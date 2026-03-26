@@ -1,4 +1,3 @@
-//@ts-nocheck
 import { useState, useEffect } from "react";
 
 const CORAL = "#F26D6D";
@@ -172,6 +171,24 @@ function FeatureCard({ icon, title, sub, detail, color }) {
 function SignupForm({ label }) {
   const [email, setEmail] = useState("");
   const [done, setDone] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!email.includes("@")) return;
+    setLoading(true);
+    try {
+      await fetch("https://formspree.io/f/xbdpjken", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setDone(true);
+    } catch {
+      setDone(true);
+    }
+    setLoading(false);
+  };
+
   return done ? (
     <div style={{ textAlign: "center", padding: "20px 0" }}>
       <div style={{ width: 50, height: 50, borderRadius: "50%", background: `${GREEN}20`, border: `1px solid ${GREEN}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
@@ -182,15 +199,15 @@ function SignupForm({ label }) {
     </div>
   ) : (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 420 }}>
-      <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Your email address"
+      <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} placeholder="Your email address"
         style={{ background: "rgba(255,255,255,0.05)", border: `2px solid ${BORDER}`, borderRadius: 14, padding: "16px 20px", color: "#fff", fontSize: 15, fontFamily: "inherit", outline: "none", width: "100%", transition: "border-color .2s" }}
         onFocus={e => e.target.style.borderColor = CORAL}
         onBlur={e => e.target.style.borderColor = BORDER}
       />
-      <button onClick={() => email.includes("@") && setDone(true)}
-        style={{ background: CORAL, color: "#fff", border: "none", borderRadius: 14, padding: "16px 24px", fontSize: 16, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontFamily: "inherit", boxShadow: `0 8px 32px rgba(242,109,109,0.35)` }}>
-        {label || "Join Free — Launching 6.6.26"}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M5 12h14M13 6l6 6-6 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
+      <button onClick={submit} disabled={loading}
+        style={{ background: loading ? "#c45555" : CORAL, color: "#fff", border: "none", borderRadius: 14, padding: "16px 24px", fontSize: 16, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontFamily: "inherit", boxShadow: `0 8px 32px rgba(242,109,109,0.35)` }}>
+        {loading ? "Joining..." : (label || "Join Free — Launching 6.6.26")}
+        {!loading && <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M5 12h14M13 6l6 6-6 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>}
       </button>
       <div style={{ textAlign: "center", fontSize: 12, color: MUTED }}>Free forever for early members &nbsp;·&nbsp; No credit card &nbsp;·&nbsp; No catch</div>
     </div>
