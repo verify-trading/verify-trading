@@ -38,7 +38,9 @@ import type { AskServiceDependencies } from "@/lib/ask/service/types";
 const ASK_MODEL_MAX_RETRIES = 2;
 
 /** Model + tool turns (e.g. search_news + get_market_briefing + submit_ask_card). */
-export const ASK_MAX_TOOL_STEPS = 10;
+export const ASK_MAX_TOOL_STEPS = 6;
+
+const ASK_MODEL_MAX_OUTPUT_TOKENS = 800;
 
 function isCapacityOrTransientApiError(error: unknown): boolean {
   if (APICallError.isInstance(error)) {
@@ -188,7 +190,7 @@ export async function generateAskResponse(
     return generateTextImpl({
       model,
       temperature: 0.2,
-      maxOutputTokens: 1_600,
+      maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
       maxRetries: ASK_MODEL_MAX_RETRIES,
       stopWhen: stepCountIs(ASK_MAX_TOOL_STEPS),
       onStepFinish({
