@@ -293,4 +293,53 @@ describe("createAskTools", () => {
       },
     });
   });
+
+  it("search_news delegates to fetchNewsEverythingImpl", async () => {
+    const fetchNewsEverythingImpl = vi.fn().mockResolvedValue({
+      query: "iran oil",
+      articles: [
+        {
+          title: "T",
+          source: "S",
+          url: "https://example.com",
+          publishedAt: "2026-04-01T00:00:00Z",
+        },
+      ],
+    });
+    const tools = createAskTools({ fetchNewsEverythingImpl });
+
+    const result = await tools.search_news.execute?.({ query: "iran oil" }, {} as never);
+
+    expect(fetchNewsEverythingImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "iran oil" }),
+    );
+    expect(result).toEqual({
+      query: "iran oil",
+      articles: [
+        {
+          title: "T",
+          source: "S",
+          url: "https://example.com",
+          publishedAt: "2026-04-01T00:00:00Z",
+        },
+      ],
+    });
+  });
+
+  it("submit_ask_card parses card_json and returns validated card", async () => {
+    const tools = createAskTools({});
+    const card = {
+      type: "insight" as const,
+      headline: "Iran Oil Themes",
+      body: "Themes here.",
+      verdict: "Angle one with source.",
+    };
+
+    const result = await tools.submit_ask_card.execute?.(
+      { card_json: JSON.stringify(card) },
+      {} as never,
+    );
+
+    expect(result).toEqual({ card });
+  });
 });

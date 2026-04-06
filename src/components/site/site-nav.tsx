@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
-import { Home, LineChart, Menu, MessageSquare, Wrench } from "lucide-react";
+import { Home, LineChart, Menu, MessageSquare } from "lucide-react";
+// import { Wrench } from "lucide-react"; // with Tools tab when /tools is shown again
 
 import { Logo } from "@/components/site/logo";
 import { Sheet } from "@/components/ui/sheet";
@@ -11,7 +12,7 @@ import { Sheet } from "@/components/ui/sheet";
 const navItems = [
   { href: "/ask", label: "Ask", icon: MessageSquare },
   { href: "/markets", label: "Markets", icon: LineChart },
-  { href: "/tools", label: "Tools", icon: Wrench },
+  // { href: "/tools", label: "Tools", icon: Wrench },
 ] as const;
 
 /** Height of the mobile header bar below safe-area (single row `h-14`). Used by overlays (e.g. Ask session sheet). */

@@ -2,15 +2,36 @@
 
 import { Sparkles } from "lucide-react";
 
+import { brandGradient } from "@/lib/brand";
+
 import { AskEmptyRestoringSkeleton } from "@/components/ask/ask-skeletons";
+
+function LogoRingIcon({ className = "" }: { className?: string }) {
+  return (
+    <div className={`relative size-14 sm:size-16 ${className}`}>
+      <div
+        className="absolute inset-0 rounded-full opacity-40 blur-md"
+        style={{ backgroundImage: brandGradient }}
+        aria-hidden
+      />
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{ backgroundImage: brandGradient }}
+      />
+      <div className="absolute inset-[2px] flex items-center justify-center rounded-full border border-white/10 bg-[rgba(10,13,46,0.94)] sm:inset-[2.5px]">
+        <Sparkles className="size-5 text-[var(--vt-blue)] sm:size-6" strokeWidth={1.5} aria-hidden />
+      </div>
+    </div>
+  );
+}
 
 function WelcomeBlock({ className = "" }: { className?: string }) {
   return (
     <div className={["text-center", className].filter(Boolean).join(" ")}>
       <div className="relative mb-4 sm:mb-5">
         <div className="absolute inset-0 scale-150 rounded-full bg-[var(--vt-blue)]/15 blur-xl" aria-hidden />
-        <div className="relative mx-auto flex size-14 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-[var(--vt-blue)]/25 to-transparent shadow-[0_8px_32px_rgba(76,110,245,0.12)] sm:size-16">
-          <Sparkles className="size-6 text-[var(--vt-blue)] sm:size-8" strokeWidth={1.5} aria-hidden />
+        <div className="relative mx-auto flex items-center justify-center rounded-2xl">
+          <LogoRingIcon />
         </div>
       </div>
       <h1 className="text-lg font-semibold tracking-tight text-white sm:text-2xl md:text-3xl">

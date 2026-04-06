@@ -1,4 +1,4 @@
-import { generateText, stepCountIs } from "ai";
+import { APICallError, generateText, RetryError, stepCountIs } from "ai";
 
 import {
   askCardSchema,
@@ -20,18 +20,69 @@ import {
 import { expandPromptTemplate } from "@/lib/site-config";
 import {
   extractJson,
+  extractSubmitAskCard,
   extractToolCard,
   extractUiMeta,
   parseImageDataUrl,
 } from "@/lib/ask/service/context";
 import {
   createSystemMessage,
+  getAskFallbackModel,
+  getAskFallbackModelId,
   getAskModel,
+  getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
 import { createAskTools } from "@/lib/ask/service/tools";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 
 const ASK_MODEL_MAX_RETRIES = 2;
+
+/** Model + tool turns (e.g. search_news + get_market_briefing + submit_ask_card). */
+export const ASK_MAX_TOOL_STEPS = 10;
+
+function isCapacityOrTransientApiError(error: unknown): boolean {
+  if (APICallError.isInstance(error)) {
+    const code = error.statusCode;
+    if (code === 401 || code === 403) {
+      return false;
+    }
+    if (code === 408 || code === 429 || code === 503 || code === 529) {
+      return true;
+    }
+    if (code !== undefined && code >= 500) {
+      return true;
+    }
+  }
+
+  if (error instanceof Error) {
+    const m = error.message.toLowerCase();
+    return (
+      /overloaded|over capacity|rate limit|too many requests|temporarily unavailable|try again|timeout|529|503|502|504/.test(
+        m,
+      ) || m.includes("econnreset") || m.includes("econnrefused")
+    );
+  }
+
+  return false;
+}
+
+function shouldAttemptAskFallbackModel(error: unknown): boolean {
+  if (getAskPrimaryModelId() === getAskFallbackModelId()) {
+    return false;
+  }
+
+  if (RetryError.isInstance(error)) {
+    if (error.reason !== "maxRetriesExceeded") {
+      return false;
+    }
+    if (isCapacityOrTransientApiError(error.lastError)) {
+      return true;
+    }
+    return isCapacityOrTransientApiError(error);
+  }
+
+  return isCapacityOrTransientApiError(error);
+}
 
 function summarizeToolResults(toolResults: Array<{ toolName?: string; output?: unknown }>) {
   return toolResults.map((toolResult) => {
@@ -131,70 +182,93 @@ export async function generateAskResponse(
     });
   }
 
-  const result = await generateTextImpl({
-    model: getAskModel(),
-    temperature: 0.2,
-    maxOutputTokens: 700,
-    maxRetries: ASK_MODEL_MAX_RETRIES,
-    stopWhen: stepCountIs(4),
-    onStepFinish({
-      stepNumber,
-      text,
-      toolCalls,
-      toolResults,
-      finishReason,
-      usage,
-    }) {
-      completedToolResults.push(
-        ...(toolResults as Array<{ toolName?: string; output?: unknown }>),
-      );
+  const runGenerate = async (model: ReturnType<typeof getAskModel>) => {
+    completedToolResults.length = 0;
 
-      logger.info("Ask generation step finished.", {
+    return generateTextImpl({
+      model,
+      temperature: 0.2,
+      maxOutputTokens: 1_600,
+      maxRetries: ASK_MODEL_MAX_RETRIES,
+      stopWhen: stepCountIs(ASK_MAX_TOOL_STEPS),
+      onStepFinish({
+        stepNumber,
+        text,
+        toolCalls,
+        toolResults,
+        finishReason,
+        usage,
+      }) {
+        completedToolResults.push(
+          ...(toolResults as Array<{ toolName?: string; output?: unknown }>),
+        );
+
+        logger.info("Ask generation step finished.", {
+          sessionId,
+          messageId,
+          stepNumber,
+          finishReason,
+          textPreview: text ? text.slice(0, 160) : "",
+          toolCalls: toolCalls.map((toolCall) => ({
+            toolName: toolCall.toolName,
+            input: toolCall.input,
+          })),
+          toolResults: summarizeToolResults(
+            toolResults as Array<{ toolName?: string; output?: unknown }>,
+          ),
+          usage,
+        });
+      },
+      messages: [
+        createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
+        createSystemMessage(askResponseGuide),
+        ...(image ? [createSystemMessage(askImageResponseGuide)] : []),
+        ...request.history.map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+        image
+          ? {
+              role: "user",
+              content: [
+                {
+                  type: "file" as const,
+                  data: image.base64,
+                  mediaType: image.mediaType,
+                },
+                {
+                  type: "text" as const,
+                  text: normalizedMessage,
+                },
+              ],
+            }
+          : {
+              role: "user",
+              content: normalizedMessage,
+            },
+      ],
+      tools: createAskTools(dependencies),
+    });
+  };
+
+  let result;
+
+  try {
+    result = await runGenerate(getAskModel());
+  } catch (error) {
+    if (shouldAttemptAskFallbackModel(error)) {
+      logger.warn("Ask primary model failed; retrying with fallback model.", {
         sessionId,
         messageId,
-        stepNumber,
-        finishReason,
-        textPreview: text ? text.slice(0, 160) : "",
-        toolCalls: toolCalls.map((toolCall) => ({
-          toolName: toolCall.toolName,
-          input: toolCall.input,
-        })),
-        toolResults: summarizeToolResults(
-          toolResults as Array<{ toolName?: string; output?: unknown }>,
-        ),
-        usage,
+        primaryModel: getAskPrimaryModelId(),
+        fallbackModel: getAskFallbackModelId(),
+        error: error instanceof Error ? error.message : String(error),
       });
-    },
-    messages: [
-      createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
-      createSystemMessage(askResponseGuide),
-      ...(image ? [createSystemMessage(askImageResponseGuide)] : []),
-      ...request.history.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
-      image
-        ? {
-            role: "user",
-            content: [
-              {
-                type: "file" as const,
-                data: image.base64,
-                mediaType: image.mediaType,
-              },
-              {
-                type: "text" as const,
-                text: normalizedMessage,
-              },
-            ],
-          }
-        : {
-            role: "user",
-            content: normalizedMessage,
-          },
-    ],
-    tools: createAskTools(dependencies),
-  });
+      result = await runGenerate(getAskFallbackModel());
+    } else {
+      throw error;
+    }
+  }
 
   const allToolResults = [
     ...completedToolResults,
@@ -202,6 +276,10 @@ export async function generateAskResponse(
   ];
   const parsedText = extractJson(result.text);
   const parsedCard = parsedText ? askCardSchema.safeParse(parsedText) : null;
+  const usedSearchNews = allToolResults.some((t) => t.toolName === "search_news");
+  const submitCard = usedSearchNews
+    ? extractSubmitAskCard(allToolResults, askCardSchema)
+    : null;
   const toolCard = extractToolCard(allToolResults, askCardSchema);
 
   if (parsedText && parsedCard && !parsedCard.success) {
@@ -219,13 +297,21 @@ export async function generateAskResponse(
     });
   }
 
-  const card = parsedCard?.success ? parsedCard.data : toolCard ?? fallbackInsightCard;
+  const card =
+    submitCard ??
+    (parsedCard?.success ? parsedCard.data : toolCard ?? fallbackInsightCard);
 
   logger.info("Ask generation completed.", {
     sessionId,
     messageId,
     finalCardType: card.type,
-    cardSource: parsedCard?.success ? "model_text" : toolCard ? "tool_result" : "fallback",
+    cardSource: submitCard
+      ? "submit_ask_card"
+      : parsedCard?.success
+        ? "model_text"
+        : toolCard
+          ? "tool_result"
+          : "fallback",
     toolResults: summarizeToolResults(allToolResults),
   });
 

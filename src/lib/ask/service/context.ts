@@ -102,10 +102,36 @@ function extractToolUiMeta(
   return undefined;
 }
 
+export function extractSubmitAskCard(
+  toolResults: ToolResultRecord[],
+  askCardSchema: {
+    safeParse: (value: unknown) => { success: boolean; data?: AskCard };
+  },
+): AskCard | null {
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const result = toolResults[index];
+    if (result.toolName !== "submit_ask_card") {
+      continue;
+    }
+
+    const output = asObject(result.output);
+    const nestedParsed = askCardSchema.safeParse(output?.card);
+    if (nestedParsed.success && nestedParsed.data) {
+      return nestedParsed.data;
+    }
+  }
+
+  return null;
+}
+
 export function extractToolCard(toolResults: ToolResultRecord[], askCardSchema: {
   safeParse: (value: unknown) => { success: boolean; data?: AskCard };
 }) {
   for (const result of toolResults) {
+    if (result.toolName === "submit_ask_card") {
+      continue;
+    }
+
     const output = asObject(result.output);
     const nested = output?.card;
     const nestedParsed = askCardSchema.safeParse(nested);

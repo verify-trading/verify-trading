@@ -117,6 +117,15 @@ function extractJson(text: string) {
   }
 }
 
+export function getAssistantTextPreview(message: AskChatMessage): string {
+  const text = message.parts
+    .filter((part): part is AskTextPart => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+
+  return text.trim().slice(0, 120);
+}
+
 export function extractAssistantCard(message: AskChatMessage): AskCard | null {
   const text = message.parts
     .filter((part): part is AskTextPart => part.type === "text")

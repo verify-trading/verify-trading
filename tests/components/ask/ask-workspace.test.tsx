@@ -6,6 +6,8 @@ import type { ImgHTMLAttributes } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "@ai-sdk/react";
 
+import { ASK_USER_MESSAGE_INVALID_RESPONSE } from "@/lib/ask/ask-failure";
+
 vi.mock("next/image", () => ({
   default: (
     props: ImgHTMLAttributes<HTMLImageElement> & {
@@ -396,9 +398,7 @@ describe("AskWorkspace", () => {
     fireEvent.click(screen.getAllByRole("button", { name: SAMPLE_PRESET_PROMPT })[0]);
 
     await waitFor(() => {
-      expect(
-        screen.getAllByText("The response could not be displayed. Please try again.").length,
-      ).toBeGreaterThan(0);
+      expect(screen.getAllByText(ASK_USER_MESSAGE_INVALID_RESPONSE).length).toBeGreaterThan(0);
     });
   });
 

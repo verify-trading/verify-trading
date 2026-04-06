@@ -9,6 +9,7 @@ import {
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
 import { logger } from "@/lib/observability/logger";
 import { getAskPersistence } from "@/lib/ask/persistence";
+import { classifyAskRouteError } from "@/lib/ask/ask-failure";
 import { generateAskResponse } from "@/lib/ask/service";
 import { AskValidationError } from "@/lib/ask/validation-error";
 
@@ -132,14 +133,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const { code, message } = classifyAskRouteError(error);
+
     logger.error("Ask response generation failed.", {
       error: error instanceof Error ? error.message : "unknown",
+      code,
     });
 
     return NextResponse.json(
       {
         error: "ask_failed",
-        message: "Could not generate an Ask response right now.",
+        code,
+        message,
       },
       { status: 502 },
     );

@@ -1,3 +1,4 @@
+import { RetryError } from "ai";
 import { describe, expect, it, vi } from "vitest";
 
 import { fallbackInsightCard } from "@/lib/ask/contracts";
@@ -708,6 +709,43 @@ describe("generateAskResponse", () => {
       body: "This image is not a trading chart I can analyse for setup, entry, stop, and target.",
       verdict: "Upload a trading chart or ask a trading question.",
     });
+  });
+
+  it("falls back to the fallback model when the primary fails after retries (overload)", async () => {
+    const card = {
+      type: "insight" as const,
+      headline: "Fallback OK",
+      body: "Body",
+      verdict: "Verdict",
+    };
+    const generateTextImpl = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new RetryError({
+          message: "Failed after 3 attempts. Last error: Overloaded",
+          reason: "maxRetriesExceeded",
+          errors: [new Error("Overloaded")],
+        }),
+      )
+      .mockResolvedValueOnce({
+        text: JSON.stringify(card),
+        toolResults: [],
+      }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "What is Gold doing?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(response.data).toEqual(card);
+    expect(generateTextImpl).toHaveBeenCalledTimes(2);
+    const firstModel = vi.mocked(generateTextImpl).mock.calls[0]?.[0]?.model;
+    const secondModel = vi.mocked(generateTextImpl).mock.calls[1]?.[0]?.model;
+    expect(firstModel).not.toBe(secondModel);
   });
 
   it("rejects unsupported image payloads", async () => {

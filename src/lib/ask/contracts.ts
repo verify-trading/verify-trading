@@ -107,6 +107,7 @@ export const chartCardSchema = z.object({
   verdict: textFieldSchema,
 });
 
+
 export const projectionCardSchema = z.object({
   type: z.literal("projection"),
   months: z.number().int().positive(),

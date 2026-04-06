@@ -24,11 +24,44 @@ import {
 import { getFcaStatus } from "@/lib/ask/fca";
 import { lookupVerifiedEntity, type LookupVerifiedEntityResult } from "@/lib/ask/entities";
 import { getMarketQuote, getMarketSeries, getMarketSeriesInputSchema } from "@/lib/ask/market";
+import { askCardSchema } from "@/lib/ask/contracts";
+import { fetchNewsEverything } from "@/lib/ask/newsdata";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 import { generateProjectionCard, generateProjectionInputSchema } from "@/lib/ask/projections";
 
 const verifyEntityInputSchema = z.object({
   name: z.string().min(1).describe("Broker, prop firm, guru, or brand name to verify."),
+});
+
+/** Anthropic requires a plain object JSON Schema; z.discriminatedUnion breaks tool registration. */
+const submitAskCardInputSchema = z.object({
+  card_json: z
+    .string()
+    .min(1)
+    .describe(
+      'One UI card as a JSON string. Include "type": broker | briefing | calc | guru | insight | chart | projection and all required fields for that type.',
+    ),
+});
+
+const searchNewsInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .describe(
+      "Search keywords for headlines (e.g. Iran oil sanctions, FOMC, ECB). Combine location + topic for geopolitics.",
+    ),
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe(
+      "Only if the user stated a calendar start date. Omit otherwise. Must not be in the future.",
+    ),
+  language: z
+    .string()
+    .length(2)
+    .optional()
+    .describe("Two-letter language code, default en."),
 });
 
 function buildInsightCard(headline: string, body: string, verdict: string): AskCard {
@@ -245,6 +278,8 @@ export function createAskTools(dependencies: AskServiceDependencies) {
   const getFcaStatusImpl = dependencies.getFcaStatusImpl ?? getFcaStatus;
   const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
   const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
+  const fetchNewsEverythingImpl =
+    dependencies.fetchNewsEverythingImpl ?? fetchNewsEverything;
 
   return {
     verify_entity: tool({
@@ -294,7 +329,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     get_market_briefing: tool({
       description:
-        "Get a complete live market briefing card plus chart data for a market asset, stock, ETF, forex pair, crypto pair, commodity, or index. Use this for 'what is X doing', price, level, session prep, and current move questions. It can resolve broader names like Silver to a supported tradable instrument or proxy.",
+        "Live price, levels, and series for a tradable. Not for headline-only questions; use search_news.",
       inputSchema: getMarketSeriesInputSchema,
       execute: async ({ asset, timeframe }) => ({
         ...buildBriefingCard(
@@ -302,6 +337,36 @@ export function createAskTools(dependencies: AskServiceDependencies) {
           await getMarketSeriesImpl(asset, timeframe),
         ),
       }),
+    }),
+    search_news: tool({
+      description:
+        "Recent headlines with descriptions (NewsData). Optional from date only if the user stated it. Read the descriptions for context, not just titles. Then submit_ask_card; use articles and note from the result.",
+      inputSchema: searchNewsInputSchema,
+      execute: async (input) => {
+        try {
+          const result = await fetchNewsEverythingImpl({
+            query: input.query,
+            from: input.from,
+            language: input.language,
+          });
+          return {
+            query: result.query,
+            articles: result.articles.slice(0, 8).map((a) => ({
+              title: a.title,
+              description: a.description,
+              source: a.source,
+            })),
+            note: result.note,
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "News search failed.";
+          return {
+            query: input.query,
+            articles: [],
+            note: message,
+          };
+        }
+      },
     }),
     calculate_position_size: tool({
       description:
@@ -356,6 +421,24 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         "Generate the full projection card for account growth and compounding questions. Requires months and startBalance. If return or drawdown assumptions are missing, it can still answer with sensible defaults, but the verdict must clearly separate user-supplied assumptions from assumed ones.",
       inputSchema: generateProjectionInputSchema,
       execute: async (toolInput) => withCard(generateProjectionCard(toolInput)),
+    }),
+    submit_ask_card: tool({
+      description:
+        "Final card submission. After search_news: use summary, setup, sentiment, or insight. After get_market_briefing: use briefing or setup. After calcs: use calc or insight. card_json = stringified card.",
+      inputSchema: submitAskCardInputSchema,
+      execute: async ({ card_json }) => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(card_json);
+        } catch {
+          throw new Error("submit_ask_card: card_json must be valid JSON.");
+        }
+        const result = askCardSchema.safeParse(parsed);
+        if (!result.success) {
+          throw new Error(`submit_ask_card: ${result.error.message}`);
+        }
+        return { card: result.data };
+      },
     }),
   };
 }

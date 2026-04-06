@@ -251,7 +251,8 @@ describe("POST /api/ask", () => {
     expect(response.status).toBe(502);
     await expect(readResponseJson(response)).resolves.toEqual({
       error: "ask_failed",
-      message: "Could not generate an Ask response right now.",
+      code: "unknown",
+      message: "boom",
     });
   });
 });

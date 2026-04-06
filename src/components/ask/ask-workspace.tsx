@@ -3,13 +3,14 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 
 import {
   extractAssistantCard,
   extractSessionData,
   extractUiMeta,
+  getAssistantTextPreview,
   deleteAskSession,
   fetchHistoryPage,
   fetchSessionList,
@@ -18,6 +19,7 @@ import {
   suggestionPrompts,
   type AskChatMessage,
 } from "@/components/ask/ask-chat-helpers";
+import { createAskChatFetch } from "@/components/ask/ask-chat-fetch";
 import { AskComposer } from "@/components/ask/ask-composer";
 import { AskEmptyState } from "@/components/ask/ask-empty-state";
 import { AskImageModal } from "@/components/ask/ask-image-modal";
@@ -28,7 +30,12 @@ import {
   mapPersistedMessageToStoreMessage,
   useAskStore,
 } from "@/components/ask/store";
+import { useVisualViewportKeyboardInset } from "@/components/ask/use-visual-viewport-keyboard-inset";
 import { SiteNav } from "@/components/site/site-nav";
+import {
+  ASK_USER_MESSAGE_INVALID_RESPONSE,
+  getUserMessageFromAskChatError,
+} from "@/lib/ask/ask-failure";
 import { ASK_ATTACHMENT_MAX_BYTES } from "@/lib/ask/config";
 import type { AskSessionListItem } from "@/lib/ask/contracts";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
@@ -37,6 +44,7 @@ import {
   isPinnedNearBottom,
 } from "@/lib/ask/scroll-thread";
 import { getAppName } from "@/lib/site-config";
+import { logger } from "@/lib/observability/logger";
 
 const ASK_SESSION_PAGE_SIZE = 40;
 
@@ -108,6 +116,7 @@ export function AskWorkspace({
       setSidebarCollapsed(false);
     }
   }, []);
+
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
   const [isDeletingSession, setIsDeletingSession] = useState(false);
   const threadViewportRef = useRef<HTMLDivElement | null>(null);
@@ -124,6 +133,20 @@ export function AskWorkspace({
     scrollHeight: number;
     scrollTop: number;
   } | null>(null);
+  const composerStripRef = useRef<HTMLDivElement | null>(null);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [composerStripHeight, setComposerStripHeight] = useState(0);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const sync = () => setIsMobileLayout(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const {
     draft,
@@ -151,10 +174,29 @@ export function AskWorkspace({
     historyWindow,
   } = useAskStore();
 
+  const keyboardInsetPx = useVisualViewportKeyboardInset(isMobileLayout);
+
+  useLayoutEffect(() => {
+    const el = composerStripRef.current;
+    if (!el) {
+      return;
+    }
+
+    const measure = () => {
+      setComposerStripHeight(el.getBoundingClientRect().height);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isMobileLayout, error, draft, attachment, messages.length]);
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport<AskChatMessage>({
         api: "/api/ask",
+        fetch: createAskChatFetch(),
       }),
     [],
   );
@@ -173,7 +215,11 @@ export function AskWorkspace({
         if (!card) {
           pendingSessionTitleRef.current = null;
           pendingAssistantAttachmentRef.current = undefined;
-          setError("The response could not be displayed. Please try again.");
+          logger.warn("Ask stream finished without a parseable card.", {
+            textPreviewLength: getAssistantTextPreview(message).length,
+            textPreview: getAssistantTextPreview(message),
+          });
+          setError(ASK_USER_MESSAGE_INVALID_RESPONSE);
           scrollToLatest();
           return;
         }
@@ -196,7 +242,7 @@ export function AskWorkspace({
         pendingAssistantAttachmentRef.current = undefined;
         scrollToLatest();
       },
-      onError: () => {
+      onError: (err) => {
         if (!pendingRequestRef.current) {
           return;
         }
@@ -205,7 +251,7 @@ export function AskWorkspace({
         pendingAssistantAttachmentRef.current = undefined;
         pendingRequestRef.current = false;
         clearTransportMessages([]);
-        setError("Could not get an answer right now. Please try again.");
+        setError(getUserMessageFromAskChatError(err));
         scrollToLatest();
       },
     });
@@ -669,7 +715,16 @@ export function AskWorkspace({
             ) : null}
 
             {/* Thread / Empty state — overflow-hidden stops the empty layout from creating a page-height scroll shell */}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div
+              className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+              style={
+                isMobileLayout
+                  ? {
+                      paddingBottom: composerStripHeight + keyboardInsetPx,
+                    }
+                  : undefined
+              }
+            >
               {messages.length === 0 ? (
                 <AskEmptyState
                   isLoadingHistory={isResolvingUrlSession || isOpeningSession || isLoadingHistory}
@@ -692,8 +747,17 @@ export function AskWorkspace({
               )}
             </div>
 
-            {/* Composer — docked bar; tight padding on mobile */}
-            <div className="shrink-0 border-t border-white/[0.06] bg-[var(--vt-navy)]/95 px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:px-6 sm:pb-5 sm:pt-4">
+            {/* Composer — docked; fixed on mobile so only this strip tracks the keyboard */}
+            <div
+              ref={composerStripRef}
+              className={[
+                "border-t border-white/[0.06] bg-[var(--vt-navy)]/95 px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:px-6 sm:pb-5 sm:pt-4",
+                isMobileLayout
+                  ? "fixed left-0 right-0 z-30"
+                  : "shrink-0",
+              ].join(" ")}
+              style={isMobileLayout ? { bottom: keyboardInsetPx } : undefined}
+            >
               {error ? (
                 <div className="mx-auto mb-1.5 w-full max-w-4xl rounded-xl border border-[rgba(242,109,109,0.2)] bg-[rgba(242,109,109,0.06)] px-3 py-2 text-xs font-medium text-[var(--vt-coral)] sm:mb-2 sm:text-[13px]">
                   {error}

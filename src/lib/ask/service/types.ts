@@ -3,6 +3,7 @@ import { generateText } from "ai";
 import { getFcaStatus } from "@/lib/ask/fca";
 import { lookupVerifiedEntity } from "@/lib/ask/entities";
 import { getMarketQuote, getMarketSeries } from "@/lib/ask/market";
+import { fetchNewsEverything } from "@/lib/ask/newsdata";
 
 export interface ParsedImageInput {
   base64: string;
@@ -15,4 +16,5 @@ export interface AskServiceDependencies {
   getFcaStatusImpl?: typeof getFcaStatus;
   getMarketQuoteImpl?: typeof getMarketQuote;
   getMarketSeriesImpl?: typeof getMarketSeries;
+  fetchNewsEverythingImpl?: typeof fetchNewsEverything;
 }
