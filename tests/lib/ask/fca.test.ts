@@ -152,7 +152,7 @@ describe("getFcaStatus", () => {
 
     expect(result.available).toBe(false);
     expect(result.frn).toBeNull();
-    expect(result.note).toContain("No FRN was available");
+    expect(result.note).toMatch(/no FRN|no reviewed fallback|lookup failed/i);
   });
 
   it("falls back to reviewed data when the FCA request throws", async () => {

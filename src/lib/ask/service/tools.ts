@@ -288,43 +288,60 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       inputSchema: verifyEntityInputSchema,
       execute: async ({ name }) => {
         const lookup = await lookupVerifiedEntityImpl(name);
-        if (!lookup.found || !lookup.entity) {
-          return withCard(buildCoverageInsightCard());
-        }
 
-        if (lookup.entity.type === "guru") {
-          const card = buildGuruCard(lookup);
-          return withCard(card ?? buildCoverageInsightCard());
-        }
+        if (lookup.found && lookup.entity) {
+          if (lookup.entity.type === "guru") {
+            const card = buildGuruCard(lookup);
+            return withCard(card ?? buildCoverageInsightCard());
+          }
 
-        if (lookup.entity.type === "propfirm") {
-          const card = buildPropFirmCard(lookup);
+          if (lookup.entity.type === "propfirm") {
+            const card = buildPropFirmCard(lookup);
+            return withCard(
+              card ?? buildCoverageInsightCard(),
+              card
+                ? {
+                    verificationKind: "propfirm",
+                    verificationSourceLabel: "Reviewed record",
+                  }
+                : undefined,
+            );
+          }
+
+          const fcaStatus = await getFcaStatusImpl({
+            name: lookup.entity.name,
+            frn: lookup.entity.fcaReference ?? undefined,
+          });
+          const card = buildBrokerCard(lookup, fcaStatus);
+
           return withCard(
             card ?? buildCoverageInsightCard(),
             card
               ? {
-                  verificationKind: "propfirm",
-                  verificationSourceLabel: "Reviewed record",
+                  verificationKind: "broker",
+                  verificationSourceLabel: fcaStatus.available ? "Live FCA confirmed" : "Reviewed record",
                 }
               : undefined,
           );
         }
 
-        const fcaStatus = await getFcaStatusImpl({
-          name: lookup.entity.name,
-          frn: lookup.entity.fcaReference ?? undefined,
-        });
-        const card = buildBrokerCard(lookup, fcaStatus);
+        // Seed lookup failed — fall back to live FCA register search
+        const fcaStatus = await getFcaStatusImpl({ name, frn: undefined });
+        if (fcaStatus.available && fcaStatus.statusText) {
+          return {
+            fcaData: {
+              queriedName: fcaStatus.queriedName,
+              frn: fcaStatus.frn,
+              statusText: fcaStatus.statusText,
+              authorised: fcaStatus.authorised,
+              warning: fcaStatus.warning,
+              note: fcaStatus.note,
+              source: fcaStatus.source,
+            },
+          };
+        }
 
-        return withCard(
-          card ?? buildCoverageInsightCard(),
-          card
-            ? {
-                verificationKind: "broker",
-                verificationSourceLabel: fcaStatus.available ? "Live FCA confirmed" : "Reviewed record",
-              }
-            : undefined,
-        );
+        return withCard(buildCoverageInsightCard());
       },
     }),
     get_market_briefing: tool({

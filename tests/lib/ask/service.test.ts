@@ -208,8 +208,8 @@ describe("generateAskResponse", () => {
       },
     );
 
-    expect(response.data.type).toBe("insight");
-    expect(response.uiMeta?.marketSeries).toBeUndefined();
+    expect(response.data.type).toBe("briefing");
+    expect(response.uiMeta?.marketSeries).toBeDefined();
   });
 
   it("surfaces verification metadata on broker cards from tool results", async () => {

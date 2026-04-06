@@ -1,4 +1,4 @@
-import { APICallError, generateText, RetryError, stepCountIs } from "ai";
+import { APICallError, generateText, RetryError, stepCountIs, streamText, type ModelMessage } from "ai";
 
 import {
   askCardSchema,
@@ -276,6 +276,14 @@ export async function generateAskResponse(
     ...completedToolResults,
     ...(result.toolResults as Array<{ toolName?: string; output?: unknown }>),
   ];
+
+  logger.info("Tool results received.", {
+    sessionId,
+    count: allToolResults.length,
+    tools: allToolResults.map((t) => t.toolName),
+    outputs: allToolResults.map((t) => JSON.stringify(t.output).slice(0, 200)),
+  });
+
   const parsedText = extractJson(result.text);
   const parsedCard = parsedText ? askCardSchema.safeParse(parsedText) : null;
   const usedSearchNews = allToolResults.some((t) => t.toolName === "search_news");
@@ -283,6 +291,15 @@ export async function generateAskResponse(
     ? extractSubmitAskCard(allToolResults, askCardSchema)
     : null;
   const toolCard = extractToolCard(allToolResults, askCardSchema);
+
+  logger.info("Card extraction results.", {
+    sessionId,
+    hasSubmitCard: !!submitCard,
+    hasToolCard: !!toolCard,
+    toolCardType: toolCard?.type ?? null,
+    hasParsedCard: !!parsedCard?.success,
+    parsedCardType: parsedCard?.success ? parsedCard.data?.type : null,
+  });
 
   if (parsedText && parsedCard && !parsedCard.success) {
     logger.warn("Ask model output did not match card schema.", {
@@ -301,7 +318,8 @@ export async function generateAskResponse(
 
   const card =
     submitCard ??
-    (parsedCard?.success ? parsedCard.data : toolCard ?? fallbackInsightCard);
+    toolCard ??
+    (parsedCard?.success ? parsedCard.data : fallbackInsightCard);
 
   logger.info("Ask generation completed.", {
     sessionId,
@@ -322,5 +340,69 @@ export async function generateAskResponse(
     uiMeta: sanitizeUiMeta(extractUiMeta(card, allToolResults)),
     sessionId,
     messageId,
+  });
+}
+
+export type AskStreamCallbacks = {
+  onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
+  onTextDelta?: (text: string) => void;
+  onDone?: (response: AskResponse) => void;
+  onError?: (error: unknown) => void;
+};
+
+export function streamAskResponse(
+  input: AskRequest,
+  callbacks: AskStreamCallbacks = {},
+  dependencies: AskServiceDependencies = {},
+) {
+  const request = askRequestSchema.parse(input);
+  const sessionId = request.sessionId ?? request.chatSessionId ?? crypto.randomUUID();
+  const messageId = crypto.randomUUID();
+  const image = parseImageDataUrl(request.image);
+  const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
+
+  const clarificationCard = resolveClarificationCard(request);
+  if (clarificationCard) {
+    return streamText({
+      model: getAskModel(),
+      prompt: JSON.stringify(clarificationCard),
+    });
+  }
+
+  const messages: ModelMessage[] = [
+    createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
+    createSystemMessage(askResponseGuide),
+    ...(image ? [createSystemMessage(askImageResponseGuide)] : []),
+    ...request.history.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    image
+      ? {
+          role: "user",
+          content: [
+            { type: "file" as const, data: image.base64, mediaType: image.mediaType },
+            { type: "text" as const, text: normalizedMessage },
+          ],
+        }
+      : { role: "user", content: normalizedMessage },
+  ];
+
+  return streamText({
+    model: getAskModel(),
+    temperature: 0.2,
+    maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
+    maxRetries: ASK_MODEL_MAX_RETRIES,
+    stopWhen: stepCountIs(ASK_MAX_TOOL_STEPS),
+    messages,
+    tools: createAskTools(dependencies),
+    onStepFinish({ toolCalls, text }) {
+      toolCalls?.forEach((tc) => {
+        callbacks.onToolCall?.(tc.toolName, tc.input as Record<string, unknown>);
+      });
+      if (text) {
+        callbacks.onTextDelta?.(text);
+      }
+    },
   });
 }
