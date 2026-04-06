@@ -1,4 +1,5 @@
-import type { AskCard, AskUiMeta, ProjectionCard } from "@/lib/ask/contracts";
+import { InteractiveMarketMiniChart, InteractiveProjectionCurve } from "@/components/ask/ask-charts";
+import type { AskCard, AskUiMeta } from "@/lib/ask/contracts";
 
 function CardFrame({
   eyebrow,
@@ -21,102 +22,6 @@ function CardFrame({
       </div>
       <div className="min-w-0 p-3 sm:p-4">{children}</div>
     </div>
-  );
-}
-
-function ProjectionCurve({
-  card,
-  markers,
-}: {
-  card: ProjectionCard;
-  markers?: number[];
-}) {
-  const width = 280;
-  const height = 110;
-  const left = 6;
-  const top = 8;
-  const innerWidth = width - left * 2;
-  const innerHeight = height - top * 2;
-  const min = Math.min(...card.dataPoints);
-  const max = Math.max(...card.dataPoints);
-  const range = max - min || 1;
-  const path = card.dataPoints
-    .map((value, index) => {
-      const x = left + (index / Math.max(card.dataPoints.length - 1, 1)) * innerWidth;
-      const y = top + innerHeight - ((value - min) / range) * innerHeight;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  return (
-    <svg data-testid="projection-curve" viewBox={`0 0 ${width} ${height}`} className="w-full">
-      <path
-        d={`${path} L${left + innerWidth},${top + innerHeight} L${left},${top + innerHeight} Z`}
-        fill="url(#projection-fill)"
-      />
-      <path
-        d={path}
-        fill="none"
-        stroke="var(--vt-blue)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {markers?.map((markerIndex) => {
-        const value = card.dataPoints[markerIndex];
-        const x = left + (markerIndex / Math.max(card.dataPoints.length - 1, 1)) * innerWidth;
-        const y = top + innerHeight - ((value - min) / range) * innerHeight;
-        return (
-          <circle
-            key={markerIndex}
-            cx={x}
-            cy={y}
-            r="3.5"
-            fill="var(--vt-coral)"
-            stroke="var(--vt-navy)"
-            strokeWidth="1.5"
-          />
-        );
-      })}
-      <defs>
-        <linearGradient id="projection-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="var(--vt-blue)" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="var(--vt-blue)" stopOpacity="0.01" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
-
-function MarketMiniChart({ points, up }: { points: number[]; up: boolean }) {
-  const width = 280;
-  const height = 88;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const path = points
-    .map((point, index) => {
-      const x = (index / Math.max(points.length - 1, 1)) * width;
-      const y = height - ((point - min) / range) * (height - 10) - 5;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  return (
-    <svg
-      data-testid="market-mini-chart"
-      viewBox={`0 0 ${width} ${height}`}
-      className="w-full rounded-2xl bg-[var(--vt-card-alt)] px-2 py-2"
-    >
-      <path
-        d={path}
-        fill="none"
-        stroke={up ? "var(--vt-green)" : "var(--vt-coral)"}
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 
@@ -230,7 +135,7 @@ function BriefingCard({
           </div>
         </div>
         {uiMeta?.marketSeries ? (
-          <MarketMiniChart points={uiMeta.marketSeries} up={isUp} />
+          <InteractiveMarketMiniChart points={uiMeta.marketSeries} up={isUp} />
         ) : null}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
@@ -397,7 +302,7 @@ function ProjectionCardView({
   return (
     <CardFrame eyebrow="Projection Engine" accentClassName="text-[var(--vt-blue)]">
       <div className="space-y-4">
-        <ProjectionCurve card={card} markers={uiMeta?.projectionMarkers} />
+        <InteractiveProjectionCurve card={card} markers={uiMeta?.projectionMarkers} />
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {[
             ["Start", `£${card.startBalance.toLocaleString("en-GB")}`],

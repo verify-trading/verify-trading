@@ -45,9 +45,6 @@ export function AskEmptyState({
       <div className="hidden min-h-0 flex-1 flex-col items-center justify-center px-8 py-10 lg:flex">
         <div className="w-full max-w-2xl">
           <WelcomeBlock className="mb-10" />
-          <p className="mb-3 text-left text-[11px] font-medium uppercase tracking-[0.14em] text-white/40">
-            Suggestions
-          </p>
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {prompts.map((prompt) => (
               <li key={prompt} className="min-w-0">

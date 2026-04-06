@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { InteractiveMarketMiniChart } from "@/components/ask/ask-charts";
 import { SiteNav } from "@/components/site/site-nav";
 import {
   MARKETS_TIMEFRAMES,
@@ -11,37 +12,6 @@ import {
   formatAssetPrice,
   formatChangePercent,
 } from "@/lib/markets/dashboard";
-
-function Sparkline({ points, up }: { points: number[]; up: boolean }) {
-  const width = 260;
-  const height = 96;
-  const top = 8;
-  const innerWidth = width;
-  const innerHeight = height - top * 2;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const path = points
-    .map((point, index) => {
-      const x = (index / Math.max(points.length - 1, 1)) * innerWidth;
-      const y = top + innerHeight - ((point - min) / range) * innerHeight;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" aria-hidden>
-      <path
-        d={path}
-        fill="none"
-        stroke={up ? "var(--vt-green)" : "var(--vt-coral)"}
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 async function fetchMarkets(timeframe: MarketsTimeframe): Promise<MarketsSnapshot> {
   const response = await fetch(`/api/markets?timeframe=${timeframe}`);
@@ -197,7 +167,7 @@ function MarketCard({ asset }: { asset: MarketsSnapshot["assets"][number] }) {
       ) : null}
       <div className="mt-4 border-t border-[color:var(--vt-border)] pt-4">
         {chartPoints ? (
-          <Sparkline points={points} up={up} />
+          <InteractiveMarketMiniChart points={points} up={up} />
         ) : (
           <p className="text-xs text-[var(--vt-muted)]">Chart unavailable for this range.</p>
         )}

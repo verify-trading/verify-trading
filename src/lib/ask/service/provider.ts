@@ -1,6 +1,6 @@
 import { anthropic } from "@ai-sdk/anthropic";
 
-const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
+const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
 export function getAskModel() {
   return anthropic(process.env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL);

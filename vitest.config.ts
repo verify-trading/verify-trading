@@ -7,6 +7,7 @@ loadEnvConfig(process.cwd());
 
 export default defineConfig({
   test: {
+    setupFiles: ["./tests/setup/vitest-globals.ts"],
     environment: "node",
     include: ["tests/**/*.test.{ts,tsx}"],
     coverage: {
