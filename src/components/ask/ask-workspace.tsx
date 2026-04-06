@@ -379,8 +379,7 @@ export function AskWorkspace({
         return;
       }
 
-      const scrollToBottom = () =>
-      {
+      const scrollToBottom = () => {
         const top = viewport.scrollHeight;
         if (typeof viewport.scrollTo === "function") {
           viewport.scrollTo({ top, behavior });
