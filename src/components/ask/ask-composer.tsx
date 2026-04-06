@@ -130,7 +130,7 @@ export function AskComposer({
             placeholder="Message…"
             rows={1}
             style={{ maxHeight: ASK_TEXTAREA_MAX_PX }}
-            className="block min-h-[40px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-[15px] leading-[1.45] text-white outline-none placeholder:text-white/40 sm:text-sm sm:leading-6"
+            className="block min-h-[40px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-[16px] leading-[1.45] text-white outline-none placeholder:text-white/40 touch-manipulation sm:text-sm sm:leading-6"
           />
         </div>
 
