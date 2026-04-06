@@ -1,36 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { useViewportTruth } from "viewport-truth/react";
 
 /**
  * Pixels obscured at the bottom of the layout viewport (typically the software keyboard).
+ * Delegates to viewport-truth for stable VisualViewport + layout metrics on iOS Safari, Android, etc.
  * When `enabled` is false, always returns 0.
  */
 export function useVisualViewportKeyboardInset(enabled: boolean): number {
-  const [insetPx, setInsetPx] = useState(0);
+  const snapshot = useViewportTruth();
 
-  useEffect(() => {
-    if (!enabled || typeof window === "undefined" || !window.visualViewport) {
-      setInsetPx(0);
-      return;
+  return useMemo(() => {
+    if (!enabled || typeof document === "undefined" || !snapshot || !snapshot.hasVisualViewport) {
+      return 0;
     }
 
-    const vv = window.visualViewport;
+    const { layoutHeight, height, offsetTop } = snapshot;
 
-    const update = () => {
-      const obscured = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setInsetPx(obscured);
-    };
+    // Prefer the larger layout baseline: some WebKit builds shrink `window.innerHeight` with the
+    // keyboard while `documentElement.clientHeight` still tracks the layout viewport.
+    const clientH = document.documentElement.clientHeight;
+    const layoutBaseline = Math.max(layoutHeight, clientH);
 
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    update();
-
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    };
-  }, [enabled]);
-
-  return enabled ? insetPx : 0;
+    return Math.max(0, layoutBaseline - height - offsetTop);
+  }, [enabled, snapshot]);
 }
