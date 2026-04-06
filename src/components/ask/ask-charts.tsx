@@ -58,7 +58,10 @@ function MarketTooltip({
         : v.toFixed(Math.abs(v) < 1 ? 5 : 2);
   return (
     <div className={tooltipBox}>
-      <div className="tabular-nums text-white/90">{formatted}</div>
+      <div className="text-[10px] font-medium uppercase tracking-wide text-white/45">
+        Point {row.step}
+      </div>
+      <div className="mt-0.5 tabular-nums text-white/95">{formatted}</div>
     </div>
   );
 }
@@ -184,19 +187,34 @@ export function InteractiveMarketMiniChart({ points, up }: { points: number[]; u
   return (
     <div
       data-testid="market-mini-chart"
-      className="h-[92px] w-full rounded-2xl bg-[var(--vt-card-alt)] px-1 py-1 sm:h-[100px]"
+      className="group/chart h-[92px] w-full cursor-crosshair rounded-2xl bg-[var(--vt-card-alt)] px-1 py-1 sm:h-[100px]"
+      role="img"
+      aria-label="Price series — hover or drag to inspect points along the line."
     >
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 6, right: 4, left: 0, bottom: 2 }}>
           <XAxis dataKey="step" hide />
           <YAxis domain={["auto", "auto"]} hide />
-          <Tooltip content={<MarketTooltip />} cursor={{ stroke: "rgba(255,255,255,0.12)" }} />
+          <Tooltip
+            content={<MarketTooltip />}
+            cursor={{
+              stroke: "rgba(255,255,255,0.45)",
+              strokeWidth: 1,
+            }}
+            isAnimationActive={false}
+          />
           <Line
             type="monotone"
             dataKey="value"
             stroke={stroke}
             strokeWidth={2.4}
             dot={false}
+            activeDot={{
+              r: 5,
+              strokeWidth: 2,
+              stroke: "rgba(255,255,255,0.95)",
+              fill: stroke,
+            }}
             isAnimationActive={false}
             connectNulls
           />
