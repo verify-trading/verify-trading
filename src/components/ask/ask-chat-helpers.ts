@@ -84,6 +84,16 @@ export async function fetchSessionList(limit = 40, cursor?: string | null) {
   return parsed.data;
 }
 
+export async function deleteAskSession(sessionId: string) {
+  const response = await fetch(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete chat session.");
+  }
+}
+
 function extractJson(text: string) {
   const trimmed = text.trim();
   if (!trimmed) {

@@ -163,6 +163,18 @@ export function createSupabasePersistence(): AskPersistence {
           : null,
       };
     },
+    async deleteSession(sessionId) {
+      const client = getSupabaseAdminClient();
+      if (!client) {
+        throw new Error("Supabase admin is not configured for Ask sessions.");
+      }
+
+      const { error } = await client.from("chat_sessions").delete().eq("id", sessionId);
+
+      if (error) {
+        throw new Error("Could not delete the Ask session.");
+      }
+    },
     async loadHistory(sessionId) {
       const page = await persistence.loadThreadPage(sessionId, { limit: 10 });
       return toHistory(page.messages);

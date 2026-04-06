@@ -2,6 +2,8 @@
 
 import { Sparkles } from "lucide-react";
 
+import { AskEmptyRestoringSkeleton } from "@/components/ask/ask-skeletons";
+
 export function AskEmptyState({
   isLoadingHistory,
   prompts,
@@ -12,18 +14,7 @@ export function AskEmptyState({
   onPromptClick: (prompt: string) => void;
 }) {
   if (isLoadingHistory) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-8 text-center">
-        <div className="flex items-center gap-2">
-          <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/70" />
-          <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/70 [animation-delay:150ms]" />
-          <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/70 [animation-delay:300ms]" />
-        </div>
-        <div className="mt-3 text-xs font-medium text-[var(--vt-muted)]/60">
-          Restoring session…
-        </div>
-      </div>
-    );
+    return <AskEmptyRestoringSkeleton />;
   }
 
   return (

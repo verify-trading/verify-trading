@@ -49,7 +49,7 @@ export function AskComposer({
   }, [draft]);
 
   const shellClassName = [
-    "mx-auto w-full max-w-3xl rounded-2xl border px-3 py-2 transition-all duration-200",
+    "mx-auto w-full max-w-4xl rounded-2xl border px-3 py-2 transition-all duration-200",
     isDragActive
       ? "border-[rgba(242,109,109,0.35)] bg-[rgba(242,109,109,0.04)]"
       : "border-white/[0.06] bg-white/[0.03] focus-within:border-[rgba(76,110,245,0.25)] focus-within:shadow-[0_0_0_3px_rgba(76,110,245,0.06)]",

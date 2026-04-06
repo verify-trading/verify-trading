@@ -217,11 +217,6 @@ function BriefingCard({
             <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)]">
               {card.asset}
             </div>
-            {uiMeta?.marketSourceLabel ? (
-              <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
-                {uiMeta.marketSourceLabel}
-              </div>
-            ) : null}
             <div className="mt-2 text-3xl font-black tracking-[-0.05em] text-white">
               {card.price}
             </div>

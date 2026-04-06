@@ -151,7 +151,6 @@ describe("generateAskResponse", () => {
                 },
                 uiMeta: {
                   marketSeries: [4470, 4482, 4493],
-                  marketSourceLabel: "Live via Twelve Data",
                   marketLevelScopeLabel: "Near-term levels",
                 },
               },
@@ -164,7 +163,6 @@ describe("generateAskResponse", () => {
     expect(response.data.type).toBe("briefing");
     expect(response.uiMeta).toEqual({
       marketSeries: [4470, 4482, 4493],
-      marketSourceLabel: "Live via Twelve Data",
       marketLevelScopeLabel: "Near-term levels",
     });
   });

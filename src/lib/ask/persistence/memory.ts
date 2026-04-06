@@ -57,6 +57,10 @@ export function createMemoryPersistence(): AskPersistence {
           : null,
       };
     },
+    async deleteSession(sessionId) {
+      memorySessions.delete(sessionId);
+      memorySessionList.delete(sessionId);
+    },
     async loadHistory(sessionId) {
       const page = await persistence.loadThreadPage(sessionId, { limit: 10 });
       return toHistory(page.messages);

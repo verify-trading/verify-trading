@@ -23,14 +23,12 @@ describe("AskResponseCard", () => {
         }}
         uiMeta={{
           marketSeries: [4470, 4485, 4493],
-          marketSourceLabel: "Live via Twelve Data",
           marketLevelScopeLabel: "Near-term levels",
         }}
       />,
     );
 
     expect(screen.getByTestId("market-mini-chart")).toBeInTheDocument();
-    expect(screen.getByText("Live via Twelve Data")).toBeInTheDocument();
     expect(screen.getByText("Near-term levels Resistance")).toBeInTheDocument();
   });
 

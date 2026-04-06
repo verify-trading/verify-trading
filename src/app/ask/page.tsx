@@ -1,19 +1,7 @@
 import { Suspense } from "react";
 
+import { AskPageSkeleton } from "@/components/ask/ask-skeletons";
 import { AskWorkspace } from "@/components/ask/ask-workspace";
-
-function AskPageFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--vt-navy)] text-white">
-      <div className="flex items-center gap-2 text-sm font-medium text-white/45">
-        <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/70" />
-        <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/70 [animation-delay:150ms]" />
-        <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/70 [animation-delay:300ms]" />
-        Loading Ask…
-      </div>
-    </div>
-  );
-}
 
 export default function AskPage({
   searchParams,
@@ -21,7 +9,11 @@ export default function AskPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   return (
-    <Suspense fallback={<AskPageFallback />}>
+    <Suspense fallback={
+      
+      
+      <></>
+    }>
       <AskPageContent searchParams={searchParams} />
     </Suspense>
   );

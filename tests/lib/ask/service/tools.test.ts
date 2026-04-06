@@ -195,7 +195,6 @@ describe("createAskTools", () => {
       },
       uiMeta: {
         marketSeries: [4676.39, 4676.53, 4682.14],
-        marketSourceLabel: "Live via Twelve Data",
         marketLevelScopeLabel: "Near-term levels",
       },
     });
@@ -243,7 +242,6 @@ describe("createAskTools", () => {
       },
       uiMeta: {
         marketSeries: [4689.2, 4694.85, 4700.5],
-        marketSourceLabel: "Live via Twelve Data",
         marketLevelScopeLabel: "Near-term levels",
       },
     });
@@ -291,7 +289,6 @@ describe("createAskTools", () => {
       },
       uiMeta: {
         marketSeries: [1.0995, 1.1005, 1.1002],
-        marketSourceLabel: "Live via Twelve Data",
         marketLevelScopeLabel: "Near-term levels",
       },
     });

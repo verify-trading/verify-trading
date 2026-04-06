@@ -14,6 +14,7 @@ describe("GET /api/ask/history", () => {
     vi.clearAllMocks();
     vi.mocked(getAskPersistence).mockReturnValue({
       listSessions: vi.fn(),
+      deleteSession: vi.fn(),
       loadHistory: vi.fn(),
       loadThreadPage,
       saveExchange: vi.fn(),

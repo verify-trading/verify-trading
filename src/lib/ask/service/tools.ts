@@ -138,12 +138,6 @@ function formatChange(value: number) {
   return `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(2)}%`;
 }
 
-function buildMarketSourceLabel(
-  quote: Awaited<ReturnType<typeof getMarketQuote>>,
-) {
-  return quote.proxyAssumption ? `Live via ${quote.symbol} proxy` : "Live via Twelve Data";
-}
-
 function buildBriefingCard(
   quote: Awaited<ReturnType<typeof getMarketQuote>>,
   series: Awaited<ReturnType<typeof getMarketSeries>>,
@@ -181,7 +175,6 @@ function buildBriefingCard(
     card,
     uiMeta: {
       marketSeries: series.closeValues,
-      marketSourceLabel: buildMarketSourceLabel(quote),
       marketLevelScopeLabel: "Near-term levels",
     },
   };

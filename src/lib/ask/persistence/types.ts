@@ -30,6 +30,7 @@ export interface AskPersistence {
     limit?: number,
     cursor?: string | null,
   ) => Promise<AskSessionListPage>;
+  deleteSession: (sessionId: string) => Promise<void>;
   loadHistory: (sessionId: string) => Promise<PersistedAskHistoryMessage[]>;
   loadThreadPage: (
     sessionId: string,

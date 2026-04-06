@@ -1,8 +1,12 @@
 "use client";
 
-import { MessageSquarePlus, PanelLeftClose, PanelLeft, Search } from "lucide-react";
+import { MessageSquarePlus, PanelLeftClose, PanelLeft, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  AskSessionListSkeleton,
+  AskSessionLoadMoreSkeleton,
+} from "@/components/ask/ask-skeletons";
 import type { AskSessionListItem } from "@/lib/ask/contracts";
 
 function formatSessionTime(updatedAt: string) {
@@ -43,6 +47,7 @@ export function AskSessionSidebar({
   onNewSession,
   onLoadMore,
   onSelectSession,
+  onRequestDeleteSession,
   isCollapsed,
   onToggleCollapse,
 }: {
@@ -54,6 +59,7 @@ export function AskSessionSidebar({
   onNewSession: () => void;
   onLoadMore: () => void;
   onSelectSession: (sessionId: string) => void;
+  onRequestDeleteSession: (session: { id: string; title: string }) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }) {
@@ -93,118 +99,130 @@ export function AskSessionSidebar({
     maybeLoadMore();
   }, [filteredSessions.length, maybeLoadMore]);
 
-  if (isCollapsed) {
-    return (
-      <div className="flex shrink-0 flex-col items-center gap-3 py-3">
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="inline-flex size-10 items-center justify-center rounded-xl text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white"
-          aria-label="Open sidebar"
-        >
-          <PanelLeft className="size-[18px]" strokeWidth={1.8} aria-hidden />
-        </button>
-        <button
-          type="button"
-          onClick={onNewSession}
-          className="inline-flex size-10 items-center justify-center rounded-xl text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white"
-          aria-label="New chat"
-        >
-          <MessageSquarePlus className="size-[18px]" strokeWidth={1.8} aria-hidden />
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <aside className="flex w-full shrink-0 flex-col py-3 max-lg:max-h-48 max-lg:border-b max-lg:border-white/[0.04] lg:w-72 xl:w-[17.5rem]">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 px-3 pb-3">
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="inline-flex size-8 items-center justify-center rounded-lg text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white"
-          aria-label="Close sidebar"
-        >
-          <PanelLeftClose className="size-4" strokeWidth={1.8} aria-hidden />
-        </button>
-        <button
-          type="button"
-          onClick={onNewSession}
-          className="inline-flex size-8 items-center justify-center rounded-lg text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white"
-          aria-label="New chat"
-        >
-          <MessageSquarePlus className="size-4" strokeWidth={1.8} aria-hidden />
-        </button>
-      </div>
+    <aside
+      className={[
+        "flex shrink-0 flex-col overflow-hidden py-0",
+        "max-lg:max-h-48 max-lg:border-b max-lg:border-white/[0.04] max-lg:w-full",
+        "transition-[width] duration-300 ease-out motion-reduce:transition-none",
+        isCollapsed ? "lg:w-14" : "lg:w-80 xl:w-96",
+      ].join(" ")}
+    >
+      {/*
+        Desktop (lg+): fixed rail (3.5rem) + session list. Collapsing animates width;
+        overflow clips the list so it slides in/out. Mobile: stacked; collapsed hides list.
+        Inner min-width matches expanded aside per breakpoint so the clip animation stays aligned.
+      */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-[20rem] xl:min-w-[24rem] lg:flex-row">
+        <div className="flex shrink-0 flex-row items-center justify-between gap-2 border-white/[0.04] px-3 py-3 max-lg:border-b lg:w-14 lg:flex-col lg:justify-start lg:gap-3 lg:border-b-0 lg:border-r lg:px-0 lg:py-3">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="inline-flex size-10 items-center justify-center rounded-xl text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
+            aria-label={isCollapsed ? "Open sidebar" : "Close sidebar"}
+            aria-expanded={!isCollapsed}
+          >
+            {isCollapsed ? (
+              <PanelLeft className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
+            ) : (
+              <PanelLeftClose className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onNewSession}
+            className="inline-flex size-10 items-center justify-center rounded-xl text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
+            aria-label="New chat"
+          >
+            <MessageSquarePlus className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
+          </button>
+        </div>
 
-      {/* Search */}
-      <div className="relative mx-3 mb-3">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--vt-muted)]" strokeWidth={2} aria-hidden />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search sessions…"
-          className="block w-full rounded-lg border border-white/[0.06] bg-white/[0.03] py-1.5 pl-8 pr-3 text-xs text-white outline-none transition placeholder:text-white/25 focus:border-[rgba(76,110,245,0.3)] focus:bg-white/[0.05]"
-        />
-      </div>
+        <div
+          className={[
+            "flex min-h-0 min-w-0 flex-1 flex-col",
+            isCollapsed ? "max-lg:hidden" : "",
+          ].join(" ")}
+        >
+          <div className="relative mx-3 mb-3 mt-0 max-lg:mt-0 lg:mt-3">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--vt-muted)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search sessions…"
+              className="block w-full rounded-lg border border-white/[0.06] bg-white/[0.03] py-1.5 pl-8 pr-3 text-xs text-white outline-none transition placeholder:text-white/25 focus:border-[rgba(76,110,245,0.3)] focus:bg-white/[0.05]"
+            />
+          </div>
 
-      {/* Session list */}
-      <div
-        ref={viewportRef}
-        onScroll={maybeLoadMore}
-        className="ask-scrollbar min-h-0 flex-1 overflow-y-auto px-2"
-      >
-        {isLoading ? (
-          <div className="px-2 py-4 text-center text-xs font-medium text-white/30">
-            Loading…
-          </div>
-        ) : filteredSessions.length === 0 ? (
-          <div className="px-2 py-4 text-center text-xs font-medium text-white/30">
-            {searchQuery ? "No matches" : "No sessions yet"}
-          </div>
-        ) : (
-          groupOrder
-            .filter((label) => grouped[label]?.length)
-            .map((label) => (
-              <div key={label} className="mb-3">
-                <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/25">
-                  {label}
-                </div>
-                {grouped[label]!.map((session) => {
-                  const isActive = session.id === activeSessionId;
-                  return (
-                    <button
-                      key={session.id}
-                      type="button"
-                      onClick={() => onSelectSession(session.id)}
-                      aria-label={session.title}
-                      aria-pressed={isActive}
-                      className={`group mb-0.5 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-all duration-150 ${
-                        isActive
-                          ? "bg-white/[0.08] text-white"
-                          : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
-                      }`}
-                    >
-                      <span className="min-w-0 flex-1 truncate text-[13px] leading-5">
-                        {session.title}
-                      </span>
-                      <span className="shrink-0 text-[10px] tabular-nums text-white/20 opacity-0 transition group-hover:opacity-100">
-                        {formatSessionTime(session.updatedAt)}
-                      </span>
-                    </button>
-                  );
-                })}
+          <div
+            ref={viewportRef}
+            onScroll={maybeLoadMore}
+            className="ask-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-3 lg:pb-3"
+          >
+            {isLoading ? (
+              <AskSessionListSkeleton />
+            ) : filteredSessions.length === 0 ? (
+              <div className="px-2 py-4 text-center text-xs font-medium text-white/30">
+                {searchQuery ? "No matches" : "No sessions yet"}
               </div>
-            ))
-        )}
-        {isLoadingMore ? (
-          <div className="flex items-center justify-center gap-2 px-2 py-3 text-xs font-medium text-white/35">
-            <span className="inline-flex size-3.5 animate-spin rounded-full border border-white/15 border-t-[var(--vt-blue)]" />
-            Loading more…
+            ) : (
+              groupOrder
+                .filter((label) => grouped[label]?.length)
+                .map((label) => (
+                  <div key={label} className="mb-3">
+                    <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/25">
+                      {label}
+                    </div>
+                    {grouped[label]!.map((session) => {
+                      const isActive = session.id === activeSessionId;
+                      return (
+                        <div
+                          key={session.id}
+                          className={`group/session mb-0.5 flex w-full items-center gap-0.5 rounded-lg transition-all duration-150 ${
+                            isActive
+                              ? "bg-white/[0.08] text-white"
+                              : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onSelectSession(session.id)}
+                            aria-label={session.title}
+                            aria-pressed={isActive}
+                            className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-[13px] leading-5">
+                              {session.title}
+                            </span>
+                            <span className="shrink-0 text-[10px] tabular-nums text-white/20 opacity-0 transition group-hover/session:opacity-100">
+                              {formatSessionTime(session.updatedAt)}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onRequestDeleteSession({ id: session.id, title: session.title })
+                            }
+                            aria-label={`Delete session: ${session.title}`}
+                            title="Delete session"
+                            className="shrink-0 rounded-md p-1.5 text-white/15 opacity-0 transition hover:bg-white/[0.08] hover:text-[var(--vt-coral)] group-hover/session:opacity-100 focus-visible:opacity-100"
+                          >
+                            <Trash2 className="size-3.5" strokeWidth={1.8} aria-hidden />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))
+            )}
+            {isLoadingMore ? <AskSessionLoadMoreSkeleton /> : null}
           </div>
-        ) : null}
+        </div>
       </div>
     </aside>
   );

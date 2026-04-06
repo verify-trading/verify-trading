@@ -10,6 +10,7 @@ import {
   extractAssistantCard,
   extractSessionData,
   extractUiMeta,
+  deleteAskSession,
   fetchHistoryPage,
   fetchSessionList,
   fileToDataUrl,
@@ -21,6 +22,7 @@ import { AskComposer } from "@/components/ask/ask-composer";
 import { AskEmptyState } from "@/components/ask/ask-empty-state";
 import { AskImageModal } from "@/components/ask/ask-image-modal";
 import { AskSessionSidebar } from "@/components/ask/ask-session-sidebar";
+import { Modal } from "@/components/ui/modal";
 import { AskThread } from "@/components/ask/ask-thread";
 import {
   mapPersistedMessageToStoreMessage,
@@ -87,10 +89,14 @@ export function AskWorkspace({
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
   const threadViewportRef = useRef<HTMLDivElement | null>(null);
   const threadBottomRef = useRef<HTMLDivElement | null>(null);
   const hasSyncedUrlSessionRef = useRef(false);
   const pendingUrlSessionRef = useRef<string | null | undefined>(undefined);
+  /** True while store is cleared to null but `?session=` may still be stale for a frame — avoid URL "resolving" skeleton. */
+  const clearingAskUrlSessionRef = useRef(false);
   const hydratedSessionRef = useRef<string | null>(null);
   const pendingAssistantAttachmentRef = useRef<string | undefined>(undefined);
   const pendingSessionTitleRef = useRef<string | null>(null);
@@ -187,10 +193,18 @@ export function AskWorkspace({
 
   const isSubmitting = status === "submitted" || status === "streaming";
   const isOpeningSession = Boolean(sessionId) && messages.length === 0 && !error;
+  /** `router.replace` can lag `useSearchParams`; store already matches `pendingUrlSessionRef`. */
+  const urlCatchingUpToStore =
+    sessionId !== null &&
+    pendingUrlSessionRef.current === sessionId &&
+    pendingUrlSessionRef.current !== null &&
+    urlSessionId !== sessionId;
   const isResolvingUrlSession =
     Boolean(urlSessionId) &&
     messages.length === 0 &&
     !error &&
+    !clearingAskUrlSessionRef.current &&
+    !urlCatchingUpToStore &&
     (sessionId !== urlSessionId || hydratedSessionRef.current !== urlSessionId);
 
   const upsertSession = useCallback((nextSessionId: string, title: string) => {
@@ -257,9 +271,37 @@ export function AskWorkspace({
     pendingRequestRef.current = false;
     clearTransportMessages([]);
     hydratedSessionRef.current = null;
+    if (nextSessionId === null) {
+      clearingAskUrlSessionRef.current = true;
+    } else {
+      clearingAskUrlSessionRef.current = false;
+    }
     openSession(nextSessionId);
     replaceSessionUrl(nextSessionId);
   }, [clearTransportMessages, openSession, replaceSessionUrl]);
+
+  const confirmDeleteSession = useCallback(async () => {
+    if (!deleteConfirm) {
+      return;
+    }
+
+    setIsDeletingSession(true);
+    setError(null);
+    const targetId = deleteConfirm.id;
+
+    try {
+      await deleteAskSession(targetId);
+      setDeleteConfirm(null);
+      if (sessionId === targetId) {
+        activateSession(null);
+      }
+      await refreshSessions();
+    } catch {
+      setError("Could not delete that session.");
+    } finally {
+      setIsDeletingSession(false);
+    }
+  }, [activateSession, deleteConfirm, refreshSessions, sessionId, setError]);
 
   function openImagePreview(src: string, alt: string) {
     setActiveImagePreview({ src, alt });
@@ -436,6 +478,12 @@ export function AskWorkspace({
   }, [refreshSessions]);
 
   useEffect(() => {
+    if (sessionId === null && urlSessionId === null) {
+      clearingAskUrlSessionRef.current = false;
+    }
+  }, [sessionId, urlSessionId]);
+
+  useEffect(() => {
     if (pendingUrlSessionRef.current !== undefined) {
       if (urlSessionId === pendingUrlSessionRef.current) {
         pendingUrlSessionRef.current = undefined;
@@ -557,14 +605,19 @@ export function AskWorkspace({
             onNewSession={() => activateSession(null)}
             onLoadMore={() => void loadMoreSessions()}
             onSelectSession={(nextSessionId) => activateSession(nextSessionId)}
+            onRequestDeleteSession={setDeleteConfirm}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
           />
 
-          {/* Divider */}
-          {!sidebarCollapsed && (
-            <div className="hidden w-px shrink-0 bg-white/[0.04] lg:block" />
-          )}
+          {/* Divider — width transition keeps pace with sidebar slide */}
+          <div
+            className={[
+              "hidden shrink-0 bg-white/[0.04] transition-[width,opacity,margin] duration-300 ease-out motion-reduce:transition-none lg:block",
+              sidebarCollapsed ? "w-0 opacity-0" : "w-px opacity-100",
+            ].join(" ")}
+            aria-hidden
+          />
 
           {/* Chat area */}
           <div
@@ -617,7 +670,7 @@ export function AskWorkspace({
             {/* Composer */}
             <div className="shrink-0 bg-gradient-to-t from-[var(--vt-navy)] via-[var(--vt-navy)] to-transparent px-4 pb-4 pt-3 sm:px-6">
               {error ? (
-                <div className="mx-auto mb-2 w-full max-w-3xl rounded-xl border border-[rgba(242,109,109,0.2)] bg-[rgba(242,109,109,0.06)] px-3 py-2 text-[13px] font-medium text-[var(--vt-coral)]">
+                <div className="mx-auto mb-2 w-full max-w-4xl rounded-xl border border-[rgba(242,109,109,0.2)] bg-[rgba(242,109,109,0.06)] px-3 py-2 text-[13px] font-medium text-[var(--vt-coral)]">
                   {error}
                 </div>
               ) : null}
@@ -635,7 +688,7 @@ export function AskWorkspace({
                 onPreviewAttachment={openImagePreview}
               />
 
-              <div className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-white/15">
+              <div className="mx-auto mt-2 max-w-4xl text-center text-[10px] text-white/15">
                 {getAppName()} may produce inaccurate information. Always verify before trading.
               </div>
             </div>
@@ -650,6 +703,44 @@ export function AskWorkspace({
           onClose={() => setActiveImagePreview(null)}
         />
       ) : null}
+
+      <Modal
+        open={deleteConfirm !== null}
+        onClose={() => {
+          if (!isDeletingSession) {
+            setDeleteConfirm(null);
+          }
+        }}
+        preventClose={isDeletingSession}
+        title="Delete this chat?"
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <button
+              type="button"
+              disabled={isDeletingSession}
+              onClick={() => setDeleteConfirm(null)}
+              className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.08] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeletingSession}
+              onClick={() => void confirmDeleteSession()}
+              className="rounded-xl bg-[var(--vt-coral)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(242,109,109,0.25)] transition hover:opacity-95 disabled:opacity-60"
+            >
+              {isDeletingSession ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        }
+      >
+        {deleteConfirm ? (
+          <p className="text-sm leading-relaxed text-white/55">
+            <span className="font-medium text-white/80">&ldquo;{deleteConfirm.title}&rdquo;</span>{" "}
+            and its messages will be removed permanently. This cannot be undone.
+          </p>
+        ) : null}
+      </Modal>
     </div>
   );
 }

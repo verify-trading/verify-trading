@@ -28,6 +28,7 @@ describe("POST /api/ask", () => {
     vi.clearAllMocks();
     vi.mocked(getAskPersistence).mockReturnValue({
       listSessions,
+      deleteSession: vi.fn(),
       loadHistory,
       loadThreadPage,
       saveExchange,

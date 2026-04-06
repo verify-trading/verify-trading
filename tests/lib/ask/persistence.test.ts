@@ -58,6 +58,30 @@ describe("getAskPersistence", () => {
     expect(sessionsPage.nextCursor).toBeNull();
   });
 
+  it("removes a session from memory when deleted", async () => {
+    const persistence = getAskPersistence();
+    const sessionId = crypto.randomUUID();
+
+    await persistence.saveExchange({
+      sessionId,
+      userMessage: "Test delete",
+      assistantCard: {
+        type: "insight",
+        headline: "H",
+        body: "B",
+        verdict: "V",
+      },
+    });
+
+    await persistence.deleteSession(sessionId);
+
+    const sessionsPage = await persistence.listSessions();
+    expect(sessionsPage.sessions).toEqual([]);
+
+    const page = await persistence.loadThreadPage(sessionId, { limit: 20 });
+    expect(page.messages).toEqual([]);
+  });
+
   it("paginates older memory history without duplicating records", async () => {
     const persistence = getAskPersistence();
     const sessionId = crypto.randomUUID();

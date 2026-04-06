@@ -4,6 +4,11 @@ import Image from "next/image";
 import { Bot } from "lucide-react";
 
 import { AskResponseCard } from "@/components/ask/cards";
+import {
+  AskAssistantLoadingSkeleton,
+  AskThreadLoadOlderSkeleton,
+  AskThreadRestoringSkeleton,
+} from "@/components/ask/ask-skeletons";
 import type { AskMessage } from "@/components/ask/store";
 import { getAppName } from "@/lib/site-config";
 
@@ -21,7 +26,7 @@ function ChatAttachmentPreview({
   compact?: boolean;
 }) {
   /** 16:9 frame: height always follows width (same proportions at every breakpoint; no h-sm/md jumps). */
-  const maxW = compact ? "max-w-2xl" : "max-w-3xl";
+  const maxW = compact ? "max-w-3xl" : "max-w-4xl";
 
   return (
     <button
@@ -79,24 +84,6 @@ function TimestampLabel({ createdAt }: { createdAt: string }) {
     <span className="select-none text-[10px] tabular-nums text-white/20">
       {label}
     </span>
-  );
-}
-
-function AssistantLoadingRow() {
-  return (
-    <div className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.015] sm:px-6">
-      <AssistantAvatar />
-      <div className="min-w-0 flex-1 pt-1">
-        <div className="flex items-center gap-1.5">
-          <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/80" />
-          <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/80 [animation-delay:150ms]" />
-          <span className="size-1.5 animate-pulse rounded-full bg-[var(--vt-blue)]/80 [animation-delay:300ms]" />
-          <span className="ml-1.5 text-xs font-medium text-[var(--vt-muted)]">
-            Analyzing…
-          </span>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -227,13 +214,11 @@ export function AskThread({
       role="log"
       aria-live="polite"
     >
-      <div className="mx-auto flex w-full max-w-3xl flex-col">
+      <div className="mx-auto flex w-full max-w-4xl flex-col">
         {/* Load older */}
         <div className="py-3 text-center">
           {isLoadingOlder ? (
-            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/25">
-              Loading…
-            </div>
+            <AskThreadLoadOlderSkeleton />
           ) : historyCursor ? (
             <button
               type="button"
@@ -265,14 +250,9 @@ export function AskThread({
         ))}
 
         {/* Submitting */}
-        {isSubmitting ? <AssistantLoadingRow /> : null}
+        {isSubmitting ? <AskAssistantLoadingSkeleton /> : null}
 
-        {/* Restoring */}
-        {isLoadingHistory ? (
-          <div className="py-6 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white/25">
-            Restoring session…
-          </div>
-        ) : null}
+        {isLoadingHistory ? <AskThreadRestoringSkeleton /> : null}
 
         <div ref={bottomRef} className="h-1" />
       </div>
