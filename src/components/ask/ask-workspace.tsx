@@ -714,7 +714,7 @@ export function AskWorkspace({
               />
 
               {/* Mobile: one short line; desktop: full sentence */}
-              <p className="relative z-10 mt-1.5 px-1 text-left text-[10px] leading-none tracking-tight text-white/45 sm:mt-3 sm:max-w-md sm:text-center sm:text-xs sm:leading-relaxed sm:text-white/40">
+              <p className="relative z-10 mx-auto mt-1.5 max-w-md px-2 text-center text-[10px] leading-none tracking-tight text-white/45 sm:mt-3 sm:text-xs sm:leading-relaxed sm:text-white/40">
                 <span className="sm:hidden whitespace-nowrap">
                   May be wrong. Verify before trading.
                 </span>
