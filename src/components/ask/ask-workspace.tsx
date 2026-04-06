@@ -30,7 +30,7 @@ import {
   mapPersistedMessageToStoreMessage,
   useAskStore,
 } from "@/components/ask/store";
-import { useVisualViewportKeyboardInset } from "@/components/ask/use-visual-viewport-keyboard-inset";
+import { useLockedViewportHeight, useVisualViewportKeyboardInset } from "@/components/ask/use-visual-viewport-keyboard-inset";
 import { SiteNav } from "@/components/site/site-nav";
 import {
   ASK_USER_MESSAGE_INVALID_RESPONSE,
@@ -175,6 +175,7 @@ export function AskWorkspace({
   } = useAskStore();
 
   const keyboardInsetPx = useVisualViewportKeyboardInset(isMobileLayout);
+  const lockedViewportStyle = useLockedViewportHeight(isMobileLayout);
 
   useLayoutEffect(() => {
     const el = composerStripRef.current;
@@ -655,7 +656,10 @@ export function AskWorkspace({
   }, [messages]);
 
   return (
-    <div className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[var(--vt-navy)] text-white">
+    <div
+      className="relative flex min-h-0 flex-col overflow-hidden bg-[var(--vt-navy)] text-white"
+      style={isMobileLayout ? lockedViewportStyle : { height: "100dvh" }}
+    >
       <SiteNav />
 
       <main className="mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col px-0 pb-0 pt-0">
