@@ -12,14 +12,14 @@ function CardFrame({
   trailing?: React.ReactNode;
 }) {
   return (
-    <div className="max-w-[24rem] overflow-hidden rounded-[20px_20px_20px_6px] border border-[color:var(--vt-border)] bg-[var(--vt-card)] shadow-[0_12px_40px_rgba(10,13,46,0.35)]">
+    <div className="w-full max-w-[min(100%,24rem)] overflow-hidden rounded-[20px_20px_20px_6px] border border-[color:var(--vt-border)] bg-[var(--vt-card)] shadow-[0_12px_40px_rgba(10,13,46,0.35)]">
       <div
-        className={`flex items-center justify-between border-b border-[color:var(--vt-border)] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] ${accentClassName}`}
+        className={`flex min-w-0 items-center justify-between gap-2 border-b border-[color:var(--vt-border)] px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] sm:px-4 sm:py-3 sm:text-[11px] ${accentClassName}`}
       >
         <span>{eyebrow}</span>
         {trailing}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="min-w-0 p-3 sm:p-4">{children}</div>
     </div>
   );
 }
@@ -147,7 +147,7 @@ function BrokerCard({
     >
       <div className="space-y-4">
         <div>
-          <div className="text-xl font-black text-white">{card.name}</div>
+          <div className="text-lg font-black text-white sm:text-xl">{card.name}</div>
           {uiMeta?.verificationSourceLabel ? (
             <div className="mt-2 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
               {uiMeta.verificationSourceLabel}
@@ -166,20 +166,20 @@ function BrokerCard({
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)]">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               {primaryLabel}
             </div>
-            <div className={`mt-1 text-sm font-bold ${primaryClassName}`}>
+            <div className={`mt-1 break-words text-sm font-bold ${primaryClassName}`}>
               {primaryValue}
             </div>
           </div>
-          <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)]">
+          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               Complaints
             </div>
-            <div className="mt-1 text-sm font-bold text-white">{card.complaints}</div>
+            <div className="mt-1 break-words text-sm font-bold text-white">{card.complaints}</div>
           </div>
         </div>
         <div
@@ -212,17 +212,17 @@ function BriefingCard({
       trailing={<span className="text-[var(--vt-green)]">Live</span>}
     >
       <div className="space-y-4">
-        <div className="flex items-end gap-3">
-          <div>
+        <div className="flex min-w-0 flex-wrap items-end gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
             <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)]">
               {card.asset}
             </div>
-            <div className="mt-2 text-3xl font-black tracking-[-0.05em] text-white">
+            <div className="mt-2 break-words text-2xl font-black tracking-[-0.05em] text-white sm:text-3xl">
               {card.price}
             </div>
           </div>
           <div
-            className={`pb-1 text-sm font-bold ${
+            className={`min-w-0 shrink-0 pb-0.5 text-xs font-bold sm:pb-1 sm:text-sm ${
               isUp ? "text-[var(--vt-green)]" : "text-[var(--vt-coral)]"
             }`}
           >
@@ -232,18 +232,18 @@ function BriefingCard({
         {uiMeta?.marketSeries ? (
           <MarketMiniChart points={uiMeta.marketSeries} up={isUp} />
         ) : null}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)]">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               {uiMeta?.marketLevelScopeLabel ? `${uiMeta.marketLevelScopeLabel} Resistance` : "Resistance"}
             </div>
-            <div className="mt-1 text-sm font-bold text-[var(--vt-coral)]">{card.level1}</div>
+            <div className="mt-1 break-words text-sm font-bold text-[var(--vt-coral)]">{card.level1}</div>
           </div>
-          <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)]">
+          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               {uiMeta?.marketLevelScopeLabel ? `${uiMeta.marketLevelScopeLabel} Support` : "Support"}
             </div>
-            <div className="mt-1 text-sm font-bold text-[var(--vt-green)]">{card.level2}</div>
+            <div className="mt-1 break-words text-sm font-bold text-[var(--vt-green)]">{card.level2}</div>
           </div>
         </div>
         {card.event ? (
@@ -263,11 +263,11 @@ function CalcCard({ card }: { card: Extract<AskCard, { type: "calc" }> }) {
   return (
     <CardFrame eyebrow="Position Size" accentClassName="text-[var(--vt-blue)]">
       <div className="space-y-4">
-        <div className="rounded-3xl bg-[var(--vt-coral)] px-4 py-5 text-center">
-          <div className="text-5xl font-black tracking-[-0.08em] text-white">{card.lots}</div>
+        <div className="rounded-3xl bg-[var(--vt-coral)] px-3 py-4 text-center sm:px-4 sm:py-5">
+          <div className="text-4xl font-black tracking-[-0.08em] text-white sm:text-5xl">{card.lots}</div>
           <div className="mt-1 text-sm font-semibold text-white/80">lots</div>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {[
             ["Account", card.account],
             ["Risk", card.risk_pct],
@@ -275,12 +275,12 @@ function CalcCard({ card }: { card: Extract<AskCard, { type: "calc" }> }) {
           ].map(([label, value]) => (
             <div
               key={label}
-              className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center"
+              className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center"
             >
-              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)]">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
                 {label}
               </div>
-              <div className="mt-1 text-sm font-bold text-white">{value}</div>
+              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
             </div>
           ))}
         </div>
@@ -304,7 +304,7 @@ function GuruCard({ card }: { card: Extract<AskCard, { type: "guru" }> }) {
     >
       <div className="space-y-4">
         <div>
-          <div className="text-xl font-black text-white">{card.name}</div>
+          <div className="text-lg font-black text-white sm:text-xl">{card.name}</div>
           <div className="mt-3 flex items-center justify-between text-sm text-[var(--vt-muted)]">
             <span>Trust Score</span>
             <span className="font-black" style={{ color: accent }}>
@@ -319,10 +319,10 @@ function GuruCard({ card }: { card: Extract<AskCard, { type: "guru" }> }) {
           </div>
         </div>
         <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)]">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
             Verified
           </div>
-          <div className="mt-1 text-sm font-bold text-white">{card.verified}</div>
+          <div className="mt-1 break-words text-sm font-bold text-white">{card.verified}</div>
         </div>
         <div
           className="rounded-2xl border px-3 py-3 text-sm font-semibold"
@@ -343,8 +343,10 @@ function InsightCard({ card }: { card: Extract<AskCard, { type: "insight" }> }) 
   return (
     <CardFrame eyebrow="Trading Insight" accentClassName="text-[var(--vt-blue)]">
       <div className="space-y-4">
-        <div className="text-xl font-black tracking-[-0.04em] text-white">{card.headline}</div>
-        <p className="text-sm leading-7 text-slate-200">{card.body}</p>
+        <div className="text-lg font-black tracking-[-0.04em] text-white sm:text-xl">
+          {card.headline}
+        </div>
+        <p className="text-sm leading-relaxed text-slate-200 sm:leading-7">{card.body}</p>
         <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
           {card.verdict}
         </div>
@@ -357,7 +359,7 @@ function ChartAnalysisCard({ card }: { card: Extract<AskCard, { type: "chart" }>
   return (
     <CardFrame eyebrow="Chart Analysis" accentClassName="text-[var(--vt-blue)]">
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {[
             ["Pattern", card.pattern],
             ["Bias", card.bias],
@@ -366,11 +368,11 @@ function ChartAnalysisCard({ card }: { card: Extract<AskCard, { type: "chart" }>
             ["Target", card.target],
             ["R:R", card.rr],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)]">
+            <div key={label} className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
                 {label}
               </div>
-              <div className="mt-1 text-sm font-bold text-white">{value}</div>
+              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
             </div>
           ))}
         </div>
@@ -396,18 +398,18 @@ function ProjectionCardView({
     <CardFrame eyebrow="Projection Engine" accentClassName="text-[var(--vt-blue)]">
       <div className="space-y-4">
         <ProjectionCurve card={card} markers={uiMeta?.projectionMarkers} />
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {[
             ["Start", `£${card.startBalance.toLocaleString("en-GB")}`],
             ["Top Up", `£${card.monthlyAdd.toLocaleString("en-GB")}`],
             ["Months", `${card.months}`],
             ["Loss Events", `${card.lossEvents}`],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)]">
+            <div key={label} className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
                 {label}
               </div>
-              <div className="mt-1 text-sm font-bold text-white">{value}</div>
+              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
             </div>
           ))}
         </div>

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   clearMarketCaches,
+  deriveQuoteFromSeries,
   getMarketQuote,
   getMarketSeries,
   resolveSupportedAsset,
@@ -107,6 +108,39 @@ describe("market tools", () => {
     expect(series.closeValues).toEqual([4470, 4480, 4490]);
     expect(series.support).toBe(4470);
     expect(series.resistance).toBe(4490);
+  });
+
+  it("sorts time-series closes by datetime when present", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        values: [
+          { datetime: "2024-01-03 00:00:00", close: "4490" },
+          { datetime: "2024-01-01 00:00:00", close: "4470" },
+          { datetime: "2024-01-02 00:00:00", close: "4480" },
+        ],
+      }),
+    }) as unknown as typeof fetch;
+
+    const series = await getMarketSeries("Gold", "1W");
+
+    expect(series.closeValues).toEqual([4470, 4480, 4490]);
+  });
+
+  it("derives a quote from a time series", () => {
+    const quote = deriveQuoteFromSeries({
+      asset: "GOLD / XAUUSD",
+      symbol: "XAU/USD",
+      timeframe: "1W",
+      closeValues: [100, 100.5, 101],
+      resistance: 101,
+      support: 100,
+    });
+
+    expect(quote.price).toBe(101);
+    expect(quote.changePercent).toBeCloseTo(1);
+    expect(quote.direction).toBe("up");
+    expect(quote.isMarketOpen).toBeNull();
   });
 
   it("throws when symbol search cannot resolve an asset", async () => {

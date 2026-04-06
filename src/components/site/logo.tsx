@@ -3,6 +3,8 @@ import { getAppName } from "@/lib/site-config";
 
 interface LogoProps {
   large?: boolean;
+  /** Smaller mark for dense mobile headers. */
+  compact?: boolean;
   stacked?: boolean;
   /** Extra wordmark beside the mark (default off — label is inside the ring). */
   showWordmark?: boolean;
@@ -41,16 +43,21 @@ function WordmarkInline() {
 
 export function Logo({
   large = false,
+  compact = false,
   stacked = false,
   showWordmark = false,
 }: LogoProps) {
   const ringSize = large
     ? "h-28 w-28 sm:h-32 sm:w-32"
-    : "h-11 w-11 sm:h-12 sm:w-12";
-  const innerInset = large ? "inset-[3px]" : "inset-[2px]";
+    : compact
+      ? "h-9 w-9"
+      : "h-11 w-11 sm:h-12 sm:w-12";
+  const innerInset = large ? "inset-[3px]" : compact ? "inset-[1.5px]" : "inset-[2px]";
   const innerTextSize = large
     ? "text-[15px] sm:text-[17px]"
-    : "text-[8px] sm:text-[9px]";
+    : compact
+      ? "text-[7px]"
+      : "text-[8px] sm:text-[9px]";
   const textSize = large ? "text-3xl" : "text-base";
 
   return (

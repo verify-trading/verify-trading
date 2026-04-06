@@ -64,7 +64,7 @@ export function Modal({
 
   return (
     <div
-      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-[rgba(5,8,27,0.88)] px-4 py-6 backdrop-blur-sm`}
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center overflow-y-auto bg-[rgba(5,8,27,0.88)] px-4 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:p-6`}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
@@ -74,7 +74,7 @@ export function Modal({
     >
       <div
         className={[
-          "w-full rounded-2xl border border-white/[0.08] bg-[var(--vt-card)] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.45)]",
+          "max-h-[min(90dvh,560px)] w-full overflow-y-auto rounded-2xl border border-white/[0.08] bg-[var(--vt-card)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:p-6",
           sizeClass[size],
         ].join(" ")}
         onClick={(event) => event.stopPropagation()}

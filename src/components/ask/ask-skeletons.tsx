@@ -85,15 +85,15 @@ function SkeletonUserMessageRow({ className = "" }: { className?: string }) {
 
 export function AskPageSkeleton() {
   return (
-    <div className="min-h-screen bg-[var(--vt-navy)] text-white">
-      <header className="sticky top-0 z-50 border-b border-[color:var(--vt-border)] bg-[rgba(10,13,46,0.92)] backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between px-4 sm:px-6">
+    <div className="flex min-h-[100dvh] flex-col bg-[var(--vt-navy)] text-white">
+      <header className="sticky top-0 z-50 border-b border-[color:var(--vt-border)] bg-[rgba(10,13,46,0.92)] pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-3 sm:px-6 lg:h-16">
           <Skeleton className="h-9 w-28 rounded-full" />
-          <Skeleton className="h-9 w-48 rounded-full sm:w-56" />
-          <Skeleton className="h-9 w-24 rounded-full" />
+          <Skeleton className="h-9 w-40 rounded-full sm:w-48" />
+          <Skeleton className="h-9 w-20 rounded-full sm:w-24" />
         </div>
       </header>
-      <div className="mx-auto flex h-[calc(100dvh-4rem)] min-h-0 w-full flex-col px-0 pb-0 pt-0">
+      <div className="mx-auto flex min-h-0 w-full flex-1 flex-col px-0 pb-0 pt-0">
         <div className="flex min-h-0 flex-1">
           <aside className="hidden w-80 shrink-0 flex-col border-r border-white/[0.04] py-3 lg:flex xl:w-96">
             <div className="flex justify-between px-3 pb-3">
@@ -131,13 +131,13 @@ export function AskPageSkeleton() {
 export function AskEmptyRestoringSkeleton() {
   return (
     <div
-      className="ask-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-4 sm:px-4"
+      className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden px-3 py-6 sm:px-4 sm:py-8"
       role="status"
       aria-busy="true"
       data-testid="ask-empty-restoring"
     >
       <span className="sr-only">Restoring session…</span>
-      <div className="mx-auto flex w-full max-w-4xl flex-col">
+      <div className="ask-scrollbar mx-auto flex max-h-[min(70vh,28rem)] w-full max-w-4xl flex-col overflow-y-auto">
         <SkeletonAssistantMessageRow bodyLines={3} />
         <SkeletonUserMessageRow />
         <SkeletonAssistantMessageRow className="opacity-80" bodyLines={2} />

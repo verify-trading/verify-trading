@@ -13,9 +13,10 @@ vi.mock("next/image", () => ({
       fill?: boolean;
     },
   ) => {
-    const { alt, onLoadingComplete, onLoad, fill: _fill, ...rest } = props;
-    // eslint-disable-next-line @next/next/no-img-element
+    const { alt, onLoadingComplete, onLoad, fill, ...rest } = props;
+    void fill;
     return (
+      // eslint-disable-next-line @next/next/no-img-element -- jsdom mock for next/image
       <img
         alt={alt ?? ""}
         {...rest}

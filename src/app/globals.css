@@ -32,14 +32,21 @@
 
 html {
   background: var(--vt-navy);
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
   background: var(--vt-navy);
   color: white;
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 button,
@@ -54,4 +61,7 @@ select {
 .ask-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .ask-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 100px; }
 .ask-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.12); }
+
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
 

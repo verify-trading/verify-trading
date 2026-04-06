@@ -9,11 +9,7 @@ export default function AskPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   return (
-    <Suspense fallback={
-      
-      
-      <></>
-    }>
+    <Suspense fallback={<AskPageSkeleton />}>
       <AskPageContent searchParams={searchParams} />
     </Suspense>
   );

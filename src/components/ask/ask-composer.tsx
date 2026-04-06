@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 
 import type { AskAttachment } from "@/components/ask/store";
 
-const ASK_TEXTAREA_MIN_PX = 36;
+const ASK_TEXTAREA_MIN_PX = 40;
 const ASK_TEXTAREA_MAX_PX = 200;
 
 export function AskComposer({
@@ -49,10 +49,10 @@ export function AskComposer({
   }, [draft]);
 
   const shellClassName = [
-    "mx-auto w-full max-w-4xl rounded-2xl border px-3 py-2 transition-all duration-200",
+    "mx-auto w-full max-w-4xl rounded-2xl border px-2 py-1.5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:rounded-3xl sm:px-3 sm:py-2.5",
     isDragActive
-      ? "border-[rgba(242,109,109,0.35)] bg-[rgba(242,109,109,0.04)]"
-      : "border-white/[0.06] bg-white/[0.03] focus-within:border-[rgba(76,110,245,0.25)] focus-within:shadow-[0_0_0_3px_rgba(76,110,245,0.06)]",
+      ? "border-[rgba(242,109,109,0.45)] bg-[rgba(242,109,109,0.08)]"
+      : "border-white/10 bg-[rgba(17,22,72,0.88)] focus-within:border-[rgba(76,110,245,0.35)] focus-within:shadow-[0_0_0_3px_rgba(76,110,245,0.12)]",
   ]
     .filter(Boolean)
     .join(" ");
@@ -61,9 +61,8 @@ export function AskComposer({
     <div className={shellClassName}>
       <input {...inputProps} />
 
-      {/* Attachment preview */}
       {attachment ? (
-        <div className="mb-2 flex items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-2">
+        <div className="mb-2 flex items-center gap-2 rounded-xl bg-white/[0.06] px-2.5 py-2 sm:px-3">
           <button
             type="button"
             onClick={() =>
@@ -81,7 +80,7 @@ export function AskComposer({
               className="size-10 rounded-lg object-cover ring-1 ring-white/10"
             />
           </button>
-          <span className="min-w-0 flex-1 truncate text-xs text-white/50">
+          <span className="min-w-0 flex-1 truncate text-xs text-white/55">
             {attachment.file.name}
           </span>
           <button
@@ -90,30 +89,26 @@ export function AskComposer({
               event.stopPropagation();
               onClearAttachment();
             }}
-            className="shrink-0 text-xs font-medium text-white/30 transition hover:text-white/60"
+            className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-white/35 transition hover:bg-white/10 hover:text-white/70"
             aria-label="Remove attachment"
           >
-            ✕
+            Remove
           </button>
         </div>
       ) : null}
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-1.5 sm:gap-2">
         <button
           type="button"
           onClick={onOpenPicker}
           title="Add image"
           aria-label="Add image"
-          className="mb-px inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white"
+          className="mb-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full text-[var(--vt-muted)] transition hover:bg-white/10 hover:text-white sm:size-9"
         >
-          <ImageIcon
-            className="size-4 opacity-80"
-            strokeWidth={1.8}
-            aria-hidden
-          />
+          <ImageIcon className="size-[18px] opacity-90" strokeWidth={1.75} aria-hidden />
         </button>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 py-0.5">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -126,10 +121,10 @@ export function AskComposer({
                 }
               }
             }}
-            placeholder="Ask anything trading…"
+            placeholder="Message…"
             rows={1}
             style={{ maxHeight: ASK_TEXTAREA_MAX_PX }}
-            className="block min-h-9 w-full resize-none overflow-y-auto border-0 bg-transparent py-1.5 text-sm leading-6 text-white outline-none placeholder:text-white/25"
+            className="block min-h-[40px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-[15px] leading-[1.45] text-white outline-none placeholder:text-white/40 sm:text-sm sm:leading-6"
           />
         </div>
 
@@ -137,13 +132,13 @@ export function AskComposer({
           type="button"
           disabled={isSubmitting || (!draft.trim() && !attachment)}
           onClick={onSubmit}
-          className="mb-px inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--vt-blue)] text-white transition hover:opacity-90 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:translate-y-0"
+          className="mb-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--vt-blue)] text-white shadow-[0_4px_16px_rgba(76,110,245,0.35)] transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none sm:size-9"
           aria-label={isSubmitting ? "Sending" : "Send message"}
         >
           {isSubmitting ? (
-            <span className="text-sm font-black leading-none">…</span>
+            <span className="text-base font-bold leading-none">…</span>
           ) : (
-            <ArrowUp className="size-4" strokeWidth={2.5} aria-hidden />
+            <ArrowUp className="size-[18px]" strokeWidth={2.5} aria-hidden />
           )}
         </button>
       </div>

@@ -18,10 +18,10 @@ function FeatureCard({
       <div className="inline-flex rounded-full border border-[rgba(76,110,245,0.24)] bg-[rgba(76,110,245,0.08)] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--vt-blue)]">
         {badge}
       </div>
-      <h3 className="mt-5 text-2xl font-black tracking-[-0.04em] text-white">
+      <h3 className="mt-5 text-xl font-black tracking-[-0.04em] text-white sm:text-2xl">
         {title}
       </h3>
-      <p className="mt-3 text-sm leading-7 text-slate-300">{description}</p>
+      <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:leading-7">{description}</p>
     </div>
   );
 }
@@ -31,12 +31,12 @@ export function LandingPage() {
     <div className="min-h-screen bg-[var(--vt-navy)] text-white">
       <SiteNav />
       <main>
-        <section className="mx-auto grid w-full max-w-6xl gap-14 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <section className="mx-auto grid w-full max-w-6xl gap-10 px-4 pb-16 pt-12 sm:gap-14 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div>
             <div className="inline-flex rounded-full border border-[rgba(242,109,109,0.24)] bg-[rgba(242,109,109,0.08)] px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-[var(--vt-coral)]">
               Launching 6 June 2026
             </div>
-            <h1 className="mt-6 text-5xl font-black tracking-[-0.08em] text-white sm:text-6xl">
+            <h1 className="mt-6 text-4xl font-black tracking-[-0.08em] text-white sm:text-5xl md:text-6xl">
               The Bloomberg Terminal for retail traders.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-8 text-slate-300">

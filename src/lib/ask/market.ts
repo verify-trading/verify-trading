@@ -19,9 +19,24 @@ const supportedAssets = {
   goldxauusd: { asset: "GOLD / XAUUSD", symbol: "XAU/USD" },
   xau: { asset: "GOLD / XAUUSD", symbol: "XAU/USD" },
   xauusd: { asset: "GOLD / XAUUSD", symbol: "XAU/USD" },
-  oil: { asset: "OIL / WTI", symbol: "XTI/USD" },
-  oilwti: { asset: "OIL / WTI", symbol: "XTI/USD" },
-  wti: { asset: "OIL / WTI", symbol: "XTI/USD" },
+  oil: {
+    asset: "OIL / WTI",
+    symbol: "USO",
+    exchange: "NYSE",
+    proxyAssumption: "Using USO ETF as a live WTI crude proxy.",
+  },
+  oilwti: {
+    asset: "OIL / WTI",
+    symbol: "USO",
+    exchange: "NYSE",
+    proxyAssumption: "Using USO ETF as a live WTI crude proxy.",
+  },
+  wti: {
+    asset: "OIL / WTI",
+    symbol: "USO",
+    exchange: "NYSE",
+    proxyAssumption: "Using USO ETF as a live WTI crude proxy.",
+  },
   silver: {
     asset: "SILVER",
     symbol: "SLV",
@@ -100,6 +115,31 @@ export interface MarketSeries extends MarketInstrument {
   closeValues: number[];
   resistance: number;
   support: number;
+}
+
+/**
+ * Builds a quote from time-series closes so the Markets dashboard can use a single `time_series`
+ * call per asset (half the Twelve Data credits vs quote + series).
+ */
+export function deriveQuoteFromSeries(series: MarketSeries): MarketQuote {
+  const { closeValues } = series;
+  if (closeValues.length < 2) {
+    throw new Error("Twelve Data time series did not include enough close values.");
+  }
+
+  const first = closeValues[0];
+  const last = closeValues[closeValues.length - 1];
+  const changePercent = first !== 0 ? ((last - first) / first) * 100 : 0;
+
+  return {
+    asset: series.asset,
+    symbol: series.symbol,
+    ...(series.proxyAssumption ? { proxyAssumption: series.proxyAssumption } : {}),
+    price: last,
+    changePercent,
+    direction: changePercent >= 0 ? "up" : "down",
+    isMarketOpen: null,
+  };
 }
 
 function normalizeAssetKey(asset: string) {
@@ -217,6 +257,47 @@ function parseNumericValue(value: unknown) {
   return null;
 }
 
+/** Twelve Data `time_series` rows include `datetime` (or `date`); sort ascending for correct range % and sparklines. */
+function parseTimestampFromSeriesRow(row: Record<string, unknown>): number | null {
+  const raw = row.datetime ?? row.date;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  const normalized = /\dT\d/.test(trimmed) ? trimmed : trimmed.replace(" ", "T");
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function parseTimeSeriesCloseValues(values: unknown[]): number[] {
+  const rows = values
+    .map((entry) => {
+      const row = entry as Record<string, unknown>;
+      const close = parseNumericValue(row.close);
+      if (close === null) {
+        return null;
+      }
+
+      return { close, ts: parseTimestampFromSeriesRow(row) };
+    })
+    .filter((row): row is { close: number; ts: number | null } => row !== null);
+
+  if (rows.length < 2) {
+    return [];
+  }
+
+  const allHaveTs = rows.every((row) => row.ts !== null);
+
+  if (allHaveTs) {
+    return [...rows]
+      .sort((a, b) => (a.ts as number) - (b.ts as number))
+      .map((row) => row.close);
+  }
+
+  return rows.map((row) => row.close).reverse();
+}
+
 function requireNumericValue(value: number | null, message: string) {
   if (value === null) {
     throw new Error(message);
@@ -225,18 +306,27 @@ function requireNumericValue(value: number | null, message: string) {
   return value;
 }
 
+/**
+ * Maps UI timeframes to Twelve Data `time_series` params. Uses **trading-day** counts for
+ * multi-day ranges so labels match user expectations (avoids e.g. 42×4h spanning many calendar weeks).
+ */
 function formatTimeframe(timeframe: MarketSeries["timeframe"]) {
   switch (timeframe) {
     case "1D":
+      // ~24 hourly bars (24/5 FX/crypto; US equities get session hours only).
       return { interval: "1h", outputsize: "24" };
     case "1W":
-      return { interval: "4h", outputsize: "42" };
+      // One trading week (Mon–Fri week of daily closes).
+      return { interval: "1day", outputsize: "5" };
     case "1M":
-      return { interval: "1day", outputsize: "30" };
+      // ~1 calendar month of trading sessions (~22 US equity sessions).
+      return { interval: "1day", outputsize: "22" };
     case "3M":
-      return { interval: "1day", outputsize: "90" };
+      // ~3 calendar months of trading sessions (~63 sessions).
+      return { interval: "1day", outputsize: "63" };
     case "1Y":
-      return { interval: "1week", outputsize: "52" };
+      // ~1 US trading year of daily closes.
+      return { interval: "1day", outputsize: "252" };
   }
 }
 
@@ -396,13 +486,7 @@ export async function getMarketSeries(
   });
 
   const values = Array.isArray(json.values) ? json.values : [];
-  const closeValues = values
-    .map((entry) => {
-      const candidate = entry as Record<string, unknown>;
-      return parseNumericValue(candidate.close);
-    })
-    .filter((value): value is number => value !== null)
-    .reverse();
+  const closeValues = parseTimeSeriesCloseValues(values);
 
   if (closeValues.length < 2) {
     throw new Error("Twelve Data time series did not include enough close values.");

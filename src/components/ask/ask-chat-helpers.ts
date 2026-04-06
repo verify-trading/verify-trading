@@ -16,7 +16,7 @@ import { ASK_HISTORY_PAGE_SIZE } from "@/lib/ask/config";
 
 export const suggestionPrompts = [
   "Is Pepperstone safe for UK retail CFD?",
-  "Gold — key levels before London open",
+  "Gold: key levels before London open",
   "Position size: 1% risk, £8k, 22 pip stop",
   "24-month projection: £10k start, £400/month",
 ];

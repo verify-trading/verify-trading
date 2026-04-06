@@ -26,7 +26,7 @@ export function AskImageModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,8,27,0.88)] px-4 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,8,27,0.88)] px-3 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:px-4 sm:py-6"
       role="dialog"
       aria-modal="true"
       aria-label="Image preview"

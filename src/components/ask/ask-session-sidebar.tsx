@@ -99,22 +99,52 @@ export function AskSessionSidebar({
     maybeLoadMore();
   }, [filteredSessions.length, maybeLoadMore]);
 
+  useEffect(() => {
+    if (isCollapsed) {
+      return;
+    }
+    const mq = window.matchMedia("(max-width: 1023px)");
+    if (!mq.matches) {
+      return;
+    }
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isCollapsed]);
+
+  const asideClassName = [
+    "flex shrink-0 flex-col overflow-hidden py-0",
+    "transition-[width] duration-300 ease-out motion-reduce:transition-none",
+    isCollapsed ? "lg:w-14" : "lg:w-80 xl:w-96",
+    isCollapsed
+      ? "max-lg:relative max-lg:w-full max-lg:border-b max-lg:border-white/[0.04]"
+      : [
+          "max-lg:fixed max-lg:inset-x-0 max-lg:top-[calc(env(safe-area-inset-top)+3.5rem)] max-lg:bottom-0 z-40 max-lg:w-full max-lg:max-h-none max-lg:border-0",
+          "max-lg:bg-[var(--vt-navy)] max-lg:shadow-[0_-8px_48px_rgba(0,0,0,0.45)]",
+        ].join(" "),
+  ].join(" ");
+
   return (
-    <aside
-      className={[
-        "flex shrink-0 flex-col overflow-hidden py-0",
-        "max-lg:max-h-48 max-lg:border-b max-lg:border-white/[0.04] max-lg:w-full",
-        "transition-[width] duration-300 ease-out motion-reduce:transition-none",
-        isCollapsed ? "lg:w-14" : "lg:w-80 xl:w-96",
-      ].join(" ")}
-    >
+    <>
+      {!isCollapsed ? (
+        <button
+          type="button"
+          aria-label="Close session list"
+          className="fixed inset-x-0 bottom-0 z-30 bg-[rgba(5,8,27,0.72)] backdrop-blur-[2px] top-[calc(env(safe-area-inset-top)+3.5rem)] lg:hidden"
+          onClick={onToggleCollapse}
+        />
+      ) : null}
+
+      <aside className={asideClassName}>
       {/*
         Desktop (lg+): fixed rail (3.5rem) + session list. Collapsing animates width;
         overflow clips the list so it slides in/out. Mobile: stacked; collapsed hides list.
         Inner min-width matches expanded aside per breakpoint so the clip animation stays aligned.
       */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-[20rem] xl:min-w-[24rem] lg:flex-row">
-        <div className="flex shrink-0 flex-row items-center justify-between gap-2 border-white/[0.04] px-3 py-3 max-lg:border-b lg:w-14 lg:flex-col lg:justify-start lg:gap-3 lg:border-b-0 lg:border-r lg:px-0 lg:py-3">
+        <div className="flex h-12 shrink-0 flex-row items-center justify-between gap-2 border-white/[0.06] bg-white/[0.02] px-3 py-0 max-lg:border-b lg:h-auto lg:w-14 lg:bg-transparent lg:px-0 lg:py-3 lg:flex-col lg:justify-start lg:gap-3 lg:border-b-0 lg:border-r">
           <button
             type="button"
             onClick={onToggleCollapse}
@@ -144,7 +174,7 @@ export function AskSessionSidebar({
             isCollapsed ? "max-lg:hidden" : "",
           ].join(" ")}
         >
-          <div className="relative mx-3 mb-3 mt-0 max-lg:mt-0 lg:mt-3">
+          <div className="relative mx-3 mb-3 mt-3">
             <Search
               className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--vt-muted)]"
               strokeWidth={2}
@@ -199,7 +229,7 @@ export function AskSessionSidebar({
                             <span className="min-w-0 flex-1 truncate text-[13px] leading-5">
                               {session.title}
                             </span>
-                            <span className="shrink-0 text-[10px] tabular-nums text-white/20 opacity-0 transition group-hover/session:opacity-100">
+                            <span className="shrink-0 text-[10px] tabular-nums text-white/20 opacity-0 transition group-hover/session:opacity-100 max-lg:opacity-100">
                               {formatSessionTime(session.updatedAt)}
                             </span>
                           </button>
@@ -210,7 +240,7 @@ export function AskSessionSidebar({
                             }
                             aria-label={`Delete session: ${session.title}`}
                             title="Delete session"
-                            className="shrink-0 rounded-md p-1.5 text-white/15 opacity-0 transition hover:bg-white/[0.08] hover:text-[var(--vt-coral)] group-hover/session:opacity-100 focus-visible:opacity-100"
+                            className="shrink-0 rounded-md p-2 text-white/15 opacity-0 transition hover:bg-white/[0.08] hover:text-[var(--vt-coral)] group-hover/session:opacity-100 focus-visible:opacity-100 max-lg:opacity-100 max-lg:text-white/35"
                           >
                             <Trash2 className="size-3.5" strokeWidth={1.8} aria-hidden />
                           </button>
@@ -225,5 +255,6 @@ export function AskSessionSidebar({
         </div>
       </div>
     </aside>
+    </>
   );
 }

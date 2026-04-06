@@ -88,7 +88,26 @@ export function AskWorkspace({
   const [sessionsCursor, setSessionsCursor] = useState<string | null>(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  /** Mobile: start collapsed so chat gets the viewport; desktop expands after mount. */
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+
+  const collapseSidebarIfMobile = useCallback(() => {
+    if (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: 1023px)").matches
+    ) {
+      setSidebarCollapsed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(min-width: 1024px)").matches
+    ) {
+      setSidebarCollapsed(false);
+    }
+  }, []);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
   const [isDeletingSession, setIsDeletingSession] = useState(false);
   const threadViewportRef = useRef<HTMLDivElement | null>(null);
@@ -590,11 +609,11 @@ export function AskWorkspace({
   }, [messages]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[var(--vt-navy)] text-white">
+    <div className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[var(--vt-navy)] text-white">
       <SiteNav />
 
-      <main className="mx-auto flex h-[calc(100dvh-4rem)] min-h-0 w-full flex-col px-0 pb-0 pt-0">
-        <div className="flex min-h-0 flex-1">
+      <main className="mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col px-0 pb-0 pt-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
           {/* Sidebar */}
           <AskSessionSidebar
             sessions={sessions}
@@ -602,9 +621,15 @@ export function AskWorkspace({
             isLoading={isLoadingSessions}
             isLoadingMore={isLoadingMoreSessions}
             hasMore={Boolean(sessionsCursor)}
-            onNewSession={() => activateSession(null)}
+            onNewSession={() => {
+              activateSession(null);
+              collapseSidebarIfMobile();
+            }}
             onLoadMore={() => void loadMoreSessions()}
-            onSelectSession={(nextSessionId) => activateSession(nextSessionId)}
+            onSelectSession={(nextSessionId) => {
+              activateSession(nextSessionId);
+              collapseSidebarIfMobile();
+            }}
             onRequestDeleteSession={setDeleteConfirm}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
@@ -643,8 +668,8 @@ export function AskWorkspace({
               </div>
             ) : null}
 
-            {/* Thread / Empty state */}
-            <div className="flex min-h-0 flex-1 flex-col">
+            {/* Thread / Empty state — overflow-hidden stops the empty layout from creating a page-height scroll shell */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {messages.length === 0 ? (
                 <AskEmptyState
                   isLoadingHistory={isResolvingUrlSession || isOpeningSession || isLoadingHistory}
@@ -667,10 +692,10 @@ export function AskWorkspace({
               )}
             </div>
 
-            {/* Composer */}
-            <div className="shrink-0 bg-gradient-to-t from-[var(--vt-navy)] via-[var(--vt-navy)] to-transparent px-4 pb-4 pt-3 sm:px-6">
+            {/* Composer — docked bar; tight padding on mobile */}
+            <div className="shrink-0 border-t border-white/[0.06] bg-[var(--vt-navy)]/95 px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:px-6 sm:pb-5 sm:pt-4">
               {error ? (
-                <div className="mx-auto mb-2 w-full max-w-4xl rounded-xl border border-[rgba(242,109,109,0.2)] bg-[rgba(242,109,109,0.06)] px-3 py-2 text-[13px] font-medium text-[var(--vt-coral)]">
+                <div className="mx-auto mb-1.5 w-full max-w-4xl rounded-xl border border-[rgba(242,109,109,0.2)] bg-[rgba(242,109,109,0.06)] px-3 py-2 text-xs font-medium text-[var(--vt-coral)] sm:mb-2 sm:text-[13px]">
                   {error}
                 </div>
               ) : null}
@@ -688,9 +713,15 @@ export function AskWorkspace({
                 onPreviewAttachment={openImagePreview}
               />
 
-              <div className="mx-auto mt-2 max-w-4xl text-center text-[10px] text-white/15">
-                {getAppName()} may produce inaccurate information. Always verify before trading.
-              </div>
+              {/* Mobile: one short line; desktop: full sentence */}
+              <p className="relative z-10 mt-1.5 px-1 text-left text-[10px] leading-none tracking-tight text-white/45 sm:mt-3 sm:max-w-md sm:text-center sm:text-xs sm:leading-relaxed sm:text-white/40">
+                <span className="sm:hidden whitespace-nowrap">
+                  May be wrong. Verify before trading.
+                </span>
+                <span className="hidden sm:inline">
+                  {getAppName()} can make mistakes. Check important information before trading.
+                </span>
+              </p>
             </div>
           </div>
         </div>

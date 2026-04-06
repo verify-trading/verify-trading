@@ -81,7 +81,7 @@ function TimestampLabel({ createdAt }: { createdAt: string }) {
   }).format(date);
 
   return (
-    <span className="select-none text-[10px] tabular-nums text-white/20">
+    <span className="select-none text-[11px] tabular-nums text-white/25 sm:text-xs sm:text-white/20">
       {label}
     </span>
   );
@@ -98,6 +98,11 @@ function UserBubble({
 }) {
   const hasContent = message.content.trim().length > 0;
   const attachmentPreviewUrl = message.attachmentPreviewUrl;
+  /** Attachments need a block-width bubble; text-only uses inline-block so width follows copy. */
+  const bubbleWidthClasses =
+    attachmentPreviewUrl != null
+      ? "block w-full max-w-[min(100%,48rem)] sm:max-w-4xl"
+      : "inline-block max-w-[min(100%,28rem)] sm:max-w-lg align-top";
 
   return (
     <div className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.015] sm:px-6">
@@ -106,10 +111,12 @@ function UserBubble({
           <TimestampLabel createdAt={message.createdAt} />
           <span className="text-[11px] font-semibold text-white/40">You</span>
         </div>
-        <div className="mt-1.5 flex justify-end">
+        {/* items-end + inline-block bubble: avoid block children forcing 100% width (w-fit alone was still stretching). */}
+        <div className="mt-1.5 flex w-full flex-col items-end">
           <div
             className={[
-              "max-w-lg rounded-[18px_18px_4px_18px] bg-[var(--vt-coral)] text-sm leading-relaxed text-white shadow-[0_8px_28px_rgba(242,109,109,0.18)]",
+              "rounded-[18px_18px_4px_18px] bg-[var(--vt-coral)] text-left text-sm leading-relaxed text-white shadow-[0_8px_28px_rgba(242,109,109,0.18)] break-words",
+              bubbleWidthClasses,
               hasContent ? "px-4 py-2.5" : "px-3 py-3",
             ]
               .filter(Boolean)
@@ -128,7 +135,7 @@ function UserBubble({
                 }
               />
             ) : null}
-            {hasContent ? <div>{message.content}</div> : null}
+            {hasContent ? <p className="m-0 max-w-full">{message.content}</p> : null}
             {message.attachmentName ? (
               <div className="mt-1.5 text-[11px] font-medium text-white/70">
                 📎 {message.attachmentName}
@@ -210,7 +217,7 @@ export function AskThread({
     <div
       ref={viewportRef}
       data-testid="ask-thread-viewport"
-      className="ask-scrollbar min-h-0 flex-1 overflow-y-auto"
+      className="ask-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
       role="log"
       aria-live="polite"
     >
@@ -223,7 +230,7 @@ export function AskThread({
             <button
               type="button"
               onClick={onLoadOlder}
-              className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/25 transition hover:text-white"
+              className="text-xs font-semibold uppercase tracking-[0.18em] text-white/30 transition hover:text-white sm:text-[11px] sm:tracking-[0.2em]"
             >
               ↑ Load older messages
             </button>
