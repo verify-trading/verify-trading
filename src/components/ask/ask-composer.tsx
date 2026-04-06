@@ -113,6 +113,12 @@ export function AskComposer({
             ref={textareaRef}
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
+            onFocus={() => {
+              requestAnimationFrame(() => {
+                window.scrollTo(0, 0);
+                requestAnimationFrame(() => window.scrollTo(0, 0));
+              });
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();

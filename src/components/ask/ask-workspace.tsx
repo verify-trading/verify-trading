@@ -148,6 +148,45 @@ export function AskWorkspace({
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  // Only while Ask is mounted (this component). Cleanup restores html/body so other routes keep normal scroll.
+  useEffect(() => {
+    if (!isMobileLayout || typeof document === "undefined") {
+      return;
+    }
+
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    body.style.overscrollBehavior = "none";
+    window.scrollTo(0, 0);
+
+    const fixWindowScroll = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    const vv = window.visualViewport;
+    vv?.addEventListener("scroll", fixWindowScroll);
+    window.addEventListener("scroll", fixWindowScroll, { passive: true });
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+      vv?.removeEventListener("scroll", fixWindowScroll);
+      window.removeEventListener("scroll", fixWindowScroll);
+    };
+  }, [isMobileLayout]);
+
   const {
     draft,
     attachment,

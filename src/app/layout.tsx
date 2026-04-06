@@ -16,7 +16,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  interactiveWidget: "resizes-content",
+  // Default is resizes-visual: only the visual viewport shrinks with the keyboard.
+  // resizes-content also shrinks the *layout* viewport and fights fixed/sticky UI + our
+  // VisualViewport-based composer; it also triggers aggressive iOS focus scroll.
+  interactiveWidget: "resizes-visual",
 };
 
 export default function RootLayout({
