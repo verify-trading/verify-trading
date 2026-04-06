@@ -1,0 +1,100 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  askCardSchema,
+  askRequestSchema,
+  fallbackInsightCard,
+  sanitizeCard,
+  sanitizeUiMeta,
+} from "@/lib/ask/contracts";
+
+describe("ask contracts", () => {
+  it("accepts a valid ask request with history and attachment metadata", () => {
+    const parsed = askRequestSchema.parse({
+      message: "Analyse this chart",
+      sessionId: crypto.randomUUID(),
+      image: "data:image/png;base64,Zm9v",
+      attachmentMeta: {
+        fileName: "gold.png",
+        mimeType: "image/png",
+        size: 1024,
+      },
+      history: [
+        { role: "user", content: "What is Gold doing?" },
+        { role: "assistant", content: JSON.stringify(fallbackInsightCard) },
+      ],
+    });
+
+    expect(parsed.history).toHaveLength(2);
+    expect(parsed.attachmentMeta?.fileName).toBe("gold.png");
+  });
+
+  it("preserves full card text after validation", () => {
+    const card = sanitizeCard({
+      type: "insight",
+      headline: "This headline is definitely too long for the client format",
+      body: Array.from({ length: 90 }, (_, index) => `word${index}`).join(" "),
+      verdict: Array.from({ length: 20 }, (_, index) => `verdict${index}`).join(" "),
+    });
+
+    expect(card.type).toBe("insight");
+    if (card.type !== "insight") {
+      throw new Error("Expected an insight card.");
+    }
+
+    expect(card.headline).toBe("This headline is definitely too long for the client format");
+    expect(card.body.split(/\s+/)).toHaveLength(90);
+    expect(card.verdict.split(/\s+/)).toHaveLength(20);
+  });
+
+  it("preserves ui metadata text without truncation", () => {
+    const uiMeta = sanitizeUiMeta({
+      marketSeries: [1, 2, 3],
+      projectionMarkers: [0, 2],
+    });
+
+    expect(uiMeta).toEqual({
+      marketSeries: [1, 2, 3],
+      projectionMarkers: [0, 2],
+    });
+  });
+
+  it("normalizes chart bias from long or short wording", () => {
+    const bullishCard = askCardSchema.parse({
+      type: "chart",
+      pattern: "V-recovery",
+      bias: "Long",
+      entry: "21,880",
+      stop: "21,370",
+      target: "21,950",
+      rr: "1.4:1",
+      confidence: "Medium",
+      verdict: "Wait for confirmation.",
+    });
+    const bearishCard = askCardSchema.parse({
+      type: "chart",
+      pattern: "Breakdown",
+      bias: "Short",
+      entry: "21,880",
+      stop: "21,950",
+      target: "21,370",
+      rr: "1.4:1",
+      confidence: "Medium",
+      verdict: "Wait for confirmation.",
+    });
+
+    expect(bullishCard.type).toBe("chart");
+    expect(bullishCard.type === "chart" ? bullishCard.bias : null).toBe("Bullish");
+    expect(bearishCard.type === "chart" ? bearishCard.bias : null).toBe("Bearish");
+  });
+
+  it("accepts an image-only ask request", () => {
+    const parsed = askRequestSchema.parse({
+      message: "",
+      image: "data:image/png;base64,Zm9v",
+    });
+
+    expect(parsed.message).toBe("");
+    expect(parsed.image).toBe("data:image/png;base64,Zm9v");
+  });
+});

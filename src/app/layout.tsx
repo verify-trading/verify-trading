@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+import { getSiteDescription, getSiteTitle } from "@/lib/site-config";
+
 export const metadata: Metadata = {
-  title: "verify.trading — The ChatGPT built for traders",
-  description:
-    "Verify any broker in 2 seconds. Get briefed before the market opens. Calculate your exact risk.",
+  title: getSiteTitle(),
+  description: getSiteDescription(),
   icons: {
     icon: "/favicon.svg",
   },

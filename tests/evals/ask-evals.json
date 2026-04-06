@@ -1,0 +1,65 @@
+[
+  {
+    "id": "insight-revenge",
+    "message": "Why do I keep revenge trading after one bad loss?",
+    "expectedType": "insight"
+  },
+  {
+    "id": "briefing-gold",
+    "message": "What is Gold doing before London open today?",
+    "expectedType": "briefing"
+  },
+  {
+    "id": "briefing-aapl",
+    "message": "What is AAPL doing this week?",
+    "expectedType": "briefing"
+  },
+  {
+    "id": "broker-pepperstone",
+    "message": "Is Pepperstone FCA regulated and safe to deposit with?",
+    "expectedType": "broker"
+  },
+  {
+    "id": "guru-switzyman",
+    "message": "Is SwitzyMan legit or just marketing?",
+    "expectedType": "guru"
+  },
+  {
+    "id": "calc-lot-size",
+    "message": "Lot size 1% risk £10000 20 pip stop on GBP/USD",
+    "expectedType": "calc",
+    "sessionGroup": "risk-sizing"
+  },
+  {
+    "id": "calc-follow-up-risk",
+    "message": "what about 2% risk?",
+    "expectedType": "calc",
+    "sessionGroup": "risk-sizing"
+  },
+  {
+    "id": "calc-profit",
+    "message": "I sold GBP/USD at 1.2750 and covered at 1.2685 with 0.8 lots. What was the profit?",
+    "expectedType": "insight"
+  },
+  {
+    "id": "projection-explicit",
+    "message": "8 month projection £10k start £500 monthly top up at 5% monthly return with 10% drawdowns every 4 months",
+    "expectedType": "projection"
+  },
+  {
+    "id": "projection-default",
+    "message": "18 month projection £10k start £500 monthly top up",
+    "expectedType": "projection"
+  },
+  {
+    "id": "mixed-priority",
+    "message": "I’m a UK retail trader with a £12,500 account. I’m considering Pepperstone for forex, I want to risk 0.8% on GBP/USD, and I’m watching Gold and Nasdaq for bias this week. Give me the most important thing I should focus on first and why.",
+    "expectedType": "insight"
+  },
+  {
+    "id": "chart-synthetic",
+    "message": "Analyse this chart setup.",
+    "expectedType": "chart",
+    "image": "synthetic-chart"
+  }
+]

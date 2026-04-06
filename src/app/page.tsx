@@ -1,5 +1,5 @@
-import VerifyTradingApp from "@/components/VerifyTradingApp";
+import { LandingPage } from "@/components/landing/landing-page";
 
 export default function Home() {
-  return <VerifyTradingApp />;
+  return <LandingPage />;
 }

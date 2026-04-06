@@ -1,0 +1,655 @@
+"use client";
+
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDropzone } from "react-dropzone";
+
+import {
+  extractAssistantCard,
+  extractSessionData,
+  extractUiMeta,
+  fetchHistoryPage,
+  fetchSessionList,
+  fileToDataUrl,
+  isDefined,
+  suggestionPrompts,
+  type AskChatMessage,
+} from "@/components/ask/ask-chat-helpers";
+import { AskComposer } from "@/components/ask/ask-composer";
+import { AskEmptyState } from "@/components/ask/ask-empty-state";
+import { AskImageModal } from "@/components/ask/ask-image-modal";
+import { AskSessionSidebar } from "@/components/ask/ask-session-sidebar";
+import { AskThread } from "@/components/ask/ask-thread";
+import {
+  mapPersistedMessageToStoreMessage,
+  useAskStore,
+} from "@/components/ask/store";
+import { SiteNav } from "@/components/site/site-nav";
+import { ASK_ATTACHMENT_MAX_BYTES } from "@/lib/ask/config";
+import type { AskSessionListItem } from "@/lib/ask/contracts";
+import { defaultAskImagePrompt } from "@/lib/ask/prompt";
+import {
+  ASK_PINNED_THRESHOLD_PX,
+  isPinnedNearBottom,
+} from "@/lib/ask/scroll-thread";
+import { getAppName } from "@/lib/site-config";
+
+const ASK_SESSION_PAGE_SIZE = 40;
+
+function parseUrlSessionId(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  )
+    ? value
+    : null;
+}
+
+function inferSessionTitle(message: string) {
+  return message.trim().slice(0, 80) || "New Ask Session";
+}
+
+function inferSessionTitleFromSubmission(message: string, attachmentFileName?: string | null) {
+  const trimmedMessage = message.trim();
+  if (trimmedMessage) {
+    return inferSessionTitle(trimmedMessage);
+  }
+
+  const trimmedAttachmentName = attachmentFileName?.trim();
+  if (trimmedAttachmentName) {
+    return inferSessionTitle(trimmedAttachmentName);
+  }
+
+  return "Chart Upload";
+}
+
+export function AskWorkspace({
+  initialUrlSessionId = null,
+}: {
+  initialUrlSessionId?: string | null;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlSessionId =
+    parseUrlSessionId(searchParams.get("session")) ?? parseUrlSessionId(initialUrlSessionId);
+  const [activeImagePreview, setActiveImagePreview] = useState<{
+    src: string;
+    alt: string;
+  } | null>(null);
+  const [sessions, setSessions] = useState<AskSessionListItem[]>([]);
+  const [sessionsCursor, setSessionsCursor] = useState<string | null>(null);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const threadViewportRef = useRef<HTMLDivElement | null>(null);
+  const threadBottomRef = useRef<HTMLDivElement | null>(null);
+  const hasSyncedUrlSessionRef = useRef(false);
+  const pendingUrlSessionRef = useRef<string | null | undefined>(undefined);
+  const hydratedSessionRef = useRef<string | null>(null);
+  const pendingAssistantAttachmentRef = useRef<string | undefined>(undefined);
+  const pendingSessionTitleRef = useRef<string | null>(null);
+  const pendingRequestRef = useRef(false);
+  const pendingPrependRef = useRef<{
+    scrollHeight: number;
+    scrollTop: number;
+  } | null>(null);
+
+  const {
+    draft,
+    attachment,
+    error,
+    messages,
+    historyCursor,
+    isLoadingHistory,
+    isLoadingOlder,
+    sessionId,
+    setDraft,
+    setAttachment,
+    clearAttachment,
+    setSessionId,
+    openSession,
+    setError,
+    startHistoryLoad,
+    finishHistoryLoad,
+    startOlderLoad,
+    finishOlderLoad,
+    hydrateThread,
+    prependHistoryPage,
+    appendUserMessage,
+    appendAssistantCard,
+    historyWindow,
+  } = useAskStore();
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport<AskChatMessage>({
+        api: "/api/ask",
+      }),
+    [],
+  );
+
+  const { sendMessage, setMessages: clearTransportMessages, status } =
+    useChat<AskChatMessage>({
+      transport,
+      onFinish: ({ message }) => {
+        const card = extractAssistantCard(message);
+        const sessionData = extractSessionData(message);
+        const attachmentPreviewUrl = pendingAssistantAttachmentRef.current;
+
+        pendingRequestRef.current = false;
+        clearTransportMessages([]);
+
+        if (!card) {
+          pendingSessionTitleRef.current = null;
+          pendingAssistantAttachmentRef.current = undefined;
+          setError("The response could not be displayed. Please try again.");
+          scrollToLatest();
+          return;
+        }
+
+        appendAssistantCard(card, extractUiMeta(message), attachmentPreviewUrl);
+        const resolvedSessionId = sessionData?.sessionId ?? useAskStore.getState().sessionId;
+        const pendingSessionTitle = pendingSessionTitleRef.current;
+
+        if (resolvedSessionId) {
+          setSessionId(resolvedSessionId);
+          hydratedSessionRef.current = resolvedSessionId;
+          replaceSessionUrl(resolvedSessionId);
+
+          if (pendingSessionTitle) {
+            upsertSession(resolvedSessionId, pendingSessionTitle);
+          }
+        }
+
+        pendingSessionTitleRef.current = null;
+        pendingAssistantAttachmentRef.current = undefined;
+        scrollToLatest();
+      },
+      onError: () => {
+        if (!pendingRequestRef.current) {
+          return;
+        }
+
+        pendingSessionTitleRef.current = null;
+        pendingAssistantAttachmentRef.current = undefined;
+        pendingRequestRef.current = false;
+        clearTransportMessages([]);
+        setError("Could not get an answer right now. Please try again.");
+        scrollToLatest();
+      },
+    });
+
+  const isSubmitting = status === "submitted" || status === "streaming";
+  const isOpeningSession = Boolean(sessionId) && messages.length === 0 && !error;
+  const isResolvingUrlSession =
+    Boolean(urlSessionId) &&
+    messages.length === 0 &&
+    !error &&
+    (sessionId !== urlSessionId || hydratedSessionRef.current !== urlSessionId);
+
+  const upsertSession = useCallback((nextSessionId: string, title: string) => {
+    const updatedAt = new Date().toISOString();
+
+    setSessions((currentSessions) => [
+      {
+        id: nextSessionId,
+        title,
+        updatedAt,
+      },
+      ...currentSessions.filter((session) => session.id !== nextSessionId),
+    ]);
+  }, []);
+
+  const refreshSessions = useCallback(async () => {
+    try {
+      const page = await fetchSessionList(ASK_SESSION_PAGE_SIZE);
+      setSessions(page.sessions);
+      setSessionsCursor(page.nextCursor);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }, []);
+
+  const loadMoreSessions = useCallback(async () => {
+    if (!sessionsCursor || isLoadingSessions || isLoadingMoreSessions) {
+      return;
+    }
+
+    setIsLoadingMoreSessions(true);
+
+    try {
+      const page = await fetchSessionList(ASK_SESSION_PAGE_SIZE, sessionsCursor);
+      setSessions((currentSessions) => [
+        ...currentSessions,
+        ...page.sessions.filter(
+          (nextSession) =>
+            !currentSessions.some((currentSession) => currentSession.id === nextSession.id),
+        ),
+      ]);
+      setSessionsCursor(page.nextCursor);
+    } finally {
+      setIsLoadingMoreSessions(false);
+    }
+  }, [isLoadingMoreSessions, isLoadingSessions, sessionsCursor]);
+
+  const replaceSessionUrl = useCallback((nextSessionId: string | null) => {
+    pendingUrlSessionRef.current = nextSessionId;
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextSessionId) {
+      params.set("session", nextSessionId);
+    } else {
+      params.delete("session");
+    }
+
+    const nextUrl = params.size > 0 ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const activateSession = useCallback((nextSessionId: string | null) => {
+    pendingSessionTitleRef.current = null;
+    pendingAssistantAttachmentRef.current = undefined;
+    pendingRequestRef.current = false;
+    clearTransportMessages([]);
+    hydratedSessionRef.current = null;
+    openSession(nextSessionId);
+    replaceSessionUrl(nextSessionId);
+  }, [clearTransportMessages, openSession, replaceSessionUrl]);
+
+  function openImagePreview(src: string, alt: string) {
+    setActiveImagePreview({ src, alt });
+  }
+
+  function scrollToLatest(behavior: ScrollBehavior = "smooth") {
+    requestAnimationFrame(() => {
+      const viewport = threadViewportRef.current;
+      if (!viewport || useAskStore.getState().messages.length === 0) {
+        return;
+      }
+
+      const scrollToBottom = () =>
+      {
+        const top = viewport.scrollHeight;
+        if (typeof viewport.scrollTo === "function") {
+          viewport.scrollTo({ top, behavior });
+          return;
+        }
+
+        viewport.scrollTop = top;
+      };
+
+      scrollToBottom();
+      requestAnimationFrame(scrollToBottom);
+    });
+  }
+
+  /**
+   * Images used to call scroll on every decode, which yanked the viewport to the bottom
+   * even while reading older messages. Only nudge scroll if the user is already near the end.
+   */
+  function scrollToLatestIfPinned(behavior: ScrollBehavior = "auto") {
+    const viewport = threadViewportRef.current;
+    if (!viewport || useAskStore.getState().messages.length === 0) {
+      return;
+    }
+
+    if (!isPinnedNearBottom(viewport, ASK_PINNED_THRESHOLD_PX)) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const v = threadViewportRef.current;
+      if (!v) {
+        return;
+      }
+
+      const top = v.scrollHeight;
+      if (typeof v.scrollTo === "function") {
+        v.scrollTo({ top, behavior });
+      } else {
+        v.scrollTop = top;
+      }
+    });
+  }
+
+  async function loadOlderMessages() {
+    if (!sessionId || !historyCursor || isLoadingOlder) {
+      return;
+    }
+
+    startOlderLoad();
+    const viewport = threadViewportRef.current;
+    if (viewport) {
+      pendingPrependRef.current = {
+        scrollHeight: viewport.scrollHeight,
+        scrollTop: viewport.scrollTop,
+      };
+    }
+
+    try {
+      const page = await fetchHistoryPage(sessionId, historyCursor);
+      prependHistoryPage(
+        page.messages.map(mapPersistedMessageToStoreMessage).filter(isDefined),
+        page.nextCursor,
+      );
+    } catch {
+      finishOlderLoad();
+      setError("Could not load older Ask messages.");
+    }
+  }
+
+  async function submit(promptOverride?: string) {
+    const nextPrompt = (promptOverride ?? draft).trim();
+    const submittedPrompt = nextPrompt || (attachment ? defaultAskImagePrompt : "");
+    const displayPrompt = nextPrompt;
+    if (!submittedPrompt || isSubmitting) {
+      return;
+    }
+
+    setError(null);
+
+    try {
+      const currentAttachment = attachment;
+      const image = currentAttachment ? await fileToDataUrl(currentAttachment.file) : null;
+
+      pendingSessionTitleRef.current = inferSessionTitleFromSubmission(
+        displayPrompt,
+        currentAttachment?.file.name ?? null,
+      );
+      pendingAssistantAttachmentRef.current = image ?? undefined;
+      pendingRequestRef.current = true;
+
+      appendUserMessage(
+        displayPrompt,
+        currentAttachment?.file.name ?? null,
+        image ?? undefined,
+      );
+      setDraft("");
+      clearAttachment();
+      scrollToLatest();
+
+      await sendMessage(
+        { text: submittedPrompt },
+        {
+          body: {
+            message: submittedPrompt,
+            image,
+            sessionId,
+            attachmentMeta: currentAttachment
+              ? {
+                  fileName: currentAttachment.file.name,
+                  mimeType: currentAttachment.file.type,
+                  size: currentAttachment.file.size,
+                }
+              : null,
+            history: historyWindow(),
+          },
+        },
+      );
+    } catch {
+      pendingSessionTitleRef.current = null;
+      pendingAssistantAttachmentRef.current = undefined;
+      pendingRequestRef.current = false;
+      clearTransportMessages([]);
+      setError("Could not send that message. Please try again.");
+      scrollToLatest();
+    }
+  }
+
+  const {
+    getRootProps,
+    getInputProps,
+    isDragActive,
+    open: openFilePicker,
+  } = useDropzone({
+    accept: {
+      "image/jpeg": [],
+      "image/png": [],
+      "image/webp": [],
+    },
+    maxFiles: 1,
+    maxSize: ASK_ATTACHMENT_MAX_BYTES,
+    noClick: true,
+    noKeyboard: true,
+    disabled: isSubmitting,
+    onDropAccepted: ([file]) => {
+      setAttachment({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      });
+    },
+    onDropRejected: () => {
+      setError("Use one PNG, JPEG, or WebP image up to 5MB.");
+    },
+  });
+  const { className: dropzoneClassName, ...dropzoneRootProps } = getRootProps() as {
+    className?: string;
+  } & Record<string, unknown>;
+
+  useEffect(() => {
+    void refreshSessions();
+  }, [refreshSessions]);
+
+  useEffect(() => {
+    if (pendingUrlSessionRef.current !== undefined) {
+      if (urlSessionId === pendingUrlSessionRef.current) {
+        pendingUrlSessionRef.current = undefined;
+      } else {
+        return;
+      }
+    }
+
+    if (!hasSyncedUrlSessionRef.current) {
+      hasSyncedUrlSessionRef.current = true;
+      if (urlSessionId !== sessionId) {
+        openSession(urlSessionId);
+      }
+      return;
+    }
+
+    if (urlSessionId !== sessionId) {
+      openSession(urlSessionId);
+    }
+  }, [openSession, sessionId, urlSessionId]);
+
+  useEffect(() => {
+    if (!sessionId || messages.length > 0 || hydratedSessionRef.current === sessionId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function restoreSession(activeSessionId: string) {
+      startHistoryLoad();
+
+      try {
+        const page = await fetchHistoryPage(activeSessionId);
+        if (cancelled) {
+          finishHistoryLoad();
+          return;
+        }
+
+        if (page.messages.length === 0) {
+          const state = useAskStore.getState();
+          if (state.sessionId === activeSessionId && state.messages.length === 0) {
+            activateSession(null);
+          }
+          finishHistoryLoad();
+          hydratedSessionRef.current = null;
+          return;
+        }
+
+        const state = useAskStore.getState();
+        if (state.sessionId !== activeSessionId || state.messages.length > 0) {
+          finishHistoryLoad();
+          return;
+        }
+
+        hydrateThread(
+          page.messages.map(mapPersistedMessageToStoreMessage).filter(isDefined),
+          page.nextCursor,
+        );
+        hydratedSessionRef.current = activeSessionId;
+        scrollToLatest("auto");
+      } catch {
+        if (!cancelled) {
+          finishHistoryLoad();
+          setError("Could not restore this Ask session.");
+        }
+      }
+    }
+
+    void restoreSession(sessionId);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activateSession,
+    finishHistoryLoad,
+    hydrateThread,
+    messages.length,
+    sessionId,
+    setError,
+    startHistoryLoad,
+  ]);
+
+  useEffect(() => {
+    if (!isSubmitting) {
+      return;
+    }
+
+    scrollToLatest();
+  }, [isSubmitting]);
+
+  useEffect(() => {
+    const pendingPrepend = pendingPrependRef.current;
+    const viewport = threadViewportRef.current;
+    if (!pendingPrepend || !viewport) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const heightDelta = viewport.scrollHeight - pendingPrepend.scrollHeight;
+      viewport.scrollTop = pendingPrepend.scrollTop + heightDelta;
+      pendingPrependRef.current = null;
+    });
+  }, [messages]);
+
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-[var(--vt-navy)] text-white">
+      <SiteNav />
+
+      <main className="mx-auto flex h-[calc(100dvh-4rem)] min-h-0 w-full flex-col px-0 pb-0 pt-0">
+        <div className="flex min-h-0 flex-1">
+          {/* Sidebar */}
+          <AskSessionSidebar
+            sessions={sessions}
+            activeSessionId={sessionId}
+            isLoading={isLoadingSessions}
+            isLoadingMore={isLoadingMoreSessions}
+            hasMore={Boolean(sessionsCursor)}
+            onNewSession={() => activateSession(null)}
+            onLoadMore={() => void loadMoreSessions()}
+            onSelectSession={(nextSessionId) => activateSession(nextSessionId)}
+            isCollapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+          />
+
+          {/* Divider */}
+          {!sidebarCollapsed && (
+            <div className="hidden w-px shrink-0 bg-white/[0.04] lg:block" />
+          )}
+
+          {/* Chat area */}
+          <div
+            {...dropzoneRootProps}
+            className={[
+              dropzoneClassName,
+              "relative flex min-h-0 min-w-0 flex-1 flex-col",
+              isDragActive ? "bg-[rgba(76,110,245,0.03)]" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {isDragActive ? (
+              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[rgba(10,13,46,0.76)] px-6">
+                <div className="rounded-2xl border border-[rgba(76,110,245,0.28)] bg-[rgba(17,22,72,0.92)] px-5 py-4 text-center shadow-[0_20px_80px_rgba(0,0,0,0.32)]">
+                  <div className="text-sm font-semibold text-white">
+                    Drop chart image to attach
+                  </div>
+                  <div className="mt-1 text-xs text-white/45">
+                    PNG, JPEG, or WebP up to 5MB
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Thread / Empty state */}
+            <div className="flex min-h-0 flex-1 flex-col">
+              {messages.length === 0 ? (
+                <AskEmptyState
+                  isLoadingHistory={isResolvingUrlSession || isOpeningSession || isLoadingHistory}
+                  prompts={suggestionPrompts}
+                  onPromptClick={(prompt) => void submit(prompt)}
+                />
+              ) : (
+                <AskThread
+                  messages={messages}
+                  historyCursor={historyCursor}
+                  isLoadingHistory={isLoadingHistory}
+                  isLoadingOlder={isLoadingOlder}
+                  isSubmitting={isSubmitting}
+                  onLoadOlder={() => void loadOlderMessages()}
+                  onOpenImage={openImagePreview}
+                  onAttachmentLoad={() => scrollToLatestIfPinned("auto")}
+                  viewportRef={threadViewportRef}
+                  bottomRef={threadBottomRef}
+                />
+              )}
+            </div>
+
+            {/* Composer */}
+            <div className="shrink-0 bg-gradient-to-t from-[var(--vt-navy)] via-[var(--vt-navy)] to-transparent px-4 pb-4 pt-3 sm:px-6">
+              {error ? (
+                <div className="mx-auto mb-2 w-full max-w-3xl rounded-xl border border-[rgba(242,109,109,0.2)] bg-[rgba(242,109,109,0.06)] px-3 py-2 text-[13px] font-medium text-[var(--vt-coral)]">
+                  {error}
+                </div>
+              ) : null}
+
+              <AskComposer
+                draft={draft}
+                attachment={attachment}
+                isSubmitting={isSubmitting}
+                isDragActive={isDragActive}
+                inputProps={getInputProps()}
+                onDraftChange={setDraft}
+                onSubmit={() => void submit()}
+                onOpenPicker={openFilePicker}
+                onClearAttachment={clearAttachment}
+                onPreviewAttachment={openImagePreview}
+              />
+
+              <div className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-white/15">
+                {getAppName()} may produce inaccurate information. Always verify before trading.
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {activeImagePreview ? (
+        <AskImageModal
+          src={activeImagePreview.src}
+          alt={activeImagePreview.alt}
+          onClose={() => setActiveImagePreview(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
