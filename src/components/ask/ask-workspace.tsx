@@ -717,6 +717,11 @@ export function AskWorkspace({
             {/* Thread / Empty state — overflow-hidden stops the empty layout from creating a page-height scroll shell */}
             <div
               className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+              style={
+                isMobileLayout
+                  ? { paddingBottom: composerStripHeight + keyboardInsetPx }
+                  : undefined
+              }
             >
               {messages.length === 0 ? (
                 <AskEmptyState
@@ -740,15 +745,16 @@ export function AskWorkspace({
               )}
             </div>
 
-            {/* Composer — sticky on mobile so only this strip tracks the keyboard; static shrink-0 on desktop */}
+            {/* Composer — fixed on mobile so it sits above the keyboard; shrink-0 on desktop */}
             <div
               ref={composerStripRef}
               className={[
                 "border-t border-white/[0.06] bg-[var(--vt-navy)]/95 px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:px-6 sm:pb-5 sm:pt-4",
                 isMobileLayout
-                  ? "sticky bottom-0 z-30"
+                  ? "fixed left-0 right-0 bottom-0 z-30"
                   : "shrink-0",
               ].join(" ")}
+              style={isMobileLayout ? { bottom: keyboardInsetPx } : undefined}
             >
               {error ? (
                 <div className="mx-auto mb-1.5 w-full max-w-4xl rounded-xl border border-[rgba(242,109,109,0.2)] bg-[rgba(242,109,109,0.06)] px-3 py-2 text-xs font-medium text-[var(--vt-coral)] sm:mb-2 sm:text-[13px]">

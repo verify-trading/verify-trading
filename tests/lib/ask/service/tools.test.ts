@@ -319,10 +319,10 @@ describe("createAskTools", () => {
         {
           title: "T",
           source: "S",
-          url: "https://example.com",
-          publishedAt: "2026-04-01T00:00:00Z",
+          description: undefined,
         },
       ],
+      note: undefined,
     });
   });
 
