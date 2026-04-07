@@ -163,6 +163,96 @@ function buildCoverageInsightCard(): AskCard {
   );
 }
 
+function buildUrlCoverageInsightCard(displayName: string): AskCard {
+  return buildInsightCard(
+    "Need Firm Name",
+    `I cannot inspect websites directly. I treated that link as ${displayName} but I do not have a reviewed record for it yet.`,
+    "Send the exact registered firm or brand name and I will check it.",
+  );
+}
+
+function extractHostnameLabel(hostname: string) {
+  const labels = hostname
+    .toLowerCase()
+    .split(".")
+    .map((label) => label.trim())
+    .filter(Boolean);
+
+  if (labels.length === 0) {
+    return null;
+  }
+
+  const filtered = labels.filter((label) => !["www", "m", "app"].includes(label));
+  if (filtered.length === 0) {
+    return null;
+  }
+
+  if (
+    filtered.length >= 3 &&
+    filtered.at(-1)?.length === 2 &&
+    ["co", "com", "org", "net"].includes(filtered.at(-2) ?? "")
+  ) {
+    return filtered.at(-3) ?? null;
+  }
+
+  return filtered.length >= 2 ? (filtered.at(-2) ?? null) : filtered[0];
+}
+
+function humanizeEntityName(value: string) {
+  const withSpaces = value
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([a-z])(?=(funded|markets|market|trading|capital|forex|funding|broker|group)\b)/gi, "$1 ")
+    .trim();
+
+  return withSpaces
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizeVerificationName(name: string) {
+  const trimmed = name.trim();
+  const urlMatch = trimmed.match(/https?:\/\/[^\s]+|www\.[^\s]+/i);
+
+  if (!urlMatch) {
+    return {
+      lookupName: trimmed,
+      displayName: trimmed,
+      fromUrl: false,
+    };
+  }
+
+  try {
+    const candidate = urlMatch[0].startsWith("http") ? urlMatch[0] : `https://${urlMatch[0]}`;
+    const url = new URL(candidate);
+    const hostnameLabel = extractHostnameLabel(url.hostname);
+
+    if (!hostnameLabel) {
+      return {
+        lookupName: trimmed,
+        displayName: trimmed,
+        fromUrl: true,
+      };
+    }
+
+    const displayName = humanizeEntityName(hostnameLabel);
+
+    return {
+      lookupName: hostnameLabel,
+      displayName,
+      fromUrl: true,
+    };
+  } catch {
+    return {
+      lookupName: trimmed,
+      displayName: trimmed,
+      fromUrl: true,
+    };
+  }
+}
+
 function formatPrice(value: number) {
   return value.toFixed(2);
 }
@@ -287,7 +377,8 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         "Verify a broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks. It uses reviewed entity data first and then live FCA confirmation when an FRN is available.",
       inputSchema: verifyEntityInputSchema,
       execute: async ({ name }) => {
-        const lookup = await lookupVerifiedEntityImpl(name);
+        const normalized = normalizeVerificationName(name);
+        const lookup = await lookupVerifiedEntityImpl(normalized.lookupName);
 
         if (lookup.found && lookup.entity) {
           if (lookup.entity.type === "guru") {
@@ -326,7 +417,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         }
 
         // Seed lookup failed — fall back to live FCA register search
-        const fcaStatus = await getFcaStatusImpl({ name, frn: undefined });
+        const fcaStatus = await getFcaStatusImpl({ name: normalized.lookupName, frn: undefined });
         if (fcaStatus.available && fcaStatus.statusText) {
           return {
             fcaData: {
@@ -341,7 +432,11 @@ export function createAskTools(dependencies: AskServiceDependencies) {
           };
         }
 
-        return withCard(buildCoverageInsightCard());
+        return withCard(
+          normalized.fromUrl
+            ? buildUrlCoverageInsightCard(normalized.displayName)
+            : buildCoverageInsightCard(),
+        );
       },
     }),
     get_market_briefing: tool({

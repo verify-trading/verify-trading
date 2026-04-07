@@ -96,6 +96,70 @@ describe("createAskTools", () => {
     });
   });
 
+  it("normalizes URL inputs before entity lookup", async () => {
+    const lookupVerifiedEntityImpl = vi.fn().mockResolvedValue({
+      found: false,
+    });
+    const getFcaStatusImpl = vi.fn().mockResolvedValue({
+      available: false,
+      queriedName: "tigerfunded",
+      frn: null,
+      statusText: null,
+      authorised: null,
+      warning: false,
+      note: null,
+      source: "FCA lookup not configured",
+    });
+    const tools = createAskTools({
+      lookupVerifiedEntityImpl,
+      getFcaStatusImpl,
+    });
+
+    await tools.verify_entity.execute?.(
+      {
+        name: "https://tigerfunded.com/",
+      },
+      {} as never,
+    );
+
+    expect(lookupVerifiedEntityImpl).toHaveBeenCalledWith("tigerfunded");
+    expect(getFcaStatusImpl).toHaveBeenCalledWith({ name: "tigerfunded", frn: undefined });
+  });
+
+  it("returns a URL-specific coverage card when a domain has no reviewed match", async () => {
+    const tools = createAskTools({
+      lookupVerifiedEntityImpl: vi.fn().mockResolvedValue({
+        found: false,
+      }),
+      getFcaStatusImpl: vi.fn().mockResolvedValue({
+        available: false,
+        queriedName: "tigerfunded",
+        frn: null,
+        statusText: null,
+        authorised: null,
+        warning: false,
+        note: null,
+        source: "FCA lookup not configured",
+      }),
+    });
+
+    const result = await tools.verify_entity.execute?.(
+      {
+        name: "https://tigerfunded.com/",
+      },
+      {} as never,
+    );
+
+    expect(result).toEqual({
+      card: {
+        type: "insight",
+        headline: "Need Firm Name",
+        body: "I cannot inspect websites directly. I treated that link as Tiger Funded but I do not have a reviewed record for it yet.",
+        verdict: "Send the exact registered firm or brand name and I will check it.",
+      },
+    });
+  });
+
   it("keeps prop firms out of the broker FCA path", async () => {
     const getFcaStatusImpl = vi.fn();
     const tools = createAskTools({
