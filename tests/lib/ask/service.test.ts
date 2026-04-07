@@ -141,6 +141,30 @@ describe("generateAskResponse", () => {
     expect(response.data.lots).toBe("0.50");
   });
 
+  it("wraps plain text model output into an insight card", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "Explain what is going wrong here",
+        sessionId: crypto.randomUUID(),
+        history: [{ role: "user", content: "Earlier context" }],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "I need one key input before I can run this. What monthly return percentage are you targeting?",
+          toolResults: [],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data.type).toBe("insight");
+    expect(response.data).not.toEqual(fallbackInsightCard);
+    if (response.data.type !== "insight") {
+      throw new Error("Expected an insight card.");
+    }
+    expect(response.data.headline).toBe("Need Input");
+    expect(response.data.body).toContain("I need one key input");
+  });
+
   it("adds market series ui metadata when a briefing tool response includes close values", async () => {
     const response = await generateAskResponse(
       {
@@ -533,7 +557,7 @@ describe("generateAskResponse", () => {
     expect(response.data.headline).toBe("Margin Needed");
   });
 
-  it("returns the fallback card when the response cannot be parsed", async () => {
+  it("wraps plain text output when the response cannot be parsed", async () => {
     const response = await generateAskResponse(
       {
         message: "Tell me something broken",
@@ -548,10 +572,15 @@ describe("generateAskResponse", () => {
       },
     );
 
-    expect(response.data).toEqual(fallbackInsightCard);
+    expect(response.data).toEqual({
+      type: "insight",
+      headline: "Quick Take",
+      body: "still not json",
+      verdict: "Ask a sharper follow-up if you want me to refine it.",
+    });
   });
 
-  it("returns the fallback card when both text and tool output are invalid", async () => {
+  it("wraps plain text output even when tool output is invalid", async () => {
     const response = await generateAskResponse(
       {
         message: "Tell me something broken",
@@ -566,10 +595,15 @@ describe("generateAskResponse", () => {
       },
     );
 
-    expect(response.data).toEqual(fallbackInsightCard);
+    expect(response.data).toEqual({
+      type: "insight",
+      headline: "Quick Take",
+      body: "still not json",
+      verdict: "Ask a sharper follow-up if you want me to refine it.",
+    });
   });
 
-  it("returns the fallback card when the model emits invalid card JSON", async () => {
+  it("wraps invalid card JSON text into an insight card", async () => {
     const response = await generateAskResponse(
       {
         message: "Tell me something malformed",
@@ -585,6 +619,29 @@ describe("generateAskResponse", () => {
             verdict: "",
           }),
           toolResults: [],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data).toEqual({
+      type: "insight",
+      headline: "Quick Take",
+      body: "{\"type\":\"insight\",\"headline\":\"\",\"body\":\"\",\"verdict\":\"\"}",
+      verdict: "Ask a sharper follow-up if you want me to refine it.",
+    });
+  });
+
+  it("still returns the fallback card when there is no usable text or tool card", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "Tell me something broken",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "   ",
+          toolResults: [{ output: { invalid: true } }],
         }) as unknown as typeof import("ai").generateText,
       },
     );

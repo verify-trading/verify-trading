@@ -116,6 +116,41 @@ function buildInsightCard(headline: string, body: string, verdict: string) {
   };
 }
 
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function clampWords(value: string, maxWords: number) {
+  const words = normalizeWhitespace(value).split(" ");
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+
+  return `${words.slice(0, maxWords).join(" ")}…`;
+}
+
+function buildInsightCardFromModelText(text: string) {
+  const normalized = normalizeWhitespace(text);
+  if (!normalized) {
+    return null;
+  }
+
+  const sentences = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  const first = sentences[0] ?? normalized;
+  const second = sentences[1] ?? "";
+  const asksForInput = /\?/.test(normalized) || /\b(i need|send|give me|what)\b/i.test(first);
+
+  return buildInsightCard(
+    asksForInput ? "Need Input" : "Quick Take",
+    clampWords(first, 60),
+    clampWords(second || (asksForInput ? "Reply with the missing detail." : "Ask a sharper follow-up if you want me to refine it."), 60),
+  );
+}
+
 function parseFlexibleNumber(raw: string): number | null {
   const normalized = raw.replace(/[$£€,]/g, "").trim().toLowerCase();
   const match = normalized.match(/^(\d+(?:\.\d+)?)([km])?$/);
@@ -400,10 +435,13 @@ export async function generateAskResponse(
     });
   }
 
+  const wrappedTextCard =
+    !submitCard && !toolCard && !parsedCard?.success ? buildInsightCardFromModelText(result.text) : null;
+
   const card =
     submitCard ??
     toolCard ??
-    (parsedCard?.success ? parsedCard.data : fallbackInsightCard);
+    (parsedCard?.success ? parsedCard.data : wrappedTextCard ?? fallbackInsightCard);
 
   logger.info("Ask generation completed.", {
     sessionId,
@@ -413,6 +451,8 @@ export async function generateAskResponse(
       ? "submit_ask_card"
       : parsedCard?.success
         ? "model_text"
+        : wrappedTextCard
+          ? "wrapped_text"
         : toolCard
           ? "tool_result"
           : "fallback",
