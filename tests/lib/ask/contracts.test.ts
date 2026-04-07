@@ -88,6 +88,24 @@ describe("ask contracts", () => {
     expect(bearishCard.type === "chart" ? bearishCard.bias : null).toBe("Bearish");
   });
 
+  it("accepts a valid setup card", () => {
+    const card = askCardSchema.parse({
+      type: "setup",
+      asset: "GOLD / XAUUSD",
+      bias: "Bullish",
+      entry: "4649.77",
+      stop: "4645.10",
+      target: "4659.11",
+      rr: "2:1",
+      rationale: "Wait for reclaim above resistance instead of buying straight into weakness.",
+      confidence: "Low",
+      verdict: "Buy only after confirmation.",
+    });
+
+    expect(card.type).toBe("setup");
+    expect(card.type === "setup" ? card.bias : null).toBe("Bullish");
+  });
+
   it("accepts an image-only ask request", () => {
     const parsed = askRequestSchema.parse({
       message: "",

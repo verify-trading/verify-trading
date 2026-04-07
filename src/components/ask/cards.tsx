@@ -292,6 +292,45 @@ function ChartAnalysisCard({ card }: { card: Extract<AskCard, { type: "chart" }>
   );
 }
 
+function SetupCardView({ card }: { card: Extract<AskCard, { type: "setup" }> }) {
+  return (
+    <CardFrame eyebrow="Trade Setup" accentClassName="text-[var(--vt-blue)]">
+      <div className="space-y-4">
+        <div>
+          <div className="text-lg font-black text-white sm:text-xl">{card.asset}</div>
+          <div className="mt-2 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
+            {card.bias} bias
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {[
+            ["Entry", card.entry],
+            ["Stop", card.stop],
+            ["Target", card.target],
+            ["R:R", card.rr],
+          ].map(([label, value]) => (
+            <div key={label} className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
+                {label}
+              </div>
+              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-sm leading-relaxed text-slate-200">
+          {card.rationale}
+        </div>
+        <div className="rounded-2xl border border-[rgba(34,197,94,0.18)] bg-[rgba(34,197,94,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-green)]">
+          Confidence: {card.confidence}
+        </div>
+        <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
+          {card.verdict}
+        </div>
+      </div>
+    </CardFrame>
+  );
+}
+
 function ProjectionCardView({
   card,
   uiMeta,
@@ -353,6 +392,9 @@ export function AskResponseCard({
       break;
     case "chart":
       content = <ChartAnalysisCard card={card} />;
+      break;
+    case "setup":
+      content = <SetupCardView card={card} />;
       break;
     case "projection":
       content = <ProjectionCardView card={card} uiMeta={uiMeta} />;

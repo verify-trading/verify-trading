@@ -94,6 +94,31 @@ const supportedAssets = {
   },
 } as const satisfies Record<string, MarketInstrument>;
 
+function collapseAssetText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function inferMarketAssetFromText(text: string): string | null {
+  const collapsed = collapseAssetText(text);
+  const tokenized = text
+    .toLowerCase()
+    .split(/[^a-z0-9/]+/)
+    .map((token) => collapseAssetText(token))
+    .filter(Boolean);
+
+  const matches = Object.entries(supportedAssets)
+    .filter(([key]) => {
+      if (key.length <= 3) {
+        return tokenized.includes(key);
+      }
+
+      return collapsed.includes(key);
+    })
+    .sort((left, right) => right[0].length - left[0].length);
+
+  return matches[0]?.[1].asset ?? null;
+}
+
 export const getMarketQuoteInputSchema = z.object({
   asset: z.string().min(1).describe("Market name or symbol such as Gold, Ethereum, EUR/USD, Nasdaq, AAPL, or TSLA."),
 });

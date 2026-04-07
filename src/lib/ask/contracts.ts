@@ -107,6 +107,19 @@ export const chartCardSchema = z.object({
   verdict: textFieldSchema,
 });
 
+export const setupCardSchema = z.object({
+  type: z.literal("setup"),
+  asset: textFieldSchema,
+  bias: chartBiasSchema,
+  entry: textFieldSchema,
+  stop: textFieldSchema,
+  target: textFieldSchema,
+  rr: textFieldSchema,
+  rationale: textFieldSchema,
+  confidence: chartConfidenceSchema,
+  verdict: textFieldSchema,
+});
+
 
 export const projectionCardSchema = z.object({
   type: z.literal("projection"),
@@ -127,6 +140,7 @@ export const askCardSchema = z.discriminatedUnion("type", [
   guruCardSchema,
   insightCardSchema,
   chartCardSchema,
+  setupCardSchema,
   projectionCardSchema,
 ]);
 
@@ -249,6 +263,7 @@ export type BriefingCard = z.infer<typeof briefingCardSchema>;
 export type CalcCard = z.infer<typeof calcCardSchema>;
 export type InsightCard = z.infer<typeof insightCardSchema>;
 export type ChartCard = z.infer<typeof chartCardSchema>;
+export type SetupCard = z.infer<typeof setupCardSchema>;
 export type ProjectionCard = z.infer<typeof projectionCardSchema>;
 
 export const fallbackInsightCard: InsightCard = {

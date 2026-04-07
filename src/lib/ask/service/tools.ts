@@ -28,6 +28,7 @@ import { askCardSchema } from "@/lib/ask/contracts";
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 import { generateProjectionCard, generateProjectionInputSchema } from "@/lib/ask/projections";
+import { buildMarketSetupCard, getMarketSetupInputSchema } from "@/lib/ask/setups";
 
 const verifyEntityInputSchema = z.object({
   name: z.string().min(1).describe("Broker, prop firm, guru, or brand name to verify."),
@@ -39,7 +40,7 @@ const submitAskCardInputSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'One UI card as a JSON string. Include "type": broker | briefing | calc | guru | insight | chart | projection and all required fields for that type.',
+      'One UI card as a JSON string. Include "type": broker | briefing | calc | guru | insight | chart | setup | projection and all required fields for that type.',
     ),
 });
 
@@ -450,6 +451,18 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         ),
       }),
     }),
+    get_market_setup: tool({
+      description:
+        "Live setup for entry questions: buy, sell, long, short, stop, target, invalidation. Use it when the user asks where to enter, not just what price is doing.",
+      inputSchema: getMarketSetupInputSchema,
+      execute: async ({ asset, timeframe, side }) => ({
+        ...buildMarketSetupCard(
+          await getMarketQuoteImpl(asset),
+          await getMarketSeriesImpl(asset, timeframe),
+          side,
+        ),
+      }),
+    }),
     search_news: tool({
       description:
         "Recent headlines with descriptions (NewsData). Optional from date only if the user stated it. Read the descriptions for context, not just titles. Then submit_ask_card; use articles and note from the result.",
@@ -536,7 +549,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     submit_ask_card: tool({
       description:
-        "Final card submission. After search_news: use summary, setup, sentiment, or insight. After get_market_briefing: use briefing or setup. After calcs: use calc or insight. card_json = stringified card.",
+        "Final card submission. After search_news: use insight, or setup if the user asked for a trade plan and you also used get_market_setup. After get_market_briefing: use briefing or setup. After get_market_setup: use setup. After calcs: use calc or insight. card_json = stringified card.",
       inputSchema: submitAskCardInputSchema,
       execute: async ({ card_json }) => {
         let parsed: unknown;

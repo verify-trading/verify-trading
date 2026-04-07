@@ -105,6 +105,48 @@ describe("generateAskResponse", () => {
     expect(response.uiMeta?.projectionMarkers).toBeDefined();
   });
 
+  it("short-circuits clear market entry prompts into a setup card", async () => {
+    const generateTextImpl = vi.fn();
+    const getMarketQuoteImpl = vi.fn().mockResolvedValue({
+      asset: "GOLD / XAUUSD",
+      symbol: "XAU/USD",
+      price: 4645.1,
+      changePercent: -0.1,
+      direction: "down",
+      isMarketOpen: true,
+    });
+    const getMarketSeriesImpl = vi.fn().mockResolvedValue({
+      asset: "GOLD / XAUUSD",
+      symbol: "XAU/USD",
+      timeframe: "1W",
+      closeValues: [4640.0, 4645.1, 4649.77],
+      resistance: 4649.77,
+      support: 4640.0,
+    });
+
+    const response = await generateAskResponse(
+      {
+        message: "What price should I buy gold at?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+        getMarketQuoteImpl,
+        getMarketSeriesImpl,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data.type).toBe("setup");
+    if (response.data.type !== "setup") {
+      throw new Error("Expected a setup card.");
+    }
+    expect(response.data.asset).toBe("GOLD / XAUUSD");
+    expect(response.data.bias).toBe("Bullish");
+    expect(response.data.entry).toBe("4649.77");
+  });
+
   it("falls back to a tool-generated card when the final text is unusable", async () => {
     const response = await generateAskResponse(
       {
@@ -603,7 +645,7 @@ describe("generateAskResponse", () => {
     });
   });
 
-  it("wraps invalid card JSON text into an insight card", async () => {
+  it("falls back cleanly when the model emits invalid card JSON", async () => {
     const response = await generateAskResponse(
       {
         message: "Tell me something malformed",
@@ -623,12 +665,7 @@ describe("generateAskResponse", () => {
       },
     );
 
-    expect(response.data).toEqual({
-      type: "insight",
-      headline: "Quick Take",
-      body: "{\"type\":\"insight\",\"headline\":\"\",\"body\":\"\",\"verdict\":\"\"}",
-      verdict: "Ask a sharper follow-up if you want me to refine it.",
-    });
+    expect(response.data).toEqual(fallbackInsightCard);
   });
 
   it("still returns the fallback card when there is no usable text or tool card", async () => {

@@ -17,6 +17,8 @@ import {
   defaultAskImagePrompt,
   verifyTradingSystemPrompt,
 } from "@/lib/ask/prompt";
+import { getMarketQuote, getMarketSeries, inferMarketAssetFromText } from "@/lib/ask/market";
+import { buildMarketSetupCard } from "@/lib/ask/setups";
 import { generateProjectionCard } from "@/lib/ask/projections";
 import { expandPromptTemplate } from "@/lib/site-config";
 import {
@@ -135,6 +137,10 @@ function buildInsightCardFromModelText(text: string) {
     return null;
   }
 
+  if (normalized.startsWith("{") || normalized.startsWith("[")) {
+    return null;
+  }
+
   const sentences = normalized
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.trim())
@@ -214,6 +220,35 @@ function extractProjectionShortcutCard(message: string) {
     ...(monthlyAdd != null ? { monthlyAdd } : {}),
     ...(monthlyReturnPercent != null ? { monthlyReturnPercent } : {}),
   });
+}
+
+function extractMarketSetupShortcutInput(message: string) {
+  const normalized = message.toLowerCase();
+  const asksBuy =
+    /\b(buy|long)\b/.test(normalized) ||
+    /\bwhat price should i buy\b/.test(normalized) ||
+    /\bwhere should i buy\b/.test(normalized);
+  const asksSell =
+    /\b(sell|short)\b/.test(normalized) ||
+    /\bwhat price should i sell\b/.test(normalized) ||
+    /\bwhere should i short\b/.test(normalized);
+  const asksEntry =
+    /\b(entry|entries|stop loss|take profit|target|invalidation)\b/.test(normalized);
+
+  if ((!asksBuy && !asksSell) || !asksEntry && !/what price should i (buy|sell)\b/.test(normalized)) {
+    return null;
+  }
+
+  const asset = inferMarketAssetFromText(message);
+  if (!asset) {
+    return null;
+  }
+
+  return {
+    asset,
+    timeframe: "1W" as const,
+    side: asksSell ? "sell" as const : "buy" as const,
+  };
 }
 
 function resolveClarificationCard(request: AskRequest) {
@@ -298,6 +333,32 @@ export async function generateAskResponse(
     return askResponseSchema.parse({
       data: sanitizeCard(projectionShortcutCard),
       uiMeta: sanitizeUiMeta(extractUiMeta(projectionShortcutCard, [])),
+      sessionId,
+      messageId,
+    });
+  }
+
+  const marketSetupShortcut = extractMarketSetupShortcutInput(normalizedMessage);
+  if (marketSetupShortcut) {
+    const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
+    const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
+    const setupResult = buildMarketSetupCard(
+      await getMarketQuoteImpl(marketSetupShortcut.asset),
+      await getMarketSeriesImpl(marketSetupShortcut.asset, marketSetupShortcut.timeframe),
+      marketSetupShortcut.side,
+    );
+
+    logger.info("Ask generation completed.", {
+      sessionId,
+      messageId,
+      finalCardType: setupResult.card.type,
+      cardSource: "setup_shortcut",
+      toolResults: [],
+    });
+
+    return askResponseSchema.parse({
+      data: sanitizeCard(setupResult.card),
+      uiMeta: sanitizeUiMeta(setupResult.uiMeta),
       sessionId,
       messageId,
     });
@@ -436,7 +497,9 @@ export async function generateAskResponse(
   }
 
   const wrappedTextCard =
-    !submitCard && !toolCard && !parsedCard?.success ? buildInsightCardFromModelText(result.text) : null;
+    !submitCard && !toolCard && !parsedCard?.success && !parsedText
+      ? buildInsightCardFromModelText(result.text)
+      : null;
 
   const card =
     submitCard ??

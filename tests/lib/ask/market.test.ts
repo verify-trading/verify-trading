@@ -5,6 +5,7 @@ import {
   deriveQuoteFromSeries,
   getMarketQuote,
   getMarketSeries,
+  inferMarketAssetFromText,
   resolveSupportedAsset,
 } from "@/lib/ask/market";
 
@@ -38,6 +39,12 @@ describe("market tools", () => {
     expect(resolveSupportedAsset("Nasdaq")?.symbol).toBe("QQQ");
     expect(resolveSupportedAsset("NAS")?.symbol).toBe("QQQ");
     expect(resolveSupportedAsset("Dow Jones")?.symbol).toBe("DIA");
+  });
+
+  it("does not infer short aliases from incidental substrings", () => {
+    expect(inferMarketAssetFromText("Should I buy this because the language sounds nascent?")).toBeNull();
+    expect(inferMarketAssetFromText("This guessing game has nothing to do with cable.")).toBeNull();
+    expect(inferMarketAssetFromText("I like the ethics here.")).toBeNull();
   });
 
   it("parses a quote response", async () => {

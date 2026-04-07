@@ -264,6 +264,56 @@ describe("createAskTools", () => {
     });
   });
 
+  it("builds a live setup card for buy-entry questions", async () => {
+    const tools = createAskTools({
+      getMarketQuoteImpl: vi.fn().mockResolvedValue({
+        asset: "GOLD / XAUUSD",
+        symbol: "XAU/USD",
+        price: 4645.1,
+        changePercent: -0.1,
+        direction: "down",
+        isMarketOpen: true,
+      }),
+      getMarketSeriesImpl: vi.fn().mockResolvedValue({
+        asset: "GOLD / XAUUSD",
+        symbol: "XAU/USD",
+        timeframe: "1W",
+        closeValues: [4640.0, 4645.1, 4649.77],
+        resistance: 4649.77,
+        support: 4640.0,
+      }),
+    });
+
+    const result = await tools.get_market_setup.execute?.(
+      {
+        asset: "Gold",
+        timeframe: "1W",
+        side: "buy",
+      },
+      {} as never,
+    );
+
+    expect(result).toEqual({
+      card: {
+        type: "setup",
+        asset: "GOLD / XAUUSD",
+        bias: "Bullish",
+        entry: "4649.77",
+        stop: "4640.00",
+        target: "4669.31",
+        rr: "2:1",
+        rationale:
+          "GOLD / XAUUSD is still leaning heavy. For a long, wait for a clean reclaim above resistance instead of catching the knife into support.",
+        confidence: "Low",
+        verdict: "Do not buy weakness here. Buy only if price reclaims 4649.77 and holds.",
+      },
+      uiMeta: {
+        marketSeries: [4640.0, 4645.1, 4649.77],
+        marketLevelScopeLabel: "Near-term levels",
+      },
+    });
+  });
+
   it("uses the full visible range when price sits on the edge of the recent closes", async () => {
     const tools = createAskTools({
       getMarketQuoteImpl: vi.fn().mockResolvedValue({

@@ -138,6 +138,16 @@ function serializeAssistantCardForContext(card: AskCard) {
         target: card.target,
         verdict: card.verdict,
       });
+    case "setup":
+      return JSON.stringify({
+        type: card.type,
+        asset: card.asset,
+        bias: card.bias,
+        entry: card.entry,
+        stop: card.stop,
+        target: card.target,
+        verdict: card.verdict,
+      });
     case "projection":
       return JSON.stringify({
         type: card.type,

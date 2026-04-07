@@ -61,7 +61,7 @@ function extractToolUiMeta(
       continue;
     }
 
-    if (card.type === "briefing") {
+    if (card.type === "briefing" || card.type === "setup") {
       if (
         Array.isArray(nestedUiMeta.marketSeries) &&
         nestedUiMeta.marketSeries.every((value) => typeof value === "number")
