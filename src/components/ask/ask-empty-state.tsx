@@ -1,26 +1,66 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
-
-import { brandGradient } from "@/lib/brand";
+import type { CSSProperties } from "react";
 
 import { AskEmptyRestoringSkeleton } from "@/components/ask/ask-skeletons";
+import { brandGradient } from "@/lib/brand";
+
+const RING_MASK: CSSProperties = {
+  mask: "radial-gradient(farthest-side, transparent calc(100% - 3.5px), black calc(100% - 3.5px))",
+  WebkitMask:
+    "radial-gradient(farthest-side, transparent calc(100% - 3.5px), black calc(100% - 3.5px))",
+};
+
+const ECHO_RING_COUNT = 4;
+const ECHO_STAGGER_S = 0.26;
 
 function LogoRingIcon({ className = "" }: { className?: string }) {
+  const echoRingStyle: CSSProperties = {
+    ...RING_MASK,
+    backgroundImage: brandGradient,
+    transformOrigin: "center",
+    willChange: "transform, opacity",
+    borderRadius: "50%",
+  };
+
   return (
-    <div className={`relative size-14 sm:size-16 ${className}`}>
-      <div
-        className="absolute inset-0 rounded-full opacity-40 blur-md"
-        style={{ backgroundImage: brandGradient }}
-        aria-hidden
-      />
-      <div
-        className="absolute inset-0 rounded-full"
-        style={{ backgroundImage: brandGradient }}
-      />
-      <div className="absolute inset-[2px] flex items-center justify-center rounded-full border border-white/10 bg-[rgba(10,13,46,0.94)] sm:inset-[2.5px]">
-        <Sparkles className="size-5 text-[var(--vt-blue)] sm:size-6" strokeWidth={1.5} aria-hidden />
+    <div className={`relative size-14 sm:size-16 ${className}`} aria-hidden>
+      {/* Duplicate rings: same stroke as the logo, scale out + fade (ripple / “fire” energy) */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-visible">
+        {Array.from({ length: ECHO_RING_COUNT }, (_, index) => (
+          <div
+            key={index}
+            className="absolute inset-0 rounded-full motion-safe:animate-[ask-logo-ring-echo_1.05s_ease-out_infinite] motion-reduce:animate-none"
+            style={{
+              ...echoRingStyle,
+              animationDelay: `${index * ECHO_STAGGER_S}s`,
+            }}
+          />
+        ))}
       </div>
+
+      {/* Soft bloom behind the sharp ring */}
+      <div
+        className="pointer-events-none absolute -inset-3 z-1 rounded-full blur-2xl motion-safe:animate-[ask-logo-ring-glow_3.2s_ease-in-out_infinite] motion-reduce:animate-none motion-reduce:opacity-50"
+        style={{ backgroundImage: brandGradient }}
+      />
+      <div
+        className="pointer-events-none absolute -inset-1 z-1 rounded-full opacity-70 blur-md"
+        style={{ backgroundImage: brandGradient }}
+      />
+
+      {/* Main ring — static gradient (ripples carry the motion) */}
+      <div className="absolute inset-0 z-2">
+        <div
+          className="size-full rounded-full"
+          style={{
+            ...RING_MASK,
+            backgroundImage: brandGradient,
+          }}
+        />
+      </div>
+
+      <div className="absolute inset-[3.5px] z-3 rounded-full border border-white/10 bg-[rgba(10,13,46,0.94)] shadow-[inset_0_0_14px_rgba(0,0,0,0.45)]" />
     </div>
   );
 }
@@ -28,9 +68,8 @@ function LogoRingIcon({ className = "" }: { className?: string }) {
 function WelcomeBlock({ className = "" }: { className?: string }) {
   return (
     <div className={["text-center", className].filter(Boolean).join(" ")}>
-      <div className="relative mb-4 sm:mb-5">
-        <div className="absolute inset-0 scale-150 rounded-full bg-[var(--vt-blue)]/15 blur-xl" aria-hidden />
-        <div className="relative mx-auto flex items-center justify-center rounded-2xl">
+      <div className="relative mb-4 px-2 pt-6 pb-2 sm:mb-5 sm:px-4 sm:pt-8">
+        <div className="relative mx-auto flex items-center justify-center overflow-visible rounded-2xl">
           <LogoRingIcon />
         </div>
       </div>
@@ -61,7 +100,7 @@ export function AskEmptyState({
     "group flex h-full min-h-[3.25rem] w-full items-start rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left text-sm font-medium leading-snug text-white/85 shadow-sm ring-1 ring-white/[0.03] transition hover:border-[rgba(76,110,245,0.35)] hover:bg-[rgba(76,110,245,0.08)] hover:text-white sm:text-base";
 
   return (
-    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden">
       {/* ─── Desktop / web: centered block; suggestions in a wrapping 2-col grid on wide panes ─── */}
       <div className="hidden min-h-0 flex-1 flex-col items-center justify-center px-8 py-10 lg:flex">
         <div className="w-full max-w-2xl">
@@ -82,33 +121,10 @@ export function AskEmptyState({
         </div>
       </div>
 
-      {/* ─── Mobile: welcome centered in upper area; suggestions pinned above composer ─── */}
-      <div className="flex min-h-0 flex-1 flex-col lg:hidden">
-        <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-5 sm:max-w-xl sm:px-8">
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-4 sm:py-6">
-            <WelcomeBlock />
-          </div>
-
-          <div className="w-full shrink-0 pb-2">
-            <p className="mb-2 text-left text-[11px] font-medium uppercase tracking-[0.12em] text-white/35">
-              Suggestions
-            </p>
-            <div
-              className="flex gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain py-0.5 pl-0.5 pr-5 [scrollbar-width:none] touch-pan-x [&::-webkit-scrollbar]:hidden"
-              style={{ WebkitOverflowScrolling: "touch" }}
-            >
-              {prompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => onPromptClick(prompt)}
-                  className="w-max shrink-0 snap-start rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left text-[13px] font-medium leading-snug text-white/85 shadow-sm ring-1 ring-white/[0.03] transition active:scale-[0.99] sm:px-4 sm:py-3.5 sm:text-sm"
-                >
-                  <span className="line-clamp-3">{prompt}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* ─── Mobile: welcome only (no suggestion chips — desktop keeps the grid) ─── */}
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-4 lg:hidden sm:max-w-xl sm:px-8 sm:py-6">
+        <div className="mx-auto w-full max-w-lg">
+          <WelcomeBlock />
         </div>
       </div>
     </div>

@@ -44,7 +44,6 @@ import {
   isPinnedNearBottom,
 } from "@/lib/ask/scroll-thread";
 import { askToolStatusSchema, type AskToolStatus } from "@/lib/ask/stream";
-import { getAppName } from "@/lib/site-config";
 import { logger } from "@/lib/observability/logger";
 
 const ASK_SESSION_PAGE_SIZE = 40;
@@ -855,14 +854,8 @@ export function AskWorkspace({
                 onPreviewAttachment={openImagePreview}
               />
 
-              {/* Mobile: one short line; desktop: full sentence */}
-              <p className="relative z-10 mx-auto mt-1.5 max-w-md px-2 text-center text-[10px] leading-none tracking-tight text-white/45 sm:mt-3 sm:text-xs sm:leading-relaxed sm:text-white/40">
-                <span className="sm:hidden whitespace-nowrap">
-                  May be wrong. Verify before trading.
-                </span>
-                <span className="hidden sm:inline">
-                  {getAppName()} can make mistakes. Check important information before trading.
-                </span>
+              <p className="relative z-10 mx-auto mt-1.5 max-w-md px-2 text-center text-[10px] leading-snug tracking-tight text-white/45 sm:mt-3 sm:text-xs sm:leading-relaxed sm:text-white/40">
+                AI can make mistakes. This is not financial advice.
               </p>
             </div>
           </div>

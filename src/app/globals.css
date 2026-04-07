@@ -65,3 +65,32 @@ select {
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 
+/* Ask empty state — neon ring glow (breathing) */
+@keyframes ask-logo-ring-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.92;
+    transform: scale(1.12);
+  }
+}
+
+/* Ask empty state — duplicate ring ripples (same stroke, scales out + fades).
+   No filter:blur here — blurring a square box caused visible square “frames”. */
+@keyframes ask-logo-ring-echo {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  45% {
+    opacity: 0.18;
+  }
+  100% {
+    transform: scale(1.48);
+    opacity: 0;
+  }
+}
+

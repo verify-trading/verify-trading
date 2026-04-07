@@ -422,6 +422,61 @@ describe("createAskTools", () => {
     });
   });
 
+  it("get_economic_calendar delegates to fetchEconomicCalendarImpl", async () => {
+    const fetchEconomicCalendarImpl = vi.fn().mockResolvedValue({
+      from: "2026-04-07",
+      to: "2026-04-14",
+      events: [
+        {
+          date: "2026-04-10",
+          time: "12:30",
+          country: "United States",
+          event: "CPI",
+          impact: "high",
+          currency: "USD",
+        },
+      ],
+      note: undefined,
+      source: "FMP",
+    });
+    const tools = createAskTools({ fetchEconomicCalendarImpl });
+
+    const result = await tools.get_economic_calendar.execute?.(
+      {
+        from: "2026-04-07",
+        to: "2026-04-14",
+        country: "US",
+        importance: "high",
+        limit: 5,
+      },
+      {} as never,
+    );
+
+    expect(fetchEconomicCalendarImpl).toHaveBeenCalledWith({
+      from: "2026-04-07",
+      to: "2026-04-14",
+      country: "US",
+      importance: "high",
+      limit: 5,
+    });
+    expect(result).toEqual({
+      from: "2026-04-07",
+      to: "2026-04-14",
+      events: [
+        {
+          date: "2026-04-10",
+          time: "12:30",
+          country: "United States",
+          event: "CPI",
+          impact: "high",
+          currency: "USD",
+        },
+      ],
+      note: undefined,
+      source: "FMP",
+    });
+  });
+
   it("builds a growth plan card for account target requests", async () => {
     const tools = createAskTools({});
 

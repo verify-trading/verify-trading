@@ -21,6 +21,7 @@ import {
   calculateRiskRewardInputSchema,
   normalizeForexPair,
 } from "@/lib/ask/calculators";
+import { fetchEconomicCalendar, getEconomicCalendarWindow } from "@/lib/ask/economic-calendar";
 import { getFcaStatus } from "@/lib/ask/fca";
 import { lookupVerifiedEntity, type LookupVerifiedEntityResult } from "@/lib/ask/entities";
 import { getMarketQuote, getMarketSeries, getMarketSeriesInputSchema } from "@/lib/ask/market";
@@ -64,6 +65,36 @@ const searchNewsInputSchema = z.object({
     .length(2)
     .optional()
     .describe("Two-letter language code, default en."),
+});
+
+const getEconomicCalendarInputSchema = z.object({
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe("Optional start date in YYYY-MM-DD. Omit for today."),
+  to: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe("Optional end date in YYYY-MM-DD. Omit for a 7-day lookahead."),
+  country: z
+    .string()
+    .min(2)
+    .optional()
+    .describe("Optional country or region filter like US, UK, Eurozone, or Japan."),
+  importance: z
+    .enum(["high", "medium", "low"])
+    .optional()
+    .describe("Optional impact filter. Use when the user asks for high-impact events only."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .default(8)
+    .describe("Maximum number of events to return, default 8."),
 });
 
 function buildInsightCard(headline: string, body: string, verdict: string): AskCard {
@@ -370,6 +401,8 @@ export function createAskTools(dependencies: AskServiceDependencies) {
   const getFcaStatusImpl = dependencies.getFcaStatusImpl ?? getFcaStatus;
   const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
   const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
+  const fetchEconomicCalendarImpl =
+    dependencies.fetchEconomicCalendarImpl ?? fetchEconomicCalendar;
   const fetchNewsEverythingImpl =
     dependencies.fetchNewsEverythingImpl ?? fetchNewsEverything;
 
@@ -467,6 +500,27 @@ export function createAskTools(dependencies: AskServiceDependencies) {
           side,
         ),
       }),
+    }),
+    get_economic_calendar: tool({
+      description:
+        "Upcoming macro events from the FMP economic calendar. Use it for scheduled releases like CPI, NFP, GDP, FOMC, BoE, ECB, or 'what matters this week'. Use search_news for unscheduled headlines or why an event matters after you have the calendar.",
+      inputSchema: getEconomicCalendarInputSchema,
+      execute: async (input) => {
+        try {
+          return await fetchEconomicCalendarImpl(input);
+        } catch (error) {
+          const { from, to } = getEconomicCalendarWindow(input);
+          const message =
+            error instanceof Error ? error.message : "Economic calendar lookup failed.";
+          return {
+            from,
+            to,
+            events: [],
+            note: message,
+            source: "FMP" as const,
+          };
+        }
+      },
     }),
     search_news: tool({
       description:

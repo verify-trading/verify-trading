@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 
+import { fetchEconomicCalendar } from "@/lib/ask/economic-calendar";
 import { getFcaStatus } from "@/lib/ask/fca";
 import { lookupVerifiedEntity } from "@/lib/ask/entities";
 import { getMarketQuote, getMarketSeries } from "@/lib/ask/market";
@@ -16,5 +17,6 @@ export interface AskServiceDependencies {
   getFcaStatusImpl?: typeof getFcaStatus;
   getMarketQuoteImpl?: typeof getMarketQuote;
   getMarketSeriesImpl?: typeof getMarketSeries;
+  fetchEconomicCalendarImpl?: typeof fetchEconomicCalendar;
   fetchNewsEverythingImpl?: typeof fetchNewsEverything;
 }
