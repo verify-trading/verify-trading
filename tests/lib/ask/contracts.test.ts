@@ -106,6 +106,45 @@ describe("ask contracts", () => {
     expect(card.type === "setup" ? card.bias : null).toBe("Bullish");
   });
 
+  it("accepts a valid growth plan card", () => {
+    const card = askCardSchema.parse({
+      type: "plan",
+      startBalance: 500,
+      monthlyAdd: 100,
+      currencySymbol: "$",
+      dailyTarget: "$1.25-$2.50",
+      weeklyTarget: "$5-$10",
+      monthlyTarget: "$20-$40",
+      maxDailyLoss: "$5",
+      projectionMonths: 12,
+      projectedBalance: 1800.25,
+      projectionReturn: "35.0%",
+      rationale: "Keep the targets realistic and scale only after consistency.",
+      verdict: "Protect downside first.",
+    });
+
+    expect(card.type).toBe("plan");
+    expect(card.type === "plan" ? card.currencySymbol : null).toBe("$");
+  });
+
+  it("accepts a projection card with an explicit currency symbol", () => {
+    const card = askCardSchema.parse({
+      type: "projection",
+      months: 12,
+      startBalance: 500,
+      monthlyAdd: 100,
+      currencySymbol: "$",
+      projectedBalance: 1400,
+      dataPoints: [525, 651, 781],
+      totalReturn: "40.0%",
+      lossEvents: 2,
+      verdict: "Base case uses conservative assumptions.",
+    });
+
+    expect(card.type).toBe("projection");
+    expect(card.type === "projection" ? card.currencySymbol : null).toBe("$");
+  });
+
   it("accepts an image-only ask request", () => {
     const parsed = askRequestSchema.parse({
       message: "",

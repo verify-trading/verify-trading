@@ -28,6 +28,7 @@ import { askCardSchema } from "@/lib/ask/contracts";
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 import { generateProjectionCard, generateProjectionInputSchema } from "@/lib/ask/projections";
+import { generateGrowthPlanCard, generateGrowthPlanInputSchema } from "@/lib/ask/plans";
 import { buildMarketSetupCard, getMarketSetupInputSchema } from "@/lib/ask/setups";
 
 const verifyEntityInputSchema = z.object({
@@ -40,7 +41,7 @@ const submitAskCardInputSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'One UI card as a JSON string. Include "type": broker | briefing | calc | guru | insight | chart | setup | projection and all required fields for that type.',
+      'One UI card as a JSON string. Include "type": broker | briefing | calc | guru | insight | plan | chart | setup | projection and all required fields for that type.',
     ),
 });
 
@@ -375,7 +376,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
   return {
     verify_entity: tool({
       description:
-        "Verify a broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks. It uses reviewed entity data first and then live FCA confirmation when an FRN is available.",
+        "Verify a broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks. It uses reviewed entity data first and then live FCA confirmation when an FRN is available. If this is only one part of a broader trading question, use the result as evidence and still synthesize the final card yourself.",
       inputSchema: verifyEntityInputSchema,
       execute: async ({ name }) => {
         const normalized = normalizeVerificationName(name);
@@ -417,6 +418,10 @@ export function createAskTools(dependencies: AskServiceDependencies) {
           );
         }
 
+        if (normalized.fromUrl) {
+          return withCard(buildUrlCoverageInsightCard(normalized.displayName));
+        }
+
         // Seed lookup failed — fall back to live FCA register search
         const fcaStatus = await getFcaStatusImpl({ name: normalized.lookupName, frn: undefined });
         if (fcaStatus.available && fcaStatus.statusText) {
@@ -442,7 +447,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     get_market_briefing: tool({
       description:
-        "Live price, levels, and series for a tradable. Not for headline-only questions; use search_news.",
+        "Live price, levels, and series for a tradable. Use it for direct market-status questions like what is X doing or price now. Not for headline-only questions, and not as the final answer for best-trade-now or trade-ranking questions.",
       inputSchema: getMarketSeriesInputSchema,
       execute: async ({ asset, timeframe }) => ({
         ...buildBriefingCard(
@@ -453,7 +458,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     get_market_setup: tool({
       description:
-        "Live setup for entry questions: buy, sell, long, short, stop, target, invalidation. Use it when the user asks where to enter, not just what price is doing.",
+        "Live setup for explicit entry questions: buy, sell, long, short, stop, target, invalidation. Use it when the user asks for live levels, not for generic education or broad market comparisons. After using it for conversational asks like 'set up a buy trade on gold', submit a final setup card in trader language instead of just echoing the raw tool output.",
       inputSchema: getMarketSetupInputSchema,
       execute: async ({ asset, timeframe, side }) => ({
         ...buildMarketSetupCard(
@@ -465,7 +470,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     search_news: tool({
       description:
-        "Recent headlines with descriptions (NewsData). Optional from date only if the user stated it. Read the descriptions for context, not just titles. Then submit_ask_card; use articles and note from the result.",
+        "Recent headlines with descriptions (NewsData). Optional from date only if the user stated it. Read the descriptions for context, not just titles. Use the result to explain market impact, and submit the final card yourself instead of echoing raw headlines.",
       inputSchema: searchNewsInputSchema,
       execute: async (input) => {
         try {
@@ -495,14 +500,14 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     calculate_position_size: tool({
       description:
-        "Calculate the exact position size card for a risk-based lot size question. Use it only when account size, risk percent, and stop loss in pips are known or can be recovered from recent history. If the user labels a cash amount as risk, do not reinterpret it as account size. If account size or risk percent is missing or ambiguous, ask for that one value instead of forcing a calc.",
+        "Calculate the exact position size card for a risk-based lot size question. Use it only when account size, risk percent, and stop loss in pips are known or can be recovered from recent history. If the user labels a cash amount as risk, do not reinterpret it as account size. If account size or risk percent is missing or ambiguous, ask for that one value instead of forcing a calc. In broader questions, use the result as support and still synthesize the final card.",
       inputSchema: calculatePositionSizeInputSchema,
       execute: async (toolInput) =>
         withCard(calculatePositionSizeCard(await enrichPositionSizeInput(toolInput, getMarketQuoteImpl))),
     }),
     calculate_risk_reward: tool({
       description:
-        "Calculate risk-reward ratio from pips or from entry, stop, and target prices. Use it when the user gives either riskPips plus rewardPips, or entryPrice plus stopPrice plus targetPrice. Do not invent missing prices or distances.",
+        "Calculate risk-reward ratio from pips or from entry, stop, and target prices. Use it when the user gives either riskPips plus rewardPips, or entryPrice plus stopPrice plus targetPrice. Do not invent missing prices or distances. In mixed questions, treat this as evidence, not the whole final answer.",
       inputSchema: calculateRiskRewardInputSchema,
       execute: async (toolInput) => {
         const result = calculateRiskReward(toolInput);
@@ -511,7 +516,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     calculate_pip_value: tool({
       description:
-        "Calculate forex pip value using pair and lot size, with optional currency conversion inputs. Use it for pip-value questions when the pair and lot size are known. If lot size is missing, ask for it.",
+        "Calculate forex pip value using pair and lot size, with optional currency conversion inputs. Use it for pip-value questions when the pair and lot size are known. If lot size is missing, ask for it. In mixed questions, treat this as evidence, not the whole final answer.",
       inputSchema: calculatePipValueInputSchema,
       execute: async (toolInput) => {
         const result = calculatePipValue(toolInput);
@@ -520,7 +525,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     calculate_margin_required: tool({
       description:
-        "Calculate required margin from pair, lot size, and leverage or margin rate. If price is missing, this tool may use the current live market price for the pair. Use it for margin questions, not for general market briefings.",
+        "Calculate required margin from pair, lot size, and leverage or margin rate. If price is missing, this tool may use the current live market price for the pair. Use it for margin questions, not for general market briefings. In mixed questions, treat this as evidence, not the whole final answer.",
       inputSchema: calculateMarginRequirementInputSchema,
       execute: async (toolInput) => {
         const price = toolInput.price ?? (await getMarketQuoteImpl(toolInput.pair)).price;
@@ -534,7 +539,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     calculate_profit_loss: tool({
       description:
-        "Calculate profit or loss from pair, entry price, exit price, direction, and lot size. Use it when those values are known. Do not invent missing trade prices or direction.",
+        "Calculate profit or loss from pair, entry price, exit price, direction, and lot size. Use it when those values are known. Do not invent missing trade prices or direction. In mixed questions, treat this as evidence, not the whole final answer.",
       inputSchema: calculateProfitLossInputSchema,
       execute: async (toolInput) => {
         const result = calculateProfitLoss(toolInput);
@@ -547,9 +552,15 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       inputSchema: generateProjectionInputSchema,
       execute: async (toolInput) => withCard(generateProjectionCard(toolInput)),
     }),
+    generate_growth_plan: tool({
+      description:
+        "Generate a realistic trading growth plan for account-target questions such as daily, weekly, and monthly goals. Use it when the user gives a balance and asks what to aim for, optionally with a monthly top-up or projection horizon.",
+      inputSchema: generateGrowthPlanInputSchema,
+      execute: async (toolInput) => withCard(generateGrowthPlanCard(toolInput)),
+    }),
     submit_ask_card: tool({
       description:
-        "Final card submission. After search_news: use insight, or setup if the user asked for a trade plan and you also used get_market_setup. After get_market_briefing: use briefing or setup. After get_market_setup: use setup. After calcs: use calc or insight. card_json = stringified card.",
+        "Final card submission for the actual answer the user should see. After search_news: use insight, or setup if the user asked for a trade plan and you also used get_market_setup. After get_market_briefing: use briefing only for direct market-status asks, otherwise use insight or setup. After get_market_setup: use setup. After generate_growth_plan: use plan. After calcs: use calc or insight. For mixed multi-topic questions, synthesize one final insight card instead of stopping at a raw tool card. card_json = stringified card.",
       inputSchema: submitAskCardInputSchema,
       execute: async ({ card_json }) => {
         let parsed: unknown;

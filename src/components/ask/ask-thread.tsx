@@ -10,6 +10,7 @@ import {
   AskThreadRestoringSkeleton,
 } from "@/components/ask/ask-skeletons";
 import type { AskMessage } from "@/components/ask/store";
+import type { AskToolStatus } from "@/lib/ask/stream";
 import { getAppName } from "@/lib/site-config";
 
 function ChatAttachmentPreview({
@@ -196,6 +197,7 @@ export function AskThread({
   isLoadingHistory,
   isLoadingOlder,
   isSubmitting,
+  liveToolStatuses,
   onLoadOlder,
   onOpenImage,
   onAttachmentLoad,
@@ -207,6 +209,7 @@ export function AskThread({
   isLoadingHistory: boolean;
   isLoadingOlder: boolean;
   isSubmitting: boolean;
+  liveToolStatuses: AskToolStatus[];
   onLoadOlder: () => void;
   onOpenImage: (src: string, alt: string) => void;
   onAttachmentLoad: () => void;
@@ -257,7 +260,7 @@ export function AskThread({
         ))}
 
         {/* Submitting */}
-        {isSubmitting ? <AskAssistantLoadingSkeleton /> : null}
+        {isSubmitting ? <AskAssistantLoadingSkeleton statuses={liveToolStatuses} /> : null}
 
         {isLoadingHistory ? <AskThreadRestoringSkeleton /> : null}
 

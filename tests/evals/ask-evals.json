@@ -5,6 +5,16 @@
     "expectedType": "insight"
   },
   {
+    "id": "insight-beginner-prompts",
+    "message": "Best prompts for trading in stock market? I am 19, learning for a year, paper trading, and I want a reliable strategy.",
+    "expectedType": "insight"
+  },
+  {
+    "id": "insight-beginner-market-choice",
+    "message": "As a beginner should I focus on stocks or forex first?",
+    "expectedType": "insight"
+  },
+  {
     "id": "briefing-gold",
     "message": "What is Gold doing before London open today?",
     "expectedType": "briefing"
@@ -25,6 +35,16 @@
     "expectedType": "guru"
   },
   {
+    "id": "propfirm-ftmo",
+    "message": "Is FTMO legit?",
+    "expectedType": "broker"
+  },
+  {
+    "id": "broker-url-tigerfunded",
+    "message": "Can you tell me about https://tigerfunded.com/",
+    "expectedType": "insight"
+  },
+  {
     "id": "calc-lot-size",
     "message": "Lot size 1% risk £10000 20 pip stop on GBP/USD",
     "expectedType": "calc",
@@ -37,9 +57,40 @@
     "sessionGroup": "risk-sizing"
   },
   {
+    "id": "calc-follow-up-stop-change",
+    "message": "what if the stop is 30 pips instead?",
+    "expectedType": "calc",
+    "sessionGroup": "risk-sizing"
+  },
+  {
     "id": "calc-profit",
     "message": "I sold GBP/USD at 1.2750 and covered at 1.2685 with 0.8 lots. What was the profit?",
     "expectedType": "insight"
+  },
+  {
+    "id": "insight-trade-management",
+    "message": "I am up 10% on this position. Should I trim, hold, or trail the stop?",
+    "expectedType": "insight"
+  },
+  {
+    "id": "insight-stop-trading",
+    "message": "I am down three trades today. Should I stop trading now?",
+    "expectedType": "insight"
+  },
+  {
+    "id": "insight-trade-review",
+    "message": "I entered too early on Nasdaq and got stopped. Was it a bad setup or just bad timing?",
+    "expectedType": "insight"
+  },
+  {
+    "id": "news-hormuz-impact",
+    "message": "If Iran closes Hormuz what happens to oil, gold, and the dollar?",
+    "expectedType": "insight"
+  },
+  {
+    "id": "news-plus-setup-oil",
+    "message": "Iran tensions are rising. Where would you buy oil if this escalates?",
+    "expectedType": "setup"
   },
   {
     "id": "projection-explicit",
@@ -52,9 +103,73 @@
     "expectedType": "projection"
   },
   {
+    "id": "growth-plan-balance",
+    "message": "I have deposited $500 give me a plan of what target to make daily weekly and month and projection",
+    "expectedType": "plan"
+  },
+  {
+    "id": "best-trade-now",
+    "message": "What will bee the best trade to get into now",
+    "expectedType": "setup",
+    "sessionGroup": "best-trade-thread"
+  },
+  {
+    "id": "setup-live-gold",
+    "message": "Set up a buy trade on gold",
+    "expectedType": "setup"
+  },
+  {
+    "id": "setup-missing-direction",
+    "message": "Set up a trade on gold",
+    "expectedType": "insight"
+  },
+  {
+    "id": "setup-education",
+    "message": "Tell me how to set up a trade",
+    "expectedType": "insight",
+    "sessionGroup": "best-trade-thread"
+  },
+  {
+    "id": "setup-comparison",
+    "message": "Why not oil",
+    "expectedType": "insight",
+    "sessionGroup": "best-trade-thread"
+  },
+  {
+    "id": "setup-followup-tighter-stop",
+    "message": "okay then keep gold but make the stop tighter",
+    "expectedType": "setup",
+    "sessionGroup": "best-trade-thread"
+  },
+  {
+    "id": "setup-thread-absurd",
+    "message": "write me a poem about bananas",
+    "expectedType": "insight",
+    "sessionGroup": "best-trade-thread"
+  },
+  {
     "id": "mixed-priority",
     "message": "I’m a UK retail trader with a £12,500 account. I’m considering Pepperstone for forex, I want to risk 0.8% on GBP/USD, and I’m watching Gold and Nasdaq for bias this week. Give me the most important thing I should focus on first and why.",
-    "expectedType": "insight"
+    "expectedType": "insight",
+    "sessionGroup": "desk-thread"
+  },
+  {
+    "id": "mixed-priority-followup-size",
+    "message": "okay then size GBP/USD for that same 0.8% risk with a 22 pip stop",
+    "expectedType": "calc",
+    "sessionGroup": "desk-thread"
+  },
+  {
+    "id": "mixed-priority-followup-bias",
+    "message": "and what is your gold bias right now?",
+    "expectedType": "briefing",
+    "sessionGroup": "desk-thread"
+  },
+  {
+    "id": "desk-thread-absurd",
+    "message": "also tell me if penguins can drive buses",
+    "expectedType": "insight",
+    "sessionGroup": "desk-thread"
   },
   {
     "id": "chart-synthetic",

@@ -148,12 +148,27 @@ function serializeAssistantCardForContext(card: AskCard) {
         target: card.target,
         verdict: card.verdict,
       });
+    case "plan":
+      return JSON.stringify({
+        type: card.type,
+        startBalance: card.startBalance,
+        monthlyAdd: card.monthlyAdd,
+        currencySymbol: card.currencySymbol,
+        dailyTarget: card.dailyTarget,
+        weeklyTarget: card.weeklyTarget,
+        monthlyTarget: card.monthlyTarget,
+        projectedBalance: card.projectedBalance,
+        projectionMonths: card.projectionMonths,
+        projectionReturn: card.projectionReturn,
+        verdict: card.verdict,
+      });
     case "projection":
       return JSON.stringify({
         type: card.type,
         months: card.months,
         startBalance: card.startBalance,
         monthlyAdd: card.monthlyAdd,
+        currencySymbol: card.currencySymbol,
         projectedBalance: card.projectedBalance,
         totalReturn: card.totalReturn,
         lossEvents: card.lossEvents,

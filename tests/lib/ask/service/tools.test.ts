@@ -100,16 +100,7 @@ describe("createAskTools", () => {
     const lookupVerifiedEntityImpl = vi.fn().mockResolvedValue({
       found: false,
     });
-    const getFcaStatusImpl = vi.fn().mockResolvedValue({
-      available: false,
-      queriedName: "tigerfunded",
-      frn: null,
-      statusText: null,
-      authorised: null,
-      warning: false,
-      note: null,
-      source: "FCA lookup not configured",
-    });
+    const getFcaStatusImpl = vi.fn();
     const tools = createAskTools({
       lookupVerifiedEntityImpl,
       getFcaStatusImpl,
@@ -123,7 +114,7 @@ describe("createAskTools", () => {
     );
 
     expect(lookupVerifiedEntityImpl).toHaveBeenCalledWith("tigerfunded");
-    expect(getFcaStatusImpl).toHaveBeenCalledWith({ name: "tigerfunded", frn: undefined });
+    expect(getFcaStatusImpl).not.toHaveBeenCalled();
   });
 
   it("returns a URL-specific coverage card when a domain has no reviewed match", async () => {
@@ -131,16 +122,7 @@ describe("createAskTools", () => {
       lookupVerifiedEntityImpl: vi.fn().mockResolvedValue({
         found: false,
       }),
-      getFcaStatusImpl: vi.fn().mockResolvedValue({
-        available: false,
-        queriedName: "tigerfunded",
-        frn: null,
-        statusText: null,
-        authorised: null,
-        warning: false,
-        note: null,
-        source: "FCA lookup not configured",
-      }),
+      getFcaStatusImpl: vi.fn(),
     });
 
     const result = await tools.verify_entity.execute?.(
@@ -438,6 +420,29 @@ describe("createAskTools", () => {
       ],
       note: undefined,
     });
+  });
+
+  it("builds a growth plan card for account target requests", async () => {
+    const tools = createAskTools({});
+
+    const result = (await tools.generate_growth_plan.execute?.(
+      {
+        startBalance: 500,
+        monthlyAdd: 100,
+        currencySymbol: "$",
+        projectionMonths: 12,
+      },
+      {} as never,
+    )) as { card: { type: string; dailyTarget?: string } };
+
+    expect(result?.card).toMatchObject({
+      type: "plan",
+      startBalance: 500,
+      monthlyAdd: 100,
+      currencySymbol: "$",
+      projectionMonths: 12,
+    });
+    expect(result.card.type === "plan" ? result.card.dailyTarget : "").toContain("$");
   });
 
   it("submit_ask_card parses card_json and returns validated card", async () => {

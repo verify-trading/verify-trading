@@ -43,6 +43,7 @@ import {
   ASK_PINNED_THRESHOLD_PX,
   isPinnedNearBottom,
 } from "@/lib/ask/scroll-thread";
+import { askToolStatusSchema, type AskToolStatus } from "@/lib/ask/stream";
 import { getAppName } from "@/lib/site-config";
 import { logger } from "@/lib/observability/logger";
 
@@ -76,6 +77,17 @@ function inferSessionTitleFromSubmission(message: string, attachmentFileName?: s
   }
 
   return "Chart Upload";
+}
+
+function buildInitialToolStatus(hasImage: boolean): AskToolStatus {
+  return {
+    id: crypto.randomUUID(),
+    phase: "thinking",
+    label: hasImage ? "Reading your chart" : "Thinking through your question",
+    detail: hasImage
+      ? "Pulling context from the uploaded image before answering."
+      : "Deciding which checks or live tools are actually needed.",
+  };
 }
 
 export function AskWorkspace({
@@ -136,6 +148,7 @@ export function AskWorkspace({
   const composerStripRef = useRef<HTMLDivElement | null>(null);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [composerStripHeight, setComposerStripHeight] = useState(0);
+  const [liveToolStatuses, setLiveToolStatuses] = useState<AskToolStatus[]>([]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") {
@@ -243,11 +256,36 @@ export function AskWorkspace({
   const { sendMessage, setMessages: clearTransportMessages, status } =
     useChat<AskChatMessage>({
       transport,
+      onData: (dataPart) => {
+        if (dataPart.type !== "data-tool-status") {
+          return;
+        }
+
+        const parsed = askToolStatusSchema.safeParse(dataPart.data);
+        if (!parsed.success) {
+          return;
+        }
+
+        setLiveToolStatuses((current) => {
+          const previous = current[current.length - 1];
+          if (
+            previous &&
+            previous.label === parsed.data.label &&
+            previous.phase === parsed.data.phase &&
+            previous.detail === parsed.data.detail
+          ) {
+            return current;
+          }
+
+          return [...current.slice(-3), parsed.data];
+        });
+      },
       onFinish: ({ message }) => {
         const card = extractAssistantCard(message);
         const sessionData = extractSessionData(message);
         const attachmentPreviewUrl = pendingAssistantAttachmentRef.current;
 
+        setLiveToolStatuses([]);
         pendingRequestRef.current = false;
         clearTransportMessages([]);
 
@@ -286,6 +324,7 @@ export function AskWorkspace({
           return;
         }
 
+        setLiveToolStatuses([]);
         pendingSessionTitleRef.current = null;
         pendingAssistantAttachmentRef.current = undefined;
         pendingRequestRef.current = false;
@@ -508,6 +547,7 @@ export function AskWorkspace({
       );
       pendingAssistantAttachmentRef.current = image ?? undefined;
       pendingRequestRef.current = true;
+      setLiveToolStatuses([buildInitialToolStatus(Boolean(image))]);
 
       appendUserMessage(
         displayPrompt,
@@ -537,6 +577,7 @@ export function AskWorkspace({
         },
       );
     } catch {
+      setLiveToolStatuses([]);
       pendingSessionTitleRef.current = null;
       pendingAssistantAttachmentRef.current = undefined;
       pendingRequestRef.current = false;
@@ -774,6 +815,7 @@ export function AskWorkspace({
                   isLoadingHistory={isLoadingHistory}
                   isLoadingOlder={isLoadingOlder}
                   isSubmitting={isSubmitting}
+                  liveToolStatuses={liveToolStatuses}
                   onLoadOlder={() => void loadOlderMessages()}
                   onOpenImage={openImagePreview}
                   onAttachmentLoad={() => scrollToLatestIfPinned("auto")}

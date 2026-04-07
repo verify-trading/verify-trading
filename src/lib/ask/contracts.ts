@@ -95,6 +95,22 @@ export const insightCardSchema = z.object({
   verdict: textFieldSchema,
 });
 
+export const planCardSchema = z.object({
+  type: z.literal("plan"),
+  startBalance: z.number().nonnegative(),
+  monthlyAdd: z.number().nonnegative(),
+  currencySymbol: textFieldSchema,
+  dailyTarget: textFieldSchema,
+  weeklyTarget: textFieldSchema,
+  monthlyTarget: textFieldSchema,
+  maxDailyLoss: textFieldSchema,
+  projectionMonths: z.number().int().positive(),
+  projectedBalance: z.number().nonnegative(),
+  projectionReturn: textFieldSchema,
+  rationale: textFieldSchema,
+  verdict: textFieldSchema,
+});
+
 export const chartCardSchema = z.object({
   type: z.literal("chart"),
   pattern: textFieldSchema,
@@ -126,6 +142,7 @@ export const projectionCardSchema = z.object({
   months: z.number().int().positive(),
   startBalance: z.number().nonnegative(),
   monthlyAdd: z.number().nonnegative(),
+  currencySymbol: textFieldSchema.optional(),
   projectedBalance: z.number().nonnegative(),
   dataPoints: z.array(z.number().nonnegative()).min(1),
   totalReturn: textFieldSchema,
@@ -139,6 +156,7 @@ export const askCardSchema = z.discriminatedUnion("type", [
   calcCardSchema,
   guruCardSchema,
   insightCardSchema,
+  planCardSchema,
   chartCardSchema,
   setupCardSchema,
   projectionCardSchema,
@@ -262,6 +280,7 @@ export type GuruCard = z.infer<typeof guruCardSchema>;
 export type BriefingCard = z.infer<typeof briefingCardSchema>;
 export type CalcCard = z.infer<typeof calcCardSchema>;
 export type InsightCard = z.infer<typeof insightCardSchema>;
+export type PlanCard = z.infer<typeof planCardSchema>;
 export type ChartCard = z.infer<typeof chartCardSchema>;
 export type SetupCard = z.infer<typeof setupCardSchema>;
 export type ProjectionCard = z.infer<typeof projectionCardSchema>;

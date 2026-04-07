@@ -80,6 +80,57 @@ describe("generateAskResponse", () => {
     });
   });
 
+  it("returns a friendly acknowledgement insight for thanks without calling the model", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "thanks",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data).toEqual({
+      type: "insight",
+      headline: "You're welcome",
+      body: "Glad that helped. If anything else comes up on markets, brokers, risk, or setups, just ask.",
+      verdict: "Send your next trading question when you are ready.",
+    });
+  });
+
+  it("does not treat thanks with extra trading content as a pure acknowledgement", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Gold",
+        body: "Follow-up noted.",
+        verdict: "Ask for levels if you want a plan.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "thanks — what about gold now?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(response.data.type).toBe("insight");
+    if (response.data.type !== "insight") {
+      throw new Error("Expected an insight card.");
+    }
+    expect(response.data.headline).toBe("Gold");
+  });
+
   it("short-circuits clear projection prompts into a projection card", async () => {
     const generateTextImpl = vi.fn();
 
@@ -105,24 +156,97 @@ describe("generateAskResponse", () => {
     expect(response.uiMeta?.projectionMarkers).toBeDefined();
   });
 
-  it("short-circuits clear market entry prompts into a setup card", async () => {
+  it("preserves the detected currency symbol on projection shortcuts", async () => {
     const generateTextImpl = vi.fn();
-    const getMarketQuoteImpl = vi.fn().mockResolvedValue({
-      asset: "GOLD / XAUUSD",
-      symbol: "XAU/USD",
-      price: 4645.1,
-      changePercent: -0.1,
-      direction: "down",
-      isMarketOpen: true,
-    });
-    const getMarketSeriesImpl = vi.fn().mockResolvedValue({
-      asset: "GOLD / XAUUSD",
-      symbol: "XAU/USD",
-      timeframe: "1W",
-      closeValues: [4640.0, 4645.1, 4649.77],
-      resistance: 4649.77,
-      support: 4640.0,
-    });
+
+    const response = await generateAskResponse(
+      {
+        message: "12-month projection: $500 start, $100/month",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data.type).toBe("projection");
+    if (response.data.type !== "projection") {
+      throw new Error("Expected a projection card.");
+    }
+    expect(response.data.currencySymbol).toBe("$");
+    expect(response.data.startBalance).toBe(500);
+    expect(response.data.monthlyAdd).toBe(100);
+  });
+
+  it("preserves explicit projection assumptions in shortcut verdicts", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message:
+          "8 month projection £10k start £500 monthly top up at 5% monthly return with 10% drawdowns every 4 months",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data.type).toBe("projection");
+    if (response.data.type !== "projection") {
+      throw new Error("Expected a projection card.");
+    }
+    expect(response.data.verdict.startsWith("Using 5% monthly returns with 10% drawdowns every 4 months.")).toBe(
+      true,
+    );
+  });
+
+  it("short-circuits balance target prompts into a plan card", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "I have deposited $500 give me a plan of what target to make daily weekly and month and projection",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data.type).toBe("plan");
+    if (response.data.type !== "plan") {
+      throw new Error("Expected a plan card.");
+    }
+    expect(response.data.currencySymbol).toBe("$");
+    expect(response.data.startBalance).toBe(500);
+    expect(response.data.dailyTarget).toContain("$");
+    expect(response.data.monthlyTarget).toContain("$");
+    expect(response.data.projectedBalance).toBeGreaterThan(500);
+  });
+
+  it("lets claude handle explicit market entry prompts", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "setup",
+        asset: "GOLD / XAUUSD",
+        bias: "Bullish",
+        entry: "4649.77",
+        stop: "4640.00",
+        target: "4669.31",
+        rr: "2:1",
+        rationale: "Gold needs a reclaim first, so the cleaner long is confirmation above resistance.",
+        confidence: "Low",
+        verdict: "Buy only after price reclaims 4649.77 and holds.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
 
     const response = await generateAskResponse(
       {
@@ -130,14 +254,10 @@ describe("generateAskResponse", () => {
         sessionId: crypto.randomUUID(),
         history: [],
       },
-      {
-        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
-        getMarketQuoteImpl,
-        getMarketSeriesImpl,
-      },
+      { generateTextImpl },
     );
 
-    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(generateTextImpl).toHaveBeenCalledOnce();
     expect(response.data.type).toBe("setup");
     if (response.data.type !== "setup") {
       throw new Error("Expected a setup card.");
@@ -145,6 +265,217 @@ describe("generateAskResponse", () => {
     expect(response.data.asset).toBe("GOLD / XAUUSD");
     expect(response.data.bias).toBe("Bullish");
     expect(response.data.entry).toBe("4649.77");
+  });
+
+  it("lets claude handle conversational setup requests", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "setup",
+        asset: "GOLD / XAUUSD",
+        bias: "Bullish",
+        entry: "4648.50-4649.20",
+        stop: "4640.00",
+        target: "4668.00",
+        rr: "2:1",
+        rationale: "The long only makes sense on a controlled pullback or clean reclaim, not a chase.",
+        confidence: "Low",
+        verdict: "Wait for price to come back to you instead of buying the middle.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "Set up a buy trade on gold",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(response.data.type).toBe("setup");
+    if (response.data.type !== "setup") {
+      throw new Error("Expected a setup card.");
+    }
+    expect(response.data.asset).toBe("GOLD / XAUUSD");
+    expect(response.data.bias).toBe("Bullish");
+  });
+
+  it("lets the model ask for direction when a setup request names a market but not a side", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Need Direction",
+        body: "I can set up GOLD / XAUUSD, but I need direction first.",
+        verdict: "Send buy or sell, or long or short.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "Set up a trade on gold",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(response.data.type).toBe("insight");
+  });
+
+  it("lets the model ask for market when a setup request names direction but not asset", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Need Market",
+        body: "I can build a sell setup, but I need the market first.",
+        verdict: "Send the asset or symbol, like Gold, BTC, EUR/USD, or Nasdaq.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "Set up a short trade for me",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(response.data.type).toBe("insight");
+  });
+
+  it("lets generic setup education flow to the model as insight", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Trade Setup",
+        body: "Pick the market, define invalidation, size the risk, then map entry and target before you click.",
+        verdict: "If you want a live setup, send the asset and direction.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "Tell me how to set up a trade",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(response.data.type).toBe("insight");
+  });
+
+  it("lets broader trade-idea questions stay model-led", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "setup",
+        asset: "GOLD / XAUUSD",
+        bias: "Bearish",
+        entry: "4642.44-4644.10",
+        stop: "4648.27",
+        target: "4630.79",
+        rr: "2:1",
+        rationale: "Gold is the cleanest setup right now after comparing a few liquid markets.",
+        confidence: "Medium",
+        verdict: "Sell the rally only if resistance keeps capping price.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "What will bee the best trade to get into now",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(response.data.type).toBe("setup");
+  });
+
+  it("lets broader market-bias questions stay model-led", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Gold Bias",
+        body: "Gold still looks heavy here, but I would rather frame that as a market view than force a live entry.",
+        verdict: "Ask for a buy or sell setup if you want exact levels.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "Is gold bearish here?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(response.data.type).toBe("insight");
+  });
+
+  it("lets the model compare a new asset against the active setup context", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Gold Over Oil",
+        body: "Oil can move harder, but it is more event-driven right now. Gold is cleaner when I want a tighter invalidation and steadier structure.",
+        verdict: "If you want a fresh oil entry, ask me for an oil setup.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "Why not oil",
+        sessionId: crypto.randomUUID(),
+        history: [
+          { role: "user", content: "What will be the best trade to get into now?" },
+          {
+            role: "assistant",
+            content: JSON.stringify({
+              type: "setup",
+              asset: "GOLD / XAUUSD",
+              bias: "Bearish",
+              entry: "4642.44-4644.10",
+              stop: "4648.27",
+              target: "4630.79",
+              rr: "2:1",
+              rationale: "Gold is the cleanest setup right now.",
+              confidence: "Medium",
+              verdict: "Sell the rally into 4642-4644.",
+            }),
+          },
+        ],
+      },
+      { generateTextImpl },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    const call = vi.mocked(generateTextImpl).mock.calls[0]?.[0];
+    expect(call?.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "system",
+          content: expect.stringContaining("Active asset: GOLD / XAUUSD"),
+        }),
+      ]),
+    );
+    expect(response.data.type).toBe("insight");
   });
 
   it("falls back to a tool-generated card when the final text is unusable", async () => {
@@ -181,6 +512,97 @@ describe("generateAskResponse", () => {
       throw new Error("Expected a calc card.");
     }
     expect(response.data.lots).toBe("0.50");
+  });
+
+  it("uses submit_ask_card even when search_news was not used", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "What should I focus on first?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "",
+          toolResults: [
+            {
+              toolName: "verify_entity",
+              output: {
+                card: {
+                  type: "broker",
+                  name: "Pepperstone",
+                  score: "8.9",
+                  status: "LEGITIMATE",
+                  fca: "Yes",
+                  complaints: "Low",
+                  verdict: "Broker check.",
+                  color: "green",
+                },
+              },
+            },
+            {
+              toolName: "submit_ask_card",
+              output: {
+                card: {
+                  type: "insight",
+                  headline: "Start With Risk",
+                  body: "Your first priority is risk control, not broker comparison or market bias.",
+                  verdict: "Lock position sizing first.",
+                },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data).toEqual({
+      type: "insight",
+      headline: "Start With Risk",
+      body: "Your first priority is risk control, not broker comparison or market bias.",
+      verdict: "Lock position sizing first.",
+    });
+  });
+
+  it("prefers the model's final JSON card over a raw tool card", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "Why not oil?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: JSON.stringify({
+            type: "insight",
+            headline: "Gold Over Oil",
+            body: "Oil can move harder, but gold is cleaner when structure matters more than volatility.",
+            verdict: "Ask for fresh oil levels if you want that setup instead.",
+          }),
+          toolResults: [
+            {
+              toolName: "get_market_briefing",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "WTI / USOIL",
+                  price: "100.00",
+                  change: "+1.00%",
+                  direction: "up",
+                  level1: "101.00",
+                  level2: "99.00",
+                  event: null,
+                  verdict: "WTI is firm.",
+                },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data.type).toBe("insight");
+    expect(response.data.type === "insight" ? response.data.headline : null).toBe("Gold Over Oil");
   });
 
   it("wraps plain text model output into an insight card", async () => {
@@ -259,7 +681,7 @@ describe("generateAskResponse", () => {
     });
   });
 
-  it("does not surface briefing ui metadata on non-briefing cards", async () => {
+  it("does not surface briefing ui metadata on final non-briefing cards", async () => {
     const response = await generateAskResponse(
       {
         message:
@@ -299,8 +721,8 @@ describe("generateAskResponse", () => {
       },
     );
 
-    expect(response.data.type).toBe("briefing");
-    expect(response.uiMeta?.marketSeries).toBeDefined();
+    expect(response.data.type).toBe("insight");
+    expect(response.uiMeta?.marketSeries).toBeUndefined();
   });
 
   it("surfaces verification metadata on broker cards from tool results", async () => {
@@ -761,24 +1183,22 @@ describe("generateAskResponse", () => {
     );
   });
 
-  it("uses session state to short-circuit setup follow-ups", async () => {
-    const generateTextImpl = vi.fn();
-    const getMarketQuoteImpl = vi.fn().mockResolvedValue({
-      asset: "GOLD / XAUUSD",
-      symbol: "XAU/USD",
-      price: 4645.1,
-      changePercent: -0.1,
-      direction: "down",
-      isMarketOpen: true,
-    });
-    const getMarketSeriesImpl = vi.fn().mockResolvedValue({
-      asset: "GOLD / XAUUSD",
-      symbol: "XAU/USD",
-      timeframe: "1W",
-      closeValues: [4640.0, 4645.1, 4649.77],
-      resistance: 4649.77,
-      support: 4640.0,
-    });
+  it("uses session state for setup follow-ups without shortcutting the model", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "setup",
+        asset: "GOLD / XAUUSD",
+        bias: "Bullish",
+        entry: "4649.77",
+        stop: "4643.00",
+        target: "4669.31",
+        rr: "2:1",
+        rationale: "A tighter stop is fine only if price confirms and you accept the higher chance of getting clipped.",
+        confidence: "Low",
+        verdict: "Tighten the stop only after confirmation, not before.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
 
     const response = await generateAskResponse(
       {
@@ -803,14 +1223,10 @@ describe("generateAskResponse", () => {
           },
         ],
       },
-      {
-        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
-        getMarketQuoteImpl,
-        getMarketSeriesImpl,
-      },
+      { generateTextImpl },
     );
 
-    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(generateTextImpl).toHaveBeenCalledOnce();
     expect(response.data.type).toBe("setup");
     if (response.data.type !== "setup") {
       throw new Error("Expected a setup card.");

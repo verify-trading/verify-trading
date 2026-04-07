@@ -1,6 +1,18 @@
 import { InteractiveMarketMiniChart, InteractiveProjectionCurve } from "@/components/ask/ask-charts";
 import type { AskCard, AskUiMeta } from "@/lib/ask/contracts";
 
+function formatDisplayMoney(value: number, currencySymbol?: string) {
+  const symbol = currencySymbol ?? "£";
+  const rounded = Number(value.toFixed(2));
+  const hasDecimals = Math.abs(rounded % 1) > Number.EPSILON;
+  const formatted = rounded.toLocaleString("en-GB", {
+    minimumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: hasDecimals ? 2 : 0,
+  });
+
+  return `${symbol}${formatted}`;
+}
+
 function CardFrame({
   eyebrow,
   accentClassName,
@@ -331,6 +343,42 @@ function SetupCardView({ card }: { card: Extract<AskCard, { type: "setup" }> }) 
   );
 }
 
+function PlanCardView({ card }: { card: Extract<AskCard, { type: "plan" }> }) {
+  return (
+    <CardFrame eyebrow="Growth Plan" accentClassName="text-[var(--vt-blue)]">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {[
+            ["Start", formatDisplayMoney(card.startBalance, card.currencySymbol)],
+            ["Top Up", formatDisplayMoney(card.monthlyAdd, card.currencySymbol)],
+            ["Daily", card.dailyTarget],
+            ["Weekly", card.weeklyTarget],
+            ["Monthly", card.monthlyTarget],
+            ["Max Daily Loss", card.maxDailyLoss],
+          ].map(([label, value]) => (
+            <div key={label} className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
+                {label}
+              </div>
+              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="rounded-2xl border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-green)]">
+          {card.projectionMonths}-month base-case projection:{" "}
+          {formatDisplayMoney(card.projectedBalance, card.currencySymbol)} ({card.projectionReturn})
+        </div>
+        <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-sm leading-relaxed text-slate-200">
+          {card.rationale}
+        </div>
+        <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
+          {card.verdict}
+        </div>
+      </div>
+    </CardFrame>
+  );
+}
+
 function ProjectionCardView({
   card,
   uiMeta,
@@ -344,8 +392,8 @@ function ProjectionCardView({
         <InteractiveProjectionCurve card={card} markers={uiMeta?.projectionMarkers} />
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {[
-            ["Start", `£${card.startBalance.toLocaleString("en-GB")}`],
-            ["Top Up", `£${card.monthlyAdd.toLocaleString("en-GB")}`],
+            ["Start", formatDisplayMoney(card.startBalance, card.currencySymbol)],
+            ["Top Up", formatDisplayMoney(card.monthlyAdd, card.currencySymbol)],
             ["Months", `${card.months}`],
             ["Loss Events", `${card.lossEvents}`],
           ].map(([label, value]) => (
@@ -358,7 +406,7 @@ function ProjectionCardView({
           ))}
         </div>
         <div className="rounded-2xl border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-green)]">
-          Projected balance: £{card.projectedBalance.toLocaleString("en-GB")} ({card.totalReturn})
+          Projected balance: {formatDisplayMoney(card.projectedBalance, card.currencySymbol)} ({card.totalReturn})
         </div>
         <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
           {card.verdict}
@@ -395,6 +443,9 @@ export function AskResponseCard({
       break;
     case "setup":
       content = <SetupCardView card={card} />;
+      break;
+    case "plan":
+      content = <PlanCardView card={card} />;
       break;
     case "projection":
       content = <ProjectionCardView card={card} uiMeta={uiMeta} />;

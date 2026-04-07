@@ -1,5 +1,27 @@
 import type { HTMLAttributes } from "react";
 
+import type { AskToolStatus } from "@/lib/ask/stream";
+
+/** Claude Code–style burst / asterisk glyph (slow spin, no extra chrome). */
+function AskWorkingGlyph({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <title>Working</title>
+      <g transform="translate(12 12)">
+        <rect x="-1" y="-8" width="2" height="16" rx="1" />
+        <rect x="-1" y="-8" width="2" height="16" rx="1" transform="rotate(60)" />
+        <rect x="-1" y="-8" width="2" height="16" rx="1" transform="rotate(-60)" />
+      </g>
+    </svg>
+  );
+}
+
 /* ─── primitives (internal; use composed exports from this file in UI) ─── */
 
 type SkeletonProps = HTMLAttributes<HTMLDivElement>;
@@ -149,23 +171,33 @@ export function AskEmptyRestoringSkeleton() {
 
 /* ─── Thread: assistant streaming — avatar + line shimmer only (no card skeleton) ─── */
 
-export function AskAssistantLoadingSkeleton() {
+export function AskAssistantLoadingSkeleton({
+  statuses = [],
+}: {
+  statuses?: AskToolStatus[];
+}) {
+  const headline = statuses[statuses.length - 1] ?? {
+    id: "thinking",
+    phase: "thinking" as const,
+    label: "Thinking through your question",
+    detail: "Deciding what matters and which live checks are worth running.",
+  };
+
   return (
     <div
-      className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 sm:px-6"
+      className="mx-1 mb-2 flex items-center gap-3 rounded-xl px-4 py-3 sm:mb-3 sm:px-6"
       role="status"
       aria-busy="true"
       aria-label="Assistant is responding"
       data-testid="ask-assistant-loading"
     >
       <span className="sr-only">Analyzing…</span>
-      <SkeletonCircle className="size-8 shrink-0" />
-      <div className="min-w-0 flex-1 space-y-2.5 pt-0.5">
-        <SkeletonLine width="w-28" className="h-2 rounded" />
-        <SkeletonLine width="w-full" className="max-w-md h-3 rounded" />
-        <SkeletonLine width="w-[92%]" className="max-w-md h-3 rounded opacity-90" />
-        <SkeletonLine width="w-[55%]" className="max-w-md h-3 rounded opacity-80" />
+      <div className="flex size-8 shrink-0 items-center justify-center text-(--vt-blue)" aria-hidden>
+        <AskWorkingGlyph className="size-[18px] animate-spin [animation-duration:2.4s]" />
       </div>
+      <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-(--vt-blue)">
+        {headline.label}
+      </p>
     </div>
   );
 }

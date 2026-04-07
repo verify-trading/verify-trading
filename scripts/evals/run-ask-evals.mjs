@@ -232,8 +232,29 @@ function evaluateCase(testCase, card) {
     issues.push("Default projection assumptions were not described as base case.");
   }
 
+  if (testCase.id === "growth-plan-balance") {
+    if (card.type !== "plan") {
+      issues.push(`Growth plan expected type plan, got ${card.type}.`);
+    }
+    if (card.type === "plan" && card.currencySymbol !== "$") {
+      issues.push(`Growth plan expected $ currency, got ${card.currencySymbol}.`);
+    }
+  }
+
   if (testCase.id === "calc-follow-up-risk" && card.type === "calc" && card.risk_pct !== "2%") {
     issues.push(`Follow-up risk did not reuse prior session correctly. Got risk_pct=${card.risk_pct}.`);
+  }
+
+  if (testCase.id === "mixed-priority-followup-size" && card.type === "calc" && card.risk_pct !== "0.8%") {
+    issues.push(`Mixed-thread risk context was not reused correctly. Got risk_pct=${card.risk_pct}.`);
+  }
+
+  if (
+    (testCase.id === "setup-thread-absurd" || testCase.id === "desk-thread-absurd") &&
+    card.type === "insight" &&
+    card.headline !== "Outside Scope"
+  ) {
+    issues.push(`Absurd out-of-scope turn should return Outside Scope, got headline "${card.headline}".`);
   }
 
   if (testCase.id === "broker-pepperstone" && card.type === "broker" && card.fca !== "Yes") {

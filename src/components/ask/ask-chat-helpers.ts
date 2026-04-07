@@ -9,10 +9,9 @@ import {
   askStreamSessionSchema,
   askUiMetaSchema,
   type AskCard,
-  type AskStreamSession,
-  type AskUiMeta,
 } from "@/lib/ask/contracts";
 import { ASK_HISTORY_PAGE_SIZE } from "@/lib/ask/config";
+import type { AskStreamData } from "@/lib/ask/stream";
 
 export const suggestionPrompts = [
   "Is Pepperstone safe for UK retail CFD?",
@@ -20,11 +19,6 @@ export const suggestionPrompts = [
   "Position size: 1% risk, £8k, 22 pip stop",
   "24-month projection: £10k start, £400/month",
 ];
-
-export type AskStreamData = {
-  "ui-meta": AskUiMeta;
-  session: AskStreamSession;
-};
 
 export type AskChatMessage = UIMessage<unknown, AskStreamData>;
 type AskChatPart = AskChatMessage["parts"][number];

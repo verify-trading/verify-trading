@@ -18,9 +18,8 @@ import {
   defaultAskImagePrompt,
   verifyTradingSystemPrompt,
 } from "@/lib/ask/prompt";
-import { getMarketQuote, getMarketSeries, inferMarketAssetFromText } from "@/lib/ask/market";
-import { buildMarketSetupCard } from "@/lib/ask/setups";
 import { generateProjectionCard } from "@/lib/ask/projections";
+import { extractGrowthPlanShortcutCard } from "@/lib/ask/plans";
 import { expandPromptTemplate } from "@/lib/site-config";
 import {
   extractJson,
@@ -45,6 +44,10 @@ const ASK_MODEL_MAX_RETRIES = 2;
 export const ASK_MAX_TOOL_STEPS = 6;
 
 const ASK_MODEL_MAX_OUTPUT_TOKENS = 800;
+
+export type AskGenerationCallbacks = {
+  onToolCall?: (event: { toolName: string; input: unknown }) => void;
+};
 
 function isCapacityOrTransientApiError(error: unknown): boolean {
   if (APICallError.isInstance(error)) {
@@ -174,6 +177,13 @@ type DerivedSessionState = {
     monthlyAdd: number;
     totalReturn: string;
   };
+  lastPlan?: {
+    startBalance: number;
+    monthlyAdd: number;
+    dailyTarget: string;
+    monthlyTarget: string;
+    projectionReturn: string;
+  };
   lastVerifiedEntity?: {
     name: string;
     status: string;
@@ -250,6 +260,16 @@ function deriveSessionState(history: AskRequest["history"] | undefined): Derived
       };
     }
 
+    if (card.type === "plan" && !state.lastPlan) {
+      state.lastPlan = {
+        startBalance: card.startBalance,
+        monthlyAdd: card.monthlyAdd,
+        dailyTarget: card.dailyTarget,
+        monthlyTarget: card.monthlyTarget,
+        projectionReturn: card.projectionReturn,
+      };
+    }
+
     if ((card.type === "broker" || card.type === "guru") && !state.lastVerifiedEntity) {
       state.lastVerifiedEntity = {
         name: card.name,
@@ -291,6 +311,11 @@ function buildSessionStateMessage(state: DerivedSessionState | null) {
       `Last projection: ${state.lastProjection.months} months, start ${state.lastProjection.startBalance}, monthly add ${state.lastProjection.monthlyAdd}, total return ${state.lastProjection.totalReturn}`,
     );
   }
+  if (state.lastPlan) {
+    lines.push(
+      `Last plan: start ${state.lastPlan.startBalance}, monthly add ${state.lastPlan.monthlyAdd}, daily target ${state.lastPlan.dailyTarget}, monthly target ${state.lastPlan.monthlyTarget}, projection return ${state.lastPlan.projectionReturn}`,
+    );
+  }
   if (state.lastVerifiedEntity) {
     lines.push(
       `Last verified entity: ${state.lastVerifiedEntity.name} (${state.lastVerifiedEntity.kind}, ${state.lastVerifiedEntity.status})`,
@@ -326,6 +351,10 @@ function parseFlexibleNumber(raw: string): number | null {
   return value;
 }
 
+function extractCurrencySymbol(raw: string) {
+  return raw.match(/[$£€]/)?.[0];
+}
+
 function extractProjectionShortcutCard(message: string) {
   const normalized = message.toLowerCase();
   const looksLikeProjection =
@@ -340,14 +369,17 @@ function extractProjectionShortcutCard(message: string) {
 
   const monthsMatch = normalized.match(/(\d{1,3})\s*(?:-| )?\s*(?:month|months|mo)\b/);
   const startMatch =
-    message.match(/\bstart(?:ing)?(?:\s+balance)?\s*[:=]?\s*([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)/i) ??
-    message.match(/([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)\s*start\b/i);
+    message.match(/([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)\s*start\b/i) ??
+    message.match(/\bstart(?:ing)?(?:\s+balance)?(?:\s+with)?\s*[:=]?\s*([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)/i);
   const monthlyAddMatch =
     message.match(/\b(?:monthly\s+(?:add|deposit|top(?: |-)?up)|top(?: |-)?up)\s*[:=]?\s*([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)/i) ??
+    message.match(/([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)\s*(?:monthly\s+)?top(?: |-)?up\b/i) ??
     message.match(/([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)\s*(?:\/\s*month|\bper month\b|\ba month\b)/i);
   const monthlyReturnMatch = message.match(
     /\b(\d+(?:\.\d+)?)\s*%\s*(?:monthly|per month|a month)\b/i,
   );
+  const drawdownPercentMatch = message.match(/\b(\d+(?:\.\d+)?)\s*%\s*drawdowns?\b/i);
+  const drawdownEveryMonthsMatch = message.match(/\bevery\s+(\d{1,3})\s*(?:-| )?\s*(?:month|months|mo)\b/i);
 
   const months = monthsMatch ? Number.parseInt(monthsMatch[1], 10) : Number.NaN;
   const startBalance = startMatch ? parseFlexibleNumber(startMatch[1]) : null;
@@ -355,6 +387,13 @@ function extractProjectionShortcutCard(message: string) {
   const monthlyReturnPercent = monthlyReturnMatch
     ? Number.parseFloat(monthlyReturnMatch[1])
     : null;
+  const drawdownPercent = drawdownPercentMatch
+    ? Number.parseFloat(drawdownPercentMatch[1])
+    : null;
+  const drawdownEveryMonths = drawdownEveryMonthsMatch
+    ? Number.parseInt(drawdownEveryMonthsMatch[1], 10)
+    : null;
+  const currencySymbol = startMatch ? extractCurrencySymbol(startMatch[1]) : undefined;
 
   if (!Number.isInteger(months) || months <= 0 || startBalance == null) {
     return null;
@@ -364,57 +403,16 @@ function extractProjectionShortcutCard(message: string) {
     months,
     startBalance,
     ...(monthlyAdd != null ? { monthlyAdd } : {}),
+    ...(currencySymbol ? { currencySymbol } : {}),
     ...(monthlyReturnPercent != null ? { monthlyReturnPercent } : {}),
+    ...(drawdownPercent != null ? { drawdownPercent } : {}),
+    ...(drawdownEveryMonths != null ? { drawdownEveryMonths } : {}),
   });
 }
 
-function extractMarketSetupShortcutInput(message: string, state: DerivedSessionState | null) {
-  const normalized = message.toLowerCase();
-  const asksBuy =
-    /\b(buy|long)\b/.test(normalized) ||
-    /\bwhat price should i buy\b/.test(normalized) ||
-    /\bwhere should i buy\b/.test(normalized);
-  const asksSell =
-    /\b(sell|short)\b/.test(normalized) ||
-    /\bwhat price should i sell\b/.test(normalized) ||
-    /\bwhere should i short\b/.test(normalized);
-  const asksEntry =
-    /\b(entry|entries|stop|stop loss|take profit|target|invalidation)\b/.test(normalized);
-  const followUpSetupQuestion =
-    asksEntry &&
-    (/\b(tighter|wider|move|adjust|change|same|that|this|it)\b/.test(normalized) ||
-      /\bwhat about\b/.test(normalized));
-
-  if (
-    (!asksBuy && !asksSell && !followUpSetupQuestion) ||
-    (!asksEntry && !/what price should i (buy|sell)\b/.test(normalized) && !followUpSetupQuestion)
-  ) {
-    return null;
-  }
-
-  const asset = inferMarketAssetFromText(message) ?? state?.activeAsset ?? null;
-  if (!asset) {
-    return null;
-  }
-
-  const side = asksSell ? "sell" : asksBuy ? "buy" : state?.activeSide;
-  if (!side) {
-    return null;
-  }
-
-  return {
-    asset,
-    timeframe: "1W" as const,
-    side,
-  };
-}
-
 function resolveClarificationCard(request: AskRequest) {
-  if ((request.history?.length ?? 0) > 0) {
-    return null;
-  }
-
   const normalized = request.message.toLowerCase();
+
   const asksForPositionSize =
     /\blot size\b/.test(normalized) ||
     /\bposition size\b/.test(normalized) ||
@@ -440,9 +438,82 @@ function resolveClarificationCard(request: AskRequest) {
   return null;
 }
 
+/** Short replies that are only gratitude or acknowledgement — not trading questions. */
+const ACK_ONLY_PHRASES = new Set([
+  "thanks",
+  "thank you",
+  "thank you so much",
+  "thanks a lot",
+  "thanks very much",
+  "thanks again",
+  "thx",
+  "ty",
+  "tyvm",
+  "cheers",
+  "appreciate it",
+  "much appreciated",
+  "got it",
+  "gotcha",
+  "ok",
+  "okay",
+  "k",
+  "cool",
+  "nice",
+  "perfect",
+  "great",
+  "sounds good",
+  "will do",
+  "yes",
+  "yep",
+  "yeah",
+  "yup",
+  "alright",
+  "all right",
+  "good to know",
+  "makes sense",
+  "fair enough",
+  "fair",
+  "noted",
+  "understood",
+  "love it",
+  "legend",
+  "grateful",
+  "ta",
+  "merci",
+  "🙏",
+  "👍",
+]);
+
+function stripTrailingPunctuationForAck(value: string) {
+  return value.replace(/[!?.…]+$/u, "").trim();
+}
+
+function resolveAcknowledgementCard(request: AskRequest): ReturnType<typeof buildInsightCard> | null {
+  if (request.image) {
+    return null;
+  }
+
+  const raw = normalizeWhitespace(request.message);
+  if (!raw || raw.length > 72) {
+    return null;
+  }
+
+  const key = stripTrailingPunctuationForAck(raw.toLowerCase());
+  if (!key || !ACK_ONLY_PHRASES.has(key)) {
+    return null;
+  }
+
+  return buildInsightCard(
+    "You're welcome",
+    "Glad that helped. If anything else comes up on markets, brokers, risk, or setups, just ask.",
+    "Send your next trading question when you are ready.",
+  );
+}
+
 export async function generateAskResponse(
   input: AskRequest,
   dependencies: AskServiceDependencies = {},
+  callbacks: AskGenerationCallbacks = {},
 ): Promise<AskResponse> {
   const request = askRequestSchema.parse(input);
   const generateTextImpl = dependencies.generateTextImpl ?? generateText;
@@ -480,6 +551,40 @@ export async function generateAskResponse(
     });
   }
 
+  const acknowledgementCard = resolveAcknowledgementCard(request);
+  if (acknowledgementCard) {
+    logger.info("Ask generation completed.", {
+      sessionId,
+      messageId,
+      finalCardType: acknowledgementCard.type,
+      cardSource: "acknowledgement",
+      toolResults: [],
+    });
+
+    return askResponseSchema.parse({
+      data: sanitizeCard(acknowledgementCard),
+      sessionId,
+      messageId,
+    });
+  }
+
+  const growthPlanShortcutCard = extractGrowthPlanShortcutCard(normalizedMessage);
+  if (growthPlanShortcutCard) {
+    logger.info("Ask generation completed.", {
+      sessionId,
+      messageId,
+      finalCardType: growthPlanShortcutCard.type,
+      cardSource: "growth_plan_shortcut",
+      toolResults: [],
+    });
+
+    return askResponseSchema.parse({
+      data: sanitizeCard(growthPlanShortcutCard),
+      sessionId,
+      messageId,
+    });
+  }
+
   const projectionShortcutCard = extractProjectionShortcutCard(normalizedMessage);
   if (projectionShortcutCard) {
     logger.info("Ask generation completed.", {
@@ -493,32 +598,6 @@ export async function generateAskResponse(
     return askResponseSchema.parse({
       data: sanitizeCard(projectionShortcutCard),
       uiMeta: sanitizeUiMeta(extractUiMeta(projectionShortcutCard, [])),
-      sessionId,
-      messageId,
-    });
-  }
-
-  const marketSetupShortcut = extractMarketSetupShortcutInput(normalizedMessage, sessionState);
-  if (marketSetupShortcut) {
-    const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
-    const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
-    const setupResult = buildMarketSetupCard(
-      await getMarketQuoteImpl(marketSetupShortcut.asset),
-      await getMarketSeriesImpl(marketSetupShortcut.asset, marketSetupShortcut.timeframe),
-      marketSetupShortcut.side,
-    );
-
-    logger.info("Ask generation completed.", {
-      sessionId,
-      messageId,
-      finalCardType: setupResult.card.type,
-      cardSource: "setup_shortcut",
-      toolResults: [],
-    });
-
-    return askResponseSchema.parse({
-      data: sanitizeCard(setupResult.card),
-      uiMeta: sanitizeUiMeta(setupResult.uiMeta),
       sessionId,
       messageId,
     });
@@ -559,6 +638,13 @@ export async function generateAskResponse(
             toolResults as Array<{ toolName?: string; output?: unknown }>,
           ),
           usage,
+        });
+
+        toolCalls.forEach((toolCall) => {
+          callbacks.onToolCall?.({
+            toolName: toolCall.toolName,
+            input: toolCall.input,
+          });
         });
       },
       messages: [
@@ -627,10 +713,7 @@ export async function generateAskResponse(
 
   const parsedText = extractJson(result.text);
   const parsedCard = parsedText ? askCardSchema.safeParse(parsedText) : null;
-  const usedSearchNews = allToolResults.some((t) => t.toolName === "search_news");
-  const submitCard = usedSearchNews
-    ? extractSubmitAskCard(allToolResults, askCardSchema)
-    : null;
+  const submitCard = extractSubmitAskCard(allToolResults, askCardSchema);
   const toolCard = extractToolCard(allToolResults, askCardSchema);
 
   logger.info("Card extraction results.", {
@@ -664,8 +747,10 @@ export async function generateAskResponse(
 
   const card =
     submitCard ??
+    (parsedCard?.success ? parsedCard.data : null) ??
     toolCard ??
-    (parsedCard?.success ? parsedCard.data : wrappedTextCard ?? fallbackInsightCard);
+    wrappedTextCard ??
+    fallbackInsightCard;
 
   logger.info("Ask generation completed.", {
     sessionId,
@@ -675,10 +760,10 @@ export async function generateAskResponse(
       ? "submit_ask_card"
       : parsedCard?.success
         ? "model_text"
-        : wrappedTextCard
-          ? "wrapped_text"
         : toolCard
           ? "tool_result"
+          : wrappedTextCard
+            ? "wrapped_text"
           : "fallback",
     toolResults: summarizeToolResults(allToolResults),
   });
@@ -704,8 +789,6 @@ export function streamAskResponse(
   dependencies: AskServiceDependencies = {},
 ) {
   const request = askRequestSchema.parse(input);
-  const sessionId = request.sessionId ?? request.chatSessionId ?? crypto.randomUUID();
-  const messageId = crypto.randomUUID();
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
 
