@@ -17,6 +17,7 @@ import {
   defaultAskImagePrompt,
   verifyTradingSystemPrompt,
 } from "@/lib/ask/prompt";
+import { generateProjectionCard } from "@/lib/ask/projections";
 import { expandPromptTemplate } from "@/lib/site-config";
 import {
   extractJson,
@@ -115,6 +116,71 @@ function buildInsightCard(headline: string, body: string, verdict: string) {
   };
 }
 
+function parseFlexibleNumber(raw: string): number | null {
+  const normalized = raw.replace(/[$£€,]/g, "").trim().toLowerCase();
+  const match = normalized.match(/^(\d+(?:\.\d+)?)([km])?$/);
+  if (!match) {
+    return null;
+  }
+
+  const value = Number.parseFloat(match[1]);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  const suffix = match[2];
+  if (suffix === "k") {
+    return value * 1_000;
+  }
+  if (suffix === "m") {
+    return value * 1_000_000;
+  }
+
+  return value;
+}
+
+function extractProjectionShortcutCard(message: string) {
+  const normalized = message.toLowerCase();
+  const looksLikeProjection =
+    /\bprojection\b/.test(normalized) ||
+    /\bproject\b/.test(normalized) ||
+    /\bforecast\b/.test(normalized) ||
+    /\bcompound(?:ing)?\b/.test(normalized);
+
+  if (!looksLikeProjection) {
+    return null;
+  }
+
+  const monthsMatch = normalized.match(/(\d{1,3})\s*(?:-| )?\s*(?:month|months|mo)\b/);
+  const startMatch =
+    message.match(/\bstart(?:ing)?(?:\s+balance)?\s*[:=]?\s*([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)/i) ??
+    message.match(/([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)\s*start\b/i);
+  const monthlyAddMatch =
+    message.match(/\b(?:monthly\s+(?:add|deposit|top(?: |-)?up)|top(?: |-)?up)\s*[:=]?\s*([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)/i) ??
+    message.match(/([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)\s*(?:\/\s*month|\bper month\b|\ba month\b)/i);
+  const monthlyReturnMatch = message.match(
+    /\b(\d+(?:\.\d+)?)\s*%\s*(?:monthly|per month|a month)\b/i,
+  );
+
+  const months = monthsMatch ? Number.parseInt(monthsMatch[1], 10) : Number.NaN;
+  const startBalance = startMatch ? parseFlexibleNumber(startMatch[1]) : null;
+  const monthlyAdd = monthlyAddMatch ? parseFlexibleNumber(monthlyAddMatch[1]) : null;
+  const monthlyReturnPercent = monthlyReturnMatch
+    ? Number.parseFloat(monthlyReturnMatch[1])
+    : null;
+
+  if (!Number.isInteger(months) || months <= 0 || startBalance == null) {
+    return null;
+  }
+
+  return generateProjectionCard({
+    months,
+    startBalance,
+    ...(monthlyAdd != null ? { monthlyAdd } : {}),
+    ...(monthlyReturnPercent != null ? { monthlyReturnPercent } : {}),
+  });
+}
+
 function resolveClarificationCard(request: AskRequest) {
   if ((request.history?.length ?? 0) > 0) {
     return null;
@@ -179,6 +245,24 @@ export async function generateAskResponse(
 
     return askResponseSchema.parse({
       data: sanitizeCard(clarificationCard),
+      sessionId,
+      messageId,
+    });
+  }
+
+  const projectionShortcutCard = extractProjectionShortcutCard(normalizedMessage);
+  if (projectionShortcutCard) {
+    logger.info("Ask generation completed.", {
+      sessionId,
+      messageId,
+      finalCardType: projectionShortcutCard.type,
+      cardSource: "projection_shortcut",
+      toolResults: [],
+    });
+
+    return askResponseSchema.parse({
+      data: sanitizeCard(projectionShortcutCard),
+      uiMeta: sanitizeUiMeta(extractUiMeta(projectionShortcutCard, [])),
       sessionId,
       messageId,
     });

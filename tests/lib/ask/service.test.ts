@@ -80,6 +80,31 @@ describe("generateAskResponse", () => {
     });
   });
 
+  it("short-circuits clear projection prompts into a projection card", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "24-month projection: £10k start, £400/month",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data.type).toBe("projection");
+    if (response.data.type !== "projection") {
+      throw new Error("Expected a projection card.");
+    }
+    expect(response.data.months).toBe(24);
+    expect(response.data.startBalance).toBe(10000);
+    expect(response.data.monthlyAdd).toBe(400);
+    expect(response.uiMeta?.projectionMarkers).toBeDefined();
+  });
+
   it("falls back to a tool-generated card when the final text is unusable", async () => {
     const response = await generateAskResponse(
       {
