@@ -7,6 +7,7 @@ import {
   fallbackInsightCard,
   sanitizeCard,
   sanitizeUiMeta,
+  type AskCard,
   type AskRequest,
   type AskResponse,
 } from "@/lib/ask/contracts";
@@ -157,6 +158,151 @@ function buildInsightCardFromModelText(text: string) {
   );
 }
 
+type DerivedSessionState = {
+  activeAsset?: string;
+  activeCardType?: AskCard["type"];
+  activeSide?: "buy" | "sell";
+  lastSetup?: {
+    entry: string;
+    stop: string;
+    target: string;
+    bias: "Bullish" | "Bearish" | "Neutral";
+  };
+  lastProjection?: {
+    months: number;
+    startBalance: number;
+    monthlyAdd: number;
+    totalReturn: string;
+  };
+  lastVerifiedEntity?: {
+    name: string;
+    status: string;
+    kind: "broker" | "guru";
+  };
+  recentUserMessages: string[];
+};
+
+function inferTradeSideFromCard(card: AskCard): "buy" | "sell" | undefined {
+  if (card.type !== "setup" && card.type !== "chart") {
+    return undefined;
+  }
+
+  if (card.bias === "Bullish") {
+    return "buy";
+  }
+  if (card.bias === "Bearish") {
+    return "sell";
+  }
+
+  return undefined;
+}
+
+function deriveSessionState(history: AskRequest["history"] | undefined): DerivedSessionState | null {
+  const messages = history ?? [];
+
+  if (!messages.length) {
+    return null;
+  }
+
+  const state: DerivedSessionState = {
+    recentUserMessages: [],
+  };
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+
+    if (message.role === "user") {
+      if (message.content.trim() && state.recentUserMessages.length < 2) {
+        state.recentUserMessages.push(clampWords(message.content, 20));
+      }
+      continue;
+    }
+
+    const parsed = askCardSchema.safeParse(extractJson(message.content));
+    if (!parsed.success) {
+      continue;
+    }
+
+    const card = parsed.data;
+
+    state.activeCardType ??= card.type;
+
+    if ((card.type === "briefing" || card.type === "setup") && !state.activeAsset) {
+      state.activeAsset = card.asset;
+    }
+
+    if (card.type === "setup" && !state.lastSetup) {
+      state.lastSetup = {
+        entry: card.entry,
+        stop: card.stop,
+        target: card.target,
+        bias: card.bias,
+      };
+      state.activeSide ??= inferTradeSideFromCard(card);
+    }
+
+    if (card.type === "projection" && !state.lastProjection) {
+      state.lastProjection = {
+        months: card.months,
+        startBalance: card.startBalance,
+        monthlyAdd: card.monthlyAdd,
+        totalReturn: card.totalReturn,
+      };
+    }
+
+    if ((card.type === "broker" || card.type === "guru") && !state.lastVerifiedEntity) {
+      state.lastVerifiedEntity = {
+        name: card.name,
+        status: card.status,
+        kind: card.type,
+      };
+    }
+  }
+
+  return Object.keys(state).length > 1 ? state : null;
+}
+
+function buildSessionStateMessage(state: DerivedSessionState | null) {
+  if (!state) {
+    return null;
+  }
+
+  const lines = [
+    "SESSION STATE",
+    "Use this only to resolve omitted context in follow-up questions. Explicit user input overrides it.",
+  ];
+
+  if (state.activeAsset) {
+    lines.push(`Active asset: ${state.activeAsset}`);
+  }
+  if (state.activeCardType) {
+    lines.push(`Last card type: ${state.activeCardType}`);
+  }
+  if (state.activeSide) {
+    lines.push(`Active trade side: ${state.activeSide}`);
+  }
+  if (state.lastSetup) {
+    lines.push(
+      `Last setup: bias ${state.lastSetup.bias}, entry ${state.lastSetup.entry}, stop ${state.lastSetup.stop}, target ${state.lastSetup.target}`,
+    );
+  }
+  if (state.lastProjection) {
+    lines.push(
+      `Last projection: ${state.lastProjection.months} months, start ${state.lastProjection.startBalance}, monthly add ${state.lastProjection.monthlyAdd}, total return ${state.lastProjection.totalReturn}`,
+    );
+  }
+  if (state.lastVerifiedEntity) {
+    lines.push(
+      `Last verified entity: ${state.lastVerifiedEntity.name} (${state.lastVerifiedEntity.kind}, ${state.lastVerifiedEntity.status})`,
+    );
+  }
+  if (state.recentUserMessages.length > 0) {
+    lines.push(`Recent user messages: ${state.recentUserMessages.join(" | ")}`);
+  }
+
+  return lines.join("\n");
+}
+
 function parseFlexibleNumber(raw: string): number | null {
   const normalized = raw.replace(/[$£€,]/g, "").trim().toLowerCase();
   const match = normalized.match(/^(\d+(?:\.\d+)?)([km])?$/);
@@ -222,7 +368,7 @@ function extractProjectionShortcutCard(message: string) {
   });
 }
 
-function extractMarketSetupShortcutInput(message: string) {
+function extractMarketSetupShortcutInput(message: string, state: DerivedSessionState | null) {
   const normalized = message.toLowerCase();
   const asksBuy =
     /\b(buy|long)\b/.test(normalized) ||
@@ -233,21 +379,33 @@ function extractMarketSetupShortcutInput(message: string) {
     /\bwhat price should i sell\b/.test(normalized) ||
     /\bwhere should i short\b/.test(normalized);
   const asksEntry =
-    /\b(entry|entries|stop loss|take profit|target|invalidation)\b/.test(normalized);
+    /\b(entry|entries|stop|stop loss|take profit|target|invalidation)\b/.test(normalized);
+  const followUpSetupQuestion =
+    asksEntry &&
+    (/\b(tighter|wider|move|adjust|change|same|that|this|it)\b/.test(normalized) ||
+      /\bwhat about\b/.test(normalized));
 
-  if ((!asksBuy && !asksSell) || !asksEntry && !/what price should i (buy|sell)\b/.test(normalized)) {
+  if (
+    (!asksBuy && !asksSell && !followUpSetupQuestion) ||
+    (!asksEntry && !/what price should i (buy|sell)\b/.test(normalized) && !followUpSetupQuestion)
+  ) {
     return null;
   }
 
-  const asset = inferMarketAssetFromText(message);
+  const asset = inferMarketAssetFromText(message) ?? state?.activeAsset ?? null;
   if (!asset) {
+    return null;
+  }
+
+  const side = asksSell ? "sell" : asksBuy ? "buy" : state?.activeSide;
+  if (!side) {
     return null;
   }
 
   return {
     asset,
     timeframe: "1W" as const,
-    side: asksSell ? "sell" as const : "buy" as const,
+    side,
   };
 }
 
@@ -294,6 +452,8 @@ export async function generateAskResponse(
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
   const completedToolResults: Array<{ toolName?: string; output?: unknown }> = [];
+  const sessionState = deriveSessionState(request.history);
+  const sessionStateMessage = buildSessionStateMessage(sessionState);
 
   logger.info("Ask generation started.", {
     sessionId,
@@ -338,7 +498,7 @@ export async function generateAskResponse(
     });
   }
 
-  const marketSetupShortcut = extractMarketSetupShortcutInput(normalizedMessage);
+  const marketSetupShortcut = extractMarketSetupShortcutInput(normalizedMessage, sessionState);
   if (marketSetupShortcut) {
     const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
     const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
@@ -404,6 +564,7 @@ export async function generateAskResponse(
       messages: [
         createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
         createSystemMessage(askResponseGuide),
+        ...(sessionStateMessage ? [createSystemMessage(sessionStateMessage)] : []),
         ...(image ? [createSystemMessage(askImageResponseGuide)] : []),
         ...request.history.map((message) => ({
           role: message.role,
