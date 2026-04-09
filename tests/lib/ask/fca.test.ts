@@ -1,6 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/supabase/admin", () => ({
+  getSupabaseAdminClient: vi.fn(),
+}));
+
+import { clearVerifiedEntitiesCache } from "@/lib/ask/entities";
 import { getFcaStatus } from "@/lib/ask/fca";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+
+const pepperstoneSupabaseRow = {
+  slug: "pepperstone",
+  name: "Pepperstone",
+  entity_type: "broker",
+  status: "legitimate",
+  fca_registered: true,
+  fca_reference: "684312",
+  fca_warning: false,
+  trust_score: 8.9,
+  notes: "FCA authorised. Top tier execution.",
+  source: "FCA Register",
+  aliases: ["pepperstone"],
+};
 
 describe("getFcaStatus", () => {
   const originalFetch = global.fetch;
@@ -8,6 +28,30 @@ describe("getFcaStatus", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    clearVerifiedEntitiesCache();
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      from: (table: string) => {
+        if (table === "broker_entity_map") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === "verified_entities") {
+          return {
+            select: () =>
+              Promise.resolve({
+                data: [pepperstoneSupabaseRow],
+                error: null,
+              }),
+          };
+        }
+        throw new Error(`Unexpected Supabase table in test: ${table}`);
+      },
+    } as never);
   });
 
   afterEach(() => {
@@ -164,5 +208,18 @@ describe("getFcaStatus", () => {
     expect(result.available).toBe(false);
     expect(result.authorised).toBe(true);
     expect(result.source).toContain("FCA Register");
+  });
+
+  it("prefers reviewed seed data over fuzzy name-search matches when a known FRN lookup fails", async () => {
+    process.env.FCA_FIRM_LOOKUP_URL = "https://example.com/fca";
+    global.fetch = vi.fn().mockRejectedValue(new Error("frn lookup failed")) as unknown as typeof fetch;
+
+    const result = await getFcaStatus({ name: "Pepperstone", frn: "684312" });
+
+    expect(result.available).toBe(false);
+    expect(result.frn).toBe("684312");
+    expect(result.authorised).toBe(true);
+    expect(result.source).toContain("FCA Register");
+    expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 });

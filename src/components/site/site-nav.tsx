@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
-import { Home, LineChart, Menu, MessageSquare } from "lucide-react";
+import { LineChart, Menu, MessageSquare } from "lucide-react";
 // import { Wrench } from "lucide-react"; // with Tools tab when /tools is shown again
 
+import { UserMenu } from "@/components/auth/user-menu";
 import { Logo } from "@/components/site/logo";
 import { Sheet } from "@/components/ui/sheet";
+import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
 const navItems = [
-  { href: "/ask", label: "Ask", icon: MessageSquare },
-  { href: "/markets", label: "Markets", icon: LineChart },
+  { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
+  { href: "/markets", label: "Markets", icon: LineChart, requiresAuth: true },
   // { href: "/tools", label: "Tools", icon: Wrench },
 ] as const;
 
@@ -20,8 +22,8 @@ export const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
 
 export function SiteNav() {
   const pathname = usePathname();
-  const isLanding = pathname === "/";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { ready, isSignedIn } = useSupabaseAuth();
 
   useEffect(() => {
     startTransition(() => {
@@ -43,6 +45,8 @@ export function SiteNav() {
       active ? "bg-white/[0.08] text-white" : "text-white/80 hover:bg-white/[0.05]",
     ].join(" ");
 
+  const visibleNavItems = navItems.filter((item) => !item.requiresAuth || (ready && isSignedIn));
+
   return (
     <>
       <nav className="sticky top-0 z-50 border-b border-[color:var(--vt-border)] bg-[rgba(10,13,46,0.92)] pt-[env(safe-area-inset-top)] backdrop-blur-xl">
@@ -51,17 +55,20 @@ export function SiteNav() {
           <Link href="/" className="min-w-0 shrink-0" onClick={() => setMobileMenuOpen(false)}>
             <Logo compact />
           </Link>
-          <button
-            type="button"
-            className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white transition hover:bg-white/[0.08]"
-            aria-expanded={mobileMenuOpen}
-            aria-haspopup="dialog"
-            aria-controls="site-mobile-nav-sheet"
-            aria-label="Open menu"
-            onClick={() => setMobileMenuOpen(true)}
-          >
-            <Menu className="size-5" strokeWidth={2} aria-hidden />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <UserMenu />
+            <button
+              type="button"
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white transition hover:bg-white/[0.08]"
+              aria-expanded={mobileMenuOpen}
+              aria-haspopup="dialog"
+              aria-controls="site-mobile-nav-sheet"
+              aria-label="Open menu"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu className="size-5" strokeWidth={2} aria-hidden />
+            </button>
+          </div>
         </div>
 
         {/* Desktop */}
@@ -69,27 +76,23 @@ export function SiteNav() {
           <Link href="/" className="min-w-0 shrink-0">
             <Logo />
           </Link>
-          <div className="mx-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto rounded-full border border-[color:var(--vt-border)] bg-white/5 p-1 sm:mx-3 sm:gap-2">
-            {navItems.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <Link key={item.href} href={item.href} className={navLinkClass(active)}>
-                  {item.label}
-                </Link>
-              );
-            })}
+          {visibleNavItems.length > 0 ? (
+            <div className="mx-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto rounded-full border border-[color:var(--vt-border)] bg-white/5 p-1 sm:mx-3 sm:gap-2">
+              {visibleNavItems.map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link key={item.href} href={item.href} className={navLinkClass(active)}>
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="min-w-0 flex-1" aria-hidden />
+          )}
+          <div className="flex shrink-0 items-center gap-2">
+            <UserMenu />
           </div>
-          <Link
-            href={isLanding ? "/ask" : "/"}
-            className="shrink-0 rounded-full bg-[var(--vt-coral)] px-3 py-2 text-xs font-semibold text-white shadow-[0_12px_40px_rgba(242,109,109,0.28)] transition hover:brightness-105 sm:px-4 sm:text-sm"
-          >
-            {isLanding ? "Open Ask" : (
-              <>
-                <span className="sm:hidden">Home</span>
-                <span className="hidden sm:inline">Back Home</span>
-              </>
-            )}
-          </Link>
         </div>
       </nav>
 
@@ -101,7 +104,7 @@ export function SiteNav() {
         title="Menu"
       >
         <nav className="flex flex-col gap-1" aria-label="Main">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
             return (
@@ -116,17 +119,6 @@ export function SiteNav() {
               </Link>
             );
           })}
-
-          <div className="my-2 border-t border-white/[0.06]" role="separator" />
-
-          <Link
-            href={isLanding ? "/ask" : "/"}
-            className="flex items-center justify-center gap-2 rounded-xl bg-[var(--vt-coral)] px-4 py-3.5 text-base font-semibold text-white shadow-[0_12px_40px_rgba(242,109,109,0.25)] transition hover:brightness-105"
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            <Home className="size-5" strokeWidth={2} aria-hidden />
-            {isLanding ? "Open Ask" : "Back home"}
-          </Link>
         </nav>
       </Sheet>
     </>

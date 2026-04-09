@@ -5,8 +5,14 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { ImgHTMLAttributes } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "@ai-sdk/react";
+import type { User } from "@supabase/supabase-js";
 
 import { ASK_USER_MESSAGE_INVALID_RESPONSE } from "@/lib/ask/ask-failure";
+
+const mockAuthUser = {
+  id: "00000000-0000-0000-0000-000000000001",
+  email: "test@example.com",
+} as User;
 
 vi.mock("next/image", () => ({
   default: (
@@ -94,6 +100,17 @@ vi.mock("next/navigation", () => ({
   }),
   usePathname: () => "/ask",
   useSearchParams: () => mockSearchParams,
+}));
+
+vi.mock("@/lib/supabase/auth-context", () => ({
+  SupabaseAuthProvider: ({ children }: { children: unknown }) => children,
+  useSupabaseAuth: () => ({
+    supabase: null,
+    user: mockAuthUser,
+    session: null,
+    ready: true,
+    isSignedIn: true,
+  }),
 }));
 
 import { suggestionPrompts } from "@/components/ask/ask-chat-helpers";

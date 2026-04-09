@@ -88,7 +88,7 @@ export function LandingPage() {
               </div>
               <div className="mt-3 space-y-2 text-sm leading-7 text-slate-300">
                 <div>Claude supervises.</div>
-                <div>Twelve Data handles live market context.</div>
+                <div>FMP handles live market context.</div>
                 <div>Seeded entities handle broker, prop firm, and guru checks.</div>
                 <div>Backend engines handle exact maths.</div>
               </div>
@@ -105,7 +105,7 @@ export function LandingPage() {
           <FeatureCard
             badge="Market Data"
             title="Live briefing path"
-            description="Twelve Data powers supported assets. Claude formats the answer, but the market numbers come from the data feed."
+            description="FMP powers supported assets. Claude formats the answer, but the market numbers come from the data feed."
           />
           <FeatureCard
             badge="Math Engine"
@@ -117,4 +117,3 @@ export function LandingPage() {
     </div>
   );
 }
-

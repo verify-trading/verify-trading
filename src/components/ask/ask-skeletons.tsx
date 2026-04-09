@@ -103,51 +103,6 @@ function SkeletonUserMessageRow({ className = "" }: { className?: string }) {
   );
 }
 
-/* ─── Ask /ask page Suspense fallback ─── */
-
-export function AskPageSkeleton() {
-  return (
-    <div className="flex min-h-[100dvh] flex-col bg-[var(--vt-navy)] text-white">
-      <header className="sticky top-0 z-50 border-b border-[color:var(--vt-border)] bg-[rgba(10,13,46,0.92)] pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-        <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-3 sm:px-6 lg:h-16">
-          <Skeleton className="h-9 w-28 rounded-full" />
-          <Skeleton className="h-9 w-40 rounded-full sm:w-48" />
-          <Skeleton className="h-9 w-20 rounded-full sm:w-24" />
-        </div>
-      </header>
-      <div className="mx-auto flex min-h-0 w-full flex-1 flex-col px-0 pb-0 pt-0">
-        <div className="flex min-h-0 flex-1">
-          <aside className="hidden w-80 shrink-0 flex-col border-r border-white/[0.04] py-3 lg:flex xl:w-96">
-            <div className="flex justify-between px-3 pb-3">
-              <Skeleton className="size-8 rounded-lg" />
-              <Skeleton className="size-8 rounded-lg" />
-            </div>
-            <div className="mx-3 mb-3">
-              <Skeleton className="h-8 w-full rounded-lg" />
-            </div>
-            <div className="min-h-0 flex-1 space-y-2 px-2">
-              <SkeletonLine width="w-12" className="h-2" />
-              <Skeleton className="h-9 w-full rounded-lg" />
-              <Skeleton className="h-9 w-full rounded-lg" />
-              <SkeletonLine width="w-14" className="mt-4 h-2" />
-              <Skeleton className="h-9 w-full rounded-lg" />
-            </div>
-          </aside>
-          <div className="ask-scrollbar flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-2 py-4 sm:px-4">
-            <div className="mx-auto flex w-full max-w-4xl flex-col">
-              <SkeletonUserMessageRow />
-              <SkeletonAssistantMessageRow bodyLines={3} />
-              <SkeletonUserMessageRow className="opacity-85" />
-              <SkeletonAssistantMessageRow className="opacity-70" bodyLines={2} />
-            </div>
-          </div>
-        </div>
-      </div>
-      <span className="sr-only">Loading Ask…</span>
-    </div>
-  );
-}
-
 /* ─── Empty chat while history hydrates (same thread layout: assistant left, user right) ─── */
 
 export function AskEmptyRestoringSkeleton() {

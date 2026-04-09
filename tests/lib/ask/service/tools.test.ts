@@ -396,8 +396,38 @@ describe("createAskTools", () => {
       articles: [
         {
           title: "T",
+          description:
+            "This is a deliberately long description that should be trimmed before it goes back into the model because tool payload size matters for latency and token cost on synthesis turns.",
           source: "S",
           url: "https://example.com",
+          publishedAt: "2026-04-01T00:00:00Z",
+        },
+        {
+          title: "T2",
+          description: "Second description",
+          source: "S2",
+          url: "https://example.com/2",
+          publishedAt: "2026-04-01T00:00:00Z",
+        },
+        {
+          title: "T3",
+          description: "Third description",
+          source: "S3",
+          url: "https://example.com/3",
+          publishedAt: "2026-04-01T00:00:00Z",
+        },
+        {
+          title: "T4",
+          description: "Fourth description",
+          source: "S4",
+          url: "https://example.com/4",
+          publishedAt: "2026-04-01T00:00:00Z",
+        },
+        {
+          title: "T5",
+          description: "Fifth description should be dropped",
+          source: "S5",
+          url: "https://example.com/5",
           publishedAt: "2026-04-01T00:00:00Z",
         },
       ],
@@ -409,71 +439,21 @@ describe("createAskTools", () => {
     expect(fetchNewsEverythingImpl).toHaveBeenCalledWith(
       expect.objectContaining({ query: "iran oil" }),
     );
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       query: "iran oil",
-      articles: [
-        {
-          title: "T",
-          source: "S",
-          description: undefined,
-        },
-      ],
       note: undefined,
     });
-  });
-
-  it("get_economic_calendar delegates to fetchEconomicCalendarImpl", async () => {
-    const fetchEconomicCalendarImpl = vi.fn().mockResolvedValue({
-      from: "2026-04-07",
-      to: "2026-04-14",
-      events: [
-        {
-          date: "2026-04-10",
-          time: "12:30",
-          country: "United States",
-          event: "CPI",
-          impact: "high",
-          currency: "USD",
-        },
-      ],
-      note: undefined,
-      source: "FMP",
+    expect(result?.articles).toHaveLength(4);
+    expect(result?.articles[0]).toMatchObject({
+      title: "T",
+      source: "S",
     });
-    const tools = createAskTools({ fetchEconomicCalendarImpl });
-
-    const result = await tools.get_economic_calendar.execute?.(
-      {
-        from: "2026-04-07",
-        to: "2026-04-14",
-        country: "US",
-        importance: "high",
-        limit: 5,
-      },
-      {} as never,
-    );
-
-    expect(fetchEconomicCalendarImpl).toHaveBeenCalledWith({
-      from: "2026-04-07",
-      to: "2026-04-14",
-      country: "US",
-      importance: "high",
-      limit: 5,
-    });
-    expect(result).toEqual({
-      from: "2026-04-07",
-      to: "2026-04-14",
-      events: [
-        {
-          date: "2026-04-10",
-          time: "12:30",
-          country: "United States",
-          event: "CPI",
-          impact: "high",
-          currency: "USD",
-        },
-      ],
-      note: undefined,
-      source: "FMP",
+    expect(result?.articles[0]?.description?.endsWith("…")).toBe(true);
+    expect(result?.articles[0]?.description?.length).toBeLessThanOrEqual(160);
+    expect(result?.articles[3]).toMatchObject({
+      title: "T4",
+      source: "S4",
+      description: "Fourth description",
     });
   });
 
@@ -515,5 +495,39 @@ describe("createAskTools", () => {
     );
 
     expect(result).toEqual({ card });
+  });
+
+  it("submit_ask_card infers briefing direction from the change sign when missing", async () => {
+    const tools = createAskTools({});
+
+    const result = await tools.submit_ask_card.execute?.(
+      {
+        card_json: JSON.stringify({
+          type: "briefing",
+          asset: "GOLD / XAUUSD",
+          price: "4749.80",
+          change: "-0.57%",
+          level1: "4753.60 resistance",
+          level2: "4745.10 support",
+          event: null,
+          verdict: "Gold is leaning heavy into the open.",
+        }),
+      },
+      {} as never,
+    );
+
+    expect(result).toEqual({
+      card: {
+        type: "briefing",
+        asset: "GOLD / XAUUSD",
+        price: "4749.80",
+        change: "-0.57%",
+        direction: "down",
+        level1: "4753.60 resistance",
+        level2: "4745.10 support",
+        event: null,
+        verdict: "Gold is leaning heavy into the open.",
+      },
+    });
   });
 });

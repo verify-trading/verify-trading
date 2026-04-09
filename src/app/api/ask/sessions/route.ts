@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAskPersistence } from "@/lib/ask/persistence";
+import { getSessionUser } from "@/lib/auth/session";
 import { logger } from "@/lib/observability/logger";
 
 const sessionQuerySchema = z.object({
@@ -29,7 +30,18 @@ export async function GET(request: Request) {
   }
 
   try {
-    const persistence = getAskPersistence();
+    const session = await getSessionUser();
+    if (!session) {
+      return NextResponse.json(
+        {
+          error: "unauthorized",
+          message: "Sign in to load Ask sessions.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const persistence = getAskPersistence({ userId: session.user.id });
     const page = await persistence.listSessions(query.limit, query.cursor ?? null);
 
     return NextResponse.json(page);

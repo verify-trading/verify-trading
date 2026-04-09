@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { SiteNav } from "@/components/site/site-nav";
 import {
   calculateMarginRequirement,
   calculatePipValue,
@@ -415,9 +414,7 @@ export function ToolsPage() {
   const ActiveIcon = activeMeta.icon;
 
   return (
-    <div className="min-h-screen bg-[var(--vt-navy)] text-white">
-      <SiteNav />
-
+    <div className="min-h-0 flex-1">
       <main className="mx-auto w-full max-w-4xl px-4 pb-12 pt-6 sm:px-6 sm:pt-8">
         {/* ── Mobile: dropdown selector ──────────────────────── */}
         <div className="mb-4 md:hidden">

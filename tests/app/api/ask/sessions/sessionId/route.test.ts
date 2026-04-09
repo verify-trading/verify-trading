@@ -4,14 +4,23 @@ vi.mock("@/lib/ask/persistence", () => ({
   getAskPersistence: vi.fn(),
 }));
 
+vi.mock("@/lib/auth/session", () => ({
+  getSessionUser: vi.fn(),
+}));
+
 import { DELETE } from "@/app/api/ask/sessions/[sessionId]/route";
 import { getAskPersistence } from "@/lib/ask/persistence";
+import { getSessionUser } from "@/lib/auth/session";
 
 describe("DELETE /api/ask/sessions/[sessionId]", () => {
   const deleteSession = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getSessionUser).mockResolvedValue({
+      user: { id: "00000000-0000-0000-0000-000000000001" },
+      supabase: {} as never,
+    });
     vi.mocked(getAskPersistence).mockReturnValue({
       listSessions: vi.fn(),
       deleteSession,
@@ -43,6 +52,22 @@ describe("DELETE /api/ask/sessions/[sessionId]", () => {
     expect(response.status).toBe(400);
     expect(json.error).toBe("sessions_delete_invalid");
     expect(deleteSession).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when there is no session", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+    const id = "11111111-1111-4111-8111-111111111111";
+
+    const response = await DELETE(new Request(`http://localhost/api/ask/sessions/${id}`), {
+      params: Promise.resolve({ sessionId: id }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(json).toEqual({
+      error: "unauthorized",
+      message: "Sign in to manage Ask sessions.",
+    });
   });
 
   it("returns 500 when delete fails", async () => {

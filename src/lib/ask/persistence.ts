@@ -15,14 +15,21 @@ function isTestEnvironment() {
 }
 
 const memoryPersistence = createMemoryPersistence();
-const supabasePersistence = createSupabasePersistence();
 
-export function getAskPersistence(): AskPersistence {
-  if (getSupabaseAdminClient()) {
-    return supabasePersistence;
+export function getAskPersistence(options?: { userId?: string }): AskPersistence {
+  if (!getSupabaseAdminClient()) {
+    if (!isTestEnvironment()) {
+      throw new Error("Supabase admin is not configured for Ask persistence.");
+    }
+    return memoryPersistence;
   }
 
-  return isTestEnvironment() ? memoryPersistence : supabasePersistence;
+  const userId = options?.userId;
+  if (!userId) {
+    throw new Error("Authenticated user id is required for Ask persistence.");
+  }
+
+  return createSupabasePersistence(userId);
 }
 
 export { clearMemoryAskPersistence };

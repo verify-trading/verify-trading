@@ -94,3 +94,59 @@ select {
   }
 }
 
+/* Sonner — library dark theme uses pure black + gray; remap to `--vt-*` (same surfaces as auth / Ask) */
+[data-sonner-toaster] {
+  font-family: var(--font-sans);
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"] [data-description] {
+  color: var(--vt-muted);
+}
+
+/*
+  Sonner applies `background: var(--normal-bg)` / `border-color: var(--normal-border)` on each toast.
+  Default dark: `--normal-bg: #000` — override at toaster + per `data-type` so tints use our palette.
+*/
+[data-sonner-toaster][data-sonner-theme="dark"] {
+  --normal-bg: var(--vt-card);
+  --normal-border: var(--vt-border);
+  --normal-text: #fff;
+  --border-radius: 1rem;
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"][data-type="success"] {
+  --normal-bg: color-mix(in srgb, var(--vt-green) 14%, var(--vt-card));
+  --normal-border: color-mix(in srgb, var(--vt-green) 42%, var(--vt-border));
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"][data-type="success"] [data-icon] {
+  color: var(--vt-green);
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"][data-type="error"] {
+  --normal-bg: color-mix(in srgb, var(--vt-coral) 12%, var(--vt-card));
+  --normal-border: color-mix(in srgb, var(--vt-coral) 38%, var(--vt-border));
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"][data-type="error"] [data-icon] {
+  color: var(--vt-coral);
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"][data-type="warning"] {
+  --normal-bg: color-mix(in srgb, var(--vt-amber) 12%, var(--vt-card));
+  --normal-border: color-mix(in srgb, var(--vt-amber) 38%, var(--vt-border));
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"][data-type="warning"] [data-icon] {
+  color: var(--vt-amber);
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"][data-type="info"] {
+  --normal-bg: color-mix(in srgb, var(--vt-blue) 12%, var(--vt-card));
+  --normal-border: color-mix(in srgb, var(--vt-blue) 38%, var(--vt-border));
+}
+
+[data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast][data-styled="true"][data-type="info"] [data-icon] {
+  color: var(--vt-blue);
+}
+

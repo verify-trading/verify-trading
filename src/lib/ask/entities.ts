@@ -1,23 +1,7 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
-import { z } from "zod";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
-const seedRowSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(["broker", "guru", "propfirm"]),
-  status: z.enum(["legitimate", "warning", "avoid"]),
-  fca_registered: z.enum(["true", "false"]),
-  fca_reference: z.string(),
-  fca_warning: z.enum(["true", "false"]),
-  trust_score: z.string(),
-  notes: z.string(),
-  source: z.string(),
-});
-
-export type VerifiedEntityType = z.infer<typeof seedRowSchema>["type"];
-export type VerifiedEntityStatus = z.infer<typeof seedRowSchema>["status"];
+export type VerifiedEntityType = "broker" | "guru" | "propfirm";
+export type VerifiedEntityStatus = "legitimate" | "warning" | "avoid";
 
 export interface VerifiedEntity {
   id: string;
@@ -54,39 +38,6 @@ export interface LookupVerifiedEntityResult {
 }
 
 let verifiedEntitiesCache: Promise<VerifiedEntity[]> | undefined;
-
-function parseCsvLine(line: string) {
-  const values: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-
-    if (character === '"') {
-      const next = line[index + 1];
-      if (inQuotes && next === '"') {
-        current += '"';
-        index += 1;
-        continue;
-      }
-
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (character === "," && !inQuotes) {
-      values.push(current);
-      current = "";
-      continue;
-    }
-
-    current += character;
-  }
-
-  values.push(current);
-  return values.map((value) => value.trim());
-}
 
 function normalizeEntityText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
@@ -161,48 +112,18 @@ function mapColor(status: VerifiedEntityStatus) {
   return status === "legitimate" ? ("green" as const) : ("red" as const);
 }
 
-function toVerifiedEntity(row: z.infer<typeof seedRowSchema>): VerifiedEntity {
-  const name = row.name.trim();
-  return {
-    id: collapseEntityText(name),
-    name,
-    type: row.type,
-    status: row.status,
-    fcaRegistered: row.fca_registered === "true",
-    fcaReference: row.fca_reference.trim() || null,
-    fcaWarning: row.fca_warning === "true",
-    trustScore: Number.parseFloat(row.trust_score),
-    notes: row.notes.trim(),
-    source: row.source.trim(),
-    aliases: createAliases(name),
-  };
-}
-
-async function readSeedEntities() {
-  const filePath = path.join(process.cwd(), "verified_entities_seed-1.csv");
-  const raw = await readFile(filePath, "utf8");
-  const [headerLine, ...lines] = raw.split(/\r?\n/).filter(Boolean);
-  const headers = parseCsvLine(headerLine);
-
-  return lines.map((line) => {
-    const values = parseCsvLine(line);
-    const row = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
-    return toVerifiedEntity(seedRowSchema.parse(row));
-  });
-}
-
-async function readSupabaseEntities() {
+async function loadVerifiedEntitiesFromSupabase(): Promise<VerifiedEntity[]> {
   const client = getSupabaseAdminClient();
   if (!client) {
-    return null;
+    return [];
   }
 
   const { data, error } = await client.from("verified_entities").select(
     "slug, name, entity_type, status, fca_registered, fca_reference, fca_warning, trust_score, notes, source, aliases",
   );
 
-  if (error || !data || data.length === 0) {
-    return null;
+  if (error || !data) {
+    return [];
   }
 
   return data.map((row) => ({
@@ -222,12 +143,14 @@ async function readSupabaseEntities() {
   }));
 }
 
+/** Clears the in-memory entity list cache (e.g. after tests or long-running reload hooks). */
+export function clearVerifiedEntitiesCache() {
+  verifiedEntitiesCache = undefined;
+}
+
 export async function getVerifiedEntities() {
   if (!verifiedEntitiesCache) {
-    verifiedEntitiesCache = (async () => {
-      const fromSupabase = await readSupabaseEntities();
-      return fromSupabase ?? readSeedEntities();
-    })();
+    verifiedEntitiesCache = loadVerifiedEntitiesFromSupabase();
   }
 
   return verifiedEntitiesCache;

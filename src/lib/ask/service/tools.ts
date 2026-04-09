@@ -21,7 +21,6 @@ import {
   calculateRiskRewardInputSchema,
   normalizeForexPair,
 } from "@/lib/ask/calculators";
-import { fetchEconomicCalendar, getEconomicCalendarWindow } from "@/lib/ask/economic-calendar";
 import { getFcaStatus } from "@/lib/ask/fca";
 import { lookupVerifiedEntity, type LookupVerifiedEntityResult } from "@/lib/ask/entities";
 import { getMarketQuote, getMarketSeries, getMarketSeriesInputSchema } from "@/lib/ask/market";
@@ -67,35 +66,8 @@ const searchNewsInputSchema = z.object({
     .describe("Two-letter language code, default en."),
 });
 
-const getEconomicCalendarInputSchema = z.object({
-  from: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
-    .describe("Optional start date in YYYY-MM-DD. Omit for today."),
-  to: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
-    .describe("Optional end date in YYYY-MM-DD. Omit for a 7-day lookahead."),
-  country: z
-    .string()
-    .min(2)
-    .optional()
-    .describe("Optional country or region filter like US, UK, Eurozone, or Japan."),
-  importance: z
-    .enum(["high", "medium", "low"])
-    .optional()
-    .describe("Optional impact filter. Use when the user asks for high-impact events only."),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
-    .optional()
-    .default(8)
-    .describe("Maximum number of events to return, default 8."),
-});
+const MAX_NEWS_TOOL_ARTICLES = 4;
+const MAX_NEWS_DESCRIPTION_CHARS = 160;
 
 function buildInsightCard(headline: string, body: string, verdict: string): AskCard {
   return {
@@ -104,6 +76,38 @@ function buildInsightCard(headline: string, body: string, verdict: string): AskC
     body,
     verdict,
   };
+}
+
+function truncateNewsDescription(value: string | null | undefined) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized.length <= MAX_NEWS_DESCRIPTION_CHARS) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, MAX_NEWS_DESCRIPTION_CHARS - 1).trimEnd()}…`;
+}
+
+function normalizeSubmittedBriefingCard(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const card = { ...(value as Record<string, unknown>) };
+  if (card.type !== "briefing" || typeof card.direction === "string") {
+    return card;
+  }
+
+  const change = typeof card.change === "string" ? card.change.trim() : "";
+  if (change.startsWith("-")) {
+    card.direction = "down";
+  } else if (change.startsWith("+")) {
+    card.direction = "up";
+  }
+
+  return card;
 }
 
 function buildBrokerCard(
@@ -294,7 +298,7 @@ function formatChange(value: number) {
   return `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(2)}%`;
 }
 
-function buildBriefingCard(
+export function buildBriefingCard(
   quote: Awaited<ReturnType<typeof getMarketQuote>>,
   series: Awaited<ReturnType<typeof getMarketSeries>>,
 ): { card: BriefingCard; uiMeta: AskUiMeta } {
@@ -340,6 +344,20 @@ function withCard(card: AskCard, uiMeta?: AskUiMeta) {
   return uiMeta ? { card, uiMeta } : { card };
 }
 
+type VerificationToolResponse =
+  | ReturnType<typeof withCard>
+  | {
+      fcaData: {
+        queriedName: string;
+        frn: string | null;
+        statusText: string | null;
+        authorised: boolean | null;
+        warning: boolean | null;
+        note: string | null;
+        source: string;
+      };
+    };
+
 async function enrichPositionSizeInput(
   toolInput: z.input<typeof calculatePositionSizeInputSchema>,
   getMarketQuoteImpl: typeof getMarketQuote,
@@ -363,7 +381,7 @@ async function enrichPositionSizeInput(
   };
 }
 
-function buildPipValueCard(result: ReturnType<typeof calculatePipValue>): AskCard {
+export function buildPipValueCard(result: ReturnType<typeof calculatePipValue>): AskCard {
   return buildInsightCard(
     "Pip Value",
     `${result.lotSize} lot on ${result.pair} moves ${result.currency} ${result.pipValue.toFixed(2)} per pip.`,
@@ -379,7 +397,7 @@ function buildMarginCard(result: ReturnType<typeof calculateMarginRequirement>):
   );
 }
 
-function buildRiskRewardCard(result: ReturnType<typeof calculateRiskReward>): AskCard {
+export function buildRiskRewardCard(result: ReturnType<typeof calculateRiskReward>): AskCard {
   return buildInsightCard(
     "Risk Reward",
     `Risk is ${result.riskDistance}. Reward is ${result.rewardDistance}. Ratio is ${result.ratio.toFixed(2)} to 1.`,
@@ -396,13 +414,8 @@ function buildProfitLossCard(result: ReturnType<typeof calculateProfitLoss>): As
 }
 
 export function createAskTools(dependencies: AskServiceDependencies) {
-  const lookupVerifiedEntityImpl =
-    dependencies.lookupVerifiedEntityImpl ?? lookupVerifiedEntity;
-  const getFcaStatusImpl = dependencies.getFcaStatusImpl ?? getFcaStatus;
   const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
   const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
-  const fetchEconomicCalendarImpl =
-    dependencies.fetchEconomicCalendarImpl ?? fetchEconomicCalendar;
   const fetchNewsEverythingImpl =
     dependencies.fetchNewsEverythingImpl ?? fetchNewsEverything;
 
@@ -411,72 +424,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       description:
         "Verify a broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks. It uses reviewed entity data first and then live FCA confirmation when an FRN is available. If this is only one part of a broader trading question, use the result as evidence and still synthesize the final card yourself.",
       inputSchema: verifyEntityInputSchema,
-      execute: async ({ name }) => {
-        const normalized = normalizeVerificationName(name);
-        const lookup = await lookupVerifiedEntityImpl(normalized.lookupName);
-
-        if (lookup.found && lookup.entity) {
-          if (lookup.entity.type === "guru") {
-            const card = buildGuruCard(lookup);
-            return withCard(card ?? buildCoverageInsightCard());
-          }
-
-          if (lookup.entity.type === "propfirm") {
-            const card = buildPropFirmCard(lookup);
-            return withCard(
-              card ?? buildCoverageInsightCard(),
-              card
-                ? {
-                    verificationKind: "propfirm",
-                    verificationSourceLabel: "Reviewed record",
-                  }
-                : undefined,
-            );
-          }
-
-          const fcaStatus = await getFcaStatusImpl({
-            name: lookup.entity.name,
-            frn: lookup.entity.fcaReference ?? undefined,
-          });
-          const card = buildBrokerCard(lookup, fcaStatus);
-
-          return withCard(
-            card ?? buildCoverageInsightCard(),
-            card
-              ? {
-                  verificationKind: "broker",
-                  verificationSourceLabel: fcaStatus.available ? "Live FCA confirmed" : "Reviewed record",
-                }
-              : undefined,
-          );
-        }
-
-        if (normalized.fromUrl) {
-          return withCard(buildUrlCoverageInsightCard(normalized.displayName));
-        }
-
-        // Seed lookup failed — fall back to live FCA register search
-        const fcaStatus = await getFcaStatusImpl({ name: normalized.lookupName, frn: undefined });
-        if (fcaStatus.available && fcaStatus.statusText) {
-          return {
-            fcaData: {
-              queriedName: fcaStatus.queriedName,
-              frn: fcaStatus.frn,
-              statusText: fcaStatus.statusText,
-              authorised: fcaStatus.authorised,
-              warning: fcaStatus.warning,
-              note: fcaStatus.note,
-              source: fcaStatus.source,
-            },
-          };
-        }
-
-        return withCard(
-          normalized.fromUrl
-            ? buildUrlCoverageInsightCard(normalized.displayName)
-            : buildCoverageInsightCard(),
-        );
-      },
+      execute: async ({ name }) => resolveVerificationToolResult(name, dependencies),
     }),
     get_market_briefing: tool({
       description:
@@ -501,30 +449,9 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         ),
       }),
     }),
-    get_economic_calendar: tool({
-      description:
-        "Upcoming macro events from the FMP economic calendar. Use it for scheduled releases like CPI, NFP, GDP, FOMC, BoE, ECB, or 'what matters this week'. Use search_news for unscheduled headlines or why an event matters after you have the calendar.",
-      inputSchema: getEconomicCalendarInputSchema,
-      execute: async (input) => {
-        try {
-          return await fetchEconomicCalendarImpl(input);
-        } catch (error) {
-          const { from, to } = getEconomicCalendarWindow(input);
-          const message =
-            error instanceof Error ? error.message : "Economic calendar lookup failed.";
-          return {
-            from,
-            to,
-            events: [],
-            note: message,
-            source: "FMP" as const,
-          };
-        }
-      },
-    }),
     search_news: tool({
       description:
-        "Recent headlines with descriptions (NewsData). Optional from date only if the user stated it. Read the descriptions for context, not just titles. Use the result to explain market impact, and submit the final card yourself instead of echoing raw headlines.",
+        "Recent headlines with descriptions (NewsData). Use it for macro, geopolitics, policy, earnings, sector themes, or scheduled-event context when the user wants what matters next. Optional from date only if the user stated it. Read the descriptions for context, not just titles. Use the result to explain market impact, and submit the final card yourself instead of echoing raw headlines.",
       inputSchema: searchNewsInputSchema,
       execute: async (input) => {
         try {
@@ -535,9 +462,9 @@ export function createAskTools(dependencies: AskServiceDependencies) {
           });
           return {
             query: result.query,
-            articles: result.articles.slice(0, 8).map((a) => ({
+            articles: result.articles.slice(0, MAX_NEWS_TOOL_ARTICLES).map((a) => ({
               title: a.title,
-              description: a.description,
+              description: truncateNewsDescription(a.description),
               source: a.source,
             })),
             note: result.note,
@@ -623,12 +550,98 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         } catch {
           throw new Error("submit_ask_card: card_json must be valid JSON.");
         }
-        const result = askCardSchema.safeParse(parsed);
+        const result = askCardSchema.safeParse(normalizeSubmittedBriefingCard(parsed));
         if (!result.success) {
           throw new Error(`submit_ask_card: ${result.error.message}`);
         }
         return { card: result.data };
       },
     }),
+  };
+}
+
+async function resolveVerificationToolResult(
+  name: string,
+  dependencies: AskServiceDependencies,
+): Promise<VerificationToolResponse> {
+  const lookupVerifiedEntityImpl =
+    dependencies.lookupVerifiedEntityImpl ?? lookupVerifiedEntity;
+  const getFcaStatusImpl = dependencies.getFcaStatusImpl ?? getFcaStatus;
+
+  const normalized = normalizeVerificationName(name);
+  const lookup = await lookupVerifiedEntityImpl(normalized.lookupName);
+
+  if (lookup.found && lookup.entity) {
+    if (lookup.entity.type === "guru") {
+      return withCard(buildGuruCard(lookup) ?? buildCoverageInsightCard());
+    }
+
+    if (lookup.entity.type === "propfirm") {
+      const card = buildPropFirmCard(lookup) ?? buildCoverageInsightCard();
+      return withCard(
+        card,
+        card.type === "broker"
+          ? {
+              verificationKind: "propfirm",
+              verificationSourceLabel: "Reviewed record",
+            }
+          : undefined,
+      );
+    }
+
+    const fcaStatus = await getFcaStatusImpl({
+      name: lookup.entity.name,
+      frn: lookup.entity.fcaReference ?? undefined,
+    });
+    const card = buildBrokerCard(lookup, fcaStatus) ?? buildCoverageInsightCard();
+
+    return withCard(
+      card,
+      card.type === "broker"
+        ? {
+            verificationKind: "broker",
+            verificationSourceLabel: fcaStatus.available ? "Live FCA confirmed" : "Reviewed record",
+          }
+        : undefined,
+    );
+  }
+
+  if (normalized.fromUrl) {
+    return withCard(buildUrlCoverageInsightCard(normalized.displayName));
+  }
+
+  const fcaStatus = await getFcaStatusImpl({ name: normalized.lookupName, frn: undefined });
+  if (fcaStatus.available && fcaStatus.statusText) {
+    return {
+      fcaData: {
+        queriedName: fcaStatus.queriedName,
+        frn: fcaStatus.frn,
+        statusText: fcaStatus.statusText,
+        authorised: fcaStatus.authorised,
+        warning: fcaStatus.warning,
+        note: fcaStatus.note,
+        source: fcaStatus.source,
+      },
+    };
+  }
+
+  return withCard(buildCoverageInsightCard());
+}
+
+export async function resolveVerificationCard(
+  name: string,
+  dependencies: AskServiceDependencies,
+) {
+  const result = await resolveVerificationToolResult(name, dependencies);
+  if ("card" in result) {
+    return result;
+  }
+
+  return {
+    card: buildInsightCard(
+      "Live FCA Result",
+      `${result.fcaData.queriedName} ${result.fcaData.authorised ? "appears authorised" : "does not appear authorised"}${result.fcaData.statusText ? ` (${result.fcaData.statusText})` : ""}.`,
+      result.fcaData.note ?? "Confirm the exact firm name before relying on this result.",
+    ),
   };
 }

@@ -10,87 +10,77 @@ const cacheTtlMs = 60_000;
 type MarketInstrument = {
   asset: string;
   symbol: string;
-  exchange?: string;
   proxyAssumption?: string;
 };
 
 const supportedAssets = {
-  gold: { asset: "GOLD / XAUUSD", symbol: "XAU/USD" },
-  goldxauusd: { asset: "GOLD / XAUUSD", symbol: "XAU/USD" },
-  xau: { asset: "GOLD / XAUUSD", symbol: "XAU/USD" },
-  xauusd: { asset: "GOLD / XAUUSD", symbol: "XAU/USD" },
+  gold: { asset: "GOLD", symbol: "GCUSD" },
+  goldxauusd: { asset: "GOLD", symbol: "GCUSD" },
+  xau: { asset: "GOLD", symbol: "GCUSD" },
+  xauusd: { asset: "GOLD", symbol: "GCUSD" },
   oil: {
     asset: "OIL / WTI",
-    symbol: "USO",
-    exchange: "NYSE",
-    proxyAssumption: "Using USO ETF as a live WTI crude proxy.",
+    symbol: "BZUSD",
+    proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
   },
   oilwti: {
     asset: "OIL / WTI",
-    symbol: "USO",
-    exchange: "NYSE",
-    proxyAssumption: "Using USO ETF as a live WTI crude proxy.",
+    symbol: "BZUSD",
+    proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
   },
   wti: {
     asset: "OIL / WTI",
-    symbol: "USO",
-    exchange: "NYSE",
-    proxyAssumption: "Using USO ETF as a live WTI crude proxy.",
+    symbol: "BZUSD",
+    proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
   },
   silver: {
     asset: "SILVER",
-    symbol: "SLV",
-    proxyAssumption: "Using SLV as a live Silver proxy.",
+    symbol: "SIUSD",
+    proxyAssumption: "Using silver futures as the live silver proxy.",
   },
   silverxagusd: {
     asset: "SILVER",
-    symbol: "SLV",
-    proxyAssumption: "Using SLV as a live Silver proxy.",
+    symbol: "SIUSD",
+    proxyAssumption: "Using silver futures as the live silver proxy.",
   },
   xagusd: {
     asset: "SILVER",
-    symbol: "SLV",
-    proxyAssumption: "Using SLV as a live Silver proxy.",
+    symbol: "SIUSD",
+    proxyAssumption: "Using silver futures as the live silver proxy.",
   },
-  bitcoin: { asset: "BITCOIN / USD", symbol: "BTC/USD" },
-  bitcoinusd: { asset: "BITCOIN / USD", symbol: "BTC/USD" },
-  btc: { asset: "BITCOIN / USD", symbol: "BTC/USD" },
-  ethereum: { asset: "ETHEREUM / USD", symbol: "ETH/USD" },
-  ethereumusd: { asset: "ETHEREUM / USD", symbol: "ETH/USD" },
-  eth: { asset: "ETHEREUM / USD", symbol: "ETH/USD" },
-  eurusd: { asset: "EUR/USD", symbol: "EUR/USD" },
-  eu: { asset: "EUR/USD", symbol: "EUR/USD" },
-  gbpusd: { asset: "GBP/USD", symbol: "GBP/USD" },
-  gu: { asset: "GBP/USD", symbol: "GBP/USD" },
+  bitcoin: { asset: "BITCOIN / USD", symbol: "BTCUSD" },
+  bitcoinusd: { asset: "BITCOIN / USD", symbol: "BTCUSD" },
+  btc: { asset: "BITCOIN / USD", symbol: "BTCUSD" },
+  ethereum: { asset: "ETHEREUM / USD", symbol: "ETHUSD" },
+  ethereumusd: { asset: "ETHEREUM / USD", symbol: "ETHUSD" },
+  eth: { asset: "ETHEREUM / USD", symbol: "ETHUSD" },
+  eurusd: { asset: "EUR/USD", symbol: "EURUSD" },
+  eu: { asset: "EUR/USD", symbol: "EURUSD" },
+  gbpusd: { asset: "GBP/USD", symbol: "GBPUSD" },
+  gu: { asset: "GBP/USD", symbol: "GBPUSD" },
   nasdaq: {
     asset: "NASDAQ",
-    symbol: "QQQ",
-    proxyAssumption: "Using QQQ as a live Nasdaq proxy.",
+    symbol: "^IXIC",
   },
   nas: {
     asset: "NASDAQ",
-    symbol: "QQQ",
-    proxyAssumption: "Using QQQ as a live Nasdaq proxy.",
+    symbol: "^IXIC",
   },
   nas100: {
     asset: "NASDAQ",
-    symbol: "QQQ",
-    proxyAssumption: "Using QQQ as a live Nasdaq proxy.",
+    symbol: "^IXIC",
   },
   dow: {
     asset: "DOW JONES",
-    symbol: "DIA",
-    proxyAssumption: "Using DIA as a live Dow Jones proxy.",
+    symbol: "^DJI",
   },
   dowjones: {
     asset: "DOW JONES",
-    symbol: "DIA",
-    proxyAssumption: "Using DIA as a live Dow Jones proxy.",
+    symbol: "^DJI",
   },
   us30: {
     asset: "DOW JONES",
-    symbol: "DIA",
-    proxyAssumption: "Using DIA as a live Dow Jones proxy.",
+    symbol: "^DJI",
   },
 } as const satisfies Record<string, MarketInstrument>;
 
@@ -99,6 +89,10 @@ function collapseAssetText(value: string) {
 }
 
 export function inferMarketAssetFromText(text: string): string | null {
+  return inferMarketAssetsFromText(text)[0] ?? null;
+}
+
+export function inferMarketAssetsFromText(text: string): string[] {
   const collapsed = collapseAssetText(text);
   const tokenized = text
     .toLowerCase()
@@ -116,7 +110,7 @@ export function inferMarketAssetFromText(text: string): string | null {
     })
     .sort((left, right) => right[0].length - left[0].length);
 
-  return matches[0]?.[1].asset ?? null;
+  return [...new Set(matches.map((match) => match[1].asset))];
 }
 
 export const getMarketQuoteInputSchema = z.object({
@@ -142,14 +136,11 @@ export interface MarketSeries extends MarketInstrument {
   support: number;
 }
 
-/**
- * Builds a quote from time-series closes so the Markets dashboard can use a single `time_series`
- * call per asset (half the Twelve Data credits vs quote + series).
- */
+/** Builds a quote from historical closes so the dashboard can reuse one series response when needed. */
 export function deriveQuoteFromSeries(series: MarketSeries): MarketQuote {
   const { closeValues } = series;
   if (closeValues.length < 2) {
-    throw new Error("Twelve Data time series did not include enough close values.");
+    throw new Error("FMP historical prices did not include enough close values.");
   }
 
   const first = closeValues[0];
@@ -225,7 +216,6 @@ function scoreInstrumentMatch(
     symbol: string;
     instrumentName?: string;
     exchange?: string;
-    instrumentType?: string;
   },
 ) {
   const normalizedQuery = normalizeAssetKey(query);
@@ -252,17 +242,10 @@ function scoreInstrumentMatch(
     score += 180;
   }
 
-  const instrumentType = (candidate.instrumentType ?? "").toLowerCase();
-  if (instrumentType.includes("digital currency") || instrumentType.includes("physical currency")) {
-    score += 40;
-  } else if (instrumentType.includes("etf")) {
-    score += 30;
-  } else if (instrumentType.includes("common stock")) {
-    score += 20;
-  }
-
   const exchange = (candidate.exchange ?? "").toUpperCase();
-  if (exchange === "NASDAQ" || exchange === "NYSE" || exchange === "NYSE ARCA") {
+  if (exchange === "FOREX" || exchange === "CRYPTO" || exchange === "COMMODITY" || exchange === "INDEX") {
+    score += 40;
+  } else if (exchange === "NASDAQ" || exchange === "NYSE" || exchange === "AMEX") {
     score += 10;
   }
 
@@ -282,7 +265,7 @@ function parseNumericValue(value: unknown) {
   return null;
 }
 
-/** Twelve Data `time_series` rows include `datetime` (or `date`); sort ascending for correct range % and sparklines. */
+/** FMP historical rows include `date`; sort ascending for correct range % and sparklines. */
 function parseTimestampFromSeriesRow(row: Record<string, unknown>): number | null {
   const raw = row.datetime ?? row.date;
   if (typeof raw !== "string" || raw.trim().length === 0) {
@@ -299,7 +282,7 @@ function parseTimeSeriesCloseValues(values: unknown[]): number[] {
   const rows = values
     .map((entry) => {
       const row = entry as Record<string, unknown>;
-      const close = parseNumericValue(row.close);
+      const close = parseNumericValue(row.close) ?? parseNumericValue(row.price);
       if (close === null) {
         return null;
       }
@@ -332,36 +315,31 @@ function requireNumericValue(value: number | null, message: string) {
 }
 
 /**
- * Maps UI timeframes to Twelve Data `time_series` params. Uses **trading-day** counts for
- * multi-day ranges so labels match user expectations (avoids e.g. 42×4h spanning many calendar weeks).
+ * FMP free-plan history is daily, so even `1D` uses recent daily closes instead of intraday bars.
+ * The goal here is consistent recent context, not fake sub-day precision.
  */
 function formatTimeframe(timeframe: MarketSeries["timeframe"]) {
   switch (timeframe) {
     case "1D":
-      // ~24 hourly bars (24/5 FX/crypto; US equities get session hours only).
-      return { interval: "1h", outputsize: "24" };
+      return { limit: "5" };
     case "1W":
-      // One trading week (Mon–Fri week of daily closes).
-      return { interval: "1day", outputsize: "5" };
+      return { limit: "7" };
     case "1M":
-      // ~1 calendar month of trading sessions (~22 US equity sessions).
-      return { interval: "1day", outputsize: "22" };
+      return { limit: "22" };
     case "3M":
-      // ~3 calendar months of trading sessions (~63 sessions).
-      return { interval: "1day", outputsize: "63" };
+      return { limit: "63" };
     case "1Y":
-      // ~1 US trading year of daily closes.
-      return { interval: "1day", outputsize: "252" };
+      return { limit: "252" };
   }
 }
 
-async function fetchTwelveData(endpoint: string, params: Record<string, string>) {
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
+async function fetchFmpData(pathname: string, params: Record<string, string>) {
+  const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) {
-    throw new Error("TWELVE_DATA_API_KEY is not configured.");
+    throw new Error("FMP_API_KEY is not configured.");
   }
 
-  const url = new URL(`https://api.twelvedata.com/${endpoint}`);
+  const url = new URL(`https://financialmodelingprep.com/${pathname}`);
   Object.entries({ ...params, apikey: apiKey }).forEach(([key, value]) => {
     url.searchParams.set(key, value);
   });
@@ -370,16 +348,32 @@ async function fetchTwelveData(endpoint: string, params: Record<string, string>)
     next: { revalidate: 60 },
   });
 
+  const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Twelve Data request failed with ${response.status}.`);
+    throw new Error(`FMP request failed with ${response.status}.`);
   }
 
-  const json = (await response.json()) as Record<string, unknown>;
-  if (json.status === "error") {
-    throw new Error(String(json.message ?? "Twelve Data returned an error."));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(text.trim() || "FMP returned a non-JSON response.");
   }
 
-  return json;
+  if (typeof parsed === "string") {
+    throw new Error(parsed);
+  }
+
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    "Error Message" in parsed &&
+    typeof parsed["Error Message"] === "string"
+  ) {
+    throw new Error(parsed["Error Message"]);
+  }
+
+  return parsed;
 }
 
 async function searchMarketInstrument(asset: string): Promise<MarketInstrument | null> {
@@ -389,13 +383,25 @@ async function searchMarketInstrument(asset: string): Promise<MarketInstrument |
     return cached;
   }
 
-  const json = await fetchTwelveData("symbol_search", {
-    symbol: asset,
-    outputsize: "5",
-  });
-  const data = Array.isArray(json.data) ? json.data : [];
+  const [symbolMatches, nameMatches] = await Promise.all([
+    fetchFmpData("stable/search-symbol", {
+      query: asset,
+    }).catch(() => []),
+    fetchFmpData("stable/search-name", {
+      query: asset,
+    }).catch(() => []),
+  ]);
+  const data = [...(Array.isArray(symbolMatches) ? symbolMatches : []), ...(Array.isArray(nameMatches) ? nameMatches : [])];
+  const uniqueCandidates = Array.from(
+    new Map(
+      data.map((entry) => {
+        const candidate = entry as Record<string, unknown>;
+        return [`${candidate.symbol ?? ""}:${candidate.exchange ?? ""}`, candidate];
+      }),
+    ).values(),
+  );
 
-  const bestMatch = data
+  const bestMatch = uniqueCandidates
     .map((entry) => {
       const candidate = entry as Record<string, unknown>;
       if (typeof candidate.symbol !== "string" || candidate.symbol.trim().length === 0) {
@@ -405,12 +411,8 @@ async function searchMarketInstrument(asset: string): Promise<MarketInstrument |
       return {
         symbol: candidate.symbol.trim(),
         instrumentName:
-          typeof candidate.instrument_name === "string" ? candidate.instrument_name.trim() : undefined,
+          typeof candidate.name === "string" ? candidate.name.trim() : undefined,
         exchange: typeof candidate.exchange === "string" ? candidate.exchange.trim() : undefined,
-        instrumentType:
-          typeof candidate.instrument_type === "string"
-            ? candidate.instrument_type.trim()
-            : undefined,
       };
     })
     .filter((value): value is NonNullable<typeof value> => value !== null)
@@ -423,7 +425,6 @@ async function searchMarketInstrument(asset: string): Promise<MarketInstrument |
   const instrument: MarketInstrument = {
     asset: buildInstrumentLabel(bestMatch.instrumentName, bestMatch.symbol),
     symbol: bestMatch.symbol,
-    ...(bestMatch.exchange ? { exchange: bestMatch.exchange } : {}),
   };
 
   setCached(instrumentCache, cacheKey, instrument);
@@ -447,27 +448,32 @@ async function resolveMarketInstrument(asset: string): Promise<MarketInstrument>
 export async function getMarketQuote(asset: string): Promise<MarketQuote> {
   const resolved = await resolveMarketInstrument(asset);
 
-  const cacheKey = resolved.exchange ? `${resolved.symbol}:${resolved.exchange}` : resolved.symbol;
+  const cacheKey = resolved.symbol;
   const cached = getCached(quoteCache, cacheKey);
   if (cached) {
     return cached;
   }
 
-  const json = await fetchTwelveData("quote", {
+  const json = await fetchFmpData("stable/quote", {
     symbol: resolved.symbol,
-    ...(resolved.exchange ? { exchange: resolved.exchange } : {}),
   });
+  const row = Array.isArray(json) ? (json[0] as Record<string, unknown> | undefined) : undefined;
+  if (!row) {
+    throw new Error(`FMP quote did not return data for ${resolved.symbol}.`);
+  }
+
   const price = requireNumericValue(
-    parseNumericValue(json.close) ??
-    parseNumericValue(json.price) ??
-    parseNumericValue(json.last),
-    "Twelve Data quote did not include a valid price.",
+    parseNumericValue(row.close) ??
+    parseNumericValue(row.price) ??
+    parseNumericValue(row.last),
+    "FMP quote did not include a valid price.",
   );
   const changePercent = requireNumericValue(
-    parseNumericValue(json.percent_change) ??
-    parseNumericValue(json.change_percent) ??
-    parseNumericValue(json.change),
-    "Twelve Data quote did not include a valid percentage change.",
+    parseNumericValue(row.changePercentage) ??
+    parseNumericValue(row.percent_change) ??
+    parseNumericValue(row.change_percent) ??
+    parseNumericValue(row.change),
+    "FMP quote did not include a valid percentage change.",
   );
 
   const quote: MarketQuote = {
@@ -476,12 +482,7 @@ export async function getMarketQuote(asset: string): Promise<MarketQuote> {
     price,
     changePercent,
     direction: changePercent >= 0 ? "up" : "down",
-    isMarketOpen:
-      typeof json.is_market_open === "boolean"
-        ? json.is_market_open
-        : typeof json.is_market_open === "string"
-          ? json.is_market_open === "true"
-          : null,
+    isMarketOpen: null,
     ...(resolved.proxyAssumption ? { proxyAssumption: resolved.proxyAssumption } : {}),
   };
 
@@ -495,26 +496,23 @@ export async function getMarketSeries(
 ): Promise<MarketSeries> {
   const resolved = await resolveMarketInstrument(asset);
 
-  const cacheKey = `${resolved.exchange ? `${resolved.symbol}:${resolved.exchange}` : resolved.symbol}:${timeframe}`;
+  const cacheKey = `${resolved.symbol}:${timeframe}`;
   const cached = getCached(seriesCache, cacheKey);
   if (cached) {
     return cached;
   }
 
   const window = formatTimeframe(timeframe);
-  const json = await fetchTwelveData("time_series", {
+  const json = await fetchFmpData("stable/historical-price-eod/light", {
     symbol: resolved.symbol,
-    ...(resolved.exchange ? { exchange: resolved.exchange } : {}),
-    interval: window.interval,
-    outputsize: window.outputsize,
-    format: "JSON",
+    limit: window.limit,
   });
 
-  const values = Array.isArray(json.values) ? json.values : [];
+  const values = Array.isArray(json) ? json : [];
   const closeValues = parseTimeSeriesCloseValues(values);
 
   if (closeValues.length < 2) {
-    throw new Error("Twelve Data time series did not include enough close values.");
+    throw new Error("FMP historical prices did not include enough close values.");
   }
 
   const series: MarketSeries = {

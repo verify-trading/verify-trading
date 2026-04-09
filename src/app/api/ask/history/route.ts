@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getAskPersistence } from "@/lib/ask/persistence";
 import { decodeHistoryCursor } from "@/lib/ask/persistence/shared";
+import { getSessionUser } from "@/lib/auth/session";
 import { logger } from "@/lib/observability/logger";
 
 const historyQuerySchema = z.object({
@@ -36,7 +37,18 @@ export async function GET(request: Request) {
   }
 
   try {
-    const persistence = getAskPersistence();
+    const session = await getSessionUser();
+    if (!session) {
+      return NextResponse.json(
+        {
+          error: "unauthorized",
+          message: "Sign in to load Ask history.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const persistence = getAskPersistence({ userId: session.user.id });
     const page = await persistence.loadThreadPage(query.sessionId, {
       cursor: query.cursor ?? null,
       limit: query.limit,

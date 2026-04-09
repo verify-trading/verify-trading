@@ -1,11 +1,23 @@
 import { RetryError } from "ai";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/observability/logger", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
 
 import { fallbackInsightCard } from "@/lib/ask/contracts";
+import { logger } from "@/lib/observability/logger";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
 import { generateAskResponse } from "@/lib/ask/service";
 
 describe("generateAskResponse", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("returns a parsed card when the model emits valid JSON", async () => {
     const response = await generateAskResponse(
       {
@@ -101,6 +113,254 @@ describe("generateAskResponse", () => {
       body: "Glad that helped. If anything else comes up on markets, brokers, risk, or setups, just ask.",
       verdict: "Send your next trading question when you are ready.",
     });
+  });
+
+  it("short-circuits direct market-status asks into a briefing card without calling the model", async () => {
+    const generateTextImpl = vi.fn();
+    const getMarketQuoteImpl = vi.fn().mockResolvedValue({
+      asset: "GOLD",
+      symbol: "GCUSD",
+      price: 4736.3,
+      changePercent: -0.86,
+      direction: "down",
+      isMarketOpen: null,
+    });
+    const getMarketSeriesImpl = vi.fn().mockResolvedValue({
+      asset: "GOLD",
+      symbol: "GCUSD",
+      timeframe: "1W",
+      closeValues: [4699.3, 4721.5, 4745.1, 4736.3],
+      resistance: 4745.1,
+      support: 4699.3,
+    });
+
+    const response = await generateAskResponse(
+      {
+        message: "status on gold?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+        getMarketQuoteImpl,
+        getMarketSeriesImpl,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(getMarketQuoteImpl).toHaveBeenCalledWith("GOLD");
+    expect(getMarketSeriesImpl).toHaveBeenCalledWith("GOLD", "1W");
+    expect(response.data.type).toBe("briefing");
+    expect(response.uiMeta).toEqual({
+      marketSeries: [4699.3, 4721.5, 4745.1, 4736.3],
+      marketLevelScopeLabel: "Near-term levels",
+    });
+  });
+
+  it("short-circuits direct broker safety checks without calling the model", async () => {
+    const generateTextImpl = vi.fn();
+    const lookupVerifiedEntityImpl = vi.fn().mockResolvedValue({
+      found: true,
+      entity: {
+        id: "pepperstone",
+        name: "Pepperstone",
+        type: "broker",
+        status: "legitimate",
+        fcaRegistered: true,
+        fcaReference: "684312",
+        fcaWarning: false,
+        trustScore: 8.9,
+        notes: "FCA authorised. Strong execution and low spreads.",
+        source: "seed",
+        aliases: ["pepperstone"],
+      },
+      brokerCardHint: {
+        name: "Pepperstone",
+        score: "8.9",
+        status: "LEGITIMATE",
+        fca: "Yes",
+        complaints: "Low",
+        color: "green",
+      },
+    });
+    const getFcaStatusImpl = vi.fn().mockResolvedValue({
+      available: true,
+      queriedName: "Pepperstone",
+      frn: "684312",
+      authorised: true,
+      warning: false,
+      statusText: "Authorised",
+      source: "FCA live lookup",
+      note: "FCA authorised. Strong execution and low spreads.",
+    });
+
+    const response = await generateAskResponse(
+      {
+        message: "Is Pepperstone safe for UK retail clients?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+        lookupVerifiedEntityImpl,
+        getFcaStatusImpl,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data).toEqual({
+      type: "broker",
+      name: "Pepperstone",
+      score: "8.9",
+      status: "LEGITIMATE",
+      fca: "Yes",
+      complaints: "Low",
+      verdict: "FCA authorised. Strong execution and low spreads.",
+      color: "green",
+    });
+    expect(response.uiMeta).toEqual({
+      verificationKind: "broker",
+      verificationSourceLabel: "Live FCA confirmed",
+    });
+  });
+
+  it("short-circuits direct pip value asks without calling the model", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "EUR/USD 1 lot pip value?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data).toEqual({
+      type: "insight",
+      headline: "Pip Value",
+      body: "1 lot on EUR/USD moves USD 10.00 per pip.",
+      verdict: "Use that number before sizing the trade.",
+    });
+  });
+
+  it("short-circuits direct risk-reward asks without calling the model", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "If I buy EUR/USD at 1.1000, stop 1.0950, target 1.1100 what's the RR?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data).toEqual({
+      type: "insight",
+      headline: "Risk Reward",
+      body: "Risk is 0.005. Reward is 0.01. Ratio is 2.00 to 1.",
+      verdict: "Take it only if the reward still justifies the setup.",
+    });
+  });
+
+  it("does not short-circuit multi-asset market questions", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Compare Strength",
+        body: "Gold and Bitcoin need comparison context, not a single-market shortcut.",
+        verdict: "Use the broader reasoning path here.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+    const getMarketQuoteImpl = vi.fn();
+    const getMarketSeriesImpl = vi.fn();
+
+    await generateAskResponse(
+      {
+        message: "status on gold and bitcoin?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl,
+        getMarketQuoteImpl,
+        getMarketSeriesImpl,
+      },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(getMarketQuoteImpl).not.toHaveBeenCalled();
+    expect(getMarketSeriesImpl).not.toHaveBeenCalled();
+  });
+
+  it("does not short-circuit macro or news-framed market questions", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Macro Matters",
+        body: "Gold after CPI needs context beyond a raw market-status shortcut.",
+        verdict: "Use the normal model path.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+    const getMarketQuoteImpl = vi.fn();
+    const getMarketSeriesImpl = vi.fn();
+
+    await generateAskResponse(
+      {
+        message: "status on gold after CPI?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl,
+        getMarketQuoteImpl,
+        getMarketSeriesImpl,
+      },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(getMarketQuoteImpl).not.toHaveBeenCalled();
+    expect(getMarketSeriesImpl).not.toHaveBeenCalled();
+  });
+
+  it("keeps market-plus-news queries on the full model path", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "insight",
+        headline: "Gold After CPI",
+        body: "This needs both the market move and the macro catalyst, so it should stay on the full reasoning path.",
+        verdict: "Use news plus price context together.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+    const getMarketQuoteImpl = vi.fn();
+    const getMarketSeriesImpl = vi.fn();
+
+    await generateAskResponse(
+      {
+        message: "What is gold doing after CPI today?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl,
+        getMarketQuoteImpl,
+        getMarketSeriesImpl,
+      },
+    );
+
+    expect(generateTextImpl).toHaveBeenCalledOnce();
+    expect(getMarketQuoteImpl).not.toHaveBeenCalled();
+    expect(getMarketSeriesImpl).not.toHaveBeenCalled();
   });
 
   it("does not treat thanks with extra trading content as a pure acknowledgement", async () => {
@@ -562,6 +822,45 @@ describe("generateAskResponse", () => {
       body: "Your first priority is risk control, not broker comparison or market bias.",
       verdict: "Lock position sizing first.",
     });
+  });
+
+  it("configures the loop to stop after a successful submit_ask_card result", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: "",
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    await generateAskResponse(
+      {
+        message: "What should I focus on first?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    const stopWhen = vi.mocked(generateTextImpl).mock.calls[0]?.[0]?.stopWhen;
+    expect(Array.isArray(stopWhen)).toBe(true);
+    const submitStopCondition = Array.isArray(stopWhen) ? stopWhen[1] : null;
+    expect(submitStopCondition).toBeTypeOf("function");
+    expect(
+      submitStopCondition?.({
+        steps: [
+          {
+            toolResults: [{ toolName: "submit_ask_card" }],
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      submitStopCondition?.({
+        steps: [
+          {
+            toolResults: [{ toolName: "get_market_briefing" }],
+          },
+        ],
+      }),
+    ).toBe(false);
   });
 
   it("prefers the model's final JSON card over a raw tool card", async () => {
@@ -1235,6 +1534,105 @@ describe("generateAskResponse", () => {
     expect(response.data.bias).toBe("Bullish");
   });
 
+  it("injects analysis rules into image requests before the user chart message", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "chart",
+        pattern: "Range",
+        bias: "Bullish",
+        entry: "100",
+        stop: "95",
+        target: "110",
+        rr: "2:1",
+        confidence: "Medium",
+        verdict: "Wait for confirmation.",
+      }),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+    const getActiveAnalysisRulesImpl = vi.fn().mockResolvedValue([
+      {
+        ruleNumber: 1,
+        category: "FOUNDATION",
+        ruleName: "Support and Resistance",
+        content: "Higher timeframe levels come first.",
+        priority: 1,
+        active: true,
+      },
+      {
+        ruleNumber: 2,
+        category: "ENTRY",
+        ruleName: "Stop Loss Placement",
+        content: "Stops go beyond the manipulation extreme.",
+        priority: 2,
+        active: true,
+      },
+    ]);
+
+    await generateAskResponse(
+      {
+        message: "Analyse this chart",
+        sessionId: crypto.randomUUID(),
+        image: "data:image/png;base64,Zm9vYmFy",
+        history: [],
+      },
+      { generateTextImpl, getActiveAnalysisRulesImpl },
+    );
+
+    expect(getActiveAnalysisRulesImpl).toHaveBeenCalledOnce();
+    const call = vi.mocked(generateTextImpl).mock.calls[0]?.[0];
+    const rulesMessageIndex =
+      call?.messages?.findIndex(
+        (message) =>
+          message.role === "system" &&
+          typeof message.content === "string" &&
+          message.content.startsWith("Apply these exact trading rules when analysing this chart:"),
+      ) ?? -1;
+    const userMessageIndex =
+      call?.messages?.findIndex((message) => message.role === "user") ?? -1;
+
+    expect(rulesMessageIndex).toBeGreaterThan(-1);
+    expect(userMessageIndex).toBeGreaterThan(rulesMessageIndex);
+    expect(call?.messages?.[rulesMessageIndex]).toEqual(
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("Rule 1 | FOUNDATION | Support and Resistance | Priority 1"),
+      }),
+    );
+    expect(call?.messages?.[rulesMessageIndex]).toEqual(
+      expect.objectContaining({
+        content: expect.stringContaining("Rule 2 | ENTRY | Stop Loss Placement | Priority 2"),
+      }),
+    );
+  });
+
+  it("does not load analysis rules for text-only requests", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify(fallbackInsightCard),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+    const getActiveAnalysisRulesImpl = vi.fn();
+
+    await generateAskResponse(
+      {
+        message: "What is Gold doing?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl, getActiveAnalysisRulesImpl },
+    );
+
+    expect(getActiveAnalysisRulesImpl).not.toHaveBeenCalled();
+    const call = vi.mocked(generateTextImpl).mock.calls[0]?.[0];
+    expect(call?.messages).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "system",
+          content: expect.stringContaining("Apply these exact trading rules when analysing this chart:"),
+        }),
+      ]),
+    );
+  });
+
   it("sends image input as a file part when a chart is attached", async () => {
     const generateTextImpl = vi.fn().mockResolvedValue({
       text: JSON.stringify({
@@ -1386,6 +1784,113 @@ describe("generateAskResponse", () => {
     const firstModel = vi.mocked(generateTextImpl).mock.calls[0]?.[0]?.model;
     const secondModel = vi.mocked(generateTextImpl).mock.calls[1]?.[0]?.model;
     expect(firstModel).not.toBe(secondModel);
+  });
+
+  it("returns the existing tool card instead of rerunning on the fallback model when the primary fails late", async () => {
+    const toolCard = {
+      type: "briefing" as const,
+      asset: "GOLD",
+      price: "4736.30",
+      change: "-0.86%",
+      direction: "down" as const,
+      level1: "4745.10",
+      level2: "4734.70",
+      event: null,
+      verdict: "Gold is leaning heavy. Watch support for a break.",
+    };
+
+    const generateTextImpl = vi.fn().mockImplementationOnce(async (input) => {
+      input.onStepFinish?.({
+        stepNumber: 0,
+        text: "",
+        toolCalls: [],
+        toolResults: [
+          {
+            toolName: "get_market_briefing",
+            output: {
+              card: toolCard,
+              uiMeta: {
+                marketSeries: [1, 2, 3],
+                marketSourceLabel: "FMP",
+              },
+            },
+          },
+        ],
+        finishReason: "tool-calls",
+        usage: undefined,
+      });
+
+      throw new RetryError({
+        message: "Failed after 3 attempts. Last error: Overloaded",
+        reason: "maxRetriesExceeded",
+        errors: [new Error("Overloaded")],
+      });
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "What is Gold doing?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(response.data).toEqual(toolCard);
+    expect(response.uiMeta).toEqual({
+      marketSeries: [1, 2, 3],
+      marketSourceLabel: "FMP",
+    });
+    expect(generateTextImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates final tool results already captured during step callbacks", async () => {
+    const submitCardResult = {
+      toolName: "submit_ask_card",
+      output: {
+        card: {
+          type: "insight" as const,
+          headline: "Iran On Edge",
+          body: "Ceasefire risk is still fragile here.",
+          verdict: "Trade the fragility, not the headline.",
+        },
+      },
+    };
+
+    const generateTextImpl = vi.fn().mockImplementation(async (input) => {
+      input.onStepFinish?.({
+        stepNumber: 0,
+        text: "",
+        toolCalls: [{ toolName: "submit_ask_card", input: {} }],
+        toolResults: [submitCardResult],
+        finishReason: "tool-calls",
+        usage: undefined,
+      });
+
+      return {
+        text: "",
+        toolResults: [submitCardResult],
+      };
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "Trump and Iran?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(response.data).toEqual(submitCardResult.output.card);
+
+    const toolResultsLog = vi.mocked(logger.info).mock.calls.find(
+      ([message]) => message === "Tool results received.",
+    );
+    expect(toolResultsLog?.[1]).toMatchObject({
+      count: 1,
+      tools: ["submit_ask_card"],
+    });
   });
 
   it("rejects unsupported image payloads", async () => {

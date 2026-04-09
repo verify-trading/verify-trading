@@ -27,7 +27,7 @@ function ChatAttachmentPreview({
   compact?: boolean;
 }) {
   /** 16:9 frame: height always follows width (same proportions at every breakpoint; no h-sm/md jumps). */
-  const maxW = compact ? "max-w-3xl" : "max-w-4xl";
+  const maxW = compact ? "max-w-4xl" : "max-w-5xl";
 
   return (
     <button
@@ -102,8 +102,8 @@ function UserBubble({
   /** Attachments need a block-width bubble; text-only uses inline-block so width follows copy. */
   const bubbleWidthClasses =
     attachmentPreviewUrl != null
-      ? "block w-full max-w-[min(100%,48rem)] sm:max-w-4xl"
-      : "inline-block max-w-[min(100%,28rem)] sm:max-w-lg align-top";
+      ? "block w-full max-w-[min(100%,48rem)] lg:max-w-5xl"
+      : "inline-block max-w-[min(100%,28rem)] sm:max-w-lg lg:max-w-2xl align-top";
 
   return (
     <div className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.015] sm:px-6">

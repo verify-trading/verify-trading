@@ -6,8 +6,11 @@ import { ZodError } from "zod";
 import { askRequestSchema } from "@/lib/ask/contracts";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
 import { logger } from "@/lib/observability/logger";
-import { getAskPersistence } from "@/lib/ask/persistence";
+import { getAskPersistence, type AskPersistence } from "@/lib/ask/persistence";
 import { classifyAskRouteError } from "@/lib/ask/ask-failure";
+import { getSessionUser } from "@/lib/auth/session";
+import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
+import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { generateAskResponse } from "@/lib/ask/service";
 import type { AskStreamData, AskToolStatus } from "@/lib/ask/stream";
 import { AskValidationError } from "@/lib/ask/validation-error";
@@ -150,15 +153,15 @@ function buildToolStatus(toolName: string, rawArgs: unknown): AskToolStatus {
 function buildAskStreamResponse({
   parsedRequest,
   requestInput,
+  persistence,
 }: {
   parsedRequest: ReturnType<typeof askRequestSchema.parse>;
   requestInput: Parameters<typeof generateAskResponse>[0];
+  persistence: AskPersistence;
 }) {
   return createUIMessageStreamResponse({
     stream: createUIMessageStream<AskRouteMessage>({
       execute: async ({ writer }) => {
-        const persistence = getAskPersistence();
-
         writer.write({
           type: "data-tool-status",
           data: {
@@ -268,12 +271,39 @@ export async function POST(request: Request) {
   }
 
   try {
+    const session = await getSessionUser();
+    if (!session) {
+      return NextResponse.json(
+        {
+          error: "unauthorized",
+          message: "Sign in to use Ask.",
+        },
+        { status: 401 },
+      );
+    }
+
     const parsedRequest = askRequestSchema.parse(body);
+    const reserve = await reserveAskQuery(session.supabase);
+    if (!reserve.ok) {
+      return NextResponse.json(
+        {
+          error: "rate_limited",
+          code: reserve.reason,
+          message:
+            reserve.reason === "daily_limit"
+              ? `You have used today’s ${FREE_DAILY_ASK_LIMIT} free chats.`
+              : "Could not verify your usage limit.",
+          remaining: reserve.remaining ?? 0,
+        },
+        { status: 429 },
+      );
+    }
+
     const sessionId =
       parsedRequest.sessionId ??
       parsedRequest.chatSessionId ??
       crypto.randomUUID();
-    const persistence = getAskPersistence();
+    const persistence = getAskPersistence({ userId: session.user.id });
     let history = parsedRequest.history;
 
     try {
@@ -298,6 +328,7 @@ export async function POST(request: Request) {
     return buildAskStreamResponse({
       parsedRequest,
       requestInput,
+      persistence,
     });
   } catch (error) {
     if (error instanceof ZodError) {

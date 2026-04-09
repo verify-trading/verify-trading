@@ -8,8 +8,6 @@ import {
   type MarketsTimeframe,
 } from "@/lib/markets/dashboard";
 
-export const revalidate = 60;
-
 function parseTimeframe(value: string | null): MarketsTimeframe {
   if (value === "1D" || value === "1W" || value === "1M" || value === "3M" || value === "1Y") {
     return value;
@@ -21,7 +19,7 @@ function parseTimeframe(value: string | null): MarketsTimeframe {
 export async function GET(request: NextRequest) {
   const timeframe = parseTimeframe(request.nextUrl.searchParams.get("timeframe"));
 
-  /** One `time_series` per asset (8 credits) — fits Basic 8/min; avoids quote + pair (16). */
+  /** One history fetch per asset keeps the dashboard simple and free-plan friendly. */
   const settled = await Promise.all(
     MARKETS_DASHBOARD_ASSETS.map(async (asset): Promise<MarketsAssetPayload> => {
       try {
@@ -55,7 +53,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(snapshot, {
     headers: {
-      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
+      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
     },
   });
 }

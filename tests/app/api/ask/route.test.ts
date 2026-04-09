@@ -8,10 +8,21 @@ vi.mock("@/lib/ask/persistence", () => ({
   getAskPersistence: vi.fn(),
 }));
 
+vi.mock("@/lib/auth/session", () => ({
+  getSessionUser: vi.fn(),
+}));
+
+vi.mock("@/lib/rate-limit/reserve-ask-query", () => ({
+  reserveAskQuery: vi.fn(),
+}));
+
 import { POST } from "@/app/api/ask/route";
 import { fallbackInsightCard } from "@/lib/ask/contracts";
 import { getAskPersistence } from "@/lib/ask/persistence";
+import { getSessionUser } from "@/lib/auth/session";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
+import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
+import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { generateAskResponse } from "@/lib/ask/service";
 
 async function readResponseJson(response: Response) {
@@ -26,6 +37,15 @@ describe("POST /api/ask", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getSessionUser).mockResolvedValue({
+      user: { id: "00000000-0000-0000-0000-000000000001" },
+      supabase: {} as never,
+    });
+    vi.mocked(reserveAskQuery).mockResolvedValue({
+      ok: true,
+      tier: "free",
+      remaining: FREE_DAILY_ASK_LIMIT - 1,
+    });
     vi.mocked(getAskPersistence).mockReturnValue({
       listSessions,
       deleteSession: vi.fn(),
@@ -88,6 +108,7 @@ describe("POST /api/ask", () => {
       error: "invalid_request",
       message: "The Ask request body is invalid.",
     });
+    expect(reserveAskQuery).not.toHaveBeenCalled();
   });
 
   it("returns 400 when the request body is not valid JSON", async () => {
@@ -106,6 +127,7 @@ describe("POST /api/ask", () => {
       error: "invalid_request",
       message: "The Ask request body is invalid.",
     });
+    expect(reserveAskQuery).not.toHaveBeenCalled();
   });
 
   it("uses persisted history when it exists", async () => {
@@ -139,6 +161,8 @@ describe("POST /api/ask", () => {
           { role: "assistant", content: JSON.stringify(fallbackInsightCard) },
         ],
       }),
+      {},
+      expect.objectContaining({ onToolCall: expect.any(Function) }),
     );
   });
 
@@ -168,6 +192,8 @@ describe("POST /api/ask", () => {
       expect.objectContaining({
         history: [{ role: "user", content: "Local fallback history" }],
       }),
+      {},
+      expect.objectContaining({ onToolCall: expect.any(Function) }),
     );
   });
 
@@ -225,6 +251,8 @@ describe("POST /api/ask", () => {
       expect.objectContaining({
         message: defaultAskImagePrompt,
       }),
+      {},
+      expect.objectContaining({ onToolCall: expect.any(Function) }),
     );
     expect(saveExchange).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -233,7 +261,55 @@ describe("POST /api/ask", () => {
     );
   });
 
-  it("returns 502 when the service throws", async () => {
+  it("returns 401 when there is no session", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+
+    const response = await POST(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        body: JSON.stringify({
+          message: "Hello",
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(readResponseJson(response)).resolves.toEqual({
+      error: "unauthorized",
+      message: "Sign in to use Ask.",
+    });
+  });
+
+  it("returns 429 when the daily free limit is reached", async () => {
+    vi.mocked(reserveAskQuery).mockResolvedValue({
+      ok: false,
+      reason: "daily_limit",
+      remaining: 0,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        body: JSON.stringify({
+          message: "Another ask",
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    const json = await readResponseJson(response);
+    expect(json.error).toBe("rate_limited");
+    expect(json.message).toBe(`You have used today’s ${FREE_DAILY_ASK_LIMIT} free chats.`);
+    expect(json.remaining).toBe(0);
+  });
+
+  it("returns a stream when the service throws inside the stream (error is surfaced in SSE)", async () => {
     vi.mocked(generateAskResponse).mockRejectedValue(new Error("boom"));
 
     const response = await POST(
@@ -248,11 +324,9 @@ describe("POST /api/ask", () => {
       }),
     );
 
-    expect(response.status).toBe(502);
-    await expect(readResponseJson(response)).resolves.toEqual({
-      error: "ask_failed",
-      code: "unknown",
-      message: "boom",
-    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const body = await response.text();
+    expect(body).toContain("boom");
   });
 });

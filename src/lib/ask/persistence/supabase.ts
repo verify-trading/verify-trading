@@ -31,6 +31,39 @@ function sanitizeFileName(fileName: string) {
   return cleaned || "attachment";
 }
 
+async function deleteSessionAttachments(userId: string, sessionId: string) {
+  const client = getSupabaseAdminClient();
+  if (!client) {
+    throw new Error("Supabase admin is not configured for Ask attachment storage.");
+  }
+
+  const sessionFolder = `${userId}/${sessionId}`;
+  const { data, error } = await client.storage.from(ASK_ATTACHMENTS_BUCKET).list(sessionFolder, {
+    limit: 1_000,
+  });
+
+  if (error) {
+    throw new Error("Could not load Ask attachments.");
+  }
+
+  const filePaths = (data ?? [])
+    .map((entry) => entry.name?.trim())
+    .filter((name): name is string => Boolean(name))
+    .map((name) => `${sessionFolder}/${name}`);
+
+  if (filePaths.length === 0) {
+    return;
+  }
+
+  const { error: removeError } = await client.storage
+    .from(ASK_ATTACHMENTS_BUCKET)
+    .remove(filePaths);
+
+  if (removeError) {
+    throw new Error("Could not delete Ask attachments.");
+  }
+}
+
 async function signAttachmentPreview(storagePath: string) {
   const client = getSupabaseAdminClient();
   if (!client) {
@@ -49,6 +82,7 @@ async function signAttachmentPreview(storagePath: string) {
 }
 
 async function uploadAttachment(
+  userId: string,
   input: PersistAskExchangeInput,
 ): Promise<AskAttachmentMeta | null> {
   if (!input.attachmentMeta || !input.userImageDataUrl) {
@@ -62,7 +96,7 @@ async function uploadAttachment(
 
   const parsedImage = decodeImageDataUrl(input.userImageDataUrl);
   const fileName = input.attachmentMeta.fileName ?? "attachment";
-  const storagePath = `sessions/${input.sessionId}/${crypto.randomUUID()}-${sanitizeFileName(fileName)}`;
+  const storagePath = `${userId}/${input.sessionId}/${crypto.randomUUID()}-${sanitizeFileName(fileName)}`;
 
   const { error } = await client.storage.from(ASK_ATTACHMENTS_BUCKET).upload(
     storagePath,
@@ -106,7 +140,7 @@ async function hydrateAttachmentMeta(
   };
 }
 
-export function createSupabasePersistence(): AskPersistence {
+export function createSupabasePersistence(userId: string): AskPersistence {
   const persistence: AskPersistence = {
     async listSessions(limit = 40, cursor = null) {
       const client = getSupabaseAdminClient();
@@ -120,6 +154,7 @@ export function createSupabasePersistence(): AskPersistence {
       let query = client
         .from("chat_sessions")
         .select("id, title, updated_at")
+        .eq("user_id", userId)
         .order("updated_at", { ascending: false })
         .order("id", { ascending: false })
         .limit(pageSize + 80);
@@ -169,7 +204,13 @@ export function createSupabasePersistence(): AskPersistence {
         throw new Error("Supabase admin is not configured for Ask sessions.");
       }
 
-      const { error } = await client.from("chat_sessions").delete().eq("id", sessionId);
+      await deleteSessionAttachments(userId, sessionId);
+
+      const { error } = await client
+        .from("chat_sessions")
+        .delete()
+        .eq("id", sessionId)
+        .eq("user_id", userId);
 
       if (error) {
         throw new Error("Could not delete the Ask session.");
@@ -183,6 +224,17 @@ export function createSupabasePersistence(): AskPersistence {
       const client = getSupabaseAdminClient();
       if (!client) {
         throw new Error("Supabase admin is not configured for Ask history.");
+      }
+
+      const { data: sessionRow, error: sessionError } = await client
+        .from("chat_sessions")
+        .select("id")
+        .eq("id", sessionId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (sessionError || !sessionRow) {
+        return { messages: [], nextCursor: null };
       }
 
       const limit = clampHistoryLimit(options.limit);
@@ -252,15 +304,20 @@ export function createSupabasePersistence(): AskPersistence {
       }
 
       const now = new Date().toISOString();
-      const attachmentMeta = await uploadAttachment(input);
+      const attachmentMeta = await uploadAttachment(userId, input);
       const { data: existingSession, error: existingSessionError } = await client
         .from("chat_sessions")
-        .select("title")
+        .select("title, user_id")
         .eq("id", input.sessionId)
         .maybeSingle();
 
       if (existingSessionError) {
         throw new Error("Could not load the Ask session.");
+      }
+
+      const existingUserId = existingSession?.user_id as string | null | undefined;
+      if (existingUserId && existingUserId !== userId) {
+        throw new Error("Could not update the Ask session.");
       }
 
       const sessionTitle =
@@ -270,7 +327,7 @@ export function createSupabasePersistence(): AskPersistence {
         {
           id: input.sessionId,
           title: sessionTitle,
-          user_id: null,
+          user_id: userId,
           updated_at: now,
         },
         {

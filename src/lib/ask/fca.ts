@@ -362,10 +362,11 @@ export async function getFcaStatus(input: z.infer<typeof getFcaStatusInputSchema
   const parsed = getFcaStatusInputSchema.parse(input);
   const resolvedFrn = await getResolvedFrn(parsed.name, parsed.frn);
   const endpoint = process.env.FCA_FIRM_LOOKUP_URL?.trim().replace(/\/+$/, "");
+  const seedFallback = await getSeedFallback(parsed.name);
 
   if (!endpoint) {
     return (
-      (await getSeedFallback(parsed.name)) ?? {
+      seedFallback ?? {
         available: false,
         queriedName: parsed.name,
         frn: resolvedFrn ?? null,
@@ -401,7 +402,9 @@ export async function getFcaStatus(input: z.infer<typeof getFcaStatusInputSchema
         return parsedPayload;
       }
     } catch {
-      // Fall back to name search below.
+      if (seedFallback) {
+        return seedFallback;
+      }
     }
   }
 
@@ -412,7 +415,7 @@ export async function getFcaStatus(input: z.infer<typeof getFcaStatusInputSchema
   }
 
   return (
-      (await getSeedFallback(parsed.name)) ?? {
+      seedFallback ?? {
         available: false,
         queriedName: parsed.name,
         frn: resolvedFrn ?? null,

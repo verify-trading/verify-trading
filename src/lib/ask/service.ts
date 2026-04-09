@@ -1,6 +1,15 @@
 import { APICallError, generateText, RetryError, stepCountIs, streamText, type ModelMessage } from "ai";
 
 import {
+  buildAnalysisRulesPrompt,
+  getActiveAnalysisRules,
+} from "@/lib/ask/analysis-rules";
+import {
+  calculatePipValue,
+  calculateRiskReward,
+  normalizeForexPair,
+} from "@/lib/ask/calculators";
+import {
   askCardSchema,
   askRequestSchema,
   askResponseSchema,
@@ -29,13 +38,25 @@ import {
   parseImageDataUrl,
 } from "@/lib/ask/service/context";
 import {
+  getMarketQuote,
+  getMarketSeries,
+  inferMarketAssetsFromText,
+} from "@/lib/ask/market";
+import { lookupVerifiedEntity } from "@/lib/ask/entities";
+import {
   createSystemMessage,
   getAskFallbackModel,
   getAskFallbackModelId,
   getAskModel,
   getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
-import { createAskTools } from "@/lib/ask/service/tools";
+import {
+  buildBriefingCard,
+  buildPipValueCard,
+  buildRiskRewardCard,
+  createAskTools,
+  resolveVerificationCard,
+} from "@/lib/ask/service/tools";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 
 const ASK_MODEL_MAX_RETRIES = 2;
@@ -113,6 +134,43 @@ function summarizeToolResults(toolResults: Array<{ toolName?: string; output?: u
   });
 }
 
+function buildToolResultSignature(toolResult: { toolName?: string; output?: unknown }) {
+  return `${toolResult.toolName ?? "unknown"}:${JSON.stringify(toolResult.output)}`;
+}
+
+function mergeToolResults(
+  completedToolResults: Array<{ toolName?: string; output?: unknown }>,
+  finalToolResults: Array<{ toolName?: string; output?: unknown }>,
+) {
+  const merged = [...completedToolResults];
+  const seen = new Set(completedToolResults.map(buildToolResultSignature));
+
+  for (const toolResult of finalToolResults) {
+    const signature = buildToolResultSignature(toolResult);
+    if (seen.has(signature)) {
+      continue;
+    }
+    seen.add(signature);
+    merged.push(toolResult);
+  }
+
+  return merged;
+}
+
+function stopAfterSubmitAskCardResult({
+  steps,
+}: {
+  steps: Array<{
+    toolResults?: Array<{ toolName?: string }>;
+  }>;
+}) {
+  const lastStep = steps[steps.length - 1];
+  return (
+    lastStep?.toolResults?.some((toolResult) => toolResult.toolName === "submit_ask_card") ??
+    false
+  );
+}
+
 function buildInsightCard(headline: string, body: string, verdict: string) {
   return {
     type: "insight" as const,
@@ -120,6 +178,60 @@ function buildInsightCard(headline: string, body: string, verdict: string) {
     body,
     verdict,
   };
+}
+
+type CompletedCard = {
+  card: AskCard;
+  source: string;
+  uiMeta?: AskResponse["uiMeta"];
+};
+
+function buildCompletedAskResponse({
+  card,
+  source,
+  sessionId,
+  messageId,
+  uiMeta,
+  toolResults = [],
+}: CompletedCard & {
+  sessionId: string;
+  messageId: string;
+  toolResults?: Array<{ toolName?: string; output?: unknown }>;
+}) {
+  logger.info("Ask generation completed.", {
+    sessionId,
+    messageId,
+    finalCardType: card.type,
+    cardSource: source,
+    toolResults: summarizeToolResults(toolResults),
+  });
+
+  return askResponseSchema.parse({
+    data: sanitizeCard(card),
+    ...(uiMeta ? { uiMeta: sanitizeUiMeta(uiMeta) } : {}),
+    sessionId,
+    messageId,
+  });
+}
+
+function extractRecoveredToolCard(toolResults: Array<{ toolName?: string; output?: unknown }>) {
+  const submitCard = extractSubmitAskCard(toolResults, askCardSchema);
+  if (submitCard) {
+    return {
+      card: submitCard,
+      source: "submit_ask_card" as const,
+    };
+  }
+
+  const toolCard = extractToolCard(toolResults, askCardSchema);
+  if (toolCard) {
+    return {
+      card: toolCard,
+      source: "tool_result" as const,
+    };
+  }
+
+  return null;
 }
 
 function normalizeWhitespace(value: string) {
@@ -510,6 +622,320 @@ function resolveAcknowledgementCard(request: AskRequest): ReturnType<typeof buil
   );
 }
 
+function extractDirectBriefingTimeframe(message: string): "1D" | "1W" | "1M" | "3M" | "1Y" {
+  const normalized = message.toLowerCase();
+
+  if (/\b1d\b|\btoday\b|\bintraday\b|\bdaily\b/.test(normalized)) {
+    return "1D";
+  }
+  if (/\b1m\b|\bmonth\b|\bmonthly\b/.test(normalized)) {
+    return "1M";
+  }
+  if (/\b3m\b|\b3 month\b|\bthree month\b/.test(normalized)) {
+    return "3M";
+  }
+  if (/\b1y\b|\byear\b|\byearly\b|\bannual\b/.test(normalized)) {
+    return "1Y";
+  }
+
+  return "1W";
+}
+
+function extractDirectForexPair(message: string) {
+  const match = message.match(/\b([a-z]{3})\/?([a-z]{3})\b/i);
+  if (!match) {
+    return null;
+  }
+
+  return normalizeForexPair(`${match[1]}/${match[2]}`).pair;
+}
+
+function parseDirectPipValueShortcut(message: string) {
+  const normalized = normalizeWhitespace(message).toLowerCase();
+  if (!/\bpip value\b/.test(normalized)) {
+    return null;
+  }
+
+  const pair = extractDirectForexPair(message);
+  const lotSizeMatch = normalized.match(/(\d+(?:\.\d+)?)\s*lot\b/);
+  const lotSize = lotSizeMatch ? Number.parseFloat(lotSizeMatch[1]) : Number.NaN;
+
+  if (!pair || !Number.isFinite(lotSize) || lotSize <= 0) {
+    return null;
+  }
+
+  return { pair, lotSize };
+}
+
+function parseDirectRiskRewardShortcut(
+  message: string,
+):
+  | {
+      riskPips: number;
+      rewardPips: number;
+    }
+  | {
+      direction: "long" | "short";
+      entryPrice: number;
+      stopPrice: number;
+      targetPrice: number;
+    }
+  | null {
+  const normalized = normalizeWhitespace(message).toLowerCase();
+  if (!/\b(rr|r:r|risk reward|risk-reward)\b/.test(normalized)) {
+    return null;
+  }
+
+  const riskPipsMatch =
+    normalized.match(/\brisk(?:ing)?\s*(\d+(?:\.\d+)?)\s*pips?\b/) ??
+    normalized.match(/\b(\d+(?:\.\d+)?)\s*pips?\s*(?:risk|stop)\b/);
+  const rewardPipsMatch =
+    normalized.match(/\breward\s*(\d+(?:\.\d+)?)\s*pips?\b/) ??
+    normalized.match(/\b(\d+(?:\.\d+)?)\s*pips?\s*(?:reward|target)\b/);
+
+  if (riskPipsMatch && rewardPipsMatch) {
+    const riskPips = Number.parseFloat(riskPipsMatch[1]);
+    const rewardPips = Number.parseFloat(rewardPipsMatch[1]);
+    if (Number.isFinite(riskPips) && riskPips > 0 && Number.isFinite(rewardPips) && rewardPips > 0) {
+      return { riskPips, rewardPips };
+    }
+  }
+
+  const direction: "long" | "short" | undefined = /\b(sell|short)\b/.test(normalized)
+    ? "short"
+    : /\b(buy|long)\b/.test(normalized)
+      ? "long"
+      : undefined;
+  const entryMatch =
+    normalized.match(/\bentry\b[^\d]*?(\d+(?:\.\d+)?)/) ??
+    normalized.match(/\bat\b[^\d]*?(\d+(?:\.\d+)?)/);
+  const stopMatch = normalized.match(/\b(?:stop|sl)\b[^\d]*?(\d+(?:\.\d+)?)/);
+  const targetMatch = normalized.match(/\b(?:target|tp)\b[^\d]*?(\d+(?:\.\d+)?)/);
+
+  if (!direction || !entryMatch || !stopMatch || !targetMatch) {
+    return null;
+  }
+
+  const entryPrice = Number.parseFloat(entryMatch[1]);
+  const stopPrice = Number.parseFloat(stopMatch[1]);
+  const targetPrice = Number.parseFloat(targetMatch[1]);
+
+  if (![entryPrice, stopPrice, targetPrice].every((value) => Number.isFinite(value) && value > 0)) {
+    return null;
+  }
+
+  return {
+    direction,
+    entryPrice,
+    stopPrice,
+    targetPrice,
+  };
+}
+
+function shouldUseDirectVerificationShortcut(message: string) {
+  const normalized = normalizeWhitespace(message).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    /\b(vs|versus|compare|price|status on|what is|entry|stop|target|setup|buy|sell|rr|risk reward|pip value|projection|plan)\b/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+
+  return /\b(safe|legit|legitimate|regulated|fca|scam|safe to deposit|uk retail|trustworthy)\b/.test(
+    normalized,
+  );
+}
+
+function shouldUseDirectMarketBriefingShortcut(message: string) {
+  const normalized = normalizeWhitespace(message).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const mentionsNewsOrMacro =
+    /\b(cpi|nfp|fed|fomc|ecb|boj|boe|inflation|payrolls|jobs|rate decision|headline|news|trump|iran|war|ceasefire|geopolitics|earnings|after earnings|why did|what happened)\b/.test(
+      normalized,
+    );
+  if (mentionsNewsOrMacro) {
+    return false;
+  }
+
+  const asksForSetupOrOpinion =
+    /\b(buy|sell|long|short|entry|stop|target|setup|trade plan|should i|best trade|cleanest setup|recommend|why not|vs|versus|compare|after earnings|earnings play|overvalued|hold)\b/.test(
+      normalized,
+    );
+  if (asksForSetupOrOpinion) {
+    return false;
+  }
+
+  return (
+    /\bstatus on\b/.test(normalized) ||
+    /\bprice now\b/.test(normalized) ||
+    /\bcurrent price\b/.test(normalized) ||
+    /\bwhere is\b.+\btrading now\b/.test(normalized)
+  );
+}
+
+function buildAskMessages({
+  history,
+  normalizedMessage,
+  image,
+  analysisRulesMessage,
+  sessionStateMessage,
+}: {
+  history: AskRequest["history"];
+  normalizedMessage: string;
+  image: ReturnType<typeof parseImageDataUrl>;
+  analysisRulesMessage: string | null;
+  sessionStateMessage?: string | null;
+}): ModelMessage[] {
+  const userMessage: ModelMessage = image
+    ? {
+        role: "user",
+        content: [
+          {
+            type: "file" as const,
+            data: image.base64,
+            mediaType: image.mediaType,
+          },
+          {
+            type: "text" as const,
+            text: normalizedMessage,
+          },
+        ],
+      }
+    : {
+        role: "user",
+        content: normalizedMessage,
+      };
+
+  return [
+    createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
+    createSystemMessage(askResponseGuide),
+    ...(sessionStateMessage ? [createSystemMessage(sessionStateMessage)] : []),
+    ...(image ? [createSystemMessage(askImageResponseGuide)] : []),
+    ...(analysisRulesMessage ? [createSystemMessage(analysisRulesMessage)] : []),
+    ...(history ?? []).map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    userMessage,
+  ];
+}
+
+async function resolveDirectShortcut({
+  request,
+  normalizedMessage,
+  image,
+  dependencies,
+}: {
+  request: AskRequest;
+  normalizedMessage: string;
+  image: ReturnType<typeof parseImageDataUrl>;
+  dependencies: AskServiceDependencies;
+}): Promise<CompletedCard | null> {
+  const clarificationCard = resolveClarificationCard(request);
+  if (clarificationCard) {
+    return {
+      card: clarificationCard,
+      source: "clarification",
+    };
+  }
+
+  const acknowledgementCard = resolveAcknowledgementCard(request);
+  if (acknowledgementCard) {
+    return {
+      card: acknowledgementCard,
+      source: "acknowledgement",
+    };
+  }
+
+  const growthPlanShortcutCard = extractGrowthPlanShortcutCard(normalizedMessage);
+  if (growthPlanShortcutCard) {
+    return {
+      card: growthPlanShortcutCard,
+      source: "growth_plan_shortcut",
+    };
+  }
+
+  const projectionShortcutCard = extractProjectionShortcutCard(normalizedMessage);
+  if (projectionShortcutCard) {
+    return {
+      card: projectionShortcutCard,
+      source: "projection_shortcut",
+      uiMeta: extractUiMeta(projectionShortcutCard, []),
+    };
+  }
+
+  if (image) {
+    return null;
+  }
+
+  const lookupVerifiedEntityImpl =
+    dependencies.lookupVerifiedEntityImpl ?? lookupVerifiedEntity;
+  if (shouldUseDirectVerificationShortcut(normalizedMessage)) {
+    const lookup = await lookupVerifiedEntityImpl(normalizedMessage);
+    const hasUrl = /https?:\/\/|www\./i.test(normalizedMessage);
+
+    if (lookup.found || hasUrl) {
+      const verificationQuery = lookup.entity?.name ?? normalizedMessage;
+      const { card, uiMeta } = await resolveVerificationCard(verificationQuery, dependencies);
+
+      return {
+        card,
+        source: "direct_verification_shortcut",
+        uiMeta,
+      };
+    }
+  }
+
+  const directPipValueInput = parseDirectPipValueShortcut(normalizedMessage);
+  if (directPipValueInput) {
+    return {
+      card: buildPipValueCard(calculatePipValue(directPipValueInput)),
+      source: "direct_pip_value_shortcut",
+    };
+  }
+
+  const directRiskRewardInput = parseDirectRiskRewardShortcut(normalizedMessage);
+  if (directRiskRewardInput) {
+    return {
+      card: buildRiskRewardCard(calculateRiskReward(directRiskRewardInput)),
+      source: "direct_risk_reward_shortcut",
+    };
+  }
+
+  if (!shouldUseDirectMarketBriefingShortcut(normalizedMessage)) {
+    return null;
+  }
+
+  const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
+  const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
+  const inferredAssets = inferMarketAssetsFromText(normalizedMessage);
+  const inferredAsset = inferredAssets.length === 1 ? inferredAssets[0] : null;
+
+  if (!inferredAsset) {
+    return null;
+  }
+
+  const timeframe = extractDirectBriefingTimeframe(normalizedMessage);
+  const { card, uiMeta } = buildBriefingCard(
+    await getMarketQuoteImpl(inferredAsset),
+    await getMarketSeriesImpl(inferredAsset, timeframe),
+  );
+
+  return {
+    card,
+    source: "direct_market_briefing_shortcut",
+    uiMeta,
+  };
+}
+
 export async function generateAskResponse(
   input: AskRequest,
   dependencies: AskServiceDependencies = {},
@@ -517,11 +943,16 @@ export async function generateAskResponse(
 ): Promise<AskResponse> {
   const request = askRequestSchema.parse(input);
   const generateTextImpl = dependencies.generateTextImpl ?? generateText;
+  const getActiveAnalysisRulesImpl =
+    dependencies.getActiveAnalysisRulesImpl ?? getActiveAnalysisRules;
 
   const sessionId = request.sessionId ?? request.chatSessionId ?? crypto.randomUUID();
   const messageId = crypto.randomUUID();
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
+  const analysisRulesMessage = image
+    ? buildAnalysisRulesPrompt(await getActiveAnalysisRulesImpl())
+    : null;
   const completedToolResults: Array<{ toolName?: string; output?: unknown }> = [];
   const sessionState = deriveSessionState(request.history);
   const sessionStateMessage = buildSessionStateMessage(sessionState);
@@ -534,70 +965,15 @@ export async function generateAskResponse(
     promptPreview: normalizedMessage.slice(0, 160),
   });
 
-  const clarificationCard = resolveClarificationCard(request);
-  if (clarificationCard) {
-    logger.info("Ask generation completed.", {
-      sessionId,
-      messageId,
-      finalCardType: clarificationCard.type,
-      cardSource: "clarification",
-      toolResults: [],
-    });
-
-    return askResponseSchema.parse({
-      data: sanitizeCard(clarificationCard),
-      sessionId,
-      messageId,
-    });
-  }
-
-  const acknowledgementCard = resolveAcknowledgementCard(request);
-  if (acknowledgementCard) {
-    logger.info("Ask generation completed.", {
-      sessionId,
-      messageId,
-      finalCardType: acknowledgementCard.type,
-      cardSource: "acknowledgement",
-      toolResults: [],
-    });
-
-    return askResponseSchema.parse({
-      data: sanitizeCard(acknowledgementCard),
-      sessionId,
-      messageId,
-    });
-  }
-
-  const growthPlanShortcutCard = extractGrowthPlanShortcutCard(normalizedMessage);
-  if (growthPlanShortcutCard) {
-    logger.info("Ask generation completed.", {
-      sessionId,
-      messageId,
-      finalCardType: growthPlanShortcutCard.type,
-      cardSource: "growth_plan_shortcut",
-      toolResults: [],
-    });
-
-    return askResponseSchema.parse({
-      data: sanitizeCard(growthPlanShortcutCard),
-      sessionId,
-      messageId,
-    });
-  }
-
-  const projectionShortcutCard = extractProjectionShortcutCard(normalizedMessage);
-  if (projectionShortcutCard) {
-    logger.info("Ask generation completed.", {
-      sessionId,
-      messageId,
-      finalCardType: projectionShortcutCard.type,
-      cardSource: "projection_shortcut",
-      toolResults: [],
-    });
-
-    return askResponseSchema.parse({
-      data: sanitizeCard(projectionShortcutCard),
-      uiMeta: sanitizeUiMeta(extractUiMeta(projectionShortcutCard, [])),
+  const directShortcut = await resolveDirectShortcut({
+    request,
+    normalizedMessage,
+    image,
+    dependencies,
+  });
+  if (directShortcut) {
+    return buildCompletedAskResponse({
+      ...directShortcut,
       sessionId,
       messageId,
     });
@@ -611,7 +987,7 @@ export async function generateAskResponse(
       temperature: 0.2,
       maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
       maxRetries: ASK_MODEL_MAX_RETRIES,
-      stopWhen: stepCountIs(ASK_MAX_TOOL_STEPS),
+      stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS), stopAfterSubmitAskCardResult],
       onStepFinish({
         stepNumber,
         text,
@@ -647,35 +1023,13 @@ export async function generateAskResponse(
           });
         });
       },
-      messages: [
-        createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
-        createSystemMessage(askResponseGuide),
-        ...(sessionStateMessage ? [createSystemMessage(sessionStateMessage)] : []),
-        ...(image ? [createSystemMessage(askImageResponseGuide)] : []),
-        ...request.history.map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        image
-          ? {
-              role: "user",
-              content: [
-                {
-                  type: "file" as const,
-                  data: image.base64,
-                  mediaType: image.mediaType,
-                },
-                {
-                  type: "text" as const,
-                  text: normalizedMessage,
-                },
-              ],
-            }
-          : {
-              role: "user",
-              content: normalizedMessage,
-            },
-      ],
+      messages: buildAskMessages({
+        history: request.history,
+        normalizedMessage,
+        image,
+        analysisRulesMessage,
+        sessionStateMessage,
+      }),
       tools: createAskTools(dependencies),
     });
   };
@@ -685,6 +1039,27 @@ export async function generateAskResponse(
   try {
     result = await runGenerate(getAskModel());
   } catch (error) {
+    const recoveredToolCard = extractRecoveredToolCard(completedToolResults);
+
+    if (recoveredToolCard) {
+      logger.warn("Ask primary model failed after yielding a valid tool card; returning tool result without fallback rerun.", {
+        sessionId,
+        messageId,
+        primaryModel: getAskPrimaryModelId(),
+        error: error instanceof Error ? error.message : String(error),
+        recoveredCardSource: recoveredToolCard.source,
+        recoveredCardType: recoveredToolCard.card.type,
+      });
+
+      return buildCompletedAskResponse({
+        card: recoveredToolCard.card,
+        source: recoveredToolCard.source,
+        uiMeta: extractUiMeta(recoveredToolCard.card, completedToolResults),
+        sessionId,
+        messageId,
+      });
+    }
+
     if (shouldAttemptAskFallbackModel(error)) {
       logger.warn("Ask primary model failed; retrying with fallback model.", {
         sessionId,
@@ -699,10 +1074,10 @@ export async function generateAskResponse(
     }
   }
 
-  const allToolResults = [
-    ...completedToolResults,
-    ...(result.toolResults as Array<{ toolName?: string; output?: unknown }>),
-  ];
+  const allToolResults = mergeToolResults(
+    completedToolResults,
+    result.toolResults as Array<{ toolName?: string; output?: unknown }>,
+  );
 
   logger.info("Tool results received.", {
     sessionId,
@@ -788,9 +1163,22 @@ export function streamAskResponse(
   callbacks: AskStreamCallbacks = {},
   dependencies: AskServiceDependencies = {},
 ) {
+  return streamAskResponseInternal(input, callbacks, dependencies);
+}
+
+async function streamAskResponseInternal(
+  input: AskRequest,
+  callbacks: AskStreamCallbacks = {},
+  dependencies: AskServiceDependencies = {},
+) {
   const request = askRequestSchema.parse(input);
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
+  const getActiveAnalysisRulesImpl =
+    dependencies.getActiveAnalysisRulesImpl ?? getActiveAnalysisRules;
+  const analysisRulesMessage = image
+    ? buildAnalysisRulesPrompt(await getActiveAnalysisRulesImpl())
+    : null;
 
   const clarificationCard = resolveClarificationCard(request);
   if (clarificationCard) {
@@ -800,31 +1188,19 @@ export function streamAskResponse(
     });
   }
 
-  const messages: ModelMessage[] = [
-    createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
-    createSystemMessage(askResponseGuide),
-    ...(image ? [createSystemMessage(askImageResponseGuide)] : []),
-    ...request.history.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
-    image
-      ? {
-          role: "user",
-          content: [
-            { type: "file" as const, data: image.base64, mediaType: image.mediaType },
-            { type: "text" as const, text: normalizedMessage },
-          ],
-        }
-      : { role: "user", content: normalizedMessage },
-  ];
+  const messages = buildAskMessages({
+    history: request.history,
+    normalizedMessage,
+    image,
+    analysisRulesMessage,
+  });
 
   return streamText({
     model: getAskModel(),
     temperature: 0.2,
     maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
     maxRetries: ASK_MODEL_MAX_RETRIES,
-    stopWhen: stepCountIs(ASK_MAX_TOOL_STEPS),
+    stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS), stopAfterSubmitAskCardResult],
     messages,
     tools: createAskTools(dependencies),
     onStepFinish({ toolCalls, text }) {

@@ -4,14 +4,23 @@ vi.mock("@/lib/ask/persistence", () => ({
   getAskPersistence: vi.fn(),
 }));
 
+vi.mock("@/lib/auth/session", () => ({
+  getSessionUser: vi.fn(),
+}));
+
 import { GET } from "@/app/api/ask/history/route";
 import { getAskPersistence } from "@/lib/ask/persistence";
+import { getSessionUser } from "@/lib/auth/session";
 
 describe("GET /api/ask/history", () => {
   const loadThreadPage = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getSessionUser).mockResolvedValue({
+      user: { id: "00000000-0000-0000-0000-000000000001" },
+      supabase: {} as never,
+    });
     vi.mocked(getAskPersistence).mockReturnValue({
       listSessions: vi.fn(),
       deleteSession: vi.fn(),
@@ -84,6 +93,23 @@ describe("GET /api/ask/history", () => {
     expect(json).toEqual({
       error: "history_request_invalid",
       message: "The Ask history request is invalid.",
+    });
+  });
+
+  it("returns 401 when there is no session", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+
+    const response = await GET(
+      new Request(
+        `http://localhost/api/ask/history?sessionId=${crypto.randomUUID()}&limit=20`,
+      ),
+    );
+
+    const json = await response.json();
+    expect(response.status).toBe(401);
+    expect(json).toEqual({
+      error: "unauthorized",
+      message: "Sign in to load Ask history.",
     });
   });
 

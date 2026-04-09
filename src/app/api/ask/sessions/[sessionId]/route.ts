@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAskPersistence } from "@/lib/ask/persistence";
+import { getSessionUser } from "@/lib/auth/session";
 import { logger } from "@/lib/observability/logger";
 
 const sessionIdParamSchema = z.string().uuid();
@@ -24,7 +25,19 @@ export async function DELETE(
   }
 
   try {
-    await getAskPersistence().deleteSession(parsed.data);
+    const session = await getSessionUser();
+    if (!session) {
+      return NextResponse.json(
+        {
+          error: "unauthorized",
+          message: "Sign in to manage Ask sessions.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const persistence = getAskPersistence({ userId: session.user.id });
+    await persistence.deleteSession(parsed.data);
     return NextResponse.json({ ok: true });
   } catch (error) {
     logger.error("Ask session delete failed.", {

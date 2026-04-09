@@ -31,7 +31,6 @@ import {
   useAskStore,
 } from "@/components/ask/store";
 import { useVisualViewportKeyboardInset } from "@/components/ask/use-visual-viewport-keyboard-inset";
-import { SiteNav } from "@/components/site/site-nav";
 import {
   ASK_USER_MESSAGE_INVALID_RESPONSE,
   getUserMessageFromAskChatError,
@@ -160,7 +159,8 @@ export function AskWorkspace({
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  // Only while Ask is mounted (this component). Cleanup restores html/body so other routes keep normal scroll.
+  // Only while Ask is mounted on mobile. Desktop should rely on the route shell's
+  // height constraints instead of globally locking document scroll.
   useEffect(() => {
     if (!isMobileLayout || typeof document === "undefined") {
       return;
@@ -733,11 +733,9 @@ export function AskWorkspace({
   }, [messages]);
 
   return (
-    <div className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[var(--vt-navy)] text-white">
-      <SiteNav />
-
-      <main className="mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col px-0 pb-0 pt-0">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden w-full">
+      <main className="mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-0 pb-0 pt-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
           {/* Sidebar */}
           <AskSessionSidebar
             sessions={sessions}
