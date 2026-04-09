@@ -1,5 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -43,7 +45,10 @@ import {
   isPinnedNearBottom,
 } from "@/lib/ask/scroll-thread";
 import { askToolStatusSchema, type AskToolStatus } from "@/lib/ask/stream";
+import { getAccountMenuQueryKey } from "@/lib/auth/account-menu-query";
 import { logger } from "@/lib/observability/logger";
+import { loadAskUsageState } from "@/lib/rate-limit/load-ask-usage";
+import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
 const ASK_SESSION_PAGE_SIZE = 40;
 
@@ -88,6 +93,19 @@ function buildInitialToolStatus(hasImage: boolean): AskToolStatus {
   };
 }
 
+function isDailyLimitError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause && typeof cause === "object" && cause !== null && "code" in cause) {
+    return (cause as { code: unknown }).code === "daily_limit";
+  }
+
+  return error instanceof Error && /used today|free chats|free queries/i.test(error.message);
+}
+
 export function AskWorkspace({
   initialUrlSessionId = null,
 }: {
@@ -96,6 +114,8 @@ export function AskWorkspace({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const { supabase, user } = useSupabaseAuth();
   const urlSessionId =
     parseUrlSessionId(searchParams.get("session")) ?? parseUrlSessionId(initialUrlSessionId);
   const [activeImagePreview, setActiveImagePreview] = useState<{
@@ -147,6 +167,7 @@ export function AskWorkspace({
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [composerStripHeight, setComposerStripHeight] = useState(0);
   const [liveToolStatuses, setLiveToolStatuses] = useState<AskToolStatus[]>([]);
+  const [isDailyLimitReached, setIsDailyLimitReached] = useState(false);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") {
@@ -316,6 +337,7 @@ export function AskWorkspace({
 
         pendingSessionTitleRef.current = null;
         pendingAssistantAttachmentRef.current = undefined;
+        refreshUsageUi();
         scrollToLatest();
       },
       onError: (err) => {
@@ -328,12 +350,19 @@ export function AskWorkspace({
         pendingAssistantAttachmentRef.current = undefined;
         pendingRequestRef.current = false;
         clearTransportMessages([]);
+        if (isDailyLimitError(err)) {
+          refreshUsageUi();
+          setError(null);
+          scrollToLatest();
+          return;
+        }
         setError(getUserMessageFromAskChatError(err));
         scrollToLatest();
       },
     });
 
   const isSubmitting = status === "submitted" || status === "streaming";
+  const isComposerLocked = isDailyLimitReached && !isSubmitting;
   const isOpeningSession = Boolean(sessionId) && messages.length === 0 && !error;
   /** `router.replace` can lag `useSearchParams`; store already matches `pendingUrlSessionRef`. */
   const urlCatchingUpToStore =
@@ -371,6 +400,30 @@ export function AskWorkspace({
       setIsLoadingSessions(false);
     }
   }, []);
+
+  const refreshUsageState = useCallback(async () => {
+    if (!supabase || !user?.id) {
+      setIsDailyLimitReached(false);
+      return;
+    }
+
+    try {
+      const usageState = await loadAskUsageState(supabase, user.id);
+      setIsDailyLimitReached(usageState.isExhausted);
+    } catch {
+      // Keep the current lock state if usage refresh fails.
+    }
+  }, [supabase, user?.id]);
+
+  const refreshUsageUi = useCallback(() => {
+    void refreshUsageState();
+    if (user?.id) {
+      void queryClient.invalidateQueries({
+        queryKey: getAccountMenuQueryKey(user.id),
+        refetchType: "active",
+      });
+    }
+  }, [queryClient, refreshUsageState, user?.id]);
 
   const loadMoreSessions = useCallback(async () => {
     if (!sessionsCursor || isLoadingSessions || isLoadingMoreSessions) {
@@ -530,7 +583,7 @@ export function AskWorkspace({
     const nextPrompt = (promptOverride ?? draft).trim();
     const submittedPrompt = nextPrompt || (attachment ? defaultAskImagePrompt : "");
     const displayPrompt = nextPrompt;
-    if (!submittedPrompt || isSubmitting) {
+    if (!submittedPrompt || isSubmitting || isComposerLocked) {
       return;
     }
 
@@ -575,12 +628,18 @@ export function AskWorkspace({
           },
         },
       );
-    } catch {
+    } catch (error) {
       setLiveToolStatuses([]);
       pendingSessionTitleRef.current = null;
       pendingAssistantAttachmentRef.current = undefined;
       pendingRequestRef.current = false;
       clearTransportMessages([]);
+      if (isDailyLimitError(error)) {
+        refreshUsageUi();
+        setError(null);
+        scrollToLatest();
+        return;
+      }
       setError("Could not send that message. Please try again.");
       scrollToLatest();
     }
@@ -601,7 +660,7 @@ export function AskWorkspace({
     maxSize: ASK_ATTACHMENT_MAX_BYTES,
     noClick: true,
     noKeyboard: true,
-    disabled: isSubmitting,
+    disabled: isSubmitting || isComposerLocked,
     onDropAccepted: ([file]) => {
       setAttachment({
         file,
@@ -619,6 +678,10 @@ export function AskWorkspace({
   useEffect(() => {
     void refreshSessions();
   }, [refreshSessions]);
+
+  useEffect(() => {
+    void refreshUsageState();
+  }, [refreshUsageState]);
 
   useEffect(() => {
     if (sessionId === null && urlSessionId === null) {
@@ -822,17 +885,47 @@ export function AskWorkspace({
               )}
             </div>
 
-            {/* Composer — fixed on mobile so it sits above the keyboard; shrink-0 on desktop */}
+            {/* Bottom chrome: optional floating limit card (sibling of composer strip, not inside input card) */}
             <div
               ref={composerStripRef}
               className={[
-                "border-t border-white/[0.06] bg-[var(--vt-navy)]/95 px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:px-6 sm:pb-5 sm:pt-4",
+                "flex flex-col gap-2",
                 isMobileLayout
                   ? "fixed left-0 right-0 bottom-0 z-30"
                   : "shrink-0",
               ].join(" ")}
               style={isMobileLayout ? { bottom: keyboardInsetPx } : undefined}
             >
+              {isDailyLimitReached ? (
+                <div className="pointer-events-none px-2.5 pt-2 sm:px-6 sm:pt-3">
+                  <div className="pointer-events-auto mx-auto flex w-full max-w-4xl items-center justify-between gap-3 rounded-xl border border-[rgba(242,109,109,0.28)] px-3.5 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-(--vt-coral)">
+                        Limit reached
+                      </span>
+                      <span className="hidden truncate text-xs text-white/50 sm:inline">
+                        All 10 free messages used today.
+                      </span>
+                    </div>
+                    <Link
+                      href="/markets"
+                      className="shrink-0 rounded-full bg-(--vt-coral) px-3 py-1.5 text-[11px] font-bold text-white shadow-[0_4px_14px_rgba(242,109,109,0.35)] transition hover:brightness-105 sm:px-3.5 sm:text-xs"
+                    >
+                      Upgrade — <span className="line-through opacity-65">£20</span> £5/mo
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+
+              <div
+                className={[
+                  "border-t border-white/[0.06] bg-[var(--vt-navy)]/95 backdrop-blur-xl",
+                  isDailyLimitReached ? "pt-1" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+              <div className="px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:px-6 sm:pb-5 sm:pt-4">
               {error ? (
                 <div className="mx-auto mb-1.5 w-full max-w-4xl rounded-xl border border-[rgba(242,109,109,0.2)] bg-[rgba(242,109,109,0.06)] px-3 py-2 text-xs font-medium text-[var(--vt-coral)] sm:mb-2 sm:text-[13px]">
                   {error}
@@ -842,8 +935,10 @@ export function AskWorkspace({
               <AskComposer
                 draft={draft}
                 attachment={attachment}
+                disabled={isComposerLocked}
                 isSubmitting={isSubmitting}
                 isDragActive={isDragActive}
+                placeholder={isComposerLocked ? "Upgrade to Pro to continue" : "Message…"}
                 inputProps={getInputProps()}
                 onDraftChange={setDraft}
                 onSubmit={() => void submit()}
@@ -855,6 +950,8 @@ export function AskWorkspace({
               <p className="relative z-10 mx-auto mt-1.5 max-w-md px-2 text-center text-[10px] leading-snug tracking-tight text-white/45 sm:mt-3 sm:text-xs sm:leading-relaxed sm:text-white/40">
                 AI can make mistakes. This is not financial advice.
               </p>
+              </div>
+              </div>
             </div>
           </div>
         </div>

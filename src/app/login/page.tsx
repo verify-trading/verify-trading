@@ -14,7 +14,7 @@ import {
   authSecondaryLinkClass,
 } from "@/components/auth/auth-field-styles";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
-import { AuthShell } from "@/components/auth/auth-shell";
+import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { beginOAuthFlow } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
@@ -125,13 +125,13 @@ function LoginPageContent() {
     >
       <div aria-live="polite">
         {resetSuccessMessage ? (
-          <div className="mb-4 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          <div className="mb-4 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3.5 text-sm leading-relaxed text-emerald-100">
             {resetSuccessMessage}
           </div>
         ) : null}
         {rootMessage ? (
           showOAuthNoAccountBanner ? (
-            <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm leading-relaxed text-red-100">
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3.5 text-sm leading-relaxed text-red-100">
               No account for this Google sign-in.{" "}
               <Link
                 href={signupHref}
@@ -142,7 +142,7 @@ function LoginPageContent() {
               to continue.
             </div>
           ) : (
-            <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3.5 text-sm leading-relaxed text-red-100">
               {rootMessage}
             </div>
           )
@@ -216,7 +216,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <AuthShell title="Welcome back" subtitle="Loading…">
-          <div className="h-40 animate-pulse rounded-xl bg-white/6" />
+          <AuthShellSpinner />
         </AuthShell>
       }
     >

@@ -14,7 +14,7 @@ import {
   authSecondaryLinkClass,
 } from "@/components/auth/auth-field-styles";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
-import { AuthShell } from "@/components/auth/auth-shell";
+import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { beginOAuthFlow } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
@@ -116,12 +116,12 @@ function SignupPageContent() {
     >
       <div aria-live="polite">
         {apiError ? (
-          <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3.5 text-sm leading-relaxed text-red-100">
             {apiError}
           </div>
         ) : null}
         {info ? (
-          <div className="rounded-xl border border-[rgba(76,110,245,0.35)] bg-[rgba(76,110,245,0.12)] px-4 py-3 text-sm text-slate-100">
+          <div className="rounded-2xl border border-(--vt-blue)/35 bg-(--vt-blue)/10 px-4 py-3.5 text-sm leading-relaxed text-white/90">
             {info}
           </div>
         ) : null}
@@ -187,7 +187,7 @@ function SignupPageContent() {
           />
           <AuthFieldError message={errors.password?.message} />
           {!errors.password ? (
-            <p className="mt-1.5 text-xs text-[var(--vt-muted)]">Use at least 8 characters.</p>
+            <p className="mt-1.5 text-xs text-(--vt-muted)">Use at least 8 characters.</p>
           ) : null}
         </div>
         <button
@@ -214,7 +214,7 @@ export default function SignupPage() {
     <Suspense
       fallback={
         <AuthShell title="Create your account" subtitle="Loading…">
-          <div className="h-40 animate-pulse rounded-xl bg-white/6" />
+          <AuthShellSpinner />
         </AuthShell>
       }
     >

@@ -33,6 +33,7 @@ vi.mock("@/components/auth/auth-shell", () => ({
       {children}
     </div>
   ),
+  AuthShellSpinner: () => <div data-testid="auth-shell-spinner">Loading</div>,
 }));
 
 vi.mock("@/components/auth/google-oauth-button", () => ({

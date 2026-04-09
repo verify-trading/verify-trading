@@ -1,32 +1,23 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import {
-  FREE_DAILY_ASK_LIMIT,
-  getFreeAskUsageSummary,
-  getTodayUtcDateString,
-  type FreeAskUsageSummary,
-} from "@/lib/rate-limit/usage";
+  getAccountMenuQueryKey,
+  loadAccountMenuState,
+  type AccountMenuProfile,
+} from "@/lib/auth/account-menu-query";
+import { hidesAuthChrome } from "@/lib/auth/auth-paths";
+import { FREE_DAILY_ASK_LIMIT, type FreeAskUsageSummary } from "@/lib/rate-limit/usage";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
 
-type ProfileRow = {
-  display_name: string | null;
-  username: string | null;
-  tier: string;
-};
-
-type UsageRow = {
-  query_count: number | null;
-};
-
-function initialsFromUser(email: string | undefined, profile: ProfileRow | null) {
+function initialsFromUser(email: string | undefined, profile: AccountMenuProfile | null) {
   const fromDisplay = profile?.display_name?.trim();
   if (fromDisplay) {
     const parts = fromDisplay.split(/\s+/).filter(Boolean);
@@ -50,50 +41,14 @@ export function UserMenu() {
   const router = useRouter();
   const pathname = usePathname();
   const { supabase, user, ready, isSignedIn } = useSupabaseAuth();
-  const [profile, setProfile] = useState<ProfileRow | null>(null);
-  const [usage, setUsage] = useState<FreeAskUsageSummary | null>(null);
-
   const email = user?.email ?? "";
-
-  useEffect(() => {
-    if (!supabase || !user?.id) {
-      startTransition(() => {
-        setProfile(null);
-        setUsage(null);
-      });
-      return;
-    }
-
-    let cancelled = false;
-    const todayUtc = getTodayUtcDateString();
-
-    void Promise.all([
-      supabase.from("profiles").select("display_name, username, tier").eq("id", user.id).maybeSingle(),
-      supabase
-        .from("usage_limits")
-        .select("query_count")
-        .eq("user_id", user.id)
-        .eq("usage_date", todayUtc)
-        .maybeSingle(),
-    ]).then(([profileResult, usageResult]) => {
-      if (cancelled) {
-        return;
-      }
-
-      startTransition(() => {
-        setProfile(profileResult.error ? null : profileResult.data ? (profileResult.data as ProfileRow) : null);
-        setUsage(
-          usageResult.error
-            ? null
-            : getFreeAskUsageSummary((usageResult.data as UsageRow | null)?.query_count),
-        );
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, user?.id]);
+  const accountMenuQuery = useQuery({
+    queryKey: getAccountMenuQueryKey(user?.id ?? ""),
+    queryFn: () => loadAccountMenuState(supabase!, user!.id),
+    enabled: Boolean(supabase && user?.id),
+  });
+  const profile = accountMenuQuery.data?.profile ?? null;
+  const usage: FreeAskUsageSummary | null = accountMenuQuery.data?.usage ?? null;
 
   /** Prefer human-readable name; handle without @ in the nav (email is in the dropdown). */
   const displayLabel = useMemo(() => {
@@ -181,7 +136,7 @@ export function UserMenu() {
                   {tierLabel}
                 </p>
                 {profile?.tier === "pro" ? (
-                  <p className="mt-2 text-xs text-[var(--vt-muted)]">Unlimited chat access.</p>
+                  <p className="mt-2 text-xs text-[var(--vt-muted)]">Unlimited message access.</p>
                 ) : null}
               </div>
             </div>
@@ -191,7 +146,7 @@ export function UserMenu() {
             <div className="border-b border-white/[0.06] px-3 py-3">
               <div className="rounded-xl border border-[color:var(--vt-border)] bg-white/[0.04] px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-white">
-                  <span>Daily chat usage</span>
+                  <span>Daily message usage</span>
                   <span>
                     {usage.used}/{FREE_DAILY_ASK_LIMIT}
                   </span>
@@ -199,7 +154,7 @@ export function UserMenu() {
                 <div
                   className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.08]"
                   role="progressbar"
-                  aria-label="Daily chat usage"
+                  aria-label="Daily message usage"
                   aria-valuemin={0}
                   aria-valuemax={usage.limit}
                   aria-valuenow={usage.used}
@@ -210,7 +165,7 @@ export function UserMenu() {
                   />
                 </div>
                 <p className="mt-2 text-[11px] text-[var(--vt-muted)]">
-                  {usage.remaining} free chats left today.
+                  {usage.remaining} free messages left today.
                 </p>
               </div>
             </div>

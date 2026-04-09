@@ -12,8 +12,10 @@ const ASK_TEXTAREA_MAX_PX = 200;
 export function AskComposer({
   draft,
   attachment,
+  disabled = false,
   isSubmitting,
   isDragActive,
+  placeholder = "Message…",
   inputProps,
   onDraftChange,
   onSubmit,
@@ -23,8 +25,10 @@ export function AskComposer({
 }: {
   draft: string;
   attachment: AskAttachment | null;
+  disabled?: boolean;
   isSubmitting: boolean;
   isDragActive: boolean;
+  placeholder?: string;
   inputProps: Record<string, unknown>;
   onDraftChange: (value: string) => void;
   onSubmit: () => void;
@@ -52,7 +56,9 @@ export function AskComposer({
     "mx-auto w-full max-w-4xl rounded-2xl border px-2 py-1.5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:rounded-3xl sm:px-3 sm:py-2.5",
     isDragActive
       ? "border-[rgba(242,109,109,0.45)] bg-[rgba(242,109,109,0.08)]"
-      : "border-white/10 bg-[rgba(17,22,72,0.88)] focus-within:border-[rgba(76,110,245,0.35)] focus-within:shadow-[0_0_0_3px_rgba(76,110,245,0.12)]",
+      : disabled
+        ? "border-[rgba(242,109,109,0.22)] bg-[rgba(17,22,72,0.78)]"
+        : "border-white/10 bg-[rgba(17,22,72,0.88)] focus-within:border-[rgba(76,110,245,0.35)] focus-within:shadow-[0_0_0_3px_rgba(76,110,245,0.12)]",
   ]
     .filter(Boolean)
     .join(" ");
@@ -100,10 +106,11 @@ export function AskComposer({
       <div className="flex items-end gap-1.5 sm:gap-2">
         <button
           type="button"
+          disabled={disabled}
           onClick={onOpenPicker}
           title="Add image"
           aria-label="Add image"
-          className="mb-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full text-[var(--vt-muted)] transition hover:bg-white/10 hover:text-white sm:size-9"
+          className="mb-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full text-[var(--vt-muted)] transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 sm:size-9"
         >
           <ImageIcon className="size-[18px] opacity-90" strokeWidth={1.75} aria-hidden />
         </button>
@@ -112,6 +119,7 @@ export function AskComposer({
           <textarea
             ref={textareaRef}
             value={draft}
+            disabled={disabled}
             onChange={(event) => onDraftChange(event.target.value)}
             onFocus={() => {
               requestAnimationFrame(() => {
@@ -122,24 +130,24 @@ export function AskComposer({
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                if (!isSubmitting && (draft.trim() || attachment)) {
+                if (!disabled && !isSubmitting && (draft.trim() || attachment)) {
                   onSubmit();
                 }
               }
             }}
-            placeholder="Message…"
+            placeholder={placeholder}
             rows={1}
             style={{ maxHeight: ASK_TEXTAREA_MAX_PX }}
-            className="block min-h-[40px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-[16px] leading-[1.45] text-white outline-none placeholder:text-white/40 touch-manipulation sm:text-sm sm:leading-6"
+            className="block min-h-[40px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-[16px] leading-[1.45] text-white outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:text-white/45 touch-manipulation sm:text-sm sm:leading-6"
           />
         </div>
 
         <button
           type="button"
-          disabled={isSubmitting || (!draft.trim() && !attachment)}
+          disabled={disabled || isSubmitting || (!draft.trim() && !attachment)}
           onClick={onSubmit}
           className="mb-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--vt-blue)] text-white shadow-[0_4px_16px_rgba(76,110,245,0.35)] transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none sm:size-9"
-          aria-label={isSubmitting ? "Sending" : "Send message"}
+          aria-label={disabled ? "Ask locked" : isSubmitting ? "Sending" : "Send message"}
         >
           {isSubmitting ? (
             <span className="text-base font-bold leading-none">…</span>

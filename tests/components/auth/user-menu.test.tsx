@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -95,6 +96,18 @@ vi.mock("@/lib/supabase/auth-context", () => ({
 
 import { UserMenu } from "@/components/auth/user-menu";
 
+function renderWithQueryClient(ui: ReactNode) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 function createQueryBuilder(result: { data: unknown; error: unknown }) {
   const builder = {
     select: vi.fn(),
@@ -144,15 +157,15 @@ describe("UserMenu", () => {
   });
 
   it("shows the daily free usage progress in the dropdown", async () => {
-    render(<UserMenu />);
+    renderWithQueryClient(<UserMenu />);
 
     await waitFor(() => {
-      expect(screen.getByText("Daily chat usage")).toBeInTheDocument();
+      expect(screen.getByText("Daily message usage")).toBeInTheDocument();
     });
 
     expect(screen.getByText("3/10")).toBeInTheDocument();
-    expect(screen.getByText("7 free chats left today.")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "Daily chat usage" })).toHaveAttribute(
+    expect(screen.getByText("7 free messages left today.")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Daily message usage" })).toHaveAttribute(
       "aria-valuenow",
       "3",
     );
@@ -161,7 +174,7 @@ describe("UserMenu", () => {
   it("hides account chrome on the password reset page", () => {
     mockPathname = "/auth/update-password";
 
-    const { container } = render(<UserMenu />);
+    const { container } = renderWithQueryClient(<UserMenu />);
 
     expect(container).toBeEmptyDOMElement();
   });

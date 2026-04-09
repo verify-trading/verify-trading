@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ImgHTMLAttributes } from "react";
+import type { ImgHTMLAttributes, ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "@ai-sdk/react";
 import type { User } from "@supabase/supabase-js";
@@ -13,6 +14,8 @@ const mockAuthUser = {
   id: "00000000-0000-0000-0000-000000000001",
   email: "test@example.com",
 } as User;
+const mockSupabaseFrom = vi.fn();
+let mockSupabaseClient: { from: typeof mockSupabaseFrom } | null = null;
 
 vi.mock("next/image", () => ({
   default: (
@@ -105,7 +108,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/supabase/auth-context", () => ({
   SupabaseAuthProvider: ({ children }: { children: unknown }) => children,
   useSupabaseAuth: () => ({
-    supabase: null,
+    supabase: mockSupabaseClient,
     user: mockAuthUser,
     session: null,
     ready: true,
@@ -130,6 +133,32 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function renderWithQueryClient(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
+function createQueryBuilder(result: { data: unknown; error: unknown }) {
+  const builder = {
+    select: vi.fn(),
+    eq: vi.fn(),
+    maybeSingle: vi.fn(),
+  };
+
+  builder.select.mockReturnValue(builder);
+  builder.eq.mockReturnValue(builder);
+  builder.maybeSingle.mockResolvedValue(result);
+
+  return builder;
+}
+
 describe("AskWorkspace", () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
@@ -146,6 +175,8 @@ describe("AskWorkspace", () => {
     };
     mockReplace.mockReset();
     mockSearchParams = new URLSearchParams();
+    mockSupabaseFrom.mockReset();
+    mockSupabaseClient = null;
     mockDropzoneState = {
       isDragActive: false,
       open: vi.fn(),
@@ -201,7 +232,7 @@ describe("AskWorkspace", () => {
       ],
     });
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     expect(screen.getByAltText("Uploaded image context")).toBeInTheDocument();
     expect(screen.getByText("Ascending Triangle")).toBeInTheDocument();
@@ -230,7 +261,7 @@ describe("AskWorkspace", () => {
       ],
     });
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     fireEvent.click(screen.getAllByRole("button", { name: "Open Uploaded image context" })[0]);
 
@@ -248,7 +279,7 @@ describe("AskWorkspace", () => {
       },
     });
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     fireEvent.click(screen.getAllByRole("button", { name: "Open attached image preview" })[0]);
 
@@ -258,7 +289,7 @@ describe("AskWorkspace", () => {
   });
 
   it("shows the restoring state immediately when opened with a session from the page", () => {
-    render(
+    renderWithQueryClient(
       <AskWorkspace initialUrlSessionId="11111111-1111-4111-8111-111111111111" />,
     );
 
@@ -268,7 +299,7 @@ describe("AskWorkspace", () => {
   it("shows a full chat-pane drop target while dragging an image", () => {
     mockDropzoneState.isDragActive = true;
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     expect(screen.getByText("Drop chart image to attach")).toBeInTheDocument();
     expect(screen.getByText("PNG, JPEG, or WebP up to 5MB")).toBeInTheDocument();
@@ -314,7 +345,7 @@ describe("AskWorkspace", () => {
       throw new Error(`Unhandled fetch: ${url}`);
     });
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     await waitFor(() => {
       expect(screen.getByText("What is Gold doing today?")).toBeInTheDocument();
@@ -358,7 +389,7 @@ describe("AskWorkspace", () => {
       });
     });
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     fireEvent.click(screen.getAllByRole("button", { name: SAMPLE_PRESET_PROMPT })[0]);
 
@@ -387,7 +418,7 @@ describe("AskWorkspace", () => {
       status: "submitted",
     };
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     await waitFor(() => {
       expect(screen.getAllByText("Analyzing…").length).toBeGreaterThan(0);
@@ -410,7 +441,7 @@ describe("AskWorkspace", () => {
       });
     });
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     fireEvent.click(screen.getAllByRole("button", { name: SAMPLE_PRESET_PROMPT })[0]);
 
@@ -425,7 +456,7 @@ describe("AskWorkspace", () => {
       throw new Error("send failed");
     });
 
-    render(<AskWorkspace />);
+    renderWithQueryClient(<AskWorkspace />);
 
     fireEvent.click(screen.getAllByRole("button", { name: SAMPLE_PRESET_PROMPT })[0]);
 
@@ -434,6 +465,66 @@ describe("AskWorkspace", () => {
         screen.getAllByText("Could not send that message. Please try again.").length,
       ).toBeGreaterThan(0);
     });
+  });
+
+  it("shows the daily limit banner above the composer and locks after the 10th reply", async () => {
+    const profileBuilder = createQueryBuilder({
+      data: { tier: "free" },
+      error: null,
+    });
+    const usageBuilder = createQueryBuilder({
+      data: { query_count: 10 },
+      error: null,
+    });
+
+    mockSupabaseFrom.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        return profileBuilder;
+      }
+      if (table === "usage_limits") {
+        return usageBuilder;
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+    mockSupabaseClient = {
+      from: mockSupabaseFrom,
+    };
+
+    mockSendMessage.mockImplementationOnce(async () => {
+      await latestUseChatOptions?.onFinish?.({
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                type: "insight",
+                headline: "Market update",
+                body: "The move is stretching.",
+                verdict: "Wait for a cleaner reset.",
+              }),
+            },
+          ],
+        },
+        messages: [],
+        isAbort: false,
+        isDisconnect: false,
+        isError: false,
+        finishReason: "stop",
+      });
+    });
+
+    renderWithQueryClient(<AskWorkspace />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: SAMPLE_PRESET_PROMPT })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText("Limit reached")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/All 10 free messages used today/).length).toBeGreaterThan(0);
+    expect(screen.getAllByPlaceholderText("Upgrade to Pro to continue")[0]).toBeDisabled();
   });
 
   it("loads more sessions automatically when the sidebar reaches the bottom", async () => {
@@ -472,7 +563,7 @@ describe("AskWorkspace", () => {
       throw new Error(`Unhandled fetch: ${url}`);
     });
 
-    const { container } = render(<AskWorkspace />);
+    const { container } = renderWithQueryClient(<AskWorkspace />);
 
     await waitFor(() => {
       expect(screen.getByText("First session")).toBeInTheDocument();
@@ -528,7 +619,7 @@ describe("AskWorkspace", () => {
       ],
     });
 
-    const { container } = render(<AskWorkspace />);
+    const { container } = renderWithQueryClient(<AskWorkspace />);
 
     const viewport = container.querySelector('[data-testid="ask-thread-viewport"]');
     if (!(viewport instanceof HTMLElement)) {
@@ -573,7 +664,7 @@ describe("AskWorkspace", () => {
       ],
     });
 
-    const { container } = render(<AskWorkspace />);
+    const { container } = renderWithQueryClient(<AskWorkspace />);
 
     const viewport = container.querySelector('[data-testid="ask-thread-viewport"]');
     if (!(viewport instanceof HTMLElement)) {

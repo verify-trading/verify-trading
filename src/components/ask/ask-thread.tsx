@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Bot } from "lucide-react";
 
 import { AskResponseCard } from "@/components/ask/cards";
