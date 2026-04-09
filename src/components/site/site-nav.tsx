@@ -57,17 +57,19 @@ export function SiteNav() {
           </Link>
           <div className="flex shrink-0 items-center gap-2">
             <UserMenu />
-            <button
-              type="button"
-              className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white transition hover:bg-white/[0.08]"
-              aria-expanded={mobileMenuOpen}
-              aria-haspopup="dialog"
-              aria-controls="site-mobile-nav-sheet"
-              aria-label="Open menu"
-              onClick={() => setMobileMenuOpen(true)}
-            >
-              <Menu className="size-5" strokeWidth={2} aria-hidden />
-            </button>
+            {visibleNavItems.length > 0 ? (
+              <button
+                type="button"
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white transition hover:bg-white/[0.08]"
+                aria-expanded={mobileMenuOpen}
+                aria-haspopup="dialog"
+                aria-controls="site-mobile-nav-sheet"
+                aria-label="Open menu"
+                onClick={() => setMobileMenuOpen(true)}
+              >
+                <Menu className="size-5" strokeWidth={2} aria-hidden />
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -96,31 +98,33 @@ export function SiteNav() {
         </div>
       </nav>
 
-      <Sheet
-        id="site-mobile-nav-sheet"
-        open={mobileMenuOpen}
-        onOpenChange={setMobileMenuOpen}
-        side="right"
-        title="Menu"
-      >
-        <nav className="flex flex-col gap-1" aria-label="Main">
-          {visibleNavItems.map((item) => {
-            const active = pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={sheetLinkClass(active)}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Icon className="size-5 shrink-0 text-[var(--vt-muted)]" strokeWidth={2} aria-hidden />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </Sheet>
+      {visibleNavItems.length > 0 ? (
+        <Sheet
+          id="site-mobile-nav-sheet"
+          open={mobileMenuOpen}
+          onOpenChange={setMobileMenuOpen}
+          side="right"
+          title="Menu"
+        >
+          <nav className="flex flex-col gap-1" aria-label="Main">
+            {visibleNavItems.map((item) => {
+              const active = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={sheetLinkClass(active)}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Icon className="size-5 shrink-0 text-[var(--vt-muted)]" strokeWidth={2} aria-hidden />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </Sheet>
+      ) : null}
     </>
   );
 }
