@@ -20,6 +20,7 @@ import { beginOAuthFlow } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { loginSchema, type LoginFormValues } from "@/lib/auth/schemas";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
+import { toast } from "sonner";
 
 function LoginPageContent() {
   const router = useRouter();
@@ -80,6 +81,7 @@ function LoginPageContent() {
       return;
     }
 
+    toast.success("Signed in.");
     router.push(next);
     router.refresh();
   }
