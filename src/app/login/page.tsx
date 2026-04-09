@@ -33,6 +33,7 @@ function LoginPageContent() {
   );
   const signupHref = useMemo(() => appendSafeNextParam("/signup", nextParam), [nextParam]);
   const paramError = searchParams.get("error");
+  const resetParam = searchParams.get("reset");
 
   const [googleBusy, setGoogleBusy] = useState(false);
 
@@ -49,6 +50,7 @@ function LoginPageContent() {
       return paramError;
     }
   }, [paramError]);
+  const resetSuccessMessage = resetParam === "success" ? "Password updated. Sign in with your new password." : null;
 
   const {
     register,
@@ -120,6 +122,11 @@ function LoginPageContent() {
       subtitle="Sign in to save sessions, sync across devices, and track your daily chat usage."
     >
       <div aria-live="polite">
+        {resetSuccessMessage ? (
+          <div className="mb-4 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            {resetSuccessMessage}
+          </div>
+        ) : null}
         {rootMessage ? (
           showOAuthNoAccountBanner ? (
             <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm leading-relaxed text-red-100">

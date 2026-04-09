@@ -15,19 +15,22 @@ import {
 } from "@/components/auth/auth-field-styles";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
-import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
+import { appendSafeNextParam } from "@/lib/auth/safe-redirect";
 import { updatePasswordSchema, type UpdatePasswordFormValues } from "@/lib/auth/schemas";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
-import { toast } from "sonner";
 
 function UpdatePasswordPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next");
-  const next = useMemo(() => getSafeRedirectPath(nextParam, "/ask"), [nextParam]);
   const loginHref = useMemo(() => appendSafeNextParam("/login", nextParam), [nextParam]);
+  const resetSuccessHref = useMemo(
+    () => appendSafeNextParam("/login?reset=success", nextParam),
+    [nextParam],
+  );
   const { supabase, user, ready } = useSupabaseAuth();
   const [apiError, setApiError] = useState<string | null>(null);
+  const [isCompletingReset, setIsCompletingReset] = useState(false);
 
   const {
     register,
@@ -39,10 +42,10 @@ function UpdatePasswordPageContent() {
   });
 
   useEffect(() => {
-    if (ready && !user) {
+    if (ready && !user && !isCompletingReset) {
       router.replace(loginHref);
     }
-  }, [loginHref, ready, router, user]);
+  }, [isCompletingReset, loginHref, ready, router, user]);
 
   async function onSubmit(values: UpdatePasswordFormValues) {
     setApiError(null);
@@ -62,8 +65,17 @@ function UpdatePasswordPageContent() {
       return;
     }
 
-    toast.success("Password updated.");
-    router.push(next);
+    setIsCompletingReset(true);
+
+    const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+
+    if (signOutError) {
+      setIsCompletingReset(false);
+      setApiError("Password updated, but we could not end the recovery session. Please sign in again.");
+      return;
+    }
+
+    router.replace(resetSuccessHref);
     router.refresh();
   }
 

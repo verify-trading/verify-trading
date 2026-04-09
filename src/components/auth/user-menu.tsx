@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { startTransition, useEffect, useMemo, useState } from "react";
 
-import { isAuthPagePath } from "@/lib/auth/auth-paths";
+import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import {
   FREE_DAILY_ASK_LIMIT,
   getFreeAskUsageSummary,
@@ -128,11 +128,11 @@ export function UserMenu() {
     );
   }
 
+  if (hidesAuthChrome(pathname)) {
+    return null;
+  }
+
   if (!isSignedIn || !user) {
-    /** On login/signup/forgot pages the form is the action — no duplicate “Sign in” in the bar. */
-    if (isAuthPagePath(pathname)) {
-      return null;
-    }
     return (
       <Link
         href="/login"

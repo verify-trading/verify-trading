@@ -7,6 +7,7 @@ import { LineChart, Menu, MessageSquare } from "lucide-react";
 // import { Wrench } from "lucide-react"; // with Tools tab when /tools is shown again
 
 import { UserMenu } from "@/components/auth/user-menu";
+import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import { Logo } from "@/components/site/logo";
 import { Sheet } from "@/components/ui/sheet";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
@@ -24,6 +25,7 @@ export function SiteNav() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { ready, isSignedIn } = useSupabaseAuth();
+  const hideAuthChrome = hidesAuthChrome(pathname);
 
   useEffect(() => {
     startTransition(() => {
@@ -45,7 +47,9 @@ export function SiteNav() {
       active ? "bg-white/[0.08] text-white" : "text-white/80 hover:bg-white/[0.05]",
     ].join(" ");
 
-  const visibleNavItems = navItems.filter((item) => !item.requiresAuth || (ready && isSignedIn));
+  const visibleNavItems = hideAuthChrome
+    ? []
+    : navItems.filter((item) => !item.requiresAuth || (ready && isSignedIn));
 
   return (
     <>

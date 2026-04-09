@@ -10,6 +10,7 @@ const mockPush = vi.fn();
 const mockRefresh = vi.fn();
 const mockSignOut = vi.fn();
 const mockFrom = vi.fn();
+let mockPathname = "/ask";
 
 const mockUser = {
   id: "00000000-0000-0000-0000-000000000001",
@@ -21,7 +22,7 @@ vi.mock("next/navigation", () => ({
     push: mockPush,
     refresh: mockRefresh,
   }),
-  usePathname: () => "/ask",
+  usePathname: () => mockPathname,
 }));
 
 vi.mock("@radix-ui/react-dropdown-menu", () => {
@@ -114,6 +115,7 @@ describe("UserMenu", () => {
     mockRefresh.mockReset();
     mockSignOut.mockReset();
     mockFrom.mockReset();
+    mockPathname = "/ask";
 
     const profileBuilder = createQueryBuilder({
       data: {
@@ -154,5 +156,13 @@ describe("UserMenu", () => {
       "aria-valuenow",
       "3",
     );
+  });
+
+  it("hides account chrome on the password reset page", () => {
+    mockPathname = "/auth/update-password";
+
+    const { container } = render(<UserMenu />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 });
