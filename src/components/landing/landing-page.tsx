@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Logo } from "@/components/site/logo";
 import { SiteNav } from "@/components/site/site-nav";
+import { SiteFooter } from "@/components/site/site-footer";
 import { getAppName } from "@/lib/site-config";
 
 function FeatureCard({
@@ -96,7 +97,7 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="mx-auto grid w-full max-w-6xl gap-4 px-4 pb-20 sm:px-6 lg:grid-cols-3">
+        <section className="mx-auto grid w-full max-w-6xl gap-4 px-4 pb-12 sm:px-6 lg:grid-cols-3">
           <FeatureCard
             badge="Verification"
             title="Seeded trust layer"
@@ -114,6 +115,7 @@ export function LandingPage() {
           />
         </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }

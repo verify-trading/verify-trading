@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
-import { LineChart, Menu, MessageSquare } from "lucide-react";
-// import { Wrench } from "lucide-react"; // with Tools tab when /tools is shown again
+import { BookOpen, LineChart, Menu, MessageSquare } from "lucide-react";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { hidesAuthChrome } from "@/lib/auth/auth-paths";
@@ -15,11 +14,18 @@ import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 const navItems = [
   { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
   { href: "/markets", label: "Markets", icon: LineChart, requiresAuth: true },
-  // { href: "/tools", label: "Tools", icon: Wrench },
+  { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: true },
 ] as const;
 
-/** Height of the mobile header bar below safe-area (single row `h-14`). Used by overlays (e.g. Ask session sheet). */
+/** Mobile header height for fixed overlays (single row + safe area). */
 export const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
+
+function siteNavLinkClass(active: boolean) {
+  return [
+    "shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium tracking-tight transition sm:px-3",
+    active ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white",
+  ].join(" ");
+}
 
 export function SiteNav() {
   const pathname = usePathname();
@@ -33,14 +39,6 @@ export function SiteNav() {
     });
   }, [pathname]);
 
-  const navLinkClass = (active: boolean) =>
-    [
-      "shrink-0 rounded-full px-2.5 py-2 text-xs font-semibold transition sm:px-4 sm:text-sm",
-      active
-        ? "bg-[var(--vt-card)] text-white"
-        : "text-[var(--vt-muted)] hover:text-white",
-    ].join(" ");
-
   const sheetLinkClass = (active: boolean) =>
     [
       "flex items-center gap-3 rounded-xl px-4 py-3.5 text-base font-semibold transition active:bg-white/10",
@@ -51,20 +49,45 @@ export function SiteNav() {
     ? []
     : navItems.filter((item) => !item.requiresAuth || (ready && isSignedIn));
 
+  const showMenu = visibleNavItems.length > 0;
+
   return (
     <>
-      <nav className="sticky top-0 z-50 border-b border-[color:var(--vt-border)] bg-[rgba(10,13,46,0.92)] pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-        {/* Mobile / tablet: logo + menu sheet — no crowded inline tabs */}
-        <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-3 lg:hidden">
+      <nav className="sticky top-0 z-50 border-b border-white/[0.07] bg-[rgb(10,13,46)]/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:min-h-14 lg:gap-4 lg:px-6">
           <Link href="/" className="min-w-0 shrink-0" onClick={() => setMobileMenuOpen(false)}>
-            <Logo compact />
+            <span className="lg:hidden">
+              <Logo compact />
+            </span>
+            <span className="hidden lg:inline">
+              <Logo />
+            </span>
           </Link>
-          <div className="flex shrink-0 items-center gap-2">
-            <UserMenu />
+
+          <div className="min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:justify-center lg:px-4">
             {visibleNavItems.length > 0 ? (
+              <nav
+                className="flex min-w-max items-center gap-0.5 sm:gap-1 lg:mx-auto"
+                aria-label="Main"
+              >
+                {visibleNavItems.map((item) => {
+                  const active = pathname === item.href;
+                  return (
+                    <Link key={item.href} href={item.href} className={siteNavLinkClass(active)}>
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            ) : null}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <UserMenu />
+            {showMenu ? (
               <button
                 type="button"
-                className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white transition hover:bg-white/[0.08]"
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-white/90 transition hover:bg-white/[0.08] lg:hidden"
                 aria-expanded={mobileMenuOpen}
                 aria-haspopup="dialog"
                 aria-controls="site-mobile-nav-sheet"
@@ -76,33 +99,9 @@ export function SiteNav() {
             ) : null}
           </div>
         </div>
-
-        {/* Desktop */}
-        <div className="mx-auto hidden h-14 w-full max-w-6xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:flex lg:h-16">
-          <Link href="/" className="min-w-0 shrink-0">
-            <Logo />
-          </Link>
-          {visibleNavItems.length > 0 ? (
-            <div className="mx-1 flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto rounded-full border border-[color:var(--vt-border)] bg-white/5 p-1 sm:mx-3 sm:gap-2">
-              {visibleNavItems.map((item) => {
-                const active = pathname === item.href;
-                return (
-                  <Link key={item.href} href={item.href} className={navLinkClass(active)}>
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="min-w-0 flex-1" aria-hidden />
-          )}
-          <div className="flex shrink-0 items-center gap-2">
-            <UserMenu />
-          </div>
-        </div>
       </nav>
 
-      {visibleNavItems.length > 0 ? (
+      {showMenu ? (
         <Sheet
           id="site-mobile-nav-sheet"
           open={mobileMenuOpen}

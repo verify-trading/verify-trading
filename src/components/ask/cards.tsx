@@ -25,14 +25,14 @@ function CardFrame({
   trailing?: React.ReactNode;
 }) {
   return (
-    <div className="w-full max-w-[min(100%,24rem)] overflow-hidden rounded-[20px_20px_20px_6px] border border-[color:var(--vt-border)] bg-[var(--vt-card)] shadow-[0_12px_40px_rgba(10,13,46,0.35)]">
+    <div className="w-full max-w-[20rem] overflow-hidden rounded-[20px_20px_20px_6px] border border-[color:var(--vt-border)] bg-[var(--vt-card)] shadow-[0_12px_40px_rgba(10,13,46,0.35)] sm:max-w-md">
       <div
         className={`flex min-w-0 items-center justify-between gap-2 border-b border-[color:var(--vt-border)] px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] sm:px-4 sm:py-3 sm:text-[11px] ${accentClassName}`}
       >
         <span>{eyebrow}</span>
         {trailing}
       </div>
-      <div className="min-w-0 p-3 sm:p-4">{children}</div>
+      <div className="min-w-0 p-3 sm:p-3.5">{children}</div>
     </div>
   );
 }
@@ -99,15 +99,8 @@ function BrokerCard({
             <div className="mt-1 break-words text-sm font-bold text-white">{card.complaints}</div>
           </div>
         </div>
-        <div
-          className="rounded-2xl border px-3 py-3 text-sm font-semibold"
-          style={{
-            borderColor: `${accent}55`,
-            backgroundColor: `${accent}1A`,
-            color: accent,
-          }}
-        >
-          {card.verdict}
+        <div className="border-t border-white/[0.06] pt-3">
+          <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>
@@ -164,12 +157,12 @@ function BriefingCard({
           </div>
         </div>
         {card.event ? (
-          <div className="rounded-2xl border border-[rgba(242,109,109,0.25)] bg-[rgba(242,109,109,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-coral)]">
+          <div className="rounded-xl border border-[rgba(242,109,109,0.25)] bg-[rgba(242,109,109,0.08)] px-3 py-2.5 text-xs font-semibold leading-snug text-[var(--vt-coral)] sm:text-sm">
             {card.event}
           </div>
         ) : null}
-        <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
-          {card.verdict}
+        <div className="border-t border-white/[0.06] pt-3">
+          <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>
@@ -201,8 +194,8 @@ function CalcCard({ card }: { card: Extract<AskCard, { type: "calc" }> }) {
             </div>
           ))}
         </div>
-        <div className="rounded-2xl border border-[rgba(34,197,94,0.25)] bg-[rgba(34,197,94,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-green)]">
-          {card.verdict}
+        <div className="border-t border-white/[0.06] pt-3">
+          <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>
@@ -241,15 +234,8 @@ function GuruCard({ card }: { card: Extract<AskCard, { type: "guru" }> }) {
           </div>
           <div className="mt-1 break-words text-sm font-bold text-white">{card.verified}</div>
         </div>
-        <div
-          className="rounded-2xl border px-3 py-3 text-sm font-semibold"
-          style={{
-            borderColor: `${accent}55`,
-            backgroundColor: `${accent}1A`,
-            color: accent,
-          }}
-        >
-          {card.verdict}
+        <div className="border-t border-white/[0.06] pt-3">
+          <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>
@@ -264,40 +250,87 @@ function InsightCard({ card }: { card: Extract<AskCard, { type: "insight" }> }) 
           {card.headline}
         </div>
         <p className="text-sm leading-relaxed text-slate-200 sm:leading-7">{card.body}</p>
-        <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
-          {card.verdict}
+        <div className="border-t border-white/[0.06] pt-3">
+          <p className="text-sm font-semibold leading-relaxed text-[var(--vt-blue)]">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>
   );
 }
 
+function chartBiasChipClass(bias: string) {
+  switch (bias) {
+    case "Bullish":
+      return "border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.12)] text-[var(--vt-green)]";
+    case "Bearish":
+      return "border border-[rgba(242,109,109,0.35)] bg-[rgba(242,109,109,0.1)] text-[var(--vt-coral)]";
+    default:
+      return "border border-white/10 bg-white/[0.05] text-[var(--vt-muted)]";
+  }
+}
+
+function chartConfidenceClass(confidence: string) {
+  switch (confidence) {
+    case "High":
+      return "text-[var(--vt-green)]";
+    case "Medium":
+      return "text-[var(--vt-amber)]";
+    case "Low":
+      return "text-[var(--vt-coral)]";
+    default:
+      return "text-[var(--vt-muted)]";
+  }
+}
+
 function ChartAnalysisCard({ card }: { card: Extract<AskCard, { type: "chart" }> }) {
   return (
     <CardFrame eyebrow="Chart Analysis" accentClassName="text-[var(--vt-blue)]">
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[
-            ["Pattern", card.pattern],
-            ["Bias", card.bias],
-            ["Entry", card.entry],
-            ["Stop", card.stop],
-            ["Target", card.target],
-            ["R:R", card.rr],
-          ].map(([label, value]) => (
-            <div key={label} className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span
+            className={`inline-flex max-w-[min(100%,12rem)] items-center rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] sm:max-w-none sm:text-xs ${chartBiasChipClass(card.bias)}`}
+          >
+            {card.bias}
+          </span>
+          <span className="inline-flex shrink-0 items-center rounded-full border border-[color:var(--vt-border)] bg-[var(--vt-card-alt)] px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-white sm:text-xs">
+            R:R {card.rr}
+          </span>
+        </div>
+
+        <div className="rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2.5">
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">
+            Pattern
+          </div>
+          <p className="mt-1.5 text-sm font-semibold leading-snug text-white">{card.pattern}</p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5">
+          {(
+            [
+              ["Entry", card.entry],
+              ["Stop", card.stop],
+              ["Target", card.target],
+            ] as const
+          ).map(([label, value]) => (
+            <div
+              key={label}
+              className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-2 py-2 text-center sm:px-2.5"
+            >
+              <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[10px]">
                 {label}
               </div>
-              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
+              <div className="mt-1 font-mono text-xs font-bold tabular-nums text-white sm:text-sm">{value}</div>
             </div>
           ))}
         </div>
-        <div className="rounded-2xl border border-[rgba(34,197,94,0.18)] bg-[rgba(34,197,94,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-green)]">
-          Confidence: {card.confidence}
+
+        <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+          <span className="font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)]">Confidence</span>
+          <span className={`font-semibold ${chartConfidenceClass(card.confidence)}`}>{card.confidence}</span>
         </div>
-        <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
-          {card.verdict}
+
+        <div className="border-t border-white/[0.06] pt-3">
+          <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>
@@ -307,39 +340,65 @@ function ChartAnalysisCard({ card }: { card: Extract<AskCard, { type: "chart" }>
 function SetupCardView({ card }: { card: Extract<AskCard, { type: "setup" }> }) {
   return (
     <CardFrame eyebrow="Trade Setup" accentClassName="text-[var(--vt-blue)]">
-      <div className="space-y-4">
-        <div>
-          <div className="text-lg font-black text-white sm:text-xl">{card.asset}</div>
-          <div className="mt-2 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
-            {card.bias} bias
-          </div>
+      <div className="space-y-3">
+        <div className="text-lg font-black tracking-[-0.03em] text-white sm:text-xl">{card.asset}</div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span
+            className={`inline-flex max-w-[min(100%,12rem)] items-center rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] sm:max-w-none sm:text-xs ${chartBiasChipClass(card.bias)}`}
+          >
+            {card.bias}
+          </span>
+          <span className="inline-flex shrink-0 items-center rounded-full border border-[color:var(--vt-border)] bg-[var(--vt-card-alt)] px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-white sm:text-xs">
+            R:R {card.rr}
+          </span>
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[
-            ["Entry", card.entry],
-            ["Stop", card.stop],
-            ["Target", card.target],
-            ["R:R", card.rr],
-          ].map(([label, value]) => (
-            <div key={label} className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
+
+        <div className="grid grid-cols-3 gap-1.5">
+          {(
+            [
+              ["Entry", card.entry],
+              ["Stop", card.stop],
+              ["Target", card.target],
+            ] as const
+          ).map(([label, value]) => (
+            <div
+              key={label}
+              className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-2 py-2 text-center sm:px-2.5"
+            >
+              <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[10px]">
                 {label}
               </div>
-              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
+              <div className="mt-1 font-mono text-xs font-bold tabular-nums text-white sm:text-sm">{value}</div>
             </div>
           ))}
         </div>
-        <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-sm leading-relaxed text-slate-200">
-          {card.rationale}
+
+        <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+          <span className="font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)]">Confidence</span>
+          <span className={`font-semibold ${chartConfidenceClass(card.confidence)}`}>{card.confidence}</span>
         </div>
-        <div className="rounded-2xl border border-[rgba(34,197,94,0.18)] bg-[rgba(34,197,94,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-green)]">
-          Confidence: {card.confidence}
+
+        <div className="border-t border-white/[0.06] pt-3">
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Context</div>
+          <p className="mt-2 text-sm leading-relaxed text-slate-200">{card.rationale}</p>
         </div>
-        <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
-          {card.verdict}
+
+        <div className="border-t border-white/[0.06] pt-3">
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Takeaway</div>
+          <p className="mt-2 text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>
+  );
+}
+
+function planStatTile(label: string, value: string) {
+  return (
+    <div className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-3 py-2.5">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">{label}</div>
+      <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
+    </div>
   );
 }
 
@@ -347,32 +406,36 @@ function PlanCardView({ card }: { card: Extract<AskCard, { type: "plan" }> }) {
   return (
     <CardFrame eyebrow="Growth Plan" accentClassName="text-[var(--vt-blue)]">
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[
-            ["Start", formatDisplayMoney(card.startBalance, card.currencySymbol)],
-            ["Top Up", formatDisplayMoney(card.monthlyAdd, card.currencySymbol)],
-            ["Daily", card.dailyTarget],
-            ["Weekly", card.weeklyTarget],
-            ["Monthly", card.monthlyTarget],
-            ["Max Daily Loss", card.maxDailyLoss],
-          ].map(([label, value]) => (
-            <div key={label} className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
-                {label}
-              </div>
-              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
-            </div>
-          ))}
+        <div>
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Capital</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {planStatTile("Start", formatDisplayMoney(card.startBalance, card.currencySymbol))}
+            {planStatTile("Top Up", formatDisplayMoney(card.monthlyAdd, card.currencySymbol))}
+          </div>
         </div>
-        <div className="rounded-2xl border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-green)]">
+        <div>
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Targets</div>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+            {planStatTile("Daily", card.dailyTarget)}
+            {planStatTile("Weekly", card.weeklyTarget)}
+            {planStatTile("Monthly", card.monthlyTarget)}
+          </div>
+        </div>
+        <div>
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Risk</div>
+          {planStatTile("Max Daily Loss", card.maxDailyLoss)}
+        </div>
+        <div className="rounded-xl border border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] px-3 py-2.5 text-xs font-semibold leading-snug text-[var(--vt-green)] sm:text-sm">
           {card.projectionMonths}-month base-case projection:{" "}
           {formatDisplayMoney(card.projectedBalance, card.currencySymbol)} ({card.projectionReturn})
         </div>
-        <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-sm leading-relaxed text-slate-200">
-          {card.rationale}
+        <div className="border-t border-white/[0.06] pt-3">
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Rationale</div>
+          <p className="mt-2 text-sm leading-relaxed text-slate-200">{card.rationale}</p>
         </div>
-        <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
-          {card.verdict}
+        <div className="border-t border-white/[0.06] pt-3">
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Takeaway</div>
+          <p className="mt-2 text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>
@@ -390,26 +453,32 @@ function ProjectionCardView({
     <CardFrame eyebrow="Projection Engine" accentClassName="text-[var(--vt-blue)]">
       <div className="space-y-4">
         <InteractiveProjectionCurve card={card} markers={uiMeta?.projectionMarkers} />
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[
-            ["Start", formatDisplayMoney(card.startBalance, card.currencySymbol)],
-            ["Top Up", formatDisplayMoney(card.monthlyAdd, card.currencySymbol)],
-            ["Months", `${card.months}`],
-            ["Loss Events", `${card.lossEvents}`],
-          ].map(([label, value]) => (
-            <div key={label} className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
-                {label}
+        <div>
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Inputs</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              ["Start", formatDisplayMoney(card.startBalance, card.currencySymbol)],
+              ["Top Up", formatDisplayMoney(card.monthlyAdd, card.currencySymbol)],
+              ["Months", `${card.months}`],
+              ["Loss Events", `${card.lossEvents}`],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-3 py-2.5"
+              >
+                <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
+                  {label}
+                </div>
+                <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
               </div>
-              <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-        <div className="rounded-2xl border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-green)]">
+        <div className="rounded-xl border border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] px-3 py-2.5 text-xs font-semibold leading-snug text-[var(--vt-green)] sm:text-sm">
           Projected balance: {formatDisplayMoney(card.projectedBalance, card.currencySymbol)} ({card.totalReturn})
         </div>
-        <div className="rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(76,110,245,0.08)] px-3 py-3 text-sm font-semibold text-[var(--vt-blue)]">
-          {card.verdict}
+        <div className="border-t border-white/[0.06] pt-3">
+          <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>
       </div>
     </CardFrame>

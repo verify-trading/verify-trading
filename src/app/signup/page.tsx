@@ -19,6 +19,7 @@ import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { beginOAuthFlow } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { signupSchema, type SignupFormValues } from "@/lib/auth/schemas";
+import { LEGAL_LINKS } from "@/lib/legal/legal-links";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
 
@@ -205,6 +206,21 @@ function SignupPageContent() {
           Sign in
         </Link>
       </p>
+
+      <nav
+        className="mt-8 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/[0.06] pt-6"
+        aria-label="Legal"
+      >
+        {LEGAL_LINKS.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="text-[11px] font-semibold text-white/35 transition hover:text-white/70"
+          >
+            {link.shortLabel}
+          </Link>
+        ))}
+      </nav>
     </AuthShell>
   );
 }

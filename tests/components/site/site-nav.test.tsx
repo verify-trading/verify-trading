@@ -44,6 +44,13 @@ describe("SiteNav", () => {
 
     expect(screen.queryByText("Ask")).not.toBeInTheDocument();
     expect(screen.queryByText("Markets")).not.toBeInTheDocument();
+    expect(screen.queryByText("Guide")).not.toBeInTheDocument();
     expect(screen.getAllByText("logo")).toHaveLength(2);
+  });
+
+  it("shows the guide tab for signed-in users", () => {
+    render(<SiteNav />);
+
+    expect(screen.getAllByText("Guide").length).toBeGreaterThan(0);
   });
 });
