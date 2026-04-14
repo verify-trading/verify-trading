@@ -219,9 +219,10 @@ export function MarketsPage({ initialTier, pricing, billingContext }: MarketsPag
       {showPaywall ? (
         <div className="pointer-events-auto absolute inset-0 z-10 flex min-h-0 flex-col overflow-y-auto">
           <div className="absolute inset-0 bg-[var(--vt-navy)]/72 backdrop-blur-[2px]" aria-hidden />
-          <div className="relative flex flex-1 items-center justify-center px-4 py-6 sm:px-6">
-            <div className="w-full max-w-3xl rounded-2xl border border-[rgba(255,255,255,0.12)] bg-[rgba(8,11,42,0.72)] px-4 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:px-6 sm:py-7">
+          <div className="relative flex flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-6 lg:px-6">
+            <div className="w-full max-w-sm rounded-2xl border border-[rgba(255,255,255,0.12)] bg-[rgba(8,11,42,0.72)] px-3 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:max-w-lg sm:px-5 sm:py-5 lg:max-w-2xl lg:px-6 lg:py-6">
               <ProPlansPricingPanel
+                density="compact"
                 pricing={pricing}
                 billingContext={billingContext}
                 headline={paywallHeadline(accessTier)}

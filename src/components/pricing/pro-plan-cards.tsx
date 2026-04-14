@@ -82,20 +82,25 @@ export function ProMonthlyPlanCard({
   pricing,
   billingContext,
   className,
+  density = "default",
 }: {
   pricing: PublicBillingPricing;
   billingContext: PricingPageBillingContext | null | undefined;
   className?: string;
+  /** `compact` — tighter padding/type for overlays (e.g. Markets paywall). */
+  density?: "default" | "compact";
 }) {
   const monthlyPromotion = pricing.monthly.promotion;
   const currentPlanKey = billingContext?.currentPlanKey ?? null;
   const isOnMonthlyPlan = currentPlanKey === "monthly";
+  const compact = density === "compact";
 
   return (
     <div
       className={cn(
         surface,
-        "flex flex-col border-[var(--vt-coral)]/40 bg-gradient-to-b from-[rgba(242,109,109,0.06)] to-transparent p-6 ring-1 ring-[var(--vt-coral)]/25",
+        "flex flex-col border-[var(--vt-coral)]/40 bg-gradient-to-b from-[rgba(242,109,109,0.06)] to-transparent ring-1 ring-[var(--vt-coral)]/25",
+        compact ? "p-4 sm:p-5" : "p-6",
         className,
       )}
     >
@@ -110,28 +115,48 @@ export function ProMonthlyPlanCard({
         ) : null}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-baseline gap-2">
-        <h3 className="text-3xl font-bold tracking-tight text-white">
+      <div className={cn("flex flex-wrap items-baseline gap-2", compact ? "mt-3" : "mt-4")}>
+        <h3 className={cn("font-bold tracking-tight text-white", compact ? "text-2xl sm:text-3xl" : "text-3xl")}>
           {monthlyPromotion ? monthlyPromotion.priceHighlight : pricing.monthly.headline}
         </h3>
         {monthlyPromotion ? (
-          <span className="text-sm font-medium text-[var(--vt-coral)]">{monthlyPromotion.priceQualifier}</span>
+          <span className={cn("font-medium text-[var(--vt-coral)]", compact ? "text-xs sm:text-sm" : "text-sm")}>
+            {monthlyPromotion.priceQualifier}
+          </span>
         ) : null}
       </div>
-      {monthlyPromotion ? <p className="mt-1 text-sm text-slate-500 line-through">{pricing.monthly.headline}</p> : null}
-      <p className="mt-3 text-sm leading-relaxed text-slate-400">
+      {monthlyPromotion ? (
+        <p className={cn("text-slate-500 line-through", compact ? "mt-0.5 text-xs sm:text-sm" : "mt-1 text-sm")}>
+          {pricing.monthly.headline}
+        </p>
+      ) : null}
+      <p
+        className={cn(
+          "leading-relaxed text-slate-400",
+          compact ? "mt-2 text-xs sm:text-sm" : "mt-3 text-sm",
+        )}
+      >
         {monthlyPromotion ? monthlyPromotion.detail : pricing.monthly.detail}
       </p>
 
-      <ul className="mt-6 flex-1 space-y-2">
+      <ul className={cn("flex-1", compact ? "mt-4 space-y-1.5" : "mt-6 space-y-2")}>
         {PRO_PLAN_FEATURES.map((f) => (
-          <li key={f} className="flex items-center gap-2 text-sm text-slate-200">
-            <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
+          <li
+            key={f}
+            className={cn(
+              "flex items-center gap-2 text-slate-200",
+              compact ? "text-xs sm:text-sm" : "text-sm",
+            )}
+          >
+            <CheckCircle2
+              className={cn("shrink-0 text-[var(--vt-green)]", compact ? "size-3.5" : "size-4")}
+              aria-hidden
+            />
             {f}
           </li>
         ))}
       </ul>
-      <div className="mt-6">
+      <div className={compact ? "mt-4" : "mt-6"}>
         {renderPaidPlanAction({
           billingContext,
           checkoutPlan: "monthly",
@@ -140,7 +165,7 @@ export function ProMonthlyPlanCard({
           defaultLabel: (
             <span className="inline-flex items-center gap-2">
               {monthlyPromotion ? monthlyPromotion.ctaLabel : "Start Pro"}
-              <ArrowRight className="size-4" aria-hidden />
+              <ArrowRight className={cn(compact ? "size-3.5" : "size-4")} aria-hidden />
             </span>
           ),
         })}
@@ -153,31 +178,63 @@ export function ProAnnualPlanCard({
   pricing,
   billingContext,
   className,
+  density = "default",
 }: {
   pricing: PublicBillingPricing;
   billingContext: PricingPageBillingContext | null | undefined;
   className?: string;
+  density?: "default" | "compact";
 }) {
   const currentPlanKey = billingContext?.currentPlanKey ?? null;
   const isOnAnnualPlan = currentPlanKey === "annual";
+  const compact = density === "compact";
 
   return (
-    <div className={cn(surface, "flex flex-col p-6 transition-colors hover:border-white/[0.12]", className)}>
+    <div
+      className={cn(
+        surface,
+        "flex flex-col transition-colors hover:border-white/[0.12]",
+        compact ? "p-4 sm:p-5" : "p-6",
+        className,
+      )}
+    >
       <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{pricing.annual.badge}</span>
-      <h3 className="mt-4 text-3xl font-bold tracking-tight text-white">{pricing.annual.headline}</h3>
-      <p className="mt-2 text-sm font-medium text-[var(--vt-green)]">{pricing.annual.savingsLabel}</p>
-      <p className="mt-3 text-sm leading-relaxed text-slate-400">{pricing.annual.detail}</p>
-      <p className="mt-2 text-sm text-[var(--vt-blue)]">{pricing.annual.equivalentMonthlyHeadline}</p>
+      <h3 className={cn("font-bold tracking-tight text-white", compact ? "mt-3 text-2xl sm:text-3xl" : "mt-4 text-3xl")}>
+        {pricing.annual.headline}
+      </h3>
+      <p className={cn("font-medium text-[var(--vt-green)]", compact ? "mt-1.5 text-xs sm:text-sm" : "mt-2 text-sm")}>
+        {pricing.annual.savingsLabel}
+      </p>
+      <p
+        className={cn(
+          "leading-relaxed text-slate-400",
+          compact ? "mt-2 text-xs sm:text-sm" : "mt-3 text-sm",
+        )}
+      >
+        {pricing.annual.detail}
+      </p>
+      <p className={cn("text-[var(--vt-blue)]", compact ? "mt-1.5 text-xs sm:text-sm" : "mt-2 text-sm")}>
+        {pricing.annual.equivalentMonthlyHeadline}
+      </p>
 
-      <ul className="mt-6 flex-1 space-y-2">
+      <ul className={cn("flex-1", compact ? "mt-4 space-y-1.5" : "mt-6 space-y-2")}>
         {ANNUAL_PLAN_FEATURES.map((f) => (
-          <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
-            <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
+          <li
+            key={f}
+            className={cn(
+              "flex items-center gap-2 text-slate-300",
+              compact ? "text-xs sm:text-sm" : "text-sm",
+            )}
+          >
+            <CheckCircle2
+              className={cn("shrink-0 text-[var(--vt-green)]", compact ? "size-3.5" : "size-4")}
+              aria-hidden
+            />
             {f}
           </li>
         ))}
       </ul>
-      <div className="mt-6">
+      <div className={compact ? "mt-4" : "mt-6"}>
         {renderPaidPlanAction({
           billingContext,
           checkoutPlan: "annual",
@@ -186,7 +243,7 @@ export function ProAnnualPlanCard({
           defaultLabel: (
             <span className="inline-flex items-center gap-2">
               Start annual plan
-              <ArrowRight className="size-4" aria-hidden />
+              <ArrowRight className={cn(compact ? "size-3.5" : "size-4")} aria-hidden />
             </span>
           ),
         })}
