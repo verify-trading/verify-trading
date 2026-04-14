@@ -6,6 +6,8 @@ import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
+import { GuidePdfSkeleton } from "@/components/guide/guide-pdf-skeleton";
+
 /** True 150% page scale (iframe `#zoom=` does not match the toolbar %; it mixes fit, DPR, and internal units). */
 const GUIDE_PDF_SCALE = 1.5;
 
@@ -22,11 +24,7 @@ export function GuidePdfViewer() {
     <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-[#111]">
       <Document
         file="/guide-pdf"
-        loading={
-          <p className="p-4 text-sm text-white/60" role="status">
-            Loading guide…
-          </p>
-        }
+        loading={<GuidePdfSkeleton />}
         error={
           <p className="p-4 text-sm text-red-400" role="alert">
             Could not load the guide PDF.

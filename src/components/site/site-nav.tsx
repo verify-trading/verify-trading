@@ -66,7 +66,8 @@ export function SiteNav() {
             </span>
           </Link>
 
-          <div className="min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:justify-center lg:px-4">
+          {/* Desktop only: primary links live in the bar; on smaller screens they are only in the sheet */}
+          <div className="hidden min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:justify-center lg:px-4">
             {visibleNavItems.length > 0 ? (
               <nav
                 className="flex min-w-max items-center gap-0.5 sm:gap-1 lg:mx-auto"
@@ -84,7 +85,7 @@ export function SiteNav() {
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <UserMenu />
             {showMenu ? (
               <Button
