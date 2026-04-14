@@ -10,7 +10,37 @@ vi.mock("@/lib/supabase/auth-context", () => ({
 }));
 
 import { MarketsPage } from "@/components/markets/markets-page";
+import { getPublicBillingPricing } from "@/lib/billing/config";
+import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
+
+const marketsTestPricing = getPublicBillingPricing();
+const signedOutBillingContext: PricingPageBillingContext = {
+  isSignedIn: false,
+  hasManageableSubscription: false,
+  currentPlanKey: null,
+};
+const freeSignedInBillingContext: PricingPageBillingContext = {
+  isSignedIn: true,
+  hasManageableSubscription: false,
+  currentPlanKey: null,
+};
+
+/** Matches `loadAccountMenuState` for a Pro user (no `usage_limits` call). */
+function supabaseClientForProAccountMenu() {
+  const profileRow = {
+    display_name: "Test",
+    username: "test",
+    tier: "pro",
+    created_at: "2026-01-01T00:00:00.000Z",
+    preferences: null as Record<string, unknown> | null,
+  };
+  const maybeSingleProfiles = vi.fn().mockResolvedValue({ data: profileRow, error: null });
+  const selectEqProfiles = vi.fn().mockReturnValue({ maybeSingle: maybeSingleProfiles });
+  const selectProfiles = vi.fn().mockReturnValue({ eq: selectEqProfiles });
+  const from = vi.fn().mockReturnValue({ select: selectProfiles });
+  return { from };
+}
 
 function renderWithQueryClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -40,29 +70,23 @@ describe("MarketsPage", () => {
 
     global.fetch = vi.fn() as unknown as typeof fetch;
 
-    renderWithQueryClient(<MarketsPage />);
+    renderWithQueryClient(
+      <MarketsPage pricing={marketsTestPricing} billingContext={signedOutBillingContext} />,
+    );
 
     expect(screen.getByRole("heading", { level: 2, name: /top assets/i })).toBeInTheDocument();
-    expect(screen.getByText("Pro Access")).toBeInTheDocument();
     expect(screen.getByText("Sign in and upgrade to Pro to unlock Markets.")).toBeInTheDocument();
-    expect(screen.getByText("20,948.12")).toBeInTheDocument();
+    expect(screen.getByText("Unlimited Ask")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view full pricing/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("button", { name: /Open Gold Futures market card/i })).toBeInTheDocument();
+    expect(screen.getByText("Preview mode")).toBeInTheDocument();
+    expect(screen.getAllByText("4,761").length).toBeGreaterThan(0);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("renders the finance card grid and live detail panel for pro users", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
-      supabase: {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { tier: "pro" },
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      } as never,
+      supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
       session: {} as never,
       ready: true,
@@ -100,7 +124,13 @@ describe("MarketsPage", () => {
       }),
     }) as unknown as typeof fetch;
 
-    renderWithQueryClient(<MarketsPage initialTier="pro" />);
+    renderWithQueryClient(
+      <MarketsPage
+        initialTier="pro"
+        pricing={marketsTestPricing}
+        billingContext={freeSignedInBillingContext}
+      />,
+    );
 
     expect(screen.getAllByRole("heading", { level: 2, name: /top assets/i }).length).toBeGreaterThan(0);
 
@@ -115,18 +145,7 @@ describe("MarketsPage", () => {
 
   it("updates the focus panel when a market card is selected", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
-      supabase: {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { tier: "pro" },
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      } as never,
+      supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
       session: {} as never,
       ready: true,
@@ -166,7 +185,13 @@ describe("MarketsPage", () => {
       }),
     }) as unknown as typeof fetch;
 
-    renderWithQueryClient(<MarketsPage initialTier="pro" />);
+    renderWithQueryClient(
+      <MarketsPage
+        initialTier="pro"
+        pricing={marketsTestPricing}
+        billingContext={freeSignedInBillingContext}
+      />,
+    );
 
     await waitFor(() => {
       expect(screen.getAllByText("94.43").length).toBeGreaterThan(0);

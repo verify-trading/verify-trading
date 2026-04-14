@@ -48,20 +48,42 @@ function renderBanner() {
 }
 
 function createSupabaseMock(profile: {
+  display_name?: string | null;
+  username?: string | null;
   tier: string;
   created_at: string;
   preferences: Record<string, unknown> | null;
 }) {
-  const maybeSingle = vi.fn().mockResolvedValue({ data: profile, error: null });
-  const selectEq = vi.fn().mockReturnValue({ maybeSingle });
-  const select = vi.fn().mockReturnValue({ eq: selectEq });
+  const fullProfile = {
+    display_name: profile.display_name ?? null,
+    username: profile.username ?? null,
+    tier: profile.tier,
+    created_at: profile.created_at,
+    preferences: profile.preferences,
+  };
+
+  const maybeSingleProfiles = vi.fn().mockResolvedValue({ data: fullProfile, error: null });
+  const selectEqProfiles = vi.fn().mockReturnValue({ maybeSingle: maybeSingleProfiles });
+  const selectProfiles = vi.fn().mockReturnValue({ eq: selectEqProfiles });
+
+  const maybeSingleUsage = vi.fn().mockResolvedValue({ data: { query_count: 0 }, error: null });
+  const eqUsageDate = vi.fn().mockReturnValue({ maybeSingle: maybeSingleUsage });
+  const eqUserId = vi.fn().mockReturnValue({ eq: eqUsageDate });
+  const selectUsage = vi.fn().mockReturnValue({ eq: eqUserId });
+
   const updateEq = vi.fn().mockResolvedValue({ error: null });
   const update = vi.fn().mockReturnValue({ eq: updateEq });
-  const from = vi.fn().mockReturnValue({ select, update });
+
+  const from = vi.fn((table: string) => {
+    if (table === "usage_limits") {
+      return { select: selectUsage };
+    }
+    return { select: selectProfiles, update };
+  });
 
   return {
     supabase: { from },
-    maybeSingle,
+    maybeSingle: maybeSingleProfiles,
     updateEq,
   };
 }

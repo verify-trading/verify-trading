@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,14 +8,10 @@ import { useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { getAccountMenuQueryKey, type AccountMenuState } from "@/lib/auth/account-menu-query";
+import { useAccountMenuQuery } from "@/lib/auth/use-account-menu-query";
 import { getOnboardingCallUrl } from "@/lib/site-config";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
-
-type BannerProfile = {
-  tier: string;
-  created_at: string;
-  preferences: Record<string, unknown> | null;
-};
 
 const ONBOARDING_BANNER_DAYS = 7;
 const ONBOARDING_BANNER_PREF_KEY = "onboarding_call_banner_last_dismissed_at";
@@ -38,26 +34,13 @@ export function OnboardingCallBanner() {
   const { supabase, user, ready, isSignedIn } = useSupabaseAuth();
   const [isSavingDismissal, setIsSavingDismissal] = useState(false);
   const bookingUrl = getOnboardingCallUrl();
-  const queryKey = ["onboarding-call-banner", user?.id ?? ""] as const;
   const dismissalSessionKey = user?.id
     ? `vt:onboarding-call-banner:${user.id}:${user.last_sign_in_at ?? "signed-in"}`
     : null;
 
-  const profileQuery = useQuery({
-    queryKey,
-    enabled: Boolean(ready && isSignedIn && supabase && user?.id),
-    queryFn: async (): Promise<BannerProfile | null> => {
-      const { data, error } = await supabase!
-        .from("profiles")
-        .select("tier, created_at, preferences")
-        .eq("id", user!.id)
-        .maybeSingle();
-      if (error) {
-        throw error;
-      }
-      return (data as BannerProfile | null) ?? null;
-    },
-  });
+  /** Prefetched on the server in `(app)/layout`; same cache as `UserMenu`. */
+  const accountMenuQuery = useAccountMenuQuery();
+  const profile = accountMenuQuery.data?.profile ?? null;
   const dismissedThisLogin = useSyncExternalStore(
     () => () => undefined,
     () =>
@@ -71,19 +54,20 @@ export function OnboardingCallBanner() {
     pathname.startsWith("/ask") &&
     ready &&
     isSignedIn &&
-    !profileQuery.isLoading &&
-    !profileQuery.isError &&
-    profileQuery.data?.tier === "free" &&
-    isWithinOnboardingWindow(profileQuery.data.created_at) &&
+    !accountMenuQuery.isLoading &&
+    !accountMenuQuery.isError &&
+    profile?.tier === "free" &&
+    profile.created_at &&
+    isWithinOnboardingWindow(profile.created_at) &&
     !dismissedThisLogin;
 
   async function dismissBanner() {
-    if (!supabase || !user || !profileQuery.data || isSavingDismissal) {
+    if (!supabase || !user || !profile || isSavingDismissal) {
       return;
     }
 
     const nextPreferences = {
-      ...(isRecord(profileQuery.data.preferences) ? profileQuery.data.preferences : {}),
+      ...(isRecord(profile.preferences) ? profile.preferences : {}),
       [ONBOARDING_BANNER_PREF_KEY]: new Date().toISOString(),
     };
 
@@ -103,9 +87,18 @@ export function OnboardingCallBanner() {
       window.sessionStorage.setItem(dismissalSessionKey, "1");
     }
 
-    queryClient.setQueryData<BannerProfile | null>(queryKey, (current) =>
-      current ? { ...current, preferences: nextPreferences } : current,
-    );
+    queryClient.setQueryData<AccountMenuState>(getAccountMenuQueryKey(user.id), (current) => {
+      if (!current?.profile) {
+        return current;
+      }
+      return {
+        ...current,
+        profile: {
+          ...current.profile,
+          preferences: nextPreferences,
+        },
+      };
+    });
   }
 
   if (!shouldShow) {

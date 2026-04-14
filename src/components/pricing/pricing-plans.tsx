@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 
-import { BillingActionButton } from "@/components/billing/billing-actions";
 import { Button } from "@/components/ui/button";
-import type { BillingPlanKey, PublicBillingPricing } from "@/lib/billing/config";
+import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { cn } from "@/lib/utils";
+
+import { ProAnnualPlanCard, ProMonthlyPlanCard } from "./pro-plan-cards";
 
 const surface =
   "rounded-xl border border-white/[0.08] bg-white/[0.02]";
@@ -17,70 +18,6 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">
       {children}
     </p>
-  );
-}
-
-function renderPaidPlanAction({
-  billingContext,
-  checkoutPlan,
-  isCurrentPlan,
-  defaultLabel,
-  variant,
-}: {
-  billingContext: PricingPageBillingContext | null | undefined;
-  checkoutPlan: BillingPlanKey;
-  isCurrentPlan: boolean;
-  defaultLabel: React.ReactNode;
-  variant: "default" | "outline";
-}) {
-  if (!billingContext?.isSignedIn) {
-    return (
-      <Button asChild variant={variant} size="pill" className="w-full">
-        <Link href="/signup">{defaultLabel}</Link>
-      </Button>
-    );
-  }
-
-  if (!billingContext.hasManageableSubscription) {
-    return (
-      <BillingActionButton
-        action="checkout"
-        buttonVariant={variant}
-        buttonSize="pill"
-        className="w-full gap-2"
-        payload={{ plan: checkoutPlan }}
-      >
-        {defaultLabel}
-      </BillingActionButton>
-    );
-  }
-
-  if (isCurrentPlan) {
-    return (
-      <Button type="button" variant={variant} size="pill" className="w-full" disabled>
-        Current plan
-      </Button>
-    );
-  }
-
-  if (billingContext.currentPlanKey) {
-    return (
-      <BillingActionButton
-        action="portal"
-        buttonVariant={variant}
-        buttonSize="pill"
-        className="w-full gap-2"
-        payload={{ flow: "subscription_update" }}
-      >
-        Change plan in Stripe
-      </BillingActionButton>
-    );
-  }
-
-  return (
-    <Button asChild variant={variant} size="pill" className="w-full">
-      <Link href="/billing">Manage subscription</Link>
-    </Button>
   );
 }
 
@@ -102,9 +39,6 @@ export function PricingPlansSection({
   showBackHome?: boolean;
 }) {
   const monthlyPromotion = pricing.monthly.promotion;
-  const currentPlanKey = billingContext?.currentPlanKey ?? null;
-  const isOnMonthlyPlan = currentPlanKey === "monthly";
-  const isOnAnnualPlan = currentPlanKey === "annual";
 
   return (
     <section
@@ -142,7 +76,7 @@ export function PricingPlansSection({
           <h3 className="mt-4 text-3xl font-bold tracking-tight text-white">{pricing.free.headline}</h3>
           <p className="mt-3 text-sm leading-relaxed text-slate-400">{pricing.free.detail}</p>
           <ul className="mt-6 flex-1 space-y-2">
-            {["10 Ask chats per day", "Broker verification", "Account sync", "Standard app experience"].map((f) => (
+            {["10 Ask chats per day", "Broker verification", "Trade Analysis", "Risk Calculators"].map((f) => (
               <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
                 <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
                 {f}
@@ -162,90 +96,8 @@ export function PricingPlansSection({
           </div>
         </div>
 
-        <div
-          className={cn(
-            surface,
-            "flex flex-col border-[var(--vt-coral)]/40 bg-gradient-to-b from-[rgba(242,109,109,0.06)] to-transparent p-6 ring-1 ring-[var(--vt-coral)]/25",
-          )}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--vt-coral)]">
-              {monthlyPromotion ? monthlyPromotion.badge : "Most popular"}
-            </span>
-            {monthlyPromotion ? (
-              <span className="rounded bg-[var(--vt-coral)]/90 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
-                Offer
-              </span>
-            ) : null}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-baseline gap-2">
-            <h3 className="text-3xl font-bold tracking-tight text-white">
-              {monthlyPromotion ? monthlyPromotion.priceHighlight : pricing.monthly.headline}
-            </h3>
-            {monthlyPromotion ? (
-              <span className="text-sm font-medium text-[var(--vt-coral)]">{monthlyPromotion.priceQualifier}</span>
-            ) : null}
-          </div>
-          {monthlyPromotion ? <p className="mt-1 text-sm text-slate-500 line-through">{pricing.monthly.headline}</p> : null}
-          <p className="mt-3 text-sm leading-relaxed text-slate-400">
-            {monthlyPromotion ? monthlyPromotion.detail : pricing.monthly.detail}
-          </p>
-
-          <ul className="mt-6 flex-1 space-y-2">
-            {["Unlimited Ask", "Live market dashboard", "Premium calculators", "Priority support", "Future features"].map((f) => (
-              <li key={f} className="flex items-center gap-2 text-sm text-slate-200">
-                <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
-                {f}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6">
-            {renderPaidPlanAction({
-              billingContext,
-              checkoutPlan: "monthly",
-              isCurrentPlan: isOnMonthlyPlan,
-              variant: "default",
-              defaultLabel: (
-                <span className="inline-flex items-center gap-2">
-                  {monthlyPromotion ? monthlyPromotion.ctaLabel : "Start Pro"}
-                  <ArrowRight className="size-4" aria-hidden />
-                </span>
-              ),
-            })}
-          </div>
-        </div>
-
-        <div className={cn(surface, "flex flex-col p-6 transition-colors hover:border-white/[0.12]")}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{pricing.annual.badge}</span>
-          <h3 className="mt-4 text-3xl font-bold tracking-tight text-white">{pricing.annual.headline}</h3>
-          <p className="mt-2 text-sm font-medium text-[var(--vt-green)]">{pricing.annual.savingsLabel}</p>
-          <p className="mt-3 text-sm leading-relaxed text-slate-400">{pricing.annual.detail}</p>
-          <p className="mt-2 text-sm text-[var(--vt-blue)]">{pricing.annual.equivalentMonthlyHeadline}</p>
-
-          <ul className="mt-6 flex-1 space-y-2">
-            {["Everything in Pro", "Annual discount", "Best long-term value"].map((f) => (
-              <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
-                <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
-                {f}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6">
-            {renderPaidPlanAction({
-              billingContext,
-              checkoutPlan: "annual",
-              isCurrentPlan: isOnAnnualPlan,
-              variant: "outline",
-              defaultLabel: (
-                <span className="inline-flex items-center gap-2">
-                  Start annual plan
-                  <ArrowRight className="size-4" aria-hidden />
-                </span>
-              ),
-            })}
-          </div>
-        </div>
+        <ProMonthlyPlanCard pricing={pricing} billingContext={billingContext} />
+        <ProAnnualPlanCard pricing={pricing} billingContext={billingContext} />
       </div>
 
       {billingContext?.hasManageableSubscription ? (

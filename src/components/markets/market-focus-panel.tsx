@@ -4,6 +4,7 @@ import { Activity, TrendingDown, TrendingUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { MarketsAssetPayload } from "@/lib/markets/dashboard";
+import type { MarketsAccessTier } from "@/lib/markets/markets-access-tier";
 import {
   formatSourceLabel,
   type MarketTile,
@@ -11,7 +12,7 @@ import {
 
 import { MarketSparkline } from "./market-sparkline";
 
-export type MarketsAccessTier = "loading" | "signed_out" | "free" | "pro";
+export type { MarketsAccessTier };
 
 export function MarketFocusPanel({
   market,

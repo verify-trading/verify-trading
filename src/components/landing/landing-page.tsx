@@ -3,20 +3,21 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import {
+  Activity,
   ArrowRight,
   CheckCircle2,
   Shield,
-  BarChart3,
   Calculator,
-  Zap,
   TrendingUp,
-  Lock,
   Mail,
   ChevronDown,
+  Upload,
+  Scale,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
+import { Logo } from "@/components/site/logo";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import type { PublicBillingPricing } from "@/lib/billing/config";
@@ -36,6 +37,15 @@ const featureIconClass: Record<IconTheme, string> = {
   purple: "border-[rgba(168,85,247,0.35)] bg-[rgba(168,85,247,0.1)] text-purple-400",
   green: "border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.1)] text-[var(--vt-green)]",
   cyan: "border-[rgba(34,211,238,0.35)] bg-[rgba(34,211,238,0.1)] text-cyan-400",
+};
+
+const featureFooterClass: Record<IconTheme, string> = {
+  blue: "text-[var(--vt-blue)]",
+  amber: "text-[var(--vt-amber)]",
+  coral: "text-[var(--vt-coral)]",
+  purple: "text-purple-400",
+  green: "text-[var(--vt-green)]",
+  cyan: "text-cyan-400",
 };
 
 const stepAccentClass: Record<"01" | "02" | "03", string> = {
@@ -66,23 +76,20 @@ function HeroSection() {
       */}
       <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:py-24">
         <div className="min-w-0 max-w-2xl text-left">
-          <SectionEyebrow>Launch · 6 June 2026</SectionEyebrow>
-          <h1 className="mt-4 text-4xl font-bold tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08]">
-            The Bloomberg Terminal for retail traders.
+          <h1 className="text-4xl font-bold tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08]">
+            <span className="block">Verify.</span>
+            <span className="mt-1 block">Before You Trade</span>
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-400 sm:text-[17px] sm:leading-8">
-            {appName} routes every Ask into the right system: live market data, seeded verification, deterministic
-            calculators, chart analysis, and projection modelling.
+            {appName} helps you verify brokers, validate trades, and manage risk with live market data and
+            purpose-built tools, so you get clear, actionable answers before you trade.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-8">
             <Button asChild variant="default" size="pill" className="gap-2 px-6">
-              <Link href="/signup">
-                Start free
+              <Link href="/ask">
+                VERIFY. NOW
                 <ArrowRight className="size-4" aria-hidden />
               </Link>
-            </Button>
-            <Button asChild variant="outline" size="pill" className="px-6">
-              <Link href="/markets">View markets</Link>
             </Button>
           </div>
           <ul className="mt-8 flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:gap-y-2">
@@ -102,60 +109,73 @@ function HeroSection() {
 /* ─── Features ─── */
 
 function FeaturesSection() {
+  const appName = getAppName();
+
   const features: Array<{
     icon: typeof Shield;
     theme: IconTheme;
-    label: string;
     title: string;
-    description: string;
+    bullets: string[];
+    footer?: string;
   }> = [
     {
       icon: Shield,
-      theme: "blue",
-      label: "Verification",
-      title: "Seeded trust layer",
-      description:
-        "Broker, prop-firm, and guru checks use the client dataset first. Unknown names fail safely instead of bluffing.",
-    },
-    {
-      icon: BarChart3,
-      theme: "amber",
-      label: "Market data",
-      title: "Live briefing path",
-      description:
-        "FMP powers supported assets. Answers are formatted for you; figures come from the feed, not from guesses.",
-    },
-    {
-      icon: Calculator,
-      theme: "coral",
-      label: "Math engine",
-      title: "Deterministic outputs",
-      description:
-        "Lot size and projection cards use backend formulas. Numbers in the UI match the engine, not prose.",
-    },
-    {
-      icon: Zap,
-      theme: "purple",
-      label: "Routing",
-      title: "Structured pipeline",
-      description:
-        "Each question is classified and routed—verification, data, maths, or analysis—before the model responds.",
+      theme: "green",
+      title: "Verify any broker in 2 seconds",
+      bullets: [
+        "Regulation status (FCA, ASIC, CySEC…)",
+        "Trust score",
+        "Complaint history",
+        "Final AI verdict",
+      ],
+      footer: "Avoid scams before you deposit.",
     },
     {
       icon: TrendingUp,
-      theme: "green",
-      label: "Charts",
-      title: "Technical analysis",
-      description:
-        "Support, resistance, and trend use real closes—not narrative pattern-matching by the LLM.",
+      theme: "blue",
+      title: "Verify your trade before entry",
+      bullets: [
+        "Risk / Reward check",
+        "Structure validation",
+        "Confirmation logic",
+        "Key insight in 1 line",
+      ],
+      footer: "Stop losing trades before they happen.",
     },
     {
-      icon: Lock,
+      icon: Calculator,
+      theme: "purple",
+      title: "Calculate your risk instantly",
+      bullets: ["Lot size calculator", "Pip value", "Reward ratio", "6 professional tools"],
+      footer: "Trade like a professional.",
+    },
+    {
+      icon: Upload,
+      theme: "amber",
+      title: "Input your trade",
+      bullets: ["Pair", "Entry price", "Stop loss", "Take profit", "Upload chart (optional)"],
+    },
+    {
+      icon: Activity,
+      theme: "coral",
+      title: "AI analysis",
+      bullets: [
+        "Checking structure",
+        "Evaluating risk",
+        "Scanning for errors",
+        "Calculating probability",
+      ],
+      footer: "Analyzing trade…",
+    },
+    {
+      icon: Scale,
       theme: "cyan",
-      label: "Security",
-      title: "Session-scoped data",
-      description:
-        "Prompts and results stay in your session. Supabase auth with RLS; no training on your conversations.",
+      title: "Verdict",
+      bullets: [
+        "DO NOT TRADE — High risk",
+        "WEAK TRADE — Fixable",
+        "VALID SETUP — Good to go",
+      ],
     },
   ];
 
@@ -163,9 +183,12 @@ function FeaturesSection() {
     <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
       <div className="max-w-2xl">
         <SectionEyebrow>Features</SectionEyebrow>
-        <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">Built for verification, not vibes</h2>
+        <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+          AI Decision Engine for Traders
+        </h2>
         <p className="mt-4 text-base leading-relaxed text-slate-400">
-          Every layer reduces guesswork: verified inputs, structured routing, deterministic maths where it matters.
+          {appName} reduces guesswork: artificial intelligence built with verified inputs, structured routing, and
+          deterministic maths—the only AI that thinks like a trader.
         </p>
       </div>
 
@@ -173,18 +196,30 @@ function FeaturesSection() {
         {features.map((f) => {
           const Icon = f.icon;
           return (
-            <div key={f.title} className={cn(surface, "p-6 transition-colors hover:border-white/[0.12] hover:bg-white/[0.03]")}>
+            <div
+              key={f.title}
+              className={cn(
+                surface,
+                "flex h-full flex-col p-6 transition-colors hover:border-white/[0.12] hover:bg-white/[0.03]",
+              )}
+            >
               <div
                 className={cn(
-                  "flex size-11 items-center justify-center rounded-lg border",
+                  "flex size-11 shrink-0 items-center justify-center rounded-lg border",
                   featureIconClass[f.theme],
                 )}
               >
                 <Icon className="size-5" strokeWidth={1.75} aria-hidden />
               </div>
-              <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{f.label}</p>
-              <h3 className="mt-1 text-lg font-semibold tracking-tight text-white">{f.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">{f.description}</p>
+              <h3 className="mt-4 text-lg font-semibold tracking-tight text-white">{f.title}</h3>
+              <ul className="mt-3 flex-1 list-disc list-outside space-y-1.5 pl-5 text-sm leading-relaxed text-slate-400 marker:text-slate-600">
+                {f.bullets.map((line) => (
+                  <li key={`${f.title}-${line}`}>{line}</li>
+                ))}
+              </ul>
+              {f.footer ? (
+                <p className={cn("mt-4 text-sm font-medium", featureFooterClass[f.theme])}>{f.footer}</p>
+              ) : null}
             </div>
           );
         })}
@@ -193,27 +228,24 @@ function FeaturesSection() {
   );
 }
 
-/* ─── How it works ─── */
+/* ─── Three pitfalls ─── */
 
 function HowItWorksSection() {
   const steps = [
     {
-      step: "01",
-      title: "Ask a question",
-      description:
-        "Natural language—broker check, lot size, market briefing, or anything trading-related.",
+      step: "01" as const,
+      title: "Entering trades too early",
+      description: "No confirmation. No edge. Just guesswork.",
     },
     {
-      step: "02",
-      title: "Smart routing",
-      description:
-        "Intent is classified and sent to verification, data feed, or math—before generation.",
+      step: "02" as const,
+      title: "Risking too much per position",
+      description: "One bad trade can wipe out your account.",
     },
     {
-      step: "03",
-      title: "Verified answer",
-      description:
-        "Structured, source-linked output. Numbers tie back to data or formulas.",
+      step: "03" as const,
+      title: "Trusting the wrong broker",
+      description: "Many traders lose money before they even start.",
     },
   ];
 
@@ -221,8 +253,13 @@ function HowItWorksSection() {
     <section className="border-y border-white/[0.06] bg-black/15">
       <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
         <div className="max-w-2xl">
-          <SectionEyebrow>How it works</SectionEyebrow>
-          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">Three steps</h2>
+          <SectionEyebrow>Three pitfalls</SectionEyebrow>
+          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+            {"Most traders don't lose from bad strategy."}
+          </h2>
+          <p className="mt-4 text-xl font-semibold leading-snug text-[var(--vt-green)] sm:text-2xl">
+            They lose from bad decisions.
+          </p>
         </div>
 
         <div className="mt-10 grid gap-6 md:grid-cols-3 md:gap-8">
@@ -234,7 +271,7 @@ function HowItWorksSection() {
               <div
                 className={cn(
                   "inline-flex size-11 items-center justify-center rounded-full border font-mono text-sm font-bold tabular-nums",
-                  stepAccentClass[s.step as "01" | "02" | "03"],
+                  stepAccentClass[s.step],
                 )}
               >
                 {s.step}
@@ -253,6 +290,7 @@ function HowItWorksSection() {
 
 function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const appName = getAppName();
 
   const faqs = [
     {
@@ -269,7 +307,7 @@ function FAQSection() {
     },
     {
       q: "Which platforms do you support?",
-      a: "verify.trading is platform-agnostic: we verify and analyse—you trade where you want.",
+      a: `${appName} is platform-agnostic: we verify and analyse—you trade where you want.`,
     },
   ];
 
@@ -362,9 +400,11 @@ function EmailCTASection() {
       <div className="mx-auto w-full max-w-3xl px-4 py-16 text-left sm:px-6 sm:py-24">
         <div className="max-w-2xl">
           <SectionEyebrow>Guide</SectionEyebrow>
-          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">Get the free trading guide</h2>
+          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+            Before You Trade — Read This
+          </h2>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-400">
-            We&apos;ll email a concise guide on broker verification, risk management, and using verify.trading effectively.
+            A step-by-step guide to verifying trades, avoiding risk, and using every feature in seconds.
           </p>
         </div>
 
@@ -415,6 +455,8 @@ function EmailCTASection() {
 /* ─── Final CTA ─── */
 
 function FinalCTASection() {
+  const benefits = ["10 free Ask chats per day", "No credit card required", "Cancel anytime"];
+
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
       <div
@@ -423,22 +465,42 @@ function FinalCTASection() {
           "bg-gradient-to-r from-[rgba(76,110,245,0.06)] to-transparent px-6 py-10 sm:px-10 sm:py-12",
         )}
       >
-        <div className="max-w-xl">
-          <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">Ready to trade with clearer answers?</h2>
-          <p className="mt-3 text-sm leading-relaxed text-slate-400 sm:text-base">
-            Start with 10 free Ask chats per day—no card required.
-          </p>
-        </div>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Button asChild variant="default" size="pill" className="gap-2 px-6">
-            <Link href="/signup">
-              Create free account
-              <ArrowRight className="size-4" aria-hidden />
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="pill" className="px-6">
-            <Link href="/ask">Open Ask</Link>
-          </Button>
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-stretch lg:gap-10">
+          <div className="flex min-w-0 flex-1 flex-col gap-6 sm:flex-row sm:items-start sm:gap-5">
+            <div className="shrink-0 pt-0.5" aria-hidden>
+              <Logo compact />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">
+                Ready to trade with clearer answers?
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-slate-400 sm:text-base">
+                Start with 10 free Ask chats per day—no card required.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button asChild variant="default" size="pill" className="gap-2 px-6">
+                  <Link href="/signup">
+                    Create free account
+                    <ArrowRight className="size-4" aria-hidden />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="pill" className="px-6">
+                  <Link href="/ask">Open Ask</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden h-auto w-px shrink-0 bg-white/[0.08] lg:block" aria-hidden />
+
+          <ul className="flex flex-col justify-center gap-3 border-t border-white/[0.08] pt-6 lg:max-w-[14rem] lg:shrink-0 lg:border-t-0 lg:pt-0">
+            {benefits.map((t) => (
+              <li key={t} className="flex items-center gap-2.5 text-sm text-slate-300">
+                <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-coral)]" aria-hidden />
+                {t}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>
@@ -459,8 +521,8 @@ export function LandingPage({
       <SiteNav />
       <main>
         <HeroSection />
-        <FeaturesSection />
         <HowItWorksSection />
+        <FeaturesSection />
         <PricingPlansSection pricing={pricing} billingContext={billingContext} />
         <FAQSection />
         <EmailCTASection />

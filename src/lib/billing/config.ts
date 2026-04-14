@@ -133,7 +133,7 @@ export function getPublicBillingPricing(now = new Date()): PublicBillingPricing 
     free: {
       badge: "Free",
       headline: formatGbp(0),
-      detail: "10 Ask chats per day with account sync and the standard app experience.",
+      detail: "10 Ask chats per day with broker verification, trade analysis, and risk calculators.",
     },
     monthly: {
       badge: "Most popular",

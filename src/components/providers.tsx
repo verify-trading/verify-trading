@@ -1,26 +1,14 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 
 import { AppToaster } from "@/components/ui/app-toaster";
 import { CookieConsentProvider } from "@/lib/cookie-consent/cookie-consent-context";
+import { getQueryClient } from "@/lib/react-query/get-query-client";
 import { SupabaseAuthProvider } from "@/lib/supabase/auth-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 60_000,
-            gcTime: 5 * 60_000,
-            refetchOnWindowFocus: false,
-            retry: 1,
-          },
-        },
-      }),
-  );
+  const queryClient = getQueryClient();
 
   return (
     <QueryClientProvider client={queryClient}>

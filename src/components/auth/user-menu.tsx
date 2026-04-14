@@ -1,17 +1,13 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, CreditCard, LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo } from "react";
 
-import {
-  getAccountMenuQueryKey,
-  loadAccountMenuState,
-  type AccountMenuProfile,
-} from "@/lib/auth/account-menu-query";
+import type { AccountMenuProfile } from "@/lib/auth/account-menu-query";
+import { useAccountMenuQuery } from "@/lib/auth/use-account-menu-query";
 import { Button } from "@/components/ui/button";
 import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import { FREE_DAILY_ASK_LIMIT, type FreeAskUsageSummary } from "@/lib/rate-limit/usage";
@@ -43,11 +39,7 @@ export function UserMenu() {
   const pathname = usePathname();
   const { supabase, user, ready, isSignedIn } = useSupabaseAuth();
   const email = user?.email ?? "";
-  const accountMenuQuery = useQuery({
-    queryKey: getAccountMenuQueryKey(user?.id ?? ""),
-    queryFn: () => loadAccountMenuState(supabase!, user!.id),
-    enabled: Boolean(supabase && user?.id),
-  });
+  const accountMenuQuery = useAccountMenuQuery();
   const profile = accountMenuQuery.data?.profile ?? null;
   const usage: FreeAskUsageSummary | null = accountMenuQuery.data?.usage ?? null;
 
