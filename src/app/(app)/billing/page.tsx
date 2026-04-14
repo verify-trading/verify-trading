@@ -7,6 +7,8 @@ import {
   canManageSubscription,
   MANAGEABLE_SUBSCRIPTION_STATUSES,
 } from "@/lib/billing/subscription-status";
+import { loadAskUsageState } from "@/lib/rate-limit/load-ask-usage";
+import type { FreeAskUsageSummary } from "@/lib/rate-limit/usage";
 
 export const metadata: Metadata = {
   title: "Billing",
@@ -152,6 +154,12 @@ export default async function BillingPage({
   const profile = (profileResult.data as ProfileRow | null) ?? null;
   const subscription = ((subscriptionResult.data as BillingSubscriptionRow[] | null) ?? [])[0] ?? null;
   const canOpenPortal = canManageSubscription(subscription?.status);
+
+  let freeAskUsage: FreeAskUsageSummary | null = null;
+  if (!canOpenPortal && profile?.tier !== "pro") {
+    const usageState = await loadAskUsageState(session.supabase, session.user.id);
+    freeAskUsage = usageState.usage;
+  }
   const isCanceling = isSubscriptionScheduledToCancel(subscription);
   const renewalDate = formatBillingDate(subscription?.current_period_end ?? null);
   const recurringAmount = formatRecurringAmount(subscription);
@@ -168,6 +176,7 @@ export default async function BillingPage({
       isCanceling={isCanceling}
       renewalDate={renewalDate}
       recurringAmount={recurringAmount}
+      freeAskUsage={freeAskUsage}
       checkoutState={checkoutState}
       checkoutSessionId={checkoutSessionId}
     />

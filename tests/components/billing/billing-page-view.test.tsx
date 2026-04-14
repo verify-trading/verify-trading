@@ -34,6 +34,7 @@ describe("BillingPageView", () => {
           interval: "year",
           interval_count: 1,
         }}
+        freeAskUsage={null}
         checkoutState={null}
         checkoutSessionId={null}
       />,
@@ -42,5 +43,32 @@ describe("BillingPageView", () => {
     expect(screen.getByText("Cancels at the end of the current billing period.")).toBeInTheDocument();
     expect(screen.getByText("Ends on")).toBeInTheDocument();
     expect(screen.queryByText("Renews on")).not.toBeInTheDocument();
+  });
+
+  it("shows free plan usage and upgrade path when not subscribed", () => {
+    render(
+      <BillingPageView
+        customerName="Test"
+        currentPlanLabel="Free"
+        canOpenPortal={false}
+        isCanceling={false}
+        renewalDate={null}
+        recurringAmount={null}
+        subscription={null}
+        freeAskUsage={{
+          used: 4,
+          remaining: 6,
+          limit: 10,
+          progressPercent: 40,
+        }}
+        checkoutState={null}
+        checkoutSessionId={null}
+      />,
+    );
+
+    expect(screen.getByText("Daily Ask usage")).toBeInTheDocument();
+    expect(screen.getByText("4/10")).toBeInTheDocument();
+    expect(screen.getByText(/6 free messages left today/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /View pricing & upgrade/i })).toHaveAttribute("href", "/pricing");
   });
 });

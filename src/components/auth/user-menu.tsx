@@ -189,7 +189,7 @@ export function UserMenu() {
 
           <DropdownMenu.Item asChild>
             <Link
-              href="/billing"
+              href={profile?.tier === "pro" ? "/billing" : "/pricing"}
               className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white outline-none data-[highlighted]:bg-white/[0.08]"
             >
               <CreditCard className="size-4 text-[var(--vt-muted)]" strokeWidth={2} aria-hidden />

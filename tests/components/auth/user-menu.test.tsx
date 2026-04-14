@@ -171,6 +171,18 @@ describe("UserMenu", () => {
     );
   });
 
+  it("links Upgrade to Pro to the pricing page", async () => {
+    renderWithQueryClient(<UserMenu />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("link", { name: /upgrade to pro/i }).length).toBeGreaterThan(0);
+    });
+
+    for (const link of screen.getAllByRole("link", { name: /upgrade to pro/i })) {
+      expect(link).toHaveAttribute("href", "/pricing");
+    }
+  });
+
   it("hides account chrome on the password reset page", () => {
     mockPathname = "/auth/update-password";
 

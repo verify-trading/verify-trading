@@ -145,7 +145,7 @@ export function getPublicBillingPricing(now = new Date()): PublicBillingPricing 
     annual: {
       badge: "Best value",
       headline: annualHeadline,
-      detail: "Same Pro features, billed yearly in GBP.",
+      detail: "Same Pro features as monthly, with one annual payment.",
       ctaLabel: "Start annual plan",
       equivalentMonthlyHeadline: `${formatGbp(STANDARD_ANNUAL_PRICE_GBP / 12)}/month equivalent`,
       savingsLabel: `Save ${formatGbp(annualSavings)} per year`,

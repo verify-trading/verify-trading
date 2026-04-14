@@ -224,7 +224,7 @@ export function PricingPlansSection({
           <p className="mt-2 text-sm text-[var(--vt-blue)]">{pricing.annual.equivalentMonthlyHeadline}</p>
 
           <ul className="mt-6 flex-1 space-y-2">
-            {["Everything in Pro", "Annual discount", "Billed yearly in GBP", "Best long-term value"].map((f) => (
+            {["Everything in Pro", "Annual discount", "Best long-term value"].map((f) => (
               <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
                 <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
                 {f}

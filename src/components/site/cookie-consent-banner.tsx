@@ -15,11 +15,13 @@ export function CookieConsentBanner({ onAcceptAll, onEssentialOnly }: CookieCons
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-[200] border-t border-[color:var(--vt-border)] bg-[rgba(10,13,46,0.97)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 shadow-[0_-12px_48px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[200] flex justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
       role="region"
       aria-label="Cookie consent"
     >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div
+        className="pointer-events-auto flex w-full max-w-3xl flex-col gap-4 rounded-2xl border border-[color:var(--vt-border)] bg-[rgba(10,13,46,0.97)] px-4 py-4 shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5 sm:py-4"
+      >
         <p className="text-sm leading-relaxed text-slate-300">
           <span className="font-semibold text-white">{app}</span> uses cookies and similar storage to
           keep you signed in, protect sessions, and run the product. With your permission we may also

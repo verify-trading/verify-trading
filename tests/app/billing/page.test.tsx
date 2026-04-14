@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetSessionUser, mockBillingPageView, mockRedirect } = vi.hoisted(() => ({
+const { mockGetSessionUser, mockBillingPageView, mockLoadAskUsageState, mockRedirect } = vi.hoisted(() => ({
   mockGetSessionUser: vi.fn(),
   mockBillingPageView: vi.fn(),
+  mockLoadAskUsageState: vi.fn(),
   mockRedirect: vi.fn(),
 }));
 
@@ -16,6 +17,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/auth/session", () => ({
   getSessionUser: mockGetSessionUser,
+}));
+
+vi.mock("@/lib/rate-limit/load-ask-usage", () => ({
+  loadAskUsageState: mockLoadAskUsageState,
 }));
 
 vi.mock("@/components/billing/billing-page-view", () => ({
@@ -47,10 +52,21 @@ function createBillingSubscriptionsQuery(data: unknown) {
 }
 
 describe("BillingPage", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     mockGetSessionUser.mockReset();
     mockBillingPageView.mockReset();
+    mockLoadAskUsageState.mockReset();
     mockRedirect.mockReset();
+
+    mockLoadAskUsageState.mockResolvedValue({
+      tier: "free",
+      usage: { used: 0, remaining: 10, limit: 10, progressPercent: 0 },
+      isExhausted: false,
+    });
 
     mockGetSessionUser.mockResolvedValue({
       user: {
@@ -91,6 +107,47 @@ describe("BillingPage", () => {
     expect(mockBillingPageView).toHaveBeenCalledWith(
       expect.objectContaining({
         isCanceling: true,
+      }),
+    );
+    expect(mockLoadAskUsageState).not.toHaveBeenCalled();
+  });
+
+  it("loads free Ask usage for free-tier users without a manageable subscription", async () => {
+    mockGetSessionUser.mockResolvedValue({
+      user: {
+        id: "user-2",
+        email: "free@example.com",
+      },
+      supabase: {
+        from: vi.fn((table: string) => {
+          if (table === "profiles") {
+            return createProfilesQuery({ display_name: "Free", tier: "free" });
+          }
+
+          if (table === "billing_subscriptions") {
+            return createBillingSubscriptionsQuery([]);
+          }
+
+          throw new Error(`Unexpected table: ${table}`);
+        }),
+      } as never,
+    } as never);
+
+    mockLoadAskUsageState.mockResolvedValue({
+      tier: "free",
+      usage: { used: 2, remaining: 8, limit: 10, progressPercent: 20 },
+      isExhausted: false,
+    });
+
+    render(await BillingPage({}));
+
+    expect(mockLoadAskUsageState).toHaveBeenCalledWith(expect.anything(), "user-2");
+    expect(mockBillingPageView).toHaveBeenCalledWith(
+      expect.objectContaining({
+        freeAskUsage: expect.objectContaining({
+          used: 2,
+          remaining: 8,
+        }),
       }),
     );
   });

@@ -26,7 +26,6 @@ The app uses three recurring Stripe prices:
 3. `STRIPE_PRICE_PRO_ANNUAL`
    - Yearly recurring price for the annual cohort
    - Amount: `£200/year`
-   - Billed yearly in GBP
 
 The app also expects one coupon:
 
