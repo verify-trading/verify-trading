@@ -31,6 +31,13 @@ type CookieConsentContextValue = {
 
 const CookieConsentContext = createContext<CookieConsentContextValue | null>(null);
 
+/**
+ * Toggle off while the consent approach is undecided. When `false`, no banner is shown and users
+ * without stored consent are treated as resolved with no choice (analytics flags stay off).
+ * Flip to `true` to show the banner again for visitors who have not consented yet.
+ */
+export const COOKIE_CONSENT_BANNER_ENABLED = false;
+
 export function CookieConsentProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [choice, setChoice] = useState<CookieConsentChoice | null>(null);
@@ -40,9 +47,14 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
     if (stored) {
       setChoice(stored.choice);
       setStatus("resolved");
-    } else {
-      setStatus("pending");
+      return;
     }
+    if (!COOKIE_CONSENT_BANNER_ENABLED) {
+      setChoice(null);
+      setStatus("resolved");
+      return;
+    }
+    setStatus("pending");
   }, []);
 
   useEffect(() => {
