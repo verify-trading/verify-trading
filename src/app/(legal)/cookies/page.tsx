@@ -13,7 +13,7 @@ export default function CookiesPage() {
     <LegalDocument
       eyebrow="Cookies"
       title="Cookie Notice"
-      summary="How we use cookies and similar storage. Update this when you add analytics, ads, or a consent banner so the notice matches what you actually deploy."
+      summary="When you first visit the site, a banner lets you choose Essential only or Accept all. Essential cookies are required for sign-in and core features; optional cookies are only used if you accept all (for example future analytics). You can change behaviour later by clearing site data for this domain in your browser."
       sections={[
         {
           title: "Why cookies and storage",
@@ -26,14 +26,14 @@ export default function CookiesPage() {
           title: "Types",
           paragraphs: [
             "Strictly necessary storage supports authentication, security, routing, and session continuity and is generally required for the product to work.",
-            "If analytics, advertising, or personalisation cookies are introduced, disclose them here with purpose and any consent controls you expose in the product.",
+            "Optional cookies (for example measurement or product improvement) are only enabled if you choose Accept all on the cookie banner. If you choose Essential only, those optional tags are not loaded.",
           ],
         },
         {
           title: "Your controls",
           paragraphs: [
-            "Users can manage cookies through browser settings; disabling essential storage may break sign-in or other features.",
-            "If you add a consent banner, align this notice with the categories and toggles shown there.",
+            "Use the cookie banner on first visit to choose Essential only or Accept all. To withdraw consent, clear cookies and local storage for this site in your browser — you will see the banner again on the next visit.",
+            "Disabling essential storage in the browser may break sign-in or other features.",
           ],
         },
       ]}

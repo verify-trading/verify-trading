@@ -27,6 +27,7 @@ import { AskEmptyState } from "@/components/ask/ask-empty-state";
 import { AskImageModal } from "@/components/ask/ask-image-modal";
 import { AskSessionSidebar } from "@/components/ask/ask-session-sidebar";
 import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
 import { AskThread } from "@/components/ask/ask-thread";
 import {
   mapPersistedMessageToStoreMessage,
@@ -907,12 +908,16 @@ export function AskWorkspace({
                         All 10 free messages used today.
                       </span>
                     </div>
-                    <Link
-                      href="/markets"
-                      className="shrink-0 rounded-full bg-(--vt-coral) px-3 py-1.5 text-[11px] font-bold text-white shadow-[0_4px_14px_rgba(242,109,109,0.35)] transition hover:brightness-105 sm:px-3.5 sm:text-xs"
+                    <Button
+                      asChild
+                      variant="default"
+                      size="pillCompact"
+                      className="shrink-0 px-3 py-1.5 text-[11px] font-bold sm:px-3.5 sm:text-xs"
                     >
-                      Upgrade — <span className="line-through opacity-65">£20</span> £5/mo
-                    </Link>
+                      <Link href="/markets">
+                        Upgrade — <span className="line-through opacity-65">£20</span> £5/mo
+                      </Link>
+                    </Button>
                   </div>
                 </div>
               ) : null}
@@ -976,22 +981,24 @@ export function AskWorkspace({
         title="Delete this chat?"
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               disabled={isDeletingSession}
               onClick={() => setDeleteConfirm(null)}
-              className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.08] disabled:opacity-50"
+              className="rounded-xl border-white/[0.1] bg-white/[0.04] text-white/80 hover:bg-white/[0.08]"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="default"
               disabled={isDeletingSession}
               onClick={() => void confirmDeleteSession()}
-              className="rounded-xl bg-[var(--vt-coral)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(242,109,109,0.25)] transition hover:opacity-95 disabled:opacity-60"
+              className="rounded-xl shadow-[0_8px_24px_rgba(242,109,109,0.25)] hover:opacity-95"
             >
               {isDeletingSession ? "Deleting…" : "Delete"}
-            </button>
+            </Button>
           </div>
         }
       >

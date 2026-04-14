@@ -321,16 +321,24 @@ function requireNumericValue(value: number | null, message: string) {
 function formatTimeframe(timeframe: MarketSeries["timeframe"]) {
   switch (timeframe) {
     case "1D":
-      return { limit: "5" };
+      return { limit: "5", points: 5 };
     case "1W":
-      return { limit: "7" };
+      return { limit: "7", points: 7 };
     case "1M":
-      return { limit: "22" };
+      return { limit: "22", points: 22 };
     case "3M":
-      return { limit: "63" };
+      return { limit: "63", points: 63 };
     case "1Y":
-      return { limit: "252" };
+      return { limit: "252", points: 252 };
   }
+}
+
+function trimCloseValues(closeValues: number[], points: number): number[] {
+  if (closeValues.length <= points) {
+    return closeValues;
+  }
+
+  return closeValues.slice(-points);
 }
 
 async function fetchFmpData(pathname: string, params: Record<string, string>) {
@@ -495,21 +503,27 @@ export async function getMarketSeries(
   timeframe: MarketSeries["timeframe"] = "1W",
 ): Promise<MarketSeries> {
   const resolved = await resolveMarketInstrument(asset);
+  const window = formatTimeframe(timeframe);
 
   const cacheKey = `${resolved.symbol}:${timeframe}`;
   const cached = getCached(seriesCache, cacheKey);
   if (cached) {
-    return cached;
+    const closeValues = trimCloseValues(cached.closeValues, window.points);
+    return {
+      ...cached,
+      closeValues,
+      support: Math.min(...closeValues),
+      resistance: Math.max(...closeValues),
+    };
   }
 
-  const window = formatTimeframe(timeframe);
   const json = await fetchFmpData("stable/historical-price-eod/light", {
     symbol: resolved.symbol,
     limit: window.limit,
   });
 
   const values = Array.isArray(json) ? json : [];
-  const closeValues = parseTimeSeriesCloseValues(values);
+  const closeValues = trimCloseValues(parseTimeSeriesCloseValues(values), window.points);
 
   if (closeValues.length < 2) {
     throw new Error("FMP historical prices did not include enough close values.");

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getAskPersistence } from "@/lib/ask/persistence";
 import { getSessionUser } from "@/lib/auth/session";
+import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 
 const sessionIdParamSchema = z.string().uuid();
@@ -15,25 +16,13 @@ export async function DELETE(
   const parsed = sessionIdParamSchema.safeParse(raw);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: "sessions_delete_invalid",
-        message: "The session id is invalid.",
-      },
-      { status: 400 },
-    );
+    return jsonApiError(400, "sessions_delete_invalid", "The session id is invalid.");
   }
 
   try {
     const session = await getSessionUser();
     if (!session) {
-      return NextResponse.json(
-        {
-          error: "unauthorized",
-          message: "Sign in to manage Ask sessions.",
-        },
-        { status: 401 },
-      );
+      return jsonUnauthorized("Sign in to manage Ask sessions.");
     }
 
     const persistence = getAskPersistence({ userId: session.user.id });
@@ -44,12 +33,6 @@ export async function DELETE(
       error: error instanceof Error ? error.message : "unknown",
     });
 
-    return NextResponse.json(
-      {
-        error: "sessions_delete_unavailable",
-        message: "Could not delete that session right now.",
-      },
-      { status: 500 },
-    );
+    return jsonApiError(500, "sessions_delete_unavailable", "Could not delete that session right now.");
   }
 }

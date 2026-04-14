@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getAskPersistence } from "@/lib/ask/persistence";
 import { decodeHistoryCursor } from "@/lib/ask/persistence/shared";
 import { getSessionUser } from "@/lib/auth/session";
+import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 
 const historyQuerySchema = z.object({
@@ -27,25 +28,13 @@ export async function GET(request: Request) {
       throw new Error("Invalid Ask history cursor.");
     }
   } catch {
-    return NextResponse.json(
-      {
-        error: "history_request_invalid",
-        message: "The Ask history request is invalid.",
-      },
-      { status: 400 },
-    );
+    return jsonApiError(400, "history_request_invalid", "The Ask history request is invalid.");
   }
 
   try {
     const session = await getSessionUser();
     if (!session) {
-      return NextResponse.json(
-        {
-          error: "unauthorized",
-          message: "Sign in to load Ask history.",
-        },
-        { status: 401 },
-      );
+      return jsonUnauthorized("Sign in to load Ask history.");
     }
 
     const persistence = getAskPersistence({ userId: session.user.id });
@@ -61,12 +50,6 @@ export async function GET(request: Request) {
       error: error instanceof Error ? error.message : "unknown",
     });
 
-    return NextResponse.json(
-      {
-        error: "history_unavailable",
-        message: "Could not load Ask history right now.",
-      },
-      { status: 500 },
-    );
+    return jsonApiError(500, "history_unavailable", "Could not load Ask history right now.");
   }
 }

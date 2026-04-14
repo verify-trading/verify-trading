@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getAskPersistence } from "@/lib/ask/persistence";
 import { getSessionUser } from "@/lib/auth/session";
+import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 
 const sessionQuerySchema = z.object({
@@ -20,25 +21,13 @@ export async function GET(request: Request) {
       cursor: searchParams.get("cursor") ?? undefined,
     });
   } catch {
-    return NextResponse.json(
-      {
-        error: "sessions_request_invalid",
-        message: "The Ask sessions request is invalid.",
-      },
-      { status: 400 },
-    );
+    return jsonApiError(400, "sessions_request_invalid", "The Ask sessions request is invalid.");
   }
 
   try {
     const session = await getSessionUser();
     if (!session) {
-      return NextResponse.json(
-        {
-          error: "unauthorized",
-          message: "Sign in to load Ask sessions.",
-        },
-        { status: 401 },
-      );
+      return jsonUnauthorized("Sign in to load Ask sessions.");
     }
 
     const persistence = getAskPersistence({ userId: session.user.id });
@@ -50,12 +39,6 @@ export async function GET(request: Request) {
       error: error instanceof Error ? error.message : "unknown",
     });
 
-    return NextResponse.json(
-      {
-        error: "sessions_unavailable",
-        message: "Could not load Ask sessions right now.",
-      },
-      { status: 500 },
-    );
+    return jsonApiError(500, "sessions_unavailable", "Could not load Ask sessions right now.");
   }
 }

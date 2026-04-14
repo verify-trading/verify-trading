@@ -9,19 +9,24 @@ import { useForm } from "react-hook-form";
 import { AuthDivider } from "@/components/auth/auth-divider";
 import {
   authFieldClassWithError,
+  authInlineErrorBannerClass,
+  authInlineSuccessBannerClass,
   authLabelClass,
-  authPrimaryButtonClass,
   authSecondaryLinkClass,
 } from "@/components/auth/auth-field-styles";
+import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { beginOAuthFlow } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
+import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
 import { loginSchema, type LoginFormValues } from "@/lib/auth/schemas";
 import { LEGAL_LINKS } from "@/lib/legal/legal-links";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
+
+import { cn } from "@/lib/utils";
 
 function LoginPageContent() {
   const router = useRouter();
@@ -69,7 +74,7 @@ function LoginPageContent() {
     clearErrors("root");
 
     if (!supabase) {
-      setError("root", { message: "Authentication is not configured. Check environment variables." });
+      setError("root", { message: AUTH_NOT_CONFIGURED_MESSAGE });
       return;
     }
     const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -93,7 +98,7 @@ function LoginPageContent() {
 
     try {
       if (!supabase) {
-        setError("root", { message: "Authentication is not configured. Check environment variables." });
+        setError("root", { message: AUTH_NOT_CONFIGURED_MESSAGE });
         setGoogleBusy(false);
         return;
       }
@@ -126,13 +131,11 @@ function LoginPageContent() {
     >
       <div aria-live="polite">
         {resetSuccessMessage ? (
-          <div className="mb-4 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3.5 text-sm leading-relaxed text-emerald-100">
-            {resetSuccessMessage}
-          </div>
+          <div className={cn("mb-4", authInlineSuccessBannerClass)}>{resetSuccessMessage}</div>
         ) : null}
         {rootMessage ? (
           showOAuthNoAccountBanner ? (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3.5 text-sm leading-relaxed text-red-100">
+            <div className={authInlineErrorBannerClass}>
               No account for this Google sign-in.{" "}
               <Link
                 href={signupHref}
@@ -143,9 +146,7 @@ function LoginPageContent() {
               to continue.
             </div>
           ) : (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3.5 text-sm leading-relaxed text-red-100">
-              {rootMessage}
-            </div>
+            <div className={authInlineErrorBannerClass}>{rootMessage}</div>
           )
         ) : null}
       </div>
@@ -197,9 +198,9 @@ function LoginPageContent() {
             </Link>
           </div>
         </div>
-        <button type="submit" disabled={googleBusy || isSubmitting} className={authPrimaryButtonClass}>
+        <Button type="submit" variant="default" size="pill" className="w-full" disabled={googleBusy || isSubmitting}>
           {isSubmitting ? "Signing in…" : "Sign in with email"}
-        </button>
+        </Button>
       </form>
 
       <p className="text-center text-sm text-(--vt-muted)">

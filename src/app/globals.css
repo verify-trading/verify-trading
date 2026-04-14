@@ -49,6 +49,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Space for fixed cookie consent bar (see CookieConsentProvider). */
+body[data-cookie-banner="open"] {
+  padding-bottom: max(9rem, calc(env(safe-area-inset-bottom) + 7rem));
+}
+
 button,
 input,
 textarea,

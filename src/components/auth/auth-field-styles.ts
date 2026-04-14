@@ -12,8 +12,21 @@ export function authFieldClassWithError(hasError: boolean) {
 
 export const authLabelClass = "mb-2 block text-[13px] font-medium tracking-wide text-white/80";
 
-export const authPrimaryButtonClass =
-  "group relative flex min-h-12 w-full items-center justify-center rounded-full bg-[var(--vt-coral)] px-4 py-3 text-sm font-bold text-white shadow-[0_12px_24px_-6px_rgba(242,109,109,0.45)] transition-all duration-300 hover:brightness-105 hover:shadow-[0_16px_32px_-6px_rgba(242,109,109,0.6)] hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0 disabled:pointer-events-none disabled:opacity-55 sm:min-h-11";
+/** Inline validation / API error callout above auth forms */
+export const authInlineErrorBannerClass =
+  "rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3.5 text-sm leading-relaxed text-red-100";
+
+/** Success / confirmation strip (e.g. password reset confirmation on login) */
+export const authInlineSuccessBannerClass =
+  "rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3.5 text-sm leading-relaxed text-emerald-100";
+
+/** Success row with leading icon (e.g. forgot-password “email sent”) */
+export const authInlineSuccessBannerFlexClass =
+  "flex gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3.5 text-sm leading-relaxed text-emerald-50/95";
+
+/** Neutral info (e.g. signup “check your email”) */
+export const authInlineInfoBannerClass =
+  "rounded-2xl border border-(--vt-blue)/35 bg-(--vt-blue)/10 px-4 py-3.5 text-sm leading-relaxed text-white/90";
 
 export const authSecondaryLinkClass =
   "font-medium text-white/60 underline-offset-4 transition-all duration-200 hover:text-white hover:underline hover:decoration-white/50";

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, CreditCard, LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo } from "react";
@@ -12,6 +12,7 @@ import {
   loadAccountMenuState,
   type AccountMenuProfile,
 } from "@/lib/auth/account-menu-query";
+import { Button } from "@/components/ui/button";
 import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import { FREE_DAILY_ASK_LIMIT, type FreeAskUsageSummary } from "@/lib/rate-limit/usage";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
@@ -89,12 +90,9 @@ export function UserMenu() {
 
   if (!isSignedIn || !user) {
     return (
-      <Link
-        href="/login"
-        className="shrink-0 rounded-full border border-[color:var(--vt-border)] px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/[0.06] sm:px-4 sm:text-sm"
-      >
-        Sign in
-      </Link>
+      <Button asChild variant="outline" size="pillCompact" className="shrink-0 px-3 text-xs sm:px-4 sm:text-sm">
+        <Link href="/login">Sign in</Link>
+      </Button>
     );
   }
 
@@ -103,9 +101,10 @@ export function UserMenu() {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <button
+        <Button
           type="button"
-          className="flex max-w-[min(100vw-8rem,14rem)] shrink-0 items-center gap-2 rounded-full border border-[color:var(--vt-border)] bg-white/[0.04] py-1.5 pl-1.5 pr-2.5 text-left text-white transition hover:bg-white/[0.08] sm:max-w-[16rem] sm:gap-2.5 sm:pl-2 sm:pr-3"
+          variant="secondary"
+          className="h-auto max-w-[min(100vw-8rem,14rem)] shrink-0 items-center gap-2 rounded-full border-[color:var(--vt-border)] bg-white/[0.04] py-1.5 pl-1.5 pr-2.5 text-left font-normal text-white hover:bg-white/[0.08] sm:max-w-[16rem] sm:gap-2.5 sm:pl-2 sm:pr-3"
           aria-label="Account menu"
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[rgba(76,110,245,0.35)] text-xs font-bold text-white">
@@ -113,7 +112,7 @@ export function UserMenu() {
           </span>
           <span className="min-w-0 flex-1 truncate text-left text-xs font-semibold sm:text-sm">{displayLabel}</span>
           <ChevronDown className="size-4 shrink-0 text-[var(--vt-muted)]" strokeWidth={2} aria-hidden />
-        </button>
+        </Button>
       </DropdownMenu.Trigger>
 
       <DropdownMenu.Portal>
@@ -135,12 +134,29 @@ export function UserMenu() {
                 <p className="mt-2 inline-flex rounded-full border border-[color:var(--vt-border)] bg-white/[0.05] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--vt-muted)]">
                   {tierLabel}
                 </p>
-                {profile?.tier === "pro" ? (
-                  <p className="mt-2 text-xs text-[var(--vt-muted)]">Unlimited message access.</p>
-                ) : null}
               </div>
             </div>
           </div>
+
+          {profile?.tier === "pro" ? (
+            <div className="border-b border-white/[0.06] px-3 py-3">
+              <div className="rounded-xl border border-[color:var(--vt-border)] bg-white/[0.04] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-white">
+                  <span>Daily message usage</span>
+                  <span className="tabular-nums text-[var(--vt-green)]">Unlimited</span>
+                </div>
+                <div
+                  className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.08]"
+                  role="progressbar"
+                  aria-label="Daily message usage"
+                  aria-valuetext="Unlimited"
+                >
+                  <div className="h-full w-full rounded-full bg-[var(--vt-green)]" />
+                </div>
+                <p className="mt-2 text-[11px] text-[var(--vt-muted)]">Pro: no daily cap on Ask messages.</p>
+              </div>
+            </div>
+          ) : null}
 
           {profile?.tier !== "pro" && usage ? (
             <div className="border-b border-white/[0.06] px-3 py-3">
@@ -170,6 +186,16 @@ export function UserMenu() {
               </div>
             </div>
           ) : null}
+
+          <DropdownMenu.Item asChild>
+            <Link
+              href="/billing"
+              className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white outline-none data-[highlighted]:bg-white/[0.08]"
+            >
+              <CreditCard className="size-4 text-[var(--vt-muted)]" strokeWidth={2} aria-hidden />
+              {profile?.tier === "pro" ? "Manage subscription" : "Upgrade to Pro"}
+            </Link>
+          </DropdownMenu.Item>
 
           <DropdownMenu.Item
             className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white outline-none data-[highlighted]:bg-white/[0.08]"

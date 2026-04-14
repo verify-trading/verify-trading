@@ -5,6 +5,7 @@ import { ArrowUp, Image as ImageIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import type { AskAttachment } from "@/components/ask/store";
+import { Button } from "@/components/ui/button";
 
 const ASK_TEXTAREA_MIN_PX = 40;
 const ASK_TEXTAREA_MAX_PX = 200;
@@ -69,12 +70,13 @@ export function AskComposer({
 
       {attachment ? (
         <div className="mb-2 flex items-center gap-2 rounded-xl bg-white/[0.06] px-2.5 py-2 sm:px-3">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() =>
               onPreviewAttachment(attachment.previewUrl, attachment.file.name)
             }
-            className="block shrink-0 rounded-lg transition hover:opacity-90"
+            className="h-auto shrink-0 rounded-lg p-0 transition hover:bg-transparent hover:opacity-90"
             aria-label="Open attached image preview"
           >
             <Image
@@ -85,35 +87,38 @@ export function AskComposer({
               unoptimized
               className="size-10 rounded-lg object-cover ring-1 ring-white/10"
             />
-          </button>
+          </Button>
           <span className="min-w-0 flex-1 truncate text-xs text-white/55">
             {attachment.file.name}
           </span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={(event) => {
               event.stopPropagation();
               onClearAttachment();
             }}
-            className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-white/35 transition hover:bg-white/10 hover:text-white/70"
+            className="h-auto shrink-0 px-2 py-1 text-xs font-medium text-white/35 hover:bg-white/10 hover:text-white/70"
             aria-label="Remove attachment"
           >
             Remove
-          </button>
+          </Button>
         </div>
       ) : null}
 
       <div className="flex items-end gap-1.5 sm:gap-2">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           disabled={disabled}
           onClick={onOpenPicker}
           title="Add image"
           aria-label="Add image"
-          className="mb-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full text-[var(--vt-muted)] transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 sm:size-9"
+          className="mb-0.5 shrink-0 rounded-full text-[var(--vt-muted)] hover:bg-white/10 hover:text-white disabled:opacity-30 sm:size-9"
         >
           <ImageIcon className="size-[18px] opacity-90" strokeWidth={1.75} aria-hidden />
-        </button>
+        </Button>
 
         <div className="min-w-0 flex-1 py-0.5">
           <textarea
@@ -142,11 +147,13 @@ export function AskComposer({
           />
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="accent"
+          size="icon"
           disabled={disabled || isSubmitting || (!draft.trim() && !attachment)}
           onClick={onSubmit}
-          className="mb-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--vt-blue)] text-white shadow-[0_4px_16px_rgba(76,110,245,0.35)] transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none sm:size-9"
+          className="disabled:shadow-none"
           aria-label={disabled ? "Ask locked" : isSubmitting ? "Sending" : "Send message"}
         >
           {isSubmitting ? (
@@ -154,7 +161,7 @@ export function AskComposer({
           ) : (
             <ArrowUp className="size-[18px]" strokeWidth={2.5} aria-hidden />
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -42,7 +42,7 @@ describe("MarketsPage", () => {
 
     renderWithQueryClient(<MarketsPage />);
 
-    expect(screen.getByText("Top Assets")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /top assets/i })).toBeInTheDocument();
     expect(screen.getByText("Pro Access")).toBeInTheDocument();
     expect(screen.getByText("Sign in and upgrade to Pro to unlock Markets.")).toBeInTheDocument();
     expect(screen.getByText("20,948.12")).toBeInTheDocument();
@@ -100,9 +100,9 @@ describe("MarketsPage", () => {
       }),
     }) as unknown as typeof fetch;
 
-    renderWithQueryClient(<MarketsPage />);
+    renderWithQueryClient(<MarketsPage initialTier="pro" />);
 
-    expect(screen.getAllByText("Top Assets").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("heading", { level: 2, name: /top assets/i }).length).toBeGreaterThan(0);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/markets?timeframe=1W");
@@ -150,6 +150,7 @@ describe("MarketsPage", () => {
               changePercent: -13.58,
               direction: "down",
               isMarketOpen: null,
+              proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
             },
             series: {
               asset: "OIL / WTI",
@@ -158,13 +159,14 @@ describe("MarketsPage", () => {
               closeValues: [109.27, 104.4, 100.9, 97.8, 94.43],
               support: 94.43,
               resistance: 109.27,
+              proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
             },
           },
         ],
       }),
     }) as unknown as typeof fetch;
 
-    renderWithQueryClient(<MarketsPage />);
+    renderWithQueryClient(<MarketsPage initialTier="pro" />);
 
     await waitFor(() => {
       expect(screen.getAllByText("94.43").length).toBeGreaterThan(0);
@@ -177,6 +179,10 @@ describe("MarketsPage", () => {
       expect(
         focusPanels.some((panel) => within(panel).queryByText("BZUSD · COMMODITY") !== null),
       ).toBe(true);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Using Brent crude futures as the free-plan oil proxy.")).toBeInTheDocument();
     });
   });
 });

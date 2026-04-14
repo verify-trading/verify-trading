@@ -2,7 +2,9 @@
 
 import type { CSSProperties } from "react";
 
+import { askSuggestionChipClass } from "@/components/ask/ask-suggestion-styles";
 import { AskEmptyRestoringSkeleton } from "@/components/ask/ask-skeletons";
+import { Button } from "@/components/ui/button";
 import { brandGradient } from "@/lib/brand";
 
 const RING_MASK: CSSProperties = {
@@ -96,9 +98,6 @@ export function AskEmptyState({
     return <AskEmptyRestoringSkeleton />;
   }
 
-  const suggestionButtonClass =
-    "group flex h-full min-h-[3.25rem] w-full items-start rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left text-sm font-medium leading-snug text-white/85 shadow-sm ring-1 ring-white/[0.03] transition hover:border-[rgba(76,110,245,0.35)] hover:bg-[rgba(76,110,245,0.08)] hover:text-white sm:text-base";
-
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden">
       {/* ─── Desktop / web: centered block; suggestions in a wrapping 2-col grid on wide panes ─── */}
@@ -108,13 +107,14 @@ export function AskEmptyState({
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {prompts.map((prompt) => (
               <li key={prompt} className="min-w-0">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => onPromptClick(prompt)}
-                  className={suggestionButtonClass}
+                  className={askSuggestionChipClass}
                 >
                   <span className="break-words">{prompt}</span>
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

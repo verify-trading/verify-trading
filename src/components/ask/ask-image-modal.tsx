@@ -4,6 +4,8 @@ import Image from "next/image";
 import { X } from "lucide-react";
 import { useEffect } from "react";
 
+import { Button } from "@/components/ui/button";
+
 export function AskImageModal({
   src,
   alt,
@@ -36,14 +38,16 @@ export function AskImageModal({
         className="relative w-full max-w-5xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 inline-flex size-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(10,13,46,0.78)] text-white transition hover:bg-[rgba(10,13,46,0.95)]"
+          className="absolute right-3 top-3 z-10 size-9 rounded-full border border-white/15 bg-[rgba(10,13,46,0.78)] text-white hover:bg-[rgba(10,13,46,0.95)]"
           aria-label="Close image preview"
         >
           <X className="size-4" strokeWidth={2.25} aria-hidden />
-        </button>
+        </Button>
         <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[var(--vt-card)] shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
           <Image
             src={src}

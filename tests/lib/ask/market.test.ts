@@ -146,6 +146,25 @@ describe("market tools", () => {
     expect(series.closeValues).toEqual([4470, 4480, 4490]);
   });
 
+  it("trims long history payloads down to the requested timeframe window", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        mockJsonResponse(
+          Array.from({ length: 10 }, (_, index) => ({
+            date: `2024-01-${String(index + 1).padStart(2, "0")}`,
+            close: 100 + index,
+          })).reverse(),
+        ),
+      ) as unknown as typeof fetch;
+
+    const series = await getMarketSeries("Gold", "1W");
+
+    expect(series.closeValues).toEqual([103, 104, 105, 106, 107, 108, 109]);
+    expect(series.support).toBe(103);
+    expect(series.resistance).toBe(109);
+  });
+
   it("derives a quote from a time series", () => {
     const quote = deriveQuoteFromSeries({
       asset: "GOLD",

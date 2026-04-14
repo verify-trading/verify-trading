@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
-import { BookOpen, LineChart, Menu, MessageSquare } from "lucide-react";
+import { BookOpen, LineChart, Menu, MessageSquare, Tag } from "lucide-react";
 
 import { UserMenu } from "@/components/auth/user-menu";
+import { Button } from "@/components/ui/button";
 import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import { Logo } from "@/components/site/logo";
 import { Sheet } from "@/components/ui/sheet";
@@ -15,6 +16,7 @@ const navItems = [
   { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
   { href: "/markets", label: "Markets", icon: LineChart, requiresAuth: true },
   { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: true },
+  { href: "/pricing", label: "Pricing", icon: Tag, requiresAuth: false },
 ] as const;
 
 /** Mobile header height for fixed overlays (single row + safe area). */
@@ -85,9 +87,11 @@ export function SiteNav() {
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <UserMenu />
             {showMenu ? (
-              <button
+              <Button
                 type="button"
-                className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-white/90 transition hover:bg-white/[0.08] lg:hidden"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 rounded-md text-white/90 hover:bg-white/[0.08] lg:hidden"
                 aria-expanded={mobileMenuOpen}
                 aria-haspopup="dialog"
                 aria-controls="site-mobile-nav-sheet"
@@ -95,7 +99,7 @@ export function SiteNav() {
                 onClick={() => setMobileMenuOpen(true)}
               >
                 <Menu className="size-5" strokeWidth={2} aria-hidden />
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>

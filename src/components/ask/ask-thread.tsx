@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Bot } from "lucide-react";
 
 import { AskResponseCard } from "@/components/ask/cards";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   AskAssistantLoadingSkeleton,
   AskThreadLoadOlderSkeleton,
@@ -31,13 +33,14 @@ function ChatAttachmentPreview({
   const maxW = compact ? "max-w-4xl" : "max-w-5xl";
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onOpen}
-      className={[
-        "mb-3 block w-full overflow-hidden rounded-2xl border border-white/6 bg-black/15 text-left transition hover:opacity-95",
+      className={cn(
+        "mb-3 h-auto w-full justify-start overflow-hidden rounded-2xl border border-white/6 bg-black/15 p-0 text-left hover:bg-black/15 hover:opacity-95",
         maxW,
-      ].join(" ")}
+      )}
       aria-label={`Open ${alt}`}
     >
       <span className="relative block w-full aspect-[16/9]">
@@ -51,7 +54,7 @@ function ChatAttachmentPreview({
           onLoadingComplete={() => onLoad?.()}
         />
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -231,13 +234,14 @@ export function AskThread({
           {isLoadingOlder ? (
             <AskThreadLoadOlderSkeleton />
           ) : historyCursor ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={onLoadOlder}
-              className="text-xs font-semibold uppercase tracking-[0.18em] text-white/30 transition hover:text-white sm:text-[11px] sm:tracking-[0.2em]"
+              className="h-auto px-2 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/30 hover:bg-transparent hover:text-white sm:text-[11px] sm:tracking-[0.2em]"
             >
               ↑ Load older messages
-            </button>
+            </Button>
           ) : null}
         </div>
 

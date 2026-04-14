@@ -9,6 +9,7 @@ import { logger } from "@/lib/observability/logger";
 import { getAskPersistence, type AskPersistence } from "@/lib/ask/persistence";
 import { classifyAskRouteError } from "@/lib/ask/ask-failure";
 import { getSessionUser } from "@/lib/auth/session";
+import { jsonInvalidRequest, jsonUnauthorized } from "@/lib/http/json-response";
 import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
 import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { generateAskResponse } from "@/lib/ask/service";
@@ -261,25 +262,13 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      {
-        error: "invalid_request",
-        message: "The Ask request body is invalid.",
-      },
-      { status: 400 },
-    );
+    return jsonInvalidRequest("The Ask request body is invalid.");
   }
 
   try {
     const session = await getSessionUser();
     if (!session) {
-      return NextResponse.json(
-        {
-          error: "unauthorized",
-          message: "Sign in to use Ask.",
-        },
-        { status: 401 },
-      );
+      return jsonUnauthorized("Sign in to use Ask.");
     }
 
     const parsedRequest = askRequestSchema.parse(body);
@@ -332,23 +321,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof ZodError) {
-      return NextResponse.json(
-        {
-          error: "invalid_request",
-          message: "The Ask request body is invalid.",
-        },
-        { status: 400 },
-      );
+      return jsonInvalidRequest("The Ask request body is invalid.");
     }
 
     if (error instanceof AskValidationError) {
-      return NextResponse.json(
-        {
-          error: "invalid_request",
-          message: error.message,
-        },
-        { status: 400 },
-      );
+      return jsonInvalidRequest(error.message);
     }
 
     const { code, message } = classifyAskRouteError(error);

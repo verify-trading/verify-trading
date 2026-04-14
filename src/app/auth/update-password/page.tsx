@@ -9,12 +9,14 @@ import { useForm } from "react-hook-form";
 
 import {
   authFieldClassWithError,
+  authInlineErrorBannerClass,
   authLabelClass,
-  authPrimaryButtonClass,
   authSecondaryLinkClass,
 } from "@/components/auth/auth-field-styles";
+import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
+import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
 import { appendSafeNextParam } from "@/lib/auth/safe-redirect";
 import { updatePasswordSchema, type UpdatePasswordFormValues } from "@/lib/auth/schemas";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
@@ -51,7 +53,7 @@ function UpdatePasswordPageContent() {
     setApiError(null);
 
     if (!supabase) {
-      setApiError("Authentication is not configured. Check environment variables.");
+      setApiError(AUTH_NOT_CONFIGURED_MESSAGE);
       return;
     }
     if (!user) {
@@ -111,9 +113,7 @@ function UpdatePasswordPageContent() {
     >
       <div aria-live="polite">
         {apiError ? (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3.5 text-sm leading-relaxed text-red-100">
-            {apiError}
-          </div>
+          <div className={authInlineErrorBannerClass}>{apiError}</div>
         ) : null}
       </div>
 
@@ -148,9 +148,9 @@ function UpdatePasswordPageContent() {
           />
           <AuthFieldError message={errors.confirmPassword?.message} />
         </div>
-        <button type="submit" disabled={isSubmitting} className={authPrimaryButtonClass}>
+        <Button type="submit" variant="default" size="pill" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Saving…" : "Save new password"}
-        </button>
+        </Button>
       </form>
 
       <p className="text-center text-sm text-(--vt-muted)">

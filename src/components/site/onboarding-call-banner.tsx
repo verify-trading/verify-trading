@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { getOnboardingCallUrl } from "@/lib/site-config";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
@@ -120,35 +121,39 @@ export function OnboardingCallBanner() {
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {bookingUrl ? (
-            <Link
-              href={bookingUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-[var(--vt-navy)] transition hover:opacity-90 sm:px-3 sm:text-sm"
+            <Button
+              asChild
+              variant="ghost"
+              className="h-auto rounded-full border-0 bg-white px-2.5 py-1 text-xs font-semibold text-[var(--vt-navy)] shadow-none hover:bg-white/90 hover:opacity-90 sm:px-3 sm:text-sm"
             >
-              Book now →
-            </Link>
+              <Link href={bookingUrl} target="_blank" rel="noreferrer">
+                Book now →
+              </Link>
+            </Button>
           ) : (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              className="h-auto rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/60 sm:px-3 sm:text-sm"
               onClick={() =>
                 toast.error("Set NEXT_PUBLIC_ONBOARDING_CALL_URL to enable the booking link.")
               }
-              className="inline-flex items-center rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/60 sm:px-3 sm:text-sm"
             >
               Book now →
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 rounded-full text-white/45 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             onClick={() => void dismissBanner()}
             disabled={isSavingDismissal}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-white/45 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             aria-label="Dismiss onboarding banner"
           >
             <X className="size-4" strokeWidth={2} aria-hidden />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

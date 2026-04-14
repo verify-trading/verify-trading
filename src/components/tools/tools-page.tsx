@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
 import {
   calculateMarginRequirement,
   calculatePipValue,
@@ -454,20 +457,19 @@ export function ToolsPage() {
                   const Icon = c.icon;
                   const isActive = c.id === active;
                   return (
-                    <button
+                    <Button
                       key={c.id}
                       type="button"
+                      variant={isActive ? "accent" : "ghost"}
                       onClick={() => setActive(c.id)}
-                      className={[
-                        "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold transition",
-                        isActive
-                          ? "bg-[var(--vt-blue)] text-white shadow-[0_4px_16px_rgba(76,110,245,0.3)]"
-                          : "text-[var(--vt-muted)] hover:bg-white/[0.06] hover:text-white",
-                      ].join(" ")}
+                      className={cn(
+                        "h-auto w-full justify-start gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold",
+                        !isActive && "text-[var(--vt-muted)] hover:bg-white/[0.06] hover:text-white",
+                      )}
                     >
                       <Icon size={15} className={isActive ? "text-white" : "text-[var(--vt-muted)]"} />
                       {c.label}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

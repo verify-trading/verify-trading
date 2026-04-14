@@ -7,6 +7,7 @@ import {
   AskSessionListSkeleton,
   AskSessionLoadMoreSkeleton,
 } from "@/components/ask/ask-skeletons";
+import { Button } from "@/components/ui/button";
 import type { AskSessionListItem } from "@/lib/ask/contracts";
 
 function formatSessionTime(updatedAt: string) {
@@ -129,10 +130,11 @@ export function AskSessionSidebar({
   return (
     <>
       {!isCollapsed ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Close session list"
-          className="fixed inset-x-0 bottom-0 z-30 bg-[rgba(5,8,27,0.72)] backdrop-blur-[2px] top-[calc(env(safe-area-inset-top)+3.5rem)] lg:hidden"
+          className="fixed inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+3.5rem)] z-30 h-auto w-full rounded-none border-0 bg-[rgba(5,8,27,0.72)] p-0 backdrop-blur-[2px] hover:bg-[rgba(5,8,27,0.78)] lg:hidden"
           onClick={onToggleCollapse}
         />
       ) : null}
@@ -145,10 +147,12 @@ export function AskSessionSidebar({
       */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-[20rem] xl:min-w-[24rem] lg:flex-row">
         <div className="flex h-12 shrink-0 flex-row items-center justify-between gap-2 border-white/[0.06] bg-white/[0.02] px-3 py-0 max-lg:border-b lg:h-auto lg:w-14 lg:bg-transparent lg:px-0 lg:py-3 lg:flex-col lg:justify-start lg:gap-3 lg:border-b-0 lg:border-r">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={onToggleCollapse}
-            className="inline-flex size-10 items-center justify-center rounded-xl text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
+            className="size-10 rounded-xl text-[var(--vt-muted)] hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
             aria-label={isCollapsed ? "Open sidebar" : "Close sidebar"}
             aria-expanded={!isCollapsed}
           >
@@ -157,15 +161,17 @@ export function AskSessionSidebar({
             ) : (
               <PanelLeftClose className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
             )}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={onNewSession}
-            className="inline-flex size-10 items-center justify-center rounded-xl text-[var(--vt-muted)] transition hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
+            className="size-10 rounded-xl text-[var(--vt-muted)] hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
             aria-label="New chat"
           >
             <MessageSquarePlus className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
-          </button>
+          </Button>
         </div>
 
         <div
@@ -219,12 +225,13 @@ export function AskSessionSidebar({
                               : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
                           }`}
                         >
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
                             onClick={() => onSelectSession(session.id)}
                             aria-label={session.title}
                             aria-pressed={isActive}
-                            className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left"
+                            className="h-auto min-w-0 flex-1 justify-start gap-2 rounded-lg px-2.5 py-2 text-left font-normal hover:bg-transparent"
                           >
                             <span className="min-w-0 flex-1 truncate text-[13px] leading-5">
                               {session.title}
@@ -232,18 +239,19 @@ export function AskSessionSidebar({
                             <span className="shrink-0 text-[10px] tabular-nums text-white/20 opacity-0 transition group-hover/session:opacity-100 max-lg:opacity-100">
                               {formatSessionTime(session.updatedAt)}
                             </span>
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
+                            variant="ghost"
                             onClick={() =>
                               onRequestDeleteSession({ id: session.id, title: session.title })
                             }
                             aria-label={`Delete session: ${session.title}`}
                             title="Delete session"
-                            className="shrink-0 rounded-md p-2 text-white/15 opacity-0 transition hover:bg-white/[0.08] hover:text-[var(--vt-coral)] group-hover/session:opacity-100 focus-visible:opacity-100 max-lg:opacity-100 max-lg:text-white/35"
+                            className="h-auto shrink-0 rounded-md p-2 text-white/15 opacity-0 hover:bg-white/[0.08] hover:text-[var(--vt-coral)] group-hover/session:opacity-100 focus-visible:opacity-100 max-lg:opacity-100 max-lg:text-white/35"
                           >
                             <Trash2 className="size-3.5" strokeWidth={1.8} aria-hidden />
-                          </button>
+                          </Button>
                         </div>
                       );
                     })}

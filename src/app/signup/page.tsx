@@ -9,15 +9,18 @@ import { useForm } from "react-hook-form";
 import { AuthDivider } from "@/components/auth/auth-divider";
 import {
   authFieldClassWithError,
+  authInlineErrorBannerClass,
+  authInlineInfoBannerClass,
   authLabelClass,
-  authPrimaryButtonClass,
   authSecondaryLinkClass,
 } from "@/components/auth/auth-field-styles";
+import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { beginOAuthFlow } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
+import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
 import { signupSchema, type SignupFormValues } from "@/lib/auth/schemas";
 import { LEGAL_LINKS } from "@/lib/legal/legal-links";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
@@ -48,7 +51,7 @@ function SignupPageContent() {
     setInfo(null);
 
     if (!supabase) {
-      setApiError("Authentication is not configured. Check environment variables.");
+      setApiError(AUTH_NOT_CONFIGURED_MESSAGE);
       return;
     }
     const origin = window.location.origin;
@@ -87,7 +90,7 @@ function SignupPageContent() {
 
     try {
       if (!supabase) {
-        setApiError("Authentication is not configured. Check environment variables.");
+        setApiError(AUTH_NOT_CONFIGURED_MESSAGE);
         setGoogleBusy(false);
         return;
       }
@@ -117,15 +120,9 @@ function SignupPageContent() {
     >
       <div aria-live="polite">
         {apiError ? (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3.5 text-sm leading-relaxed text-red-100">
-            {apiError}
-          </div>
+          <div className={authInlineErrorBannerClass}>{apiError}</div>
         ) : null}
-        {info ? (
-          <div className="rounded-2xl border border-(--vt-blue)/35 bg-(--vt-blue)/10 px-4 py-3.5 text-sm leading-relaxed text-white/90">
-            {info}
-          </div>
-        ) : null}
+        {info ? <div className={authInlineInfoBannerClass}>{info}</div> : null}
       </div>
 
       <div className="space-y-4">
@@ -191,13 +188,9 @@ function SignupPageContent() {
             <p className="mt-1.5 text-xs text-(--vt-muted)">Use at least 8 characters.</p>
           ) : null}
         </div>
-        <button
-          type="submit"
-          disabled={googleBusy || isSubmitting}
-          className={authPrimaryButtonClass}
-        >
+        <Button type="submit" variant="default" size="pill" className="w-full" disabled={googleBusy || isSubmitting}>
           {isSubmitting ? "Creating…" : "Create account with email"}
-        </button>
+        </Button>
       </form>
 
       <p className="text-center text-sm text-(--vt-muted)">

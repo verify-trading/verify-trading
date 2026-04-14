@@ -5,6 +5,8 @@ import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 type SheetSide = "right" | "bottom";
 
 /**
@@ -86,10 +88,11 @@ export function Sheet({
       className={`fixed inset-0 ${zIndexClass} flex ${side === "right" ? "justify-end" : "items-end justify-center"}`}
       role="presentation"
     >
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-label="Close panel"
-        className="absolute inset-0 bg-[rgba(5,8,27,0.72)] backdrop-blur-[2px] motion-safe:transition-opacity"
+        className="absolute inset-0 h-full w-full rounded-none border-0 bg-[rgba(5,8,27,0.72)] p-0 backdrop-blur-[2px] hover:bg-[rgba(5,8,27,0.78)] motion-safe:transition-opacity"
         onClick={() => onOpenChange(false)}
       />
       <div
@@ -110,14 +113,16 @@ export function Sheet({
               Panel
             </span>
           )}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
+            className="ml-auto inline-flex size-10 shrink-0 rounded-xl text-white/70 hover:bg-white/10 hover:text-white"
             onClick={() => onOpenChange(false)}
-            className="ml-auto inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-white/70 transition hover:bg-white/10 hover:text-white"
             aria-label="Close"
           >
             <X className="size-5" strokeWidth={2} aria-hidden />
-          </button>
+          </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">{children}</div>
       </div>
