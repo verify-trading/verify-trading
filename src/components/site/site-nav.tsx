@@ -11,6 +11,7 @@ import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import { Logo } from "@/components/site/logo";
 import { Sheet } from "@/components/ui/sheet";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
+import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
@@ -32,8 +33,13 @@ function siteNavLinkClass(active: boolean) {
 export function SiteNav() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
   const { ready, isSignedIn } = useSupabaseAuth();
   const hideAuthChrome = hidesAuthChrome(pathname);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => {
     startTransition(() => {
@@ -52,6 +58,8 @@ export function SiteNav() {
     : navItems.filter((item) => !item.requiresAuth || (ready && isSignedIn));
 
   const showMenu = visibleNavItems.length > 0;
+  /** Avoid hydration mismatch: SSR and first paint match (end-aligned); after mount, centre when signed in. */
+  const desktopNavCentered = hasMounted && ready && isSignedIn;
 
   return (
     <>
@@ -66,13 +74,15 @@ export function SiteNav() {
             </span>
           </Link>
 
-          {/* Desktop only: primary links live in the bar; on smaller screens they are only in the sheet */}
-          <div className="hidden min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:justify-center lg:px-4">
+          {/* Desktop: centred when signed in; end-aligned next to Sign in when only public links (e.g. Pricing) */}
+          <div
+            className={cn(
+              "hidden min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:items-center lg:px-4",
+              desktopNavCentered ? "lg:justify-center" : "lg:justify-end lg:gap-3",
+            )}
+          >
             {visibleNavItems.length > 0 ? (
-              <nav
-                className="flex min-w-max items-center gap-0.5 sm:gap-1 lg:mx-auto"
-                aria-label="Main"
-              >
+              <nav className="flex min-w-max items-center gap-0.5 sm:gap-1" aria-label="Main">
                 {visibleNavItems.map((item) => {
                   const active = pathname === item.href;
                   return (

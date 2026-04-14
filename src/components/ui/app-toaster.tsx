@@ -13,17 +13,19 @@ export function AppToaster() {
     <Toaster
       position="top-center"
       theme="dark"
-      closeButton={false}
+      closeButton
       richColors={false}
       toastOptions={{
-        duration: 4000,
+        duration: 3000,
         classNames: {
           toast:
-            "flex w-full max-w-[min(100vw-2rem,22rem)] items-start gap-3 px-4 py-3.5 text-sm shadow-[0_16px_50px_rgba(0,0,0,0.42)] ring-1 ring-white/[0.06] backdrop-blur-xl",
+            "group relative flex w-full max-w-[min(100vw-2rem,22rem)] items-start gap-3 py-3.5 pl-4 pr-10 text-sm shadow-[0_16px_50px_rgba(0,0,0,0.42)] ring-1 ring-white/[0.06] backdrop-blur-xl",
           content: "flex-1 gap-0.5",
           title: "text-[0.9375rem] font-semibold leading-snug text-white",
           description: "mt-0.5 text-[13px] leading-relaxed",
           icon: "mt-0.5 [&_svg]:shrink-0",
+          closeButton:
+            "absolute right-2 top-2 rounded-md border-0 bg-transparent p-1.5 text-white/50 transition hover:bg-white/[0.08] hover:text-white [&_svg]:size-4",
           actionButton:
             "rounded-lg !bg-[var(--vt-coral)] !text-white !shadow-none font-semibold hover:brightness-105",
           cancelButton:

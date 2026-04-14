@@ -914,9 +914,7 @@ export function AskWorkspace({
                       size="pillCompact"
                       className="shrink-0 px-3 py-1.5 text-[11px] font-bold sm:px-3.5 sm:text-xs"
                     >
-                      <Link href="/markets">
-                        Upgrade — <span className="line-through opacity-65">£20</span> £5/mo
-                      </Link>
+                      <Link href="/pricing">Upgrade to Pro</Link>
                     </Button>
                   </div>
                 </div>
