@@ -23,13 +23,13 @@ describe("AskResponseCard", () => {
         }}
         uiMeta={{
           marketSeries: [4470, 4485, 4493],
-          marketLevelScopeLabel: "Near-term levels",
+          marketLevelScopeLabel: "Recent range",
         }}
       />,
     );
 
     expect(screen.getByTestId("market-mini-chart")).toBeInTheDocument();
-    expect(screen.getByText("Near-term levels Resistance")).toBeInTheDocument();
+    expect(screen.getByText("Recent range high")).toBeInTheDocument();
   });
 
   it("renders projection loss markers when projection ui metadata is present", () => {

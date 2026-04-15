@@ -60,7 +60,7 @@ function ChatAttachmentPreview({
 
 function AssistantAvatar() {
   return (
-    <div className="shrink-0 shadow-[0_4px_16px_rgba(76,110,245,0.3)]" aria-hidden>
+    <div className="shrink-0" aria-hidden>
       <Logo size="avatar" innerWordmark={false} />
     </div>
   );

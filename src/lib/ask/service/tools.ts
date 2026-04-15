@@ -299,22 +299,22 @@ export function buildBriefingCard(
   quote: Awaited<ReturnType<typeof getMarketQuote>>,
   series: Awaited<ReturnType<typeof getMarketSeries>>,
 ): { card: BriefingCard; uiMeta: AskUiMeta } {
-  const supportCandidates = series.closeValues.filter((value) => value < quote.price);
-  const resistanceCandidates = series.closeValues.filter((value) => value > quote.price);
-
-  const support =
-    supportCandidates.length > 0 ? Math.max(...supportCandidates) : quote.price;
-  const resistance =
-    resistanceCandidates.length > 0 ? Math.min(...resistanceCandidates) : quote.price;
-  const hasTwoSidedRange =
-    supportCandidates.length > 0 && resistanceCandidates.length > 0;
-  const rangeRatio = resistance > support ? (resistance - support) / Math.max(Math.abs(quote.price), 1) : 0;
+  const rangeLow = series.support;
+  const rangeHigh = series.resistance;
+  const rangeRatio =
+    rangeHigh > rangeLow ? (rangeHigh - rangeLow) / Math.max(Math.abs(quote.price), 1) : 0;
+  const isAboveRangeHigh = quote.price > rangeHigh;
+  const isBelowRangeLow = quote.price < rangeLow;
   const verdict =
-    hasTwoSidedRange && rangeRatio < 0.0015
-      ? `${quote.asset} is compressed here. Wait for a clean break before choosing a side.`
+    rangeRatio < 0.0015
+      ? `${quote.asset} is compressed inside the recent range. Wait for a clean break before choosing a side.`
+      : isAboveRangeHigh
+        ? `${quote.asset} is trading above the recent range high. Watch for acceptance above the breakout or a slip back inside the range.`
+      : isBelowRangeLow
+        ? `${quote.asset} is trading below the recent range low. Watch for follow-through lower or a quick reclaim back into the range.`
       : quote.direction === "up"
-        ? `${quote.asset} is holding above support. Watch resistance for continuation.`
-        : `${quote.asset} is leaning heavy. Watch support for the next move.`;
+        ? `${quote.asset} is pushing toward the recent range high. Watch for continuation if that breaks.`
+        : `${quote.asset} is leaning back toward the recent range low. Watch for follow-through if that gives way.`;
 
   const card: BriefingCard = {
     type: "briefing",
@@ -322,8 +322,8 @@ export function buildBriefingCard(
     price: formatMarketPrice(quote.price, quote),
     change: formatChange(quote.changePercent),
     direction: quote.direction,
-    level1: formatMarketPrice(resistance, series),
-    level2: formatMarketPrice(support, series),
+    level1: formatMarketPrice(rangeHigh, series),
+    level2: formatMarketPrice(rangeLow, series),
     event: null,
     verdict,
   };
@@ -332,7 +332,7 @@ export function buildBriefingCard(
     card,
     uiMeta: {
       marketSeries: series.closeValues,
-      marketLevelScopeLabel: "Near-term levels",
+      marketLevelScopeLabel: "Recent range",
     },
   };
 }

@@ -199,7 +199,7 @@ describe("createAskTools", () => {
     });
   });
 
-  it("keeps briefing support and resistance aligned around the current price", async () => {
+  it("uses the recent visible range for briefing levels", async () => {
     const tools = createAskTools({
       getMarketQuoteImpl: vi.fn().mockResolvedValue({
         asset: "GOLD / XAUUSD",
@@ -234,14 +234,15 @@ describe("createAskTools", () => {
         price: "4658.75",
         change: "-0.38%",
         direction: "down",
-        level1: "4676.39",
-        level2: "4658.75",
+        level1: "4682.14",
+        level2: "4676.39",
         event: null,
-        verdict: "GOLD / XAUUSD is leaning heavy. Watch support for the next move.",
+        verdict:
+          "GOLD / XAUUSD is compressed inside the recent range. Wait for a clean break before choosing a side.",
       },
       uiMeta: {
         marketSeries: [4676.39, 4676.53, 4682.14],
-        marketLevelScopeLabel: "Near-term levels",
+        marketLevelScopeLabel: "Recent range",
       },
     });
   });
@@ -332,13 +333,14 @@ describe("createAskTools", () => {
         change: "+0.51%",
         direction: "up",
         level1: "4700.50",
-        level2: "4694.85",
+        level2: "4689.20",
         event: null,
-        verdict: "GOLD / XAUUSD is holding above support. Watch resistance for continuation.",
+        verdict:
+          "GOLD / XAUUSD is pushing toward the recent range high. Watch for continuation if that breaks.",
       },
       uiMeta: {
         marketSeries: [4689.2, 4694.85, 4700.5],
-        marketLevelScopeLabel: "Near-term levels",
+        marketLevelScopeLabel: "Recent range",
       },
     });
   });
@@ -378,14 +380,62 @@ describe("createAskTools", () => {
         price: "1.1000",
         change: "+0.04%",
         direction: "up",
-        level1: "1.1002",
+        level1: "1.1005",
         level2: "1.0995",
         event: null,
-        verdict: "EUR/USD is compressed here. Wait for a clean break before choosing a side.",
+        verdict: "EUR/USD is compressed inside the recent range. Wait for a clean break before choosing a side.",
       },
       uiMeta: {
         marketSeries: [1.0995, 1.1005, 1.1002],
-        marketLevelScopeLabel: "Near-term levels",
+        marketLevelScopeLabel: "Recent range",
+      },
+    });
+  });
+
+  it("describes a breakout when the live quote trades above the recent range high", async () => {
+    const tools = createAskTools({
+      getMarketQuoteImpl: vi.fn().mockResolvedValue({
+        asset: "AUD/USD",
+        symbol: "AUDUSD",
+        price: 0.7175,
+        changePercent: 0.69,
+        direction: "up",
+        isMarketOpen: true,
+      }),
+      getMarketSeriesImpl: vi.fn().mockResolvedValue({
+        asset: "AUD/USD",
+        symbol: "AUDUSD",
+        timeframe: "1W",
+        closeValues: [0.70425, 0.70797, 0.70549, 0.70199, 0.70932, 0.71255, 0.7174],
+        resistance: 0.7174,
+        support: 0.70199,
+      }),
+    });
+
+    const result = await tools.get_market_briefing.execute?.(
+      {
+        asset: "AUD/USD",
+        timeframe: "1W",
+      },
+      {} as never,
+    );
+
+    expect(result).toEqual({
+      card: {
+        type: "briefing",
+        asset: "AUD/USD",
+        price: "0.7175",
+        change: "+0.69%",
+        direction: "up",
+        level1: "0.7174",
+        level2: "0.7020",
+        event: null,
+        verdict:
+          "AUD/USD is trading above the recent range high. Watch for acceptance above the breakout or a slip back inside the range.",
+      },
+      uiMeta: {
+        marketSeries: [0.70425, 0.70797, 0.70549, 0.70199, 0.70932, 0.71255, 0.7174],
+        marketLevelScopeLabel: "Recent range",
       },
     });
   });

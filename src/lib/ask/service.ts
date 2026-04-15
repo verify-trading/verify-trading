@@ -229,12 +229,54 @@ function buildCompletedAskResponse({
   });
 }
 
-function extractRecoveredToolCard(toolResults: Array<{ toolName?: string; output?: unknown }>) {
+function buildProtectedBriefingForMarketUpdate(
+  fmpBriefing: AskCard | null,
+  toolResults: Array<{ toolName?: string; output?: unknown }>,
+  message: string,
+) {
+  if (fmpBriefing?.type !== "briefing" || !shouldUseProtectedBriefingForMarketUpdate(message)) {
+    return null;
+  }
+
+  return {
+    ...fmpBriefing,
+    event: fmpBriefing.event ?? extractBriefingEventFromNews(toolResults),
+  };
+}
+
+function extractRecoveredToolCard(
+  toolResults: Array<{ toolName?: string; output?: unknown }>,
+  message: string,
+) {
   const submitCard = extractSubmitAskCard(toolResults, askCardSchema);
   const fmpBriefing = extractMarketBriefingCard(toolResults, askCardSchema);
+  const protectedBriefing = buildProtectedBriefingForMarketUpdate(
+    fmpBriefing,
+    toolResults,
+    message,
+  );
+  const toolCard = extractToolCard(toolResults, askCardSchema);
+  const protectedCalcToolCard =
+    toolCard?.type === "calc" && shouldPreferDeterministicCalcToolCard(message)
+      ? toolCard
+      : null;
   if (submitCard?.type === "briefing" && fmpBriefing) {
     return {
-      card: fmpBriefing,
+      card: protectedBriefing ?? fmpBriefing,
+      source: "tool_result" as const,
+    };
+  }
+
+  if (submitCard?.type === "insight" && protectedBriefing) {
+    return {
+      card: protectedBriefing,
+      source: "tool_result" as const,
+    };
+  }
+
+  if (submitCard?.type === "calc" && protectedCalcToolCard) {
+    return {
+      card: protectedCalcToolCard,
       source: "tool_result" as const,
     };
   }
@@ -246,10 +288,23 @@ function extractRecoveredToolCard(toolResults: Array<{ toolName?: string; output
     };
   }
 
-  const toolCard = extractToolCard(toolResults, askCardSchema);
+  if (protectedCalcToolCard) {
+    return {
+      card: protectedCalcToolCard,
+      source: "tool_result" as const,
+    };
+  }
+
   if (toolCard) {
     return {
       card: toolCard,
+      source: "tool_result" as const,
+    };
+  }
+
+  if (protectedBriefing) {
+    return {
+      card: protectedBriefing,
       source: "tool_result" as const,
     };
   }
@@ -283,6 +338,99 @@ function clampWords(value: string, maxWords: number) {
   }
 
   return `${words.slice(0, maxWords).join(" ")}…`;
+}
+
+function shouldUseProtectedBriefingForMarketUpdate(message: string) {
+  const normalized = normalizeWhitespace(message).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    /\b(buy|sell|long|short|entry|stop|target|setup|trade plan|should i|best trade|cleanest setup|recommend|overvalued|hold|vs|versus|compare)\b/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    /\bstatus\b/.test(normalized) ||
+    /\bupdate\b/.test(normalized) ||
+    /\bnews on\b/.test(normalized) ||
+    /\bwhat analysis\b/.test(normalized) ||
+    /\bwhat do we have\b/.test(normalized) ||
+    /\bwhat(?:'s| is) happening\b/.test(normalized)
+  );
+}
+
+function shouldPreferDeterministicCalcToolCard(message: string) {
+  const normalized = normalizeWhitespace(message).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const hasCalcSignal =
+    /\b(lot size|position size|margin|required margin|pip value|profit|loss|p\/l|risk reward|risk-reward|rr|risk|stop|pips?)\b/.test(
+      normalized,
+    ) || /\bsize (?:that|it|this)\b/.test(normalized);
+  if (!hasCalcSignal) {
+    return false;
+  }
+
+  return !/\b(news|headline|what matters|best trade|cleanest setup|should i|buy|sell|long|short|broker|regulated|fca|compare|versus|vs|watching)\b/.test(
+    normalized,
+  );
+}
+
+function extractBriefingEventFromNews(
+  toolResults: Array<{ toolName?: string; output?: unknown }>,
+) {
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const toolResult = toolResults[index];
+    if (toolResult.toolName !== "search_news") {
+      continue;
+    }
+
+    const output =
+      toolResult.output && typeof toolResult.output === "object"
+        ? (toolResult.output as Record<string, unknown>)
+        : null;
+    if (!output) {
+      continue;
+    }
+
+    if (Array.isArray(output.articles)) {
+      for (const article of output.articles) {
+        if (!article || typeof article !== "object") {
+          continue;
+        }
+
+        const title =
+          typeof (article as { title?: unknown }).title === "string"
+            ? normalizeWhitespace((article as { title: string }).title)
+            : "";
+        if (!title) {
+          continue;
+        }
+
+        const source =
+          typeof (article as { source?: unknown }).source === "string"
+            ? normalizeWhitespace((article as { source: string }).source)
+            : "";
+        return clampWords(source ? `${title} (${source})` : title, 24);
+      }
+    }
+
+    if (typeof output.note === "string") {
+      const note = normalizeWhitespace(output.note);
+      if (note) {
+        return clampWords(note, 24);
+      }
+    }
+  }
+
+  return null;
 }
 
 function buildInsightCardFromModelText(text: string) {
@@ -617,6 +765,10 @@ function shouldUseDirectVerificationShortcut(message: string) {
     return false;
   }
 
+  if (inferMarketAssetsFromText(message).length > 0 || extractDirectForexPair(message)) {
+    return false;
+  }
+
   if (
     /\b(vs|versus|compare|price|status on|what is|entry|stop|target|setup|buy|sell|rr|risk reward|pip value|projection|plan)\b/.test(
       normalized,
@@ -938,7 +1090,10 @@ export async function generateAskResponse(
   try {
     result = await runGenerate(getAskModel());
   } catch (error) {
-    const recoveredToolCard = extractRecoveredToolCard(completedToolResults);
+    const recoveredToolCard = extractRecoveredToolCard(
+      completedToolResults,
+      normalizedMessage,
+    );
 
     if (recoveredToolCard) {
       logger.warn("Ask primary model failed after yielding a valid tool card; returning tool result without fallback rerun.", {
@@ -995,6 +1150,15 @@ export async function generateAskResponse(
     submitCard ?? outputCard ?? (parsedCard?.success ? parsedCard.data : null);
   const preferFmpBriefingOverModel =
     modelPreferredCard?.type === "briefing" && fmpBriefing !== null;
+  const protectedCalcToolCard =
+    toolCard?.type === "calc" && shouldPreferDeterministicCalcToolCard(normalizedMessage)
+      ? toolCard
+      : null;
+  const protectedBriefingForMarketUpdate = buildProtectedBriefingForMarketUpdate(
+    fmpBriefing,
+    allToolResults,
+    normalizedMessage,
+  );
 
   logger.info("Card extraction results.", {
     sessionId,
@@ -1006,6 +1170,8 @@ export async function generateAskResponse(
     parsedCardType: parsedCard?.success ? parsedCard.data?.type : null,
     outputCardType: outputCard?.type ?? null,
     preferFmpBriefingOverModel,
+    hasProtectedCalcToolCard: Boolean(protectedCalcToolCard),
+    hasProtectedBriefingForMarketUpdate: Boolean(protectedBriefingForMarketUpdate),
   });
 
   if (parsedText && parsedCard && !parsedCard.success) {
@@ -1029,7 +1195,11 @@ export async function generateAskResponse(
       : null;
 
   const card =
-    (preferFmpBriefingOverModel ? fmpBriefing : null) ??
+    (preferFmpBriefingOverModel
+      ? protectedBriefingForMarketUpdate ?? fmpBriefing
+      : null) ??
+    (modelPreferredCard?.type === "calc" ? protectedCalcToolCard : null) ??
+    (modelPreferredCard?.type === "insight" ? protectedBriefingForMarketUpdate : null) ??
     modelPreferredCard ??
     toolCard ??
     wrappedTextCard ??
@@ -1041,6 +1211,11 @@ export async function generateAskResponse(
     finalCardType: card.type,
     cardSource: preferFmpBriefingOverModel
       ? "tool_result"
+      : protectedCalcToolCard &&
+          (modelPreferredCard?.type === "calc" || modelPreferredCard == null)
+        ? "tool_result"
+      : protectedBriefingForMarketUpdate
+        ? "tool_result"
       : submitCard
         ? "submit_ask_card"
         : outputCard

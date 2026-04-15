@@ -112,6 +112,34 @@ describe("market tools", () => {
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
+  it("formats searched forex instruments with slash-separated asset labels", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        mockJsonResponse([
+          {
+            symbol: "AUDUSD",
+            name: "AUD/USD",
+            exchange: "FOREX",
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(mockJsonResponse([]))
+      .mockResolvedValueOnce(
+        mockJsonResponse([
+          {
+            price: 0.7163,
+            changePercentage: 0.53,
+          },
+        ]),
+      ) as unknown as typeof fetch;
+
+    const quote = await getMarketQuote("AUD/USD");
+
+    expect(quote.symbol).toBe("AUDUSD");
+    expect(quote.asset).toBe("AUD/USD");
+  });
+
   it("parses a time-series response", async () => {
     global.fetch = vi
       .fn()

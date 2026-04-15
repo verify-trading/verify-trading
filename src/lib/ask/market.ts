@@ -162,6 +162,15 @@ function normalizeAssetKey(asset: string) {
   return asset.toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
 }
 
+function formatCompactForexLabel(value: string) {
+  const normalized = value.trim().toUpperCase();
+  if (!/^[A-Z]{6}$/.test(normalized)) {
+    return null;
+  }
+
+  return `${normalized.slice(0, 3)}/${normalized.slice(3, 6)}`;
+}
+
 export function resolveSupportedAsset(asset: string) {
   return (
     supportedAssets[normalizeAssetKey(asset) as keyof typeof supportedAssets] ?? null
@@ -194,13 +203,15 @@ function setCached<T>(cache: Map<string, { value: T; expiresAt: number }>, key: 
 function buildInstrumentLabel(name: string | undefined, symbol: string) {
   const normalizedName = name?.trim();
   const normalizedSymbol = symbol.trim().toUpperCase();
+  const forexLabelFromName = normalizedName ? formatCompactForexLabel(normalizedName) : null;
+  const forexLabelFromSymbol = formatCompactForexLabel(normalizedSymbol);
 
   if (!normalizedName) {
-    return normalizedSymbol;
+    return forexLabelFromSymbol ?? normalizedSymbol;
   }
 
   if (normalizeAssetKey(normalizedName) === normalizeAssetKey(normalizedSymbol)) {
-    return normalizedSymbol;
+    return forexLabelFromName ?? forexLabelFromSymbol ?? normalizedSymbol;
   }
 
   if (normalizedName.length <= 26) {

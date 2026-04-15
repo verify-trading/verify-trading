@@ -115,6 +115,18 @@ function BriefingCard({
   uiMeta?: AskUiMeta;
 }) {
   const isUp = card.direction === "up";
+  const level1Label =
+    uiMeta?.marketLevelScopeLabel === "Recent range"
+      ? "Recent range high"
+      : uiMeta?.marketLevelScopeLabel
+        ? `${uiMeta.marketLevelScopeLabel} Resistance`
+        : "Resistance";
+  const level2Label =
+    uiMeta?.marketLevelScopeLabel === "Recent range"
+      ? "Recent range low"
+      : uiMeta?.marketLevelScopeLabel
+        ? `${uiMeta.marketLevelScopeLabel} Support`
+        : "Support";
   return (
     <CardFrame
       eyebrow="Market Briefing"
@@ -145,13 +157,13 @@ function BriefingCard({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
-              {uiMeta?.marketLevelScopeLabel ? `${uiMeta.marketLevelScopeLabel} Resistance` : "Resistance"}
+              {level1Label}
             </div>
             <div className="mt-1 break-words text-sm font-bold text-[var(--vt-coral)]">{card.level1}</div>
           </div>
           <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
-              {uiMeta?.marketLevelScopeLabel ? `${uiMeta.marketLevelScopeLabel} Support` : "Support"}
+              {level2Label}
             </div>
             <div className="mt-1 break-words text-sm font-bold text-[var(--vt-green)]">{card.level2}</div>
           </div>

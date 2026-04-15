@@ -153,7 +153,7 @@ describe("generateAskResponse", () => {
     expect(response.data.type).toBe("briefing");
     expect(response.uiMeta).toEqual({
       marketSeries: [4699.3, 4721.5, 4745.1, 4736.3],
-      marketLevelScopeLabel: "Near-term levels",
+      marketLevelScopeLabel: "Recent range",
     });
   });
 
@@ -837,6 +837,61 @@ describe("generateAskResponse", () => {
     expect(response.data.lots).toBe("0.50");
   });
 
+  it("prefers a deterministic calc tool card over a rewritten calc submission on direct sizing asks", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "size that for a £12,500 account risking 0.8% with a 30 pip stop.",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "",
+          toolResults: [
+            {
+              toolName: "calculate_position_size",
+              output: {
+                card: {
+                  type: "calc",
+                  lots: "0.45",
+                  risk_amount: "£100.00",
+                  account: "£12,500.00",
+                  risk_pct: "0.8%",
+                  sl_pips: "30",
+                  verdict: "0.45 lots on AUD/USD. Risk stays capped at £100.00 with a 30 pip stop.",
+                },
+              },
+            },
+            {
+              toolName: "submit_ask_card",
+              output: {
+                card: {
+                  type: "calc",
+                  lots: "0.45",
+                  risk_amount: "£100.00",
+                  account: "£12,500.00",
+                  risk_pct: "0.8%",
+                  sl_pips: "30",
+                  verdict: "Keep the size, respect the level, and move the stop to 0.6873.",
+                },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data).toEqual({
+      type: "calc",
+      lots: "0.45",
+      risk_amount: "£100.00",
+      account: "£12,500.00",
+      risk_pct: "0.8%",
+      sl_pips: "30",
+      verdict: "0.45 lots on AUD/USD. Risk stays capped at £100.00 with a 30 pip stop.",
+    });
+  });
+
   it("uses submit_ask_card even when search_news was not used", async () => {
     const response = await generateAskResponse(
       {
@@ -942,6 +997,85 @@ describe("generateAskResponse", () => {
     }
     expect(response.data.price).toBe("0.72");
     expect(response.data.verdict).toContain("holding above support");
+  });
+
+  it("keeps the FMP briefing and merges news event for market-update prompts", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "status and news on aud/usd in market?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "",
+          toolResults: [
+            {
+              toolName: "get_market_briefing",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "AUD/USD",
+                  price: "0.7166",
+                  change: "+0.55%",
+                  direction: "up",
+                  level1: "0.7167",
+                  level2: "0.7126",
+                  event: null,
+                  verdict:
+                    "AUD/USD is pushing toward the recent range high. Watch for continuation if that breaks.",
+                },
+                uiMeta: {
+                  marketSeries: [0.7126, 0.7148, 0.7167, 0.7166],
+                  marketLevelScopeLabel: "Recent range",
+                },
+              },
+            },
+            {
+              toolName: "search_news",
+              output: {
+                query: "aud usd",
+                articles: [
+                  {
+                    title: "AUD gains as softer US inflation keeps the dollar offered",
+                    source: "Reuters",
+                  },
+                ],
+                note: null,
+              },
+            },
+            {
+              toolName: "submit_ask_card",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "AUDUSD",
+                  price: "0.6390",
+                  change: "+0.53%",
+                  direction: "up",
+                  level1: "0.6450 resistance",
+                  level2: "0.6330 support",
+                  event: null,
+                  verdict: "Hallucinated narrative.",
+                },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data).toEqual({
+      type: "briefing",
+      asset: "AUD/USD",
+      price: "0.7166",
+      change: "+0.55%",
+      direction: "up",
+      level1: "0.7167",
+      level2: "0.7126",
+      event: "AUD gains as softer US inflation keeps the dollar offered (Reuters)",
+      verdict: "AUD/USD is pushing toward the recent range high. Watch for continuation if that breaks.",
+    });
   });
 
   it("prefers get_market_briefing (FMP) over a valid model-generated briefing card", async () => {
@@ -1118,7 +1252,7 @@ describe("generateAskResponse", () => {
                 },
                 uiMeta: {
                   marketSeries: [4470, 4482, 4493],
-                  marketLevelScopeLabel: "Near-term levels",
+                  marketLevelScopeLabel: "Recent range",
                 },
               },
             },
@@ -1130,7 +1264,7 @@ describe("generateAskResponse", () => {
     expect(response.data.type).toBe("briefing");
     expect(response.uiMeta).toEqual({
       marketSeries: [4470, 4482, 4493],
-      marketLevelScopeLabel: "Near-term levels",
+      marketLevelScopeLabel: "Recent range",
     });
   });
 
@@ -1218,6 +1352,9 @@ describe("generateAskResponse", () => {
             },
           ],
         }) as unknown as typeof import("ai").generateText,
+        lookupVerifiedEntityImpl: vi.fn().mockResolvedValue({
+          found: false,
+        }),
       },
     );
 
@@ -2190,6 +2327,156 @@ describe("generateAskResponse", () => {
     );
 
     expect(response.data).toEqual(submitCardResult.output.card);
+  });
+
+  it("prefers the protected briefing card for market-update prompts even when the model submits an insight", async () => {
+    const result = {
+      text: "",
+      toolResults: [
+        {
+          toolName: "get_market_briefing",
+          output: {
+            card: {
+              type: "briefing" as const,
+              asset: "AUD/USD",
+              price: "0.7166",
+              change: "+0.55%",
+              direction: "up" as const,
+              level1: "0.7167",
+              level2: "0.7126",
+              event: null,
+              verdict: "AUD/USD is pushing toward the recent range high. Watch for continuation if that breaks.",
+            },
+            uiMeta: {
+              marketSeries: [0.7126, 0.7148, 0.7167, 0.7166],
+              marketLevelScopeLabel: "Recent range",
+            },
+          },
+        },
+        {
+          toolName: "search_news",
+          output: {
+            query: "aud usd",
+            articles: [
+              {
+                title: "AUD gains as softer US inflation keeps the dollar offered",
+                source: "Reuters",
+              },
+            ],
+            note: null,
+          },
+        },
+        {
+          toolName: "submit_ask_card",
+          output: {
+            card: {
+              type: "insight" as const,
+              headline: "AUD/USD Live Pulse",
+              body: "AUD/USD has pushed higher and the macro tone is helping the move.",
+              verdict: "Watch whether the bid survives into the close.",
+            },
+          },
+        },
+      ],
+    } as { text: string; toolResults: unknown[]; output?: unknown };
+
+    Object.defineProperty(result, "output", {
+      get() {
+        throw new Error("No output generated.");
+      },
+    });
+
+    const generateTextImpl = vi.fn().mockResolvedValue(result) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "status and news on aud/usd in market?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(response.data).toEqual({
+      type: "briefing",
+      asset: "AUD/USD",
+      price: "0.7166",
+      change: "+0.55%",
+      direction: "up",
+      level1: "0.7167",
+      level2: "0.7126",
+      event: "AUD gains as softer US inflation keeps the dollar offered (Reuters)",
+      verdict: "AUD/USD is pushing toward the recent range high. Watch for continuation if that breaks.",
+    });
+    expect(response.uiMeta).toEqual({
+      marketSeries: [0.7126, 0.7148, 0.7167, 0.7166],
+      marketLevelScopeLabel: "Recent range",
+    });
+  });
+
+  it("keeps opinion prompts on the insight path even when briefing data is available", async () => {
+    const submitInsightCard = {
+      type: "insight" as const,
+      headline: "Wait For Proof",
+      body: "The macro tone helps, but this is still an opinion question and needs judgment rather than a raw status card.",
+      verdict: "Do not buy it just because the headline tone feels supportive.",
+    };
+
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: "",
+      toolResults: [
+        {
+          toolName: "get_market_briefing",
+          output: {
+            card: {
+              type: "briefing" as const,
+              asset: "AUD/USD",
+              price: "0.7166",
+              change: "+0.55%",
+              direction: "up" as const,
+              level1: "0.7167",
+              level2: "0.7126",
+              event: null,
+              verdict: "AUD/USD is pushing toward the recent range high. Watch for continuation if that breaks.",
+            },
+            uiMeta: {
+              marketSeries: [0.7126, 0.7148, 0.7167, 0.7166],
+              marketLevelScopeLabel: "Recent range",
+            },
+          },
+        },
+        {
+          toolName: "search_news",
+          output: {
+            query: "aud usd",
+            articles: [
+              {
+                title: "AUD gains as softer US inflation keeps the dollar offered",
+                source: "Reuters",
+              },
+            ],
+            note: null,
+          },
+        },
+        {
+          toolName: "submit_ask_card",
+          output: {
+            card: submitInsightCard,
+          },
+        },
+      ],
+    }) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "should i buy aud/usd after this news?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(response.data).toEqual(submitInsightCard);
   });
 
   it("rejects unsupported image payloads", async () => {

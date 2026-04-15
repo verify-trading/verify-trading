@@ -80,15 +80,25 @@ export function Logo({
         : "text-[8px] sm:text-[9px]";
   const textSize = size === "large" ? "text-3xl" : "text-base";
 
+  const showGlowBlur = size !== "avatar";
+
   return (
     <div
       className={`flex items-center ${stacked ? "flex-col gap-3" : "gap-3"}`}
     >
-      <div className={`relative ${ringSize} shrink-0`}>
-        <div
-          className="absolute inset-0 rounded-full opacity-45 blur-md"
-          style={{ backgroundImage: brandGradient }}
-        />
+      <div
+        className={`relative ${ringSize} shrink-0 ${
+          size === "avatar"
+            ? "drop-shadow-[0_4px_14px_rgba(76,110,245,0.28)]"
+            : ""
+        }`}
+      >
+        {showGlowBlur ? (
+          <div
+            className="absolute inset-0 rounded-full opacity-45 blur-md"
+            style={{ backgroundImage: brandGradient }}
+          />
+        ) : null}
         <div
           className="absolute inset-0 rounded-full"
           style={{ backgroundImage: brandGradient }}
