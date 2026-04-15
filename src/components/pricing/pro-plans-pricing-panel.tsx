@@ -69,11 +69,7 @@ export function ProPlansPricingPanel({
         <ProMonthlyPlanCard pricing={pricing} billingContext={billingContext} density={density} />
         <ProAnnualPlanCard pricing={pricing} billingContext={billingContext} density={density} />
       </div>
-      <p className={cn("text-center text-slate-500", compact ? "mt-3 text-[11px] sm:text-xs" : "mt-5 text-xs")}>
-        <Link href="/pricing" className="font-medium text-[var(--vt-blue)] underline-offset-2 hover:underline">
-          View full pricing
-        </Link>
-      </p>
+    
     </div>
   );
 }

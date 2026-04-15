@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Upload,
   Scale,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -48,11 +49,37 @@ const featureFooterClass: Record<IconTheme, string> = {
   cyan: "text-cyan-400",
 };
 
-const stepAccentClass: Record<"01" | "02" | "03", string> = {
-  "01": "border-[rgba(76,110,245,0.4)] bg-[rgba(76,110,245,0.15)] text-[var(--vt-blue)]",
-  "02": "border-[rgba(242,109,109,0.4)] bg-[rgba(242,109,109,0.12)] text-[var(--vt-coral)]",
-  "03": "border-[rgba(34,197,94,0.4)] bg-[rgba(34,197,94,0.12)] text-[var(--vt-green)]",
-};
+/** Pain icons — use theme `--vt-coral` (same token as hero dot, eyebrows, error accents). */
+const pitfallIconShell =
+  "flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--vt-coral)] text-white shadow-[0_4px_16px_rgba(242,109,109,0.42)] ring-1 ring-inset ring-white/20";
+
+function PitfallIcon({ variant }: { variant: "exclaim" | "risk" | "close" }) {
+  if (variant === "exclaim") {
+    return (
+      <div className={pitfallIconShell} aria-hidden>
+        <span className="text-lg font-black leading-none">!</span>
+      </div>
+    );
+  }
+  if (variant === "risk") {
+    return (
+      <div className={pitfallIconShell} aria-hidden>
+        <div className="relative size-6">
+          <span className="absolute left-0 top-0 size-1.5 rounded-full bg-white" />
+          <span className="absolute right-0 top-0 size-1.5 rounded-full bg-white" />
+          <span className="absolute bottom-0 left-0 size-1.5 rounded-full bg-white" />
+          <span className="absolute bottom-0 right-0 size-1.5 rounded-full bg-white" />
+          <span className="absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={pitfallIconShell} aria-hidden>
+      <X className="size-5" strokeWidth={3} />
+    </div>
+  );
+}
 
 function SectionEyebrow({ children }: { children: React.ReactNode }) {
   return (
@@ -77,7 +104,9 @@ function HeroSection() {
       <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:py-24">
         <div className="min-w-0 max-w-2xl text-left">
           <h1 className="text-4xl font-bold tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08]">
-            <span className="block">Verify.</span>
+            <span className="block">
+              verify<span className="text-[var(--vt-coral)]">.</span>
+            </span>
             <span className="mt-1 block">Before You Trade</span>
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-400 sm:text-[17px] sm:leading-8">
@@ -85,15 +114,12 @@ function HeroSection() {
             purpose-built tools, so you get clear, actionable answers before you trade.
           </p>
           <div className="mt-8">
-            <Button asChild variant="default" size="pill" className="gap-2 px-6">
-              <Link href="/ask">
-                VERIFY. NOW
-                <ArrowRight className="size-4" aria-hidden />
-              </Link>
+            <Button asChild variant="default" size="pill" className="px-6">
+              <Link href="/ask">VERIFY TRADE NOW</Link>
             </Button>
           </div>
           <ul className="mt-8 flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:gap-y-2">
-            {["No credit card required", "10 free Ask chats / day", "Cancel anytime"].map((t) => (
+            {["Stop bad trades in seconds", "Avoid any scams", "Control your risk"].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <CheckCircle2 className="size-3.5 shrink-0 text-[var(--vt-green)]" aria-hidden />
                 {t}
@@ -118,66 +144,67 @@ function FeaturesSection() {
     bullets: string[];
     footer?: string;
   }> = [
-    {
-      icon: Shield,
-      theme: "green",
-      title: "Verify any broker in 2 seconds",
-      bullets: [
-        "Regulation status (FCA, ASIC, CySEC…)",
-        "Trust score",
-        "Complaint history",
-        "Final AI verdict",
-      ],
-      footer: "Avoid scams before you deposit.",
-    },
-    {
-      icon: TrendingUp,
-      theme: "blue",
-      title: "Verify your trade before entry",
-      bullets: [
-        "Risk / Reward check",
-        "Structure validation",
-        "Confirmation logic",
-        "Key insight in 1 line",
-      ],
-      footer: "Stop losing trades before they happen.",
-    },
-    {
-      icon: Calculator,
-      theme: "purple",
-      title: "Calculate your risk instantly",
-      bullets: ["Lot size calculator", "Pip value", "Reward ratio", "6 professional tools"],
-      footer: "Trade like a professional.",
-    },
-    {
-      icon: Upload,
-      theme: "amber",
-      title: "Input your trade",
-      bullets: ["Pair", "Entry price", "Stop loss", "Take profit", "Upload chart (optional)"],
-    },
-    {
-      icon: Activity,
-      theme: "coral",
-      title: "AI analysis",
-      bullets: [
-        "Checking structure",
-        "Evaluating risk",
-        "Scanning for errors",
-        "Calculating probability",
-      ],
-      footer: "Analyzing trade…",
-    },
-    {
-      icon: Scale,
-      theme: "cyan",
-      title: "Verdict",
-      bullets: [
-        "DO NOT TRADE — High risk",
-        "WEAK TRADE — Fixable",
-        "VALID SETUP — Good to go",
-      ],
-    },
-  ];
+      {
+        icon: TrendingUp,
+        theme: "blue",
+        title: "verify your trade before entry",
+        bullets: [
+          "Risk / Reward check",
+          "Structure validation",
+          "Confirmation logic",
+          "Key insight in 1 line",
+        ],
+        footer: "Stop losing trades before they happen.",
+      },
+      {
+        icon: Shield,
+        theme: "green",
+        title: "Verify any broker in 2 seconds",
+        bullets: [
+          "Regulation status (FCA, ASIC, CySEC…)",
+          "Trust score",
+          "Complaint history",
+          "Final AI verdict",
+        ],
+        footer: "Avoid scams before you deposit.",
+      },
+
+      {
+        icon: Calculator,
+        theme: "purple",
+        title: "Calculate your risk instantly",
+        bullets: ["Lot size calculator", "Pip value", "Reward ratio", "6 professional tools"],
+        footer: "Trade like a professional.",
+      },
+      {
+        icon: Upload,
+        theme: "amber",
+        title: "Input your trade",
+        bullets: ["Pair", "Entry price", "Stop loss", "Take profit", "Upload chart (optional)"],
+      },
+      {
+        icon: Activity,
+        theme: "coral",
+        title: "AI analysis",
+        bullets: [
+          "Checking structure",
+          "Evaluating risk",
+          "Scanning for errors",
+          "Calculating probability",
+        ],
+        footer: "Analyzing trade…",
+      },
+      {
+        icon: Scale,
+        theme: "cyan",
+        title: "Verdict",
+        bullets: [
+          "DO NOT TRADE — High risk",
+          "WEAK TRADE — Fixable",
+          "VALID SETUP — Good to go",
+        ],
+      },
+    ];
 
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
@@ -231,19 +258,19 @@ function FeaturesSection() {
 /* ─── Three pitfalls ─── */
 
 function HowItWorksSection() {
-  const steps = [
+  const pitfalls = [
     {
-      step: "01" as const,
+      variant: "exclaim" as const,
       title: "Entering trades too early",
       description: "No confirmation. No edge. Just guesswork.",
     },
     {
-      step: "02" as const,
+      variant: "risk" as const,
       title: "Risking too much per position",
-      description: "One bad trade can wipe out your account.",
+      description: "Over-leverage turns one loss into a margin call.",
     },
     {
-      step: "03" as const,
+      variant: "close" as const,
       title: "Trusting the wrong broker",
       description: "Many traders lose money before they even start.",
     },
@@ -262,24 +289,30 @@ function HowItWorksSection() {
           </p>
         </div>
 
-        <div className="mt-10 grid gap-6 md:grid-cols-3 md:gap-8">
-          {steps.map((s) => (
-            <div
-              key={s.step}
-              className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 transition-colors hover:border-white/[0.12]"
-            >
+        <div className="mt-10 space-y-6">
+          <div className="grid gap-6 md:grid-cols-3 md:gap-8">
+            {pitfalls.map((p) => (
               <div
-                className={cn(
-                  "inline-flex size-11 items-center justify-center rounded-full border font-mono text-sm font-bold tabular-nums",
-                  stepAccentClass[s.step],
-                )}
+                key={p.title}
+                className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 transition-colors hover:border-white/[0.12] sm:p-6"
               >
-                {s.step}
+                <div className="flex gap-4">
+                  <PitfallIcon variant={p.variant} />
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold leading-snug text-white">{p.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-400">{p.description}</p>
+                  </div>
+                </div>
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-white">{s.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">{s.description}</p>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-5 py-5 text-center sm:px-8 sm:py-6">
+            <p className="text-base leading-snug text-white sm:text-lg">
+              One mistake can{" "}
+              <span className="font-semibold text-[var(--vt-coral)]">wipe your account.</span>
+            </p>
+          </div>
         </div>
       </div>
     </section>

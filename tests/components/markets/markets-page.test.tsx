@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/supabase/auth-context", () => ({
   useSupabaseAuth: vi.fn(),
@@ -54,9 +54,63 @@ function renderWithQueryClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+/** Routes `/api/markets/intelligence` and `/api/markets/calendar` before `/api/markets` snapshot. */
+function mockFetchForMarketTabs(marketsSnapshot: Record<string, unknown>) {
+  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+    if (url.includes("/api/markets/intelligence")) {
+      return {
+        ok: true,
+        json: async () => ({
+          updatedAt: "2026-04-09T10:00:00.000Z",
+          items: [
+            {
+              id: "n1",
+              title: "Intel test headline for Markets tab",
+              source: "Reuters",
+              publishedAt: "2026-04-14T08:30:00.000Z",
+              summary: "Summary line",
+            },
+          ],
+        }),
+      };
+    }
+    if (url.includes("/api/markets/calendar")) {
+      return {
+        ok: true,
+        json: async () => ({
+          updatedAt: "2026-04-09T10:00:00.000Z",
+          dayLabel: "Today — April 14, 2026",
+          items: [
+            {
+              id: "e1",
+              timeUtc: "2026-04-14T12:30:00.000Z",
+              timeLabel: "12:30 UTC",
+              currency: "USD",
+              event: "CPI m/m",
+              impact: "high",
+              forecast: "0.3%",
+              previous: "0.2%",
+            },
+          ],
+        }),
+      };
+    }
+    return {
+      ok: true,
+      json: async () => marketsSnapshot,
+    };
+  }) as unknown as typeof fetch;
+}
+
 describe("MarketsPage", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_MARKETS_PAYWALL_UI_ENABLED", "true");
   });
 
   it("renders the locked preview for non-pro users without fetching live data", async () => {
@@ -77,7 +131,7 @@ describe("MarketsPage", () => {
     expect(screen.getByRole("heading", { level: 2, name: /top assets/i })).toBeInTheDocument();
     expect(screen.getByText("Sign in and upgrade to Pro to unlock Markets.")).toBeInTheDocument();
     expect(screen.getByText("Unlimited Ask")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /view full pricing/i })).toHaveAttribute("href", "/pricing");
+
     expect(screen.getByRole("button", { name: /Open Gold Futures market card/i })).toBeInTheDocument();
     expect(screen.getByText("Preview mode")).toBeInTheDocument();
     expect(screen.getAllByText("4,761").length).toBeGreaterThan(0);
@@ -93,36 +147,33 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        updatedAt: "2026-04-09T10:00:00.000Z",
-        timeframe: "1W",
-        assets: [
-          {
-            id: "nasdaq",
-            label: "NASDAQ",
-            error: null,
-            quote: {
-              asset: "NASDAQ",
-              symbol: "^IXIC",
-              price: 20948.12,
-              changePercent: 2.89,
-              direction: "up",
-              isMarketOpen: null,
-            },
-            series: {
-              asset: "NASDAQ",
-              symbol: "^IXIC",
-              timeframe: "1W",
-              closeValues: [20100, 20280, 20410, 20680, 20948.12],
-              support: 20100,
-              resistance: 20948.12,
-            },
+    mockFetchForMarketTabs({
+      updatedAt: "2026-04-09T10:00:00.000Z",
+      timeframe: "1W",
+      assets: [
+        {
+          id: "nasdaq",
+          label: "NASDAQ",
+          error: null,
+          quote: {
+            asset: "NASDAQ",
+            symbol: "^IXIC",
+            price: 20948.12,
+            changePercent: 2.89,
+            direction: "up",
+            isMarketOpen: null,
           },
-        ],
-      }),
-    }) as unknown as typeof fetch;
+          series: {
+            asset: "NASDAQ",
+            symbol: "^IXIC",
+            timeframe: "1W",
+            closeValues: [20100, 20280, 20410, 20680, 20948.12],
+            support: 20100,
+            resistance: 20948.12,
+          },
+        },
+      ],
+    });
 
     renderWithQueryClient(
       <MarketsPage
@@ -152,38 +203,35 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        updatedAt: "2026-04-09T10:00:00.000Z",
-        timeframe: "1W",
-        assets: [
-          {
-            id: "oil",
-            label: "OIL",
-            error: null,
-            quote: {
-              asset: "OIL / WTI",
-              symbol: "BZUSD",
-              price: 94.43,
-              changePercent: -13.58,
-              direction: "down",
-              isMarketOpen: null,
-              proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
-            },
-            series: {
-              asset: "OIL / WTI",
-              symbol: "BZUSD",
-              timeframe: "1W",
-              closeValues: [109.27, 104.4, 100.9, 97.8, 94.43],
-              support: 94.43,
-              resistance: 109.27,
-              proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
-            },
+    mockFetchForMarketTabs({
+      updatedAt: "2026-04-09T10:00:00.000Z",
+      timeframe: "1W",
+      assets: [
+        {
+          id: "oil",
+          label: "OIL",
+          error: null,
+          quote: {
+            asset: "OIL / WTI",
+            symbol: "BZUSD",
+            price: 94.43,
+            changePercent: -13.58,
+            direction: "down",
+            isMarketOpen: null,
+            proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
           },
-        ],
-      }),
-    }) as unknown as typeof fetch;
+          series: {
+            asset: "OIL / WTI",
+            symbol: "BZUSD",
+            timeframe: "1W",
+            closeValues: [109.27, 104.4, 100.9, 97.8, 94.43],
+            support: 94.43,
+            resistance: 109.27,
+            proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
+          },
+        },
+      ],
+    });
 
     renderWithQueryClient(
       <MarketsPage
@@ -208,6 +256,126 @@ describe("MarketsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Using Brent crude futures as the free-plan oil proxy.")).toBeInTheDocument();
+    });
+  });
+
+  it("defaults the section selector to Charts and can switch to Market Intelligence content", async () => {
+    vi.mocked(useSupabaseAuth).mockReturnValue({
+      supabase: supabaseClientForProAccountMenu() as never,
+      user: { id: "user-1" } as never,
+      session: {} as never,
+      ready: true,
+      isSignedIn: true,
+    });
+
+    mockFetchForMarketTabs({
+      updatedAt: "2026-04-09T10:00:00.000Z",
+      timeframe: "1W",
+      assets: [
+        {
+          id: "gold",
+          label: "GOLD",
+          error: null,
+          quote: {
+            asset: "Gold",
+            symbol: "GCUSD",
+            price: 3000,
+            changePercent: 1,
+            direction: "up",
+            isMarketOpen: null,
+          },
+          series: {
+            asset: "Gold",
+            symbol: "GCUSD",
+            timeframe: "1W",
+            closeValues: [2900, 2950, 3000],
+            support: 2900,
+            resistance: 3000,
+          },
+        },
+      ],
+    });
+
+    renderWithQueryClient(
+      <MarketsPage
+        initialTier="pro"
+        pricing={marketsTestPricing}
+        billingContext={freeSignedInBillingContext}
+      />,
+    );
+
+    const sectionSelect = screen.getByLabelText(/markets view/i) as HTMLSelectElement;
+    expect(sectionSelect.options).toHaveLength(3);
+    expect(sectionSelect.value).toBe("charts");
+    expect(screen.getAllByRole("heading", { level: 2, name: /top assets/i }).length).toBeGreaterThan(0);
+
+    fireEvent.change(sectionSelect, { target: { value: "intelligence" } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 2, name: /market intelligence/i })).toBeInTheDocument();
+      expect(screen.getByText(/Intel test headline for Markets tab/i)).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith("/api/markets/intelligence");
+    });
+  });
+
+  it("switches to Economic Calendar table", async () => {
+    vi.mocked(useSupabaseAuth).mockReturnValue({
+      supabase: supabaseClientForProAccountMenu() as never,
+      user: { id: "user-1" } as never,
+      session: {} as never,
+      ready: true,
+      isSignedIn: true,
+    });
+
+    mockFetchForMarketTabs({
+      updatedAt: "2026-04-09T10:00:00.000Z",
+      timeframe: "1W",
+      assets: [
+        {
+          id: "gold",
+          label: "GOLD",
+          error: null,
+          quote: {
+            asset: "Gold",
+            symbol: "GCUSD",
+            price: 3000,
+            changePercent: 1,
+            direction: "up",
+            isMarketOpen: null,
+          },
+          series: {
+            asset: "Gold",
+            symbol: "GCUSD",
+            timeframe: "1W",
+            closeValues: [2900, 2950, 3000],
+            support: 2900,
+            resistance: 3000,
+          },
+        },
+      ],
+    });
+
+    renderWithQueryClient(
+      <MarketsPage
+        initialTier="pro"
+        pricing={marketsTestPricing}
+        billingContext={freeSignedInBillingContext}
+      />,
+    );
+
+    const sectionSelect = screen.getByLabelText(/markets view/i) as HTMLSelectElement;
+    fireEvent.change(sectionSelect, { target: { value: "calendar" } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 2, name: /economic calendar/i })).toBeInTheDocument();
+      expect(screen.getByText("CPI m/m")).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith("/api/markets/calendar");
     });
   });
 });

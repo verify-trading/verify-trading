@@ -1,10 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { ProPlansPricingPanel } from "@/components/pricing/pro-plans-pricing-panel";
 import { useAccountMenuQuery } from "@/lib/auth/use-account-menu-query";
 import type { PublicBillingPricing } from "@/lib/billing/config";
@@ -15,6 +13,8 @@ import type { MarketsAssetPayload } from "@/lib/markets/dashboard";
 import { MARKETS_TIMEFRAMES, type MarketsTimeframe } from "@/lib/markets/dashboard";
 import {
   buildTile,
+  fetchEconomicCalendar,
+  fetchMarketsIntelligence,
   fetchMarketsSnapshot,
   lockedMockTiles,
   marketCatalog,
@@ -25,11 +25,36 @@ import {
 import { cn } from "@/lib/utils";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
-import { MarketCard } from "./market-card";
-import { MarketFocusPanel } from "./market-focus-panel";
-import { MarketCardSkeleton, MarketFocusPanelSkeleton } from "./markets-skeletons";
+import { EconomicCalendarSection } from "./economic-calendar-section";
+import { MarketIntelligenceSection } from "./market-intelligence-section";
+import { MarketsChartsSection } from "./markets-charts-section";
+import { MarketsCommunityCtas } from "./markets-community-ctas";
+import { MarketsViewTabs, type MarketsTabId } from "./markets-view-tabs";
 
 const MARKETS_QUERY_STALE_MS = 15 * 60_000;
+const MARKETS_INTELLIGENCE_STALE_MS = 15 * 60_000;
+const MARKETS_CALENDAR_STALE_MS = 30 * 60_000;
+
+function utcTodayDayLabel(): string {
+  const d = new Date();
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(d);
+  return `Today — ${formatted}`;
+}
+
+/**
+ * Non-Pro paywall overlay + content blur. When `NEXT_PUBLIC_MARKETS_PAYWALL_UI_ENABLED` is the string `"false"`,
+ * the overlay is hidden so you can preview the page (restart dev server after changing `.env.local`).
+ * Omit or set to `true` in production.
+ */
+function isMarketsPaywallUiEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_MARKETS_PAYWALL_UI_ENABLED !== "false";
+}
 
 export type MarketsPageProps = {
   /** From the server so Pro users never see the locked preview flash while auth hydrates. */
@@ -63,8 +88,9 @@ function selectionTone(
 export function MarketsPage({ initialTier, pricing, billingContext }: MarketsPageProps) {
   const { ready, isSignedIn } = useSupabaseAuth();
   const accountMenuQuery = useAccountMenuQuery();
-  const [selectedId, setSelectedId] = useState(marketCatalog[0]?.id ?? "gold");
+  const [selectedId, setSelectedId] = useState<string>(marketCatalog[0]?.id ?? "gold");
   const [timeframe] = useState<MarketsTimeframe>(MARKETS_TIMEFRAMES[1] ?? "1W");
+  const [activeTab, setActiveTab] = useState<MarketsTabId>("charts");
 
   const accessTier = useMemo(
     (): MarketsAccessTier =>
@@ -99,6 +125,24 @@ export function MarketsPage({ initialTier, pricing, billingContext }: MarketsPag
     refetchOnWindowFocus: false,
   });
 
+  const intelligenceQuery = useQuery({
+    queryKey: ["markets", "intelligence"],
+    queryFn: fetchMarketsIntelligence,
+    enabled: isPro && activeTab === "intelligence",
+    staleTime: MARKETS_INTELLIGENCE_STALE_MS,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const calendarQuery = useQuery({
+    queryKey: ["markets", "calendar"],
+    queryFn: fetchEconomicCalendar,
+    enabled: isPro && activeTab === "calendar",
+    staleTime: MARKETS_CALENDAR_STALE_MS,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  });
+
   const assetsById = new Map(marketsQuery.data?.assets.map((asset) => [asset.id, asset]) ?? []);
   const lockedTiles = marketCatalog.map((item) => ({
     ...lockedMockTiles[item.id],
@@ -115,9 +159,26 @@ export function MarketsPage({ initialTier, pricing, billingContext }: MarketsPag
   const selectedCatalogItem = marketCatalog.find((item) => item.id === selectedId) ?? marketCatalog[0]!;
 
   const showSkeleton = isPro && marketsQuery.isPending;
-  const showPaywall = !isPro;
+  const showPaywallUi = !isPro && isMarketsPaywallUiEnabled();
   const showFetchError = isPro && marketsQuery.isError;
   const statusShowsLive = isPro && !showSkeleton && !marketsQuery.isFetching;
+
+  const economicCalendarDayLabel = useMemo(
+    () => calendarQuery.data?.dayLabel ?? utcTodayDayLabel(),
+    [calendarQuery.data?.dayLabel],
+  );
+
+  const intelligenceErrorMessage =
+    intelligenceQuery.isError && intelligenceQuery.error instanceof Error
+      ? intelligenceQuery.error.message
+      : null;
+  const calendarErrorMessage =
+    calendarQuery.isError && calendarQuery.error instanceof Error ? calendarQuery.error.message : null;
+
+  const intelligenceItems = intelligenceQuery.data?.items ?? [];
+  const calendarItems = calendarQuery.data?.items ?? [];
+  const intelligenceLoading = isPro && intelligenceQuery.isPending;
+  const calendarLoading = isPro && calendarQuery.isPending;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -126,99 +187,56 @@ export function MarketsPage({ initialTier, pricing, billingContext }: MarketsPag
           <h1 className="sr-only">Markets</h1>
 
           <section>
-            <header className="mb-8 border-b border-white/[0.08] pb-8">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--vt-coral)]">
-                    Markets
-                  </p>
-                  <h2 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white sm:text-4xl">
-                    Top assets
-                  </h2>
-                  <p className="mt-2 max-w-lg text-sm leading-relaxed text-[var(--vt-muted)]">
-                    Select a symbol for levels, trend, and live session context.
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pt-1">
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--vt-border)] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-[var(--vt-muted)]">
-                    {statusShowsLive ? (
-                      <span className="size-1.5 shrink-0 rounded-full bg-[var(--vt-green)] animate-pulse" />
-                    ) : null}
-                    {showSkeleton ? "Loading live data…" : selectedMarket.updatedLabel}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="pillCompact"
-                    className="gap-2 border-[color:var(--vt-border)] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => {
-                      void marketsQuery.refetch();
-                    }}
-                    disabled={!isPro || marketsQuery.isFetching}
-                  >
-                    <RefreshCcw className={`size-3.5 ${marketsQuery.isFetching ? "animate-spin" : ""}`} aria-hidden />
-                    Refresh
-                  </Button>
-                </div>
-              </div>
-            </header>
-
-            {showFetchError ? (
-              <div className="mb-4 rounded-2xl border border-[rgba(242,109,109,0.28)] bg-[rgba(242,109,109,0.08)] px-4 py-3 text-sm text-slate-200">
-                Live market data is unavailable right now. The layout is still visible, but the feed could not be
-                refreshed.
-              </div>
-            ) : null}
-
             <div
               className={cn(
-                "grid gap-4 transition-[filter,opacity] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start",
-                showPaywall &&
+                "transition-[filter,opacity]",
+                showPaywallUi &&
                   "pointer-events-none select-none blur-[1.5px] opacity-[0.88] saturate-[0.85] sm:blur-[2.5px]",
               )}
             >
-              <div
-                className="min-w-0 self-start grid auto-rows-auto grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-                data-testid="market-cards-grid"
-              >
-                {showSkeleton
-                  ? marketCatalog.map((item) => (
-                      <MarketCardSkeleton
-                        key={item.id}
-                        item={item}
-                        isSelected={item.id === selectedId}
-                        onSelect={() => setSelectedId(item.id)}
-                      />
-                    ))
-                  : tiles.map((market) => (
-                      <MarketCard
-                        key={market.id}
-                        market={market}
-                        isSelected={market.id === selectedMarket.id}
-                        onSelect={() => setSelectedId(market.id)}
-                      />
-                    ))}
-              </div>
+              <MarketsViewTabs activeTab={activeTab} onTabChange={setActiveTab}>
+                {activeTab === "charts" ? (
+                  <MarketsChartsSection
+                    showFetchError={showFetchError}
+                    showSkeleton={showSkeleton}
+                    statusShowsLive={statusShowsLive}
+                    selectedMarket={selectedMarket}
+                    selectedId={selectedId}
+                    onSelectMarket={setSelectedId}
+                    tiles={tiles}
+                    selectedCatalogItem={selectedCatalogItem}
+                    selectedAsset={selectedAsset}
+                    selectedTone={selectedTone}
+                    selectedProxyAssumption={selectedProxyAssumption}
+                    accessTier={accessTier}
+                    isPro={isPro}
+                    marketsQuery={marketsQuery}
+                  />
+                ) : activeTab === "intelligence" ? (
+                  <MarketIntelligenceSection
+                    items={intelligenceItems}
+                    isLoading={intelligenceLoading}
+                    errorMessage={intelligenceErrorMessage}
+                  />
+                ) : (
+                  <EconomicCalendarSection
+                    items={calendarItems}
+                    dayLabel={economicCalendarDayLabel}
+                    isLoading={calendarLoading}
+                    errorMessage={calendarErrorMessage}
+                  />
+                )}
+              </MarketsViewTabs>
 
-              {showSkeleton ? (
-                <MarketFocusPanelSkeleton item={selectedCatalogItem} />
-              ) : (
-                <MarketFocusPanel
-                  market={selectedMarket}
-                  selectedAsset={selectedAsset}
-                  selectedTone={selectedTone}
-                  selectedProxyAssumption={selectedProxyAssumption}
-                  accessTier={accessTier}
-                />
-              )}
+              <MarketsCommunityCtas />
             </div>
           </section>
         </main>
       </div>
 
-      {showPaywall ? (
+      {showPaywallUi ? (
         <div className="pointer-events-auto absolute inset-0 z-10 flex min-h-0 flex-col overflow-y-auto">
-          <div className="absolute inset-0 bg-[var(--vt-navy)]/72 backdrop-blur-[2px]" aria-hidden />
+          <div className="absolute inset-0 bg-(--vt-navy)/72 backdrop-blur-[2px]" aria-hidden />
           <div className="relative flex flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-6 lg:px-6">
             <div className="w-full max-w-sm rounded-2xl border border-[rgba(255,255,255,0.12)] bg-[rgba(8,11,42,0.72)] px-3 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:max-w-lg sm:px-5 sm:py-5 lg:max-w-2xl lg:px-6 lg:py-6">
               <ProPlansPricingPanel

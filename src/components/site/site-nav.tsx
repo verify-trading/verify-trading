@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
-import { BookOpen, LineChart, Menu, MessageSquare, Tag } from "lucide-react";
+import { BookOpen, LineChart, Menu, MessageSquare } from "lucide-react";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ const navItems = [
   { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
   { href: "/markets", label: "Markets", icon: LineChart, requiresAuth: true },
   { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: true },
-  { href: "/pricing", label: "Pricing", icon: Tag, requiresAuth: false },
 ] as const;
 
 /** Mobile header height for fixed overlays (single row + safe area). */
@@ -74,7 +73,7 @@ export function SiteNav() {
             </span>
           </Link>
 
-          {/* Desktop: centred when signed in; end-aligned next to Sign in when only public links (e.g. Pricing) */}
+          {/* Desktop: centred when signed in; end-aligned when signed out (no centre links) */}
           <div
             className={cn(
               "hidden min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:items-center lg:px-4",

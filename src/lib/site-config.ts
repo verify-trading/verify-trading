@@ -31,6 +31,20 @@ export function getOnboardingCallUrl(): string | null {
   return raw || null;
 }
 
+/** Prefer `NEXT_PUBLIC_TRADER_SUPPORT_CALL_URL`; falls back to onboarding booking URL. */
+export function getTraderSupportCallUrl(): string | null {
+  const dedicated = process.env.NEXT_PUBLIC_TRADER_SUPPORT_CALL_URL?.trim();
+  if (dedicated) {
+    return dedicated;
+  }
+  return getOnboardingCallUrl();
+}
+
+export function getTelegramCommunityUrl(): string | null {
+  const raw = process.env.NEXT_PUBLIC_TELEGRAM_COMMUNITY_URL?.trim();
+  return raw || null;
+}
+
 /** Injects {{APP_NAME}} in prompt templates. */
 export function expandPromptTemplate(template: string): string {
   return template.replace(/\{\{APP_NAME\}\}/g, getAppName());

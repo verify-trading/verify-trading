@@ -1,4 +1,5 @@
 /** Markets dashboard catalog, locked preview tiles, and pure helpers to build live tiles from API snapshots. */
+import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
 import {
   formatAssetPrice,
   formatChangePercent,
@@ -7,6 +8,7 @@ import {
   type MarketsSnapshot,
   type MarketsTimeframe,
 } from "@/lib/markets/dashboard";
+import type { MarketIntelligenceSnapshot } from "@/lib/markets/market-intelligence";
 
 export type MarketCatalogItem = {
   id: MarketsDashboardAssetId;
@@ -450,4 +452,20 @@ export async function fetchMarketsSnapshot(timeframe: MarketsTimeframe) {
   }
 
   return (await response.json()) as MarketsSnapshot;
+}
+
+export async function fetchMarketsIntelligence(): Promise<MarketIntelligenceSnapshot> {
+  const response = await fetch("/api/markets/intelligence");
+  if (!response.ok) {
+    throw new Error(`Market intelligence request failed with ${response.status}.`);
+  }
+  return (await response.json()) as MarketIntelligenceSnapshot;
+}
+
+export async function fetchEconomicCalendar(): Promise<EconomicCalendarSnapshot> {
+  const response = await fetch("/api/markets/calendar");
+  if (!response.ok) {
+    throw new Error(`Economic calendar request failed with ${response.status}.`);
+  }
+  return (await response.json()) as EconomicCalendarSnapshot;
 }
