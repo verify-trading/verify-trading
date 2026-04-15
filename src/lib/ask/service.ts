@@ -34,6 +34,7 @@ import { expandPromptTemplate } from "@/lib/site-config";
 import {
   extractJson,
   extractMarketBriefingCard,
+  extractMarketSetupCard,
   extractSubmitAskCard,
   extractToolCard,
   extractUiMeta,
@@ -244,72 +245,175 @@ function buildProtectedBriefingForMarketUpdate(
   };
 }
 
-function extractRecoveredToolCard(
+type AskCardSource =
+  | "tool_result"
+  | "submit_ask_card"
+  | "model_output"
+  | "model_text_fallback"
+  | "wrapped_text"
+  | "fallback";
+
+type ParsedAskCardResult =
+  | { success: true; data: AskCard }
+  | { success: false };
+
+type ToolCardState = {
+  toolCard: AskCard | null;
+  fmpBriefing: AskCard | null;
+  protectedBriefingForMarketUpdate: AskCard | null;
+  marketSetupToolCard: AskCard | null;
+  deterministicCalcToolCard: AskCard | null;
+};
+
+type ResolvedCardSelection = {
+  card: AskCard;
+  source: AskCardSource;
+  debug: {
+    hasSubmitCard: boolean;
+    hasOutputCard: boolean;
+    hasToolCard: boolean;
+    toolCardType: AskCard["type"] | null;
+    hasParsedCard: boolean;
+    parsedCardType: AskCard["type"] | null;
+    outputCardType: AskCard["type"] | null;
+    modelPreferredCardType: AskCard["type"] | null;
+    hasProtectedBriefingForMarketUpdate: boolean;
+    hasDeterministicCalcToolCard: boolean;
+    hasMarketSetupToolCard: boolean;
+    overrideCardType: AskCard["type"] | null;
+  };
+};
+
+function collectToolCardState(
   toolResults: Array<{ toolName?: string; output?: unknown }>,
   message: string,
-) {
-  const submitCard = extractSubmitAskCard(toolResults, askCardSchema);
+): ToolCardState {
+  const toolCard = extractToolCard(toolResults, askCardSchema);
   const fmpBriefing = extractMarketBriefingCard(toolResults, askCardSchema);
-  const protectedBriefing = buildProtectedBriefingForMarketUpdate(
+  const protectedBriefingForMarketUpdate = buildProtectedBriefingForMarketUpdate(
     fmpBriefing,
     toolResults,
     message,
   );
-  const toolCard = extractToolCard(toolResults, askCardSchema);
-  const protectedCalcToolCard =
+  const marketSetupToolCard = extractMarketSetupCard(toolResults, askCardSchema);
+  const deterministicCalcToolCard =
     toolCard?.type === "calc" && shouldPreferDeterministicCalcToolCard(message)
       ? toolCard
       : null;
-  if (submitCard?.type === "briefing" && fmpBriefing) {
-    return {
-      card: protectedBriefing ?? fmpBriefing,
-      source: "tool_result" as const,
-    };
+
+  return {
+    toolCard,
+    fmpBriefing,
+    protectedBriefingForMarketUpdate,
+    marketSetupToolCard,
+    deterministicCalcToolCard,
+  };
+}
+
+function resolveToolOwnedOverride(
+  modelPreferredCard: AskCard | null,
+  toolState: ToolCardState,
+): AskCard | null {
+  if (!modelPreferredCard) {
+    return null;
   }
 
-  if (submitCard?.type === "insight" && protectedBriefing) {
-    return {
-      card: protectedBriefing,
-      source: "tool_result" as const,
-    };
+  if (modelPreferredCard.type === "briefing" && toolState.fmpBriefing?.type === "briefing") {
+    return toolState.protectedBriefingForMarketUpdate ?? toolState.fmpBriefing;
   }
 
-  if (submitCard?.type === "calc" && protectedCalcToolCard) {
-    return {
-      card: protectedCalcToolCard,
-      source: "tool_result" as const,
-    };
+  if (modelPreferredCard.type === "setup" && toolState.marketSetupToolCard?.type === "setup") {
+    return toolState.marketSetupToolCard;
   }
 
-  if (submitCard) {
-    return {
-      card: submitCard,
-      source: "submit_ask_card" as const,
-    };
+  if (modelPreferredCard.type === "calc" && toolState.deterministicCalcToolCard?.type === "calc") {
+    return toolState.deterministicCalcToolCard;
   }
 
-  if (protectedCalcToolCard) {
-    return {
-      card: protectedCalcToolCard,
-      source: "tool_result" as const,
-    };
-  }
-
-  if (toolCard) {
-    return {
-      card: toolCard,
-      source: "tool_result" as const,
-    };
-  }
-
-  if (protectedBriefing) {
-    return {
-      card: protectedBriefing,
-      source: "tool_result" as const,
-    };
+  if (modelPreferredCard.type === "insight" && toolState.protectedBriefingForMarketUpdate) {
+    return toolState.protectedBriefingForMarketUpdate;
   }
 
   return null;
+}
+
+function resolveFallbackToolCard(toolState: ToolCardState): AskCard | null {
+  if (toolState.toolCard?.type === "briefing") {
+    return toolState.protectedBriefingForMarketUpdate ?? toolState.toolCard;
+  }
+
+  return toolState.toolCard ?? toolState.protectedBriefingForMarketUpdate ?? toolState.fmpBriefing;
+}
+
+function resolveModelCardSource(
+  submitCard: AskCard | null,
+  outputCard: AskCard | null,
+  parsedCard: ParsedAskCardResult | null,
+): AskCardSource | null {
+  if (submitCard) {
+    return "submit_ask_card";
+  }
+  if (outputCard) {
+    return "model_output";
+  }
+  if (parsedCard?.success) {
+    return "model_text_fallback";
+  }
+
+  return null;
+}
+
+function resolveFinalCardSelection({
+  submitCard,
+  outputCard,
+  parsedCard,
+  toolResults,
+  wrappedTextCard,
+  message,
+}: {
+  submitCard: AskCard | null;
+  outputCard: AskCard | null;
+  parsedCard: ParsedAskCardResult | null;
+  toolResults: Array<{ toolName?: string; output?: unknown }>;
+  wrappedTextCard: AskCard | null;
+  message: string;
+}): ResolvedCardSelection {
+  const toolState = collectToolCardState(toolResults, message);
+  const modelPreferredCard =
+    submitCard ?? outputCard ?? (parsedCard?.success ? parsedCard.data : null);
+  const overrideCard = resolveToolOwnedOverride(modelPreferredCard, toolState);
+  const fallbackToolCard = resolveFallbackToolCard(toolState);
+  const modelCardSource = resolveModelCardSource(submitCard, outputCard, parsedCard);
+  const card =
+    overrideCard ??
+    modelPreferredCard ??
+    fallbackToolCard ??
+    wrappedTextCard ??
+    fallbackInsightCard;
+  const source =
+    overrideCard || fallbackToolCard
+      ? "tool_result"
+      : modelCardSource ??
+        (wrappedTextCard ? "wrapped_text" : "fallback");
+
+  return {
+    card,
+    source,
+    debug: {
+      hasSubmitCard: Boolean(submitCard),
+      hasOutputCard: Boolean(outputCard),
+      hasToolCard: Boolean(toolState.toolCard),
+      toolCardType: toolState.toolCard?.type ?? null,
+      hasParsedCard: parsedCard?.success ?? false,
+      parsedCardType: parsedCard?.success ? parsedCard.data.type : null,
+      outputCardType: outputCard?.type ?? null,
+      modelPreferredCardType: modelPreferredCard?.type ?? null,
+      hasProtectedBriefingForMarketUpdate: Boolean(toolState.protectedBriefingForMarketUpdate),
+      hasDeterministicCalcToolCard: Boolean(toolState.deterministicCalcToolCard),
+      hasMarketSetupToolCard: Boolean(toolState.marketSetupToolCard),
+      overrideCardType: overrideCard?.type ?? null,
+    },
+  };
 }
 
 function extractOutputCard(result: { output?: unknown }) {
@@ -1090,25 +1194,32 @@ export async function generateAskResponse(
   try {
     result = await runGenerate(getAskModel());
   } catch (error) {
-    const recoveredToolCard = extractRecoveredToolCard(
-      completedToolResults,
-      normalizedMessage,
-    );
+    const recoveredSelection = resolveFinalCardSelection({
+      submitCard: extractSubmitAskCard(completedToolResults, askCardSchema),
+      outputCard: null,
+      parsedCard: null,
+      toolResults: completedToolResults,
+      wrappedTextCard: null,
+      message: normalizedMessage,
+    });
 
-    if (recoveredToolCard) {
+    if (
+      recoveredSelection.source === "tool_result" ||
+      recoveredSelection.source === "submit_ask_card"
+    ) {
       logger.warn("Ask primary model failed after yielding a valid tool card; returning tool result without fallback rerun.", {
         sessionId,
         messageId,
         primaryModel: getAskPrimaryModelId(),
         error: error instanceof Error ? error.message : String(error),
-        recoveredCardSource: recoveredToolCard.source,
-        recoveredCardType: recoveredToolCard.card.type,
+        recoveredCardSource: recoveredSelection.source,
+        recoveredCardType: recoveredSelection.card.type,
       });
 
       return buildCompletedAskResponse({
-        card: recoveredToolCard.card,
-        source: recoveredToolCard.source,
-        uiMeta: extractUiMeta(recoveredToolCard.card, completedToolResults),
+        card: recoveredSelection.card,
+        source: recoveredSelection.source,
+        uiMeta: extractUiMeta(recoveredSelection.card, completedToolResults),
         sessionId,
         messageId,
       });
@@ -1142,39 +1253,16 @@ export async function generateAskResponse(
 
   const outputCard = extractOutputCard(result as { output?: unknown });
   const parsedText = outputCard ? null : extractJson(result.text);
-  const parsedCard = parsedText ? askCardSchema.safeParse(parsedText) : null;
+  const parsedCardResult = parsedText ? askCardSchema.safeParse(parsedText) : null;
+  const parsedCard: ParsedAskCardResult | null = parsedCardResult?.success
+    ? { success: true, data: parsedCardResult.data }
+    : parsedCardResult
+      ? { success: false }
+      : null;
   const submitCard = extractSubmitAskCard(allToolResults, askCardSchema);
   const toolCard = extractToolCard(allToolResults, askCardSchema);
-  const fmpBriefing = extractMarketBriefingCard(allToolResults, askCardSchema);
-  const modelPreferredCard =
-    submitCard ?? outputCard ?? (parsedCard?.success ? parsedCard.data : null);
-  const preferFmpBriefingOverModel =
-    modelPreferredCard?.type === "briefing" && fmpBriefing !== null;
-  const protectedCalcToolCard =
-    toolCard?.type === "calc" && shouldPreferDeterministicCalcToolCard(normalizedMessage)
-      ? toolCard
-      : null;
-  const protectedBriefingForMarketUpdate = buildProtectedBriefingForMarketUpdate(
-    fmpBriefing,
-    allToolResults,
-    normalizedMessage,
-  );
 
-  logger.info("Card extraction results.", {
-    sessionId,
-    hasSubmitCard: !!submitCard,
-    hasOutputCard: !!outputCard,
-    hasToolCard: !!toolCard,
-    toolCardType: toolCard?.type ?? null,
-    hasParsedCard: !!parsedCard?.success,
-    parsedCardType: parsedCard?.success ? parsedCard.data?.type : null,
-    outputCardType: outputCard?.type ?? null,
-    preferFmpBriefingOverModel,
-    hasProtectedCalcToolCard: Boolean(protectedCalcToolCard),
-    hasProtectedBriefingForMarketUpdate: Boolean(protectedBriefingForMarketUpdate),
-  });
-
-  if (parsedText && parsedCard && !parsedCard.success) {
+  if (parsedText && parsedCardResult && !parsedCardResult.success) {
     logger.warn("Ask model output did not match card schema.", {
       sessionId,
       messageId,
@@ -1182,7 +1270,7 @@ export async function generateAskResponse(
         parsedText && typeof parsedText === "object" && !Array.isArray(parsedText)
           ? (parsedText as { type?: unknown }).type ?? null
           : null,
-      issues: parsedCard.error.issues.slice(0, 6).map((issue) => ({
+      issues: parsedCardResult.error.issues.slice(0, 6).map((issue) => ({
         path: issue.path.join("."),
         message: issue.message,
       })),
@@ -1194,45 +1282,31 @@ export async function generateAskResponse(
       ? buildInsightCardFromModelText(result.text)
       : null;
 
-  const card =
-    (preferFmpBriefingOverModel
-      ? protectedBriefingForMarketUpdate ?? fmpBriefing
-      : null) ??
-    (modelPreferredCard?.type === "calc" ? protectedCalcToolCard : null) ??
-    (modelPreferredCard?.type === "insight" ? protectedBriefingForMarketUpdate : null) ??
-    modelPreferredCard ??
-    toolCard ??
-    wrappedTextCard ??
-    fallbackInsightCard;
+  const finalSelection = resolveFinalCardSelection({
+    submitCard,
+    outputCard,
+    parsedCard,
+    toolResults: allToolResults,
+    wrappedTextCard,
+    message: normalizedMessage,
+  });
+
+  logger.info("Card extraction results.", {
+    sessionId,
+    ...finalSelection.debug,
+  });
 
   logger.info("Ask generation completed.", {
     sessionId,
     messageId,
-    finalCardType: card.type,
-    cardSource: preferFmpBriefingOverModel
-      ? "tool_result"
-      : protectedCalcToolCard &&
-          (modelPreferredCard?.type === "calc" || modelPreferredCard == null)
-        ? "tool_result"
-      : protectedBriefingForMarketUpdate
-        ? "tool_result"
-      : submitCard
-        ? "submit_ask_card"
-        : outputCard
-          ? "model_output"
-        : parsedCard?.success
-          ? "model_text_fallback"
-          : toolCard
-            ? "tool_result"
-            : wrappedTextCard
-              ? "wrapped_text"
-            : "fallback",
+    finalCardType: finalSelection.card.type,
+    cardSource: finalSelection.source,
     toolResults: summarizeToolResults(allToolResults),
   });
 
   return askResponseSchema.parse({
-    data: sanitizeCard(card),
-    uiMeta: sanitizeUiMeta(extractUiMeta(card, allToolResults)),
+    data: sanitizeCard(finalSelection.card),
+    uiMeta: sanitizeUiMeta(extractUiMeta(finalSelection.card, allToolResults)),
     sessionId,
     messageId,
   });

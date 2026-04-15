@@ -54,7 +54,8 @@ function extractToolUiMeta(
   card: AskCard,
   toolResults: ToolResultRecord[],
 ): AskUiMeta | undefined {
-  for (const result of toolResults) {
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const result = toolResults[index];
     const output = asObject(result.output);
     const nestedUiMeta = asObject(output?.uiMeta);
     if (!nestedUiMeta) {
@@ -127,7 +128,8 @@ export function extractSubmitAskCard(
 export function extractToolCard(toolResults: ToolResultRecord[], askCardSchema: {
   safeParse: (value: unknown) => { success: boolean; data?: AskCard };
 }) {
-  for (const result of toolResults) {
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const result = toolResults[index];
     if (result.toolName === "submit_ask_card") {
       continue;
     }
@@ -158,6 +160,28 @@ export function extractMarketBriefingCard(
     const output = asObject(result.output);
     const nestedParsed = askCardSchema.safeParse(output?.card);
     if (nestedParsed.success && nestedParsed.data?.type === "briefing") {
+      return nestedParsed.data;
+    }
+  }
+
+  return null;
+}
+
+/** Setup card from `get_market_setup`. Used to keep deterministic setup levels authoritative. */
+export function extractMarketSetupCard(
+  toolResults: ToolResultRecord[],
+  askCardSchema: {
+    safeParse: (value: unknown) => { success: boolean; data?: AskCard };
+  },
+): AskCard | null {
+  for (const result of toolResults) {
+    if (result.toolName !== "get_market_setup") {
+      continue;
+    }
+
+    const output = asObject(result.output);
+    const nestedParsed = askCardSchema.safeParse(output?.card);
+    if (nestedParsed.success && nestedParsed.data?.type === "setup") {
       return nestedParsed.data;
     }
   }

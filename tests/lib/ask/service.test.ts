@@ -892,6 +892,168 @@ describe("generateAskResponse", () => {
     });
   });
 
+  it("prefers get_market_setup over a rewritten setup submission when both return setup cards", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "so should i go for it?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "",
+          toolResults: [
+            {
+              toolName: "get_market_setup",
+              output: {
+                card: {
+                  type: "setup",
+                  asset: "AUD/USD",
+                  bias: "Bullish",
+                  entry: "0.7173-0.7174",
+                  stop: "0.7169",
+                  target: "0.7184",
+                  rr: "2:1",
+                  rationale: "AUD/USD is holding up. Industry standard is buy the pullback into support, not chase the middle of the range.",
+                  confidence: "Medium",
+                  verdict: "Buy the pullback only if support holds. Invalidation sits below 0.7169.",
+                },
+                uiMeta: {
+                  marketSeries: [0.7169, 0.7173, 0.7174],
+                  marketLevelScopeLabel: "Near-term levels",
+                },
+              },
+            },
+            {
+              toolName: "submit_ask_card",
+              output: {
+                card: {
+                  type: "setup",
+                  asset: "AUD/USD",
+                  bias: "Bullish",
+                  entry: "0.7173",
+                  stop: "0.7169",
+                  target: "0.7184",
+                  rr: "2:1",
+                  rationale:
+                    "Price is pushing into the range high at 0.7174. The risk-on mood and USD weakness are tailwinds, but you're buying near resistance, not a clean pullback.",
+                  confidence: "Medium",
+                  verdict:
+                    "Don't chase it here. Wait for price to break and hold above 0.7174, then enter on the retest.",
+                },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data).toEqual({
+      type: "setup",
+      asset: "AUD/USD",
+      bias: "Bullish",
+      entry: "0.7173-0.7174",
+      stop: "0.7169",
+      target: "0.7184",
+      rr: "2:1",
+      rationale: "AUD/USD is holding up. Industry standard is buy the pullback into support, not chase the middle of the range.",
+      confidence: "Medium",
+      verdict: "Buy the pullback only if support holds. Invalidation sits below 0.7169.",
+    });
+    expect(response.uiMeta).toEqual({
+      marketSeries: [0.7169, 0.7173, 0.7174],
+      marketLevelScopeLabel: "Near-term levels",
+    });
+  });
+
+  it("falls back to the latest setup tool card when a mixed market prompt has no final model card", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "please check again verify should i go for it on aud usd",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "",
+          toolResults: [
+            {
+              toolName: "get_market_briefing",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "AUD/USD",
+                  price: "0.7171",
+                  change: "+0.64%",
+                  direction: "up",
+                  level1: "0.7174",
+                  level2: "0.7020",
+                  event: null,
+                  verdict: "AUD/USD is pushing toward the recent range high.",
+                },
+                uiMeta: {
+                  marketSeries: [0.702, 0.7126, 0.7174],
+                  marketLevelScopeLabel: "Recent range",
+                },
+              },
+            },
+            {
+              toolName: "search_news",
+              output: {
+                query: "AUD/USD Australian Dollar outlook",
+                articles: [
+                  {
+                    title: "AUD/USD Forecast",
+                    source: "Example News",
+                  },
+                ],
+                note: null,
+              },
+            },
+            {
+              toolName: "get_market_setup",
+              output: {
+                card: {
+                  type: "setup",
+                  asset: "AUD/USD",
+                  bias: "Bullish",
+                  entry: "0.7121-0.7126",
+                  stop: "0.7108",
+                  target: "0.7160",
+                  rr: "2:1",
+                  rationale: "AUD/USD is holding up. Industry standard is buy the pullback into support, not chase the middle of the range.",
+                  confidence: "Medium",
+                  verdict: "Buy the pullback only if support holds. Invalidation sits below 0.7108.",
+                },
+                uiMeta: {
+                  marketSeries: [0.7108, 0.7121, 0.7126, 0.7171],
+                  marketLevelScopeLabel: "Near-term levels",
+                },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data).toEqual({
+      type: "setup",
+      asset: "AUD/USD",
+      bias: "Bullish",
+      entry: "0.7121-0.7126",
+      stop: "0.7108",
+      target: "0.7160",
+      rr: "2:1",
+      rationale: "AUD/USD is holding up. Industry standard is buy the pullback into support, not chase the middle of the range.",
+      confidence: "Medium",
+      verdict: "Buy the pullback only if support holds. Invalidation sits below 0.7108.",
+    });
+    expect(response.uiMeta).toEqual({
+      marketSeries: [0.7108, 0.7121, 0.7126, 0.7171],
+      marketLevelScopeLabel: "Near-term levels",
+    });
+  });
+
   it("uses submit_ask_card even when search_news was not used", async () => {
     const response = await generateAskResponse(
       {
