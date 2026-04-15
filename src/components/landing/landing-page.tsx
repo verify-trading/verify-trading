@@ -147,7 +147,7 @@ function FeaturesSection() {
       {
         icon: TrendingUp,
         theme: "blue",
-        title: "verify your trade before entry",
+        title: "Verify your trade before entry",
         bullets: [
           "Risk / Reward check",
           "Structure validation",
