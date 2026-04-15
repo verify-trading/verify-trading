@@ -284,7 +284,7 @@ function HowItWorksSection() {
           <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
             {"Most traders don't lose from bad strategy."}
           </h2>
-          <p className="mt-4 text-xl font-semibold leading-snug text-[var(--vt-green)] sm:text-2xl">
+          <p className="mt-4 text-xl font-semibold leading-snug text-[var(--vt-coral)] sm:text-2xl">
             They lose from bad decisions.
           </p>
         </div>
