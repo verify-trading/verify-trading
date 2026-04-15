@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { generateText, streamText } from "ai";
 
 import { getActiveAnalysisRules } from "@/lib/ask/analysis-rules";
 import { getFcaStatus } from "@/lib/ask/fca";
@@ -13,6 +13,7 @@ export interface ParsedImageInput {
 
 export interface AskServiceDependencies {
   generateTextImpl?: typeof generateText;
+  streamTextImpl?: typeof streamText;
   getActiveAnalysisRulesImpl?: typeof getActiveAnalysisRules;
   lookupVerifiedEntityImpl?: typeof lookupVerifiedEntity;
   getFcaStatusImpl?: typeof getFcaStatus;

@@ -18,13 +18,14 @@ describe("GET /api/ask/sessions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getSessionUser).mockResolvedValue({
-      user: { id: "00000000-0000-0000-0000-000000000001" },
+      user: { id: "00000000-0000-0000-0000-000000000001" } as never,
       supabase: {} as never,
     });
     vi.mocked(getAskPersistence).mockReturnValue({
       listSessions,
       deleteSession: vi.fn(),
       loadHistory: vi.fn(),
+      loadSessionMemory: vi.fn(),
       loadThreadPage: vi.fn(),
       saveExchange: vi.fn(),
     });

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { ASK_MODEL_HISTORY_LIMIT } from "@/lib/ask/config";
+
 const brokerStatusSchema = z.enum(["LEGITIMATE", "WARNING", "AVOID"]);
 const cardColorSchema = z.enum(["green", "red"]);
 const booleanStringSchema = z.enum(["Yes", "No"]);
@@ -150,6 +152,18 @@ export const projectionCardSchema = z.object({
   verdict: textFieldSchema,
 });
 
+const askCardTypeSchema = z.enum([
+  "broker",
+  "briefing",
+  "calc",
+  "guru",
+  "insight",
+  "plan",
+  "chart",
+  "setup",
+  "projection",
+]);
+
 export const askCardSchema = z.discriminatedUnion("type", [
   brokerCardSchema,
   briefingCardSchema,
@@ -161,6 +175,49 @@ export const askCardSchema = z.discriminatedUnion("type", [
   setupCardSchema,
   projectionCardSchema,
 ]);
+
+export const askSessionMemorySchema = z
+  .object({
+    activeAsset: z.string().trim().min(1).optional(),
+    activeSide: z.enum(["buy", "sell"]).optional(),
+    lastCardType: askCardTypeSchema.optional(),
+    lastSetup: z
+      .object({
+        entry: z.string().trim().min(1),
+        stop: z.string().trim().min(1),
+        target: z.string().trim().min(1),
+        bias: z.enum(["Bullish", "Bearish", "Neutral"]),
+      })
+      .optional(),
+    lastProjection: z
+      .object({
+        months: z.number().int().positive(),
+        startBalance: z.number().nonnegative(),
+        monthlyAdd: z.number().nonnegative(),
+        totalReturn: z.string().trim().min(1),
+      })
+      .optional(),
+    lastPlan: z
+      .object({
+        startBalance: z.number().nonnegative(),
+        monthlyAdd: z.number().nonnegative(),
+        dailyTarget: z.string().trim().min(1),
+        monthlyTarget: z.string().trim().min(1),
+        projectionReturn: z.string().trim().min(1),
+      })
+      .optional(),
+    lastVerifiedEntity: z
+      .object({
+        name: z.string().trim().min(1),
+        status: z.string().trim().min(1),
+        kind: z.enum(["broker", "guru"]),
+      })
+      .optional(),
+    recentUserGoals: z.array(z.string().trim().min(1)).max(3).optional(),
+    openQuestion: z.string().trim().min(1).optional(),
+    lastUpdatedAt: z.string().trim().min(1).optional(),
+  })
+  .strict();
 
 export const askRequestSchema = z
   .object({
@@ -184,6 +241,7 @@ export const askRequestSchema = z
       })
       .nullable()
       .optional(),
+    sessionMemory: askSessionMemorySchema.nullable().optional(),
     history: z
       .array(
         z.object({
@@ -191,7 +249,7 @@ export const askRequestSchema = z
           content: z.string().trim().min(1),
         }),
       )
-      .max(10)
+      .max(ASK_MODEL_HISTORY_LIMIT)
       .optional()
       .default([]),
   })
@@ -272,6 +330,7 @@ export type AskResponse = z.infer<typeof askResponseSchema>;
 export type AskUiMeta = NonNullable<z.infer<typeof askResponseSchema>["uiMeta"]>;
 export type AskStreamSession = z.infer<typeof askStreamSessionSchema>;
 export type AskAttachmentMeta = NonNullable<z.infer<typeof askAttachmentMetaSchema>>;
+export type AskSessionMemory = z.infer<typeof askSessionMemorySchema>;
 export type AskHistoryPageMessage = z.infer<typeof askHistoryPageMessageSchema>;
 export type AskHistoryPage = z.infer<typeof askHistoryPageSchema>;
 export type AskSessionListItem = z.infer<typeof askSessionListItemSchema>;

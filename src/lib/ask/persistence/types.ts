@@ -2,6 +2,7 @@ import type {
   AskAttachmentMeta,
   AskCard,
   AskHistoryPage,
+  AskSessionMemory,
   AskSessionListItem,
   AskUiMeta,
 } from "@/lib/ask/contracts";
@@ -17,6 +18,7 @@ export interface PersistAskExchangeInput {
   assistantCard: AskCard;
   assistantUiMeta?: AskUiMeta;
   attachmentMeta?: AskAttachmentMeta | null;
+  sessionMemory?: AskSessionMemory | null;
   userImageDataUrl?: string | null;
 }
 
@@ -31,6 +33,7 @@ export interface AskPersistence {
     cursor?: string | null,
   ) => Promise<AskSessionListPage>;
   deleteSession: (sessionId: string) => Promise<void>;
+  loadSessionMemory: (sessionId: string) => Promise<AskSessionMemory | null>;
   loadHistory: (sessionId: string) => Promise<PersistedAskHistoryMessage[]>;
   loadThreadPage: (
     sessionId: string,

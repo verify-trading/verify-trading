@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 
+import { ASK_CLIENT_CONTEXT_WINDOW_SIZE } from "@/lib/ask/config";
 import type {
   AskAttachmentMeta,
   AskCard,
@@ -19,7 +20,6 @@ export interface AskHistoryMessage {
   content: string;
 }
 
-const CONTEXT_WINDOW_SIZE = 6;
 const MAX_CONTEXT_CHARS = 500;
 
 export interface UserAskMessage {
@@ -308,7 +308,7 @@ export const useAskStore = create<AskStoreState>()(
     historyWindow: () =>
       get()
         .messages
-        .slice(-CONTEXT_WINDOW_SIZE)
+        .slice(-ASK_CLIENT_CONTEXT_WINDOW_SIZE)
         .filter((message) =>
           message.role === "assistant" || message.content.trim().length > 0,
         )

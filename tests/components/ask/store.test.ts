@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { mapPersistedMessageToStoreMessage, useAskStore } from "@/components/ask/store";
+import { ASK_CLIENT_CONTEXT_WINDOW_SIZE } from "@/lib/ask/config";
 
 describe("useAskStore historyWindow", () => {
   beforeEach(() => {
@@ -16,14 +17,14 @@ describe("useAskStore historyWindow", () => {
     });
   });
 
-  it("keeps only the most recent six messages for model context", () => {
+  it("keeps only the configured recent message window for model context", () => {
     const state = useAskStore.getState();
 
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       state.appendUserMessage(`User message ${index}`, null);
     }
 
-    expect(useAskStore.getState().historyWindow()).toHaveLength(6);
+    expect(useAskStore.getState().historyWindow()).toHaveLength(ASK_CLIENT_CONTEXT_WINDOW_SIZE);
     expect(useAskStore.getState().historyWindow()[0]?.content).toContain("User message 2");
   });
 

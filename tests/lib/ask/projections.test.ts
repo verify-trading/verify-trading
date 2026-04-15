@@ -60,4 +60,25 @@ describe("generateProjectionCard", () => {
     expect(card.lossEvents).toBe(2);
     expect(card.verdict).toBe("Using 5% monthly returns with 10% drawdowns every 4 months.");
   });
+
+  it("includes currencySymbol on the card when the input provides one", () => {
+    const card = generateProjectionCard({
+      months: 6,
+      startBalance: 500,
+      monthlyAdd: 100,
+      currencySymbol: "$",
+    });
+
+    expect(card.currencySymbol).toBe("$");
+    expect(card.startBalance).toBe(500);
+  });
+
+  it("omits currencySymbol when the input does not provide one", () => {
+    const card = generateProjectionCard({
+      months: 6,
+      startBalance: 500,
+    });
+
+    expect(card.currencySymbol).toBeUndefined();
+  });
 });

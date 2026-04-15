@@ -2,9 +2,11 @@ import {
   type AskAttachmentMeta,
   type AskCard,
   type AskHistoryPageMessage,
+  type AskSessionMemory,
   type AskSessionListItem,
   type AskUiMeta,
 } from "@/lib/ask/contracts";
+import { ASK_MODEL_HISTORY_LIMIT } from "@/lib/ask/config";
 
 import {
   clampHistoryLimit,
@@ -25,6 +27,7 @@ type MemoryRecord = AskHistoryPageMessage & {
 
 const memorySessions = new Map<string, MemoryRecord[]>();
 const memorySessionList = new Map<string, AskSessionListItem>();
+const memorySessionMemory = new Map<string, AskSessionMemory | null>();
 
 export function createMemoryPersistence(): AskPersistence {
   const persistence: AskPersistence = {
@@ -60,9 +63,13 @@ export function createMemoryPersistence(): AskPersistence {
     async deleteSession(sessionId) {
       memorySessions.delete(sessionId);
       memorySessionList.delete(sessionId);
+      memorySessionMemory.delete(sessionId);
+    },
+    async loadSessionMemory(sessionId) {
+      return memorySessionMemory.get(sessionId) ?? null;
     },
     async loadHistory(sessionId) {
-      const page = await persistence.loadThreadPage(sessionId, { limit: 10 });
+      const page = await persistence.loadThreadPage(sessionId, { limit: ASK_MODEL_HISTORY_LIMIT });
       return toHistory(page.messages);
     },
     async loadThreadPage(sessionId, options = {}) {
@@ -124,6 +131,7 @@ export function createMemoryPersistence(): AskPersistence {
           inferSessionTitleFromInput(input.userMessage, input.attachmentMeta?.fileName),
         updatedAt: timestamp,
       });
+      memorySessionMemory.set(input.sessionId, input.sessionMemory ?? null);
     },
   };
 
@@ -133,4 +141,5 @@ export function createMemoryPersistence(): AskPersistence {
 export function clearMemoryAskPersistence() {
   memorySessions.clear();
   memorySessionList.clear();
+  memorySessionMemory.clear();
 }

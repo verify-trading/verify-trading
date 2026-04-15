@@ -31,6 +31,15 @@ describe("getAskPersistence", () => {
       assistantUiMeta: {
         projectionMarkers: [1],
       },
+      sessionMemory: {
+        lastCardType: "broker",
+        lastVerifiedEntity: {
+          name: "FTMO",
+          status: "LEGITIMATE",
+          kind: "broker",
+        },
+        recentUserGoals: ["Is FTMO legitimate?"],
+      },
     });
 
     const history = await persistence.loadHistory(sessionId);
@@ -56,6 +65,16 @@ describe("getAskPersistence", () => {
       }),
     ]);
     expect(sessionsPage.nextCursor).toBeNull();
+
+    await expect(persistence.loadSessionMemory(sessionId)).resolves.toEqual({
+      lastCardType: "broker",
+      lastVerifiedEntity: {
+        name: "FTMO",
+        status: "LEGITIMATE",
+        kind: "broker",
+      },
+      recentUserGoals: ["Is FTMO legitimate?"],
+    });
   });
 
   it("removes a session from memory when deleted", async () => {

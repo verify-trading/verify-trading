@@ -375,16 +375,66 @@ describe("createAskTools", () => {
       card: {
         type: "briefing",
         asset: "EUR/USD",
-        price: "1.10",
+        price: "1.1000",
         change: "+0.04%",
         direction: "up",
-        level1: "1.10",
-        level2: "1.10",
+        level1: "1.1002",
+        level2: "1.0995",
         event: null,
         verdict: "EUR/USD is compressed here. Wait for a clean break before choosing a side.",
       },
       uiMeta: {
         marketSeries: [1.0995, 1.1005, 1.1002],
+        marketLevelScopeLabel: "Near-term levels",
+      },
+    });
+  });
+
+  it("formats forex setup levels with pair precision instead of collapsing them to two decimals", async () => {
+    const tools = createAskTools({
+      getMarketQuoteImpl: vi.fn().mockResolvedValue({
+        asset: "EUR/USD",
+        symbol: "EUR/USD",
+        price: 1.1002,
+        changePercent: -0.12,
+        direction: "down",
+        isMarketOpen: true,
+      }),
+      getMarketSeriesImpl: vi.fn().mockResolvedValue({
+        asset: "EUR/USD",
+        symbol: "EUR/USD",
+        timeframe: "1W",
+        closeValues: [1.0995, 1.1002, 1.1005],
+        resistance: 1.1005,
+        support: 1.0995,
+      }),
+    });
+
+    const result = await tools.get_market_setup.execute?.(
+      {
+        asset: "EUR/USD",
+        timeframe: "1W",
+        side: "buy",
+      },
+      {} as never,
+    );
+
+    expect(result).toEqual({
+      card: {
+        type: "setup",
+        asset: "EUR/USD",
+        bias: "Bullish",
+        entry: "1.1005",
+        stop: "1.0995",
+        target: "1.1025",
+        rr: "2:1",
+        rationale:
+          "EUR/USD is still leaning heavy. For a long, wait for a clean reclaim above resistance instead of catching the knife into support.",
+        confidence: "Low",
+        verdict: "Do not buy weakness here. Buy only if price reclaims 1.1005 and holds.",
+      },
+      uiMeta: {
+        marketSeries: [1.0995, 1.1002, 1.1005],
         marketLevelScopeLabel: "Near-term levels",
       },
     });

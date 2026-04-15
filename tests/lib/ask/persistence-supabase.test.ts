@@ -80,4 +80,100 @@ describe("createSupabasePersistence", () => {
     expect(remove).not.toHaveBeenCalled();
     expect(deleteSecondEq).toHaveBeenCalledWith("user_id", "user-1");
   });
+
+  it("loads stored session memory for a user-owned thread", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        memory_summary: {
+          activeAsset: "GOLD / XAUUSD",
+          lastCardType: "setup",
+          activeSide: "buy",
+        },
+      },
+      error: null,
+    });
+    const secondEq = vi.fn(() => ({ maybeSingle }));
+    const firstEq = vi.fn(() => ({ eq: secondEq }));
+    const select = vi.fn(() => ({ eq: firstEq }));
+
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table !== "chat_sessions") {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+
+        return { select };
+      }),
+    } as never);
+
+    const persistence = createSupabasePersistence("user-1");
+
+    await expect(persistence.loadSessionMemory("session-1")).resolves.toEqual({
+      activeAsset: "GOLD / XAUUSD",
+      lastCardType: "setup",
+      activeSide: "buy",
+    });
+    expect(select).toHaveBeenCalledWith("memory_summary");
+    expect(firstEq).toHaveBeenCalledWith("id", "session-1");
+    expect(secondEq).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("stores session memory when saving an exchange", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const selectEq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq: selectEq }));
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const insert = vi.fn().mockResolvedValue({ error: null });
+
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "chat_sessions") {
+          return {
+            select,
+            upsert,
+          };
+        }
+
+        if (table === "chat_messages") {
+          return {
+            insert,
+          };
+        }
+
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    } as never);
+
+    const persistence = createSupabasePersistence("user-1");
+    await persistence.saveExchange({
+      sessionId: "session-1",
+      userMessage: "Should I buy gold?",
+      assistantCard: {
+        type: "insight",
+        headline: "Wait First",
+        body: "Let price confirm before you commit.",
+        verdict: "Wait for confirmation.",
+      },
+      sessionMemory: {
+        activeAsset: "GOLD / XAUUSD",
+        lastCardType: "insight",
+        recentUserGoals: ["Should I buy gold?"],
+      },
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "session-1",
+        user_id: "user-1",
+        memory_summary: {
+          activeAsset: "GOLD / XAUUSD",
+          lastCardType: "insight",
+          recentUserGoals: ["Should I buy gold?"],
+        },
+        memory_updated_at: expect.any(String),
+      }),
+      { onConflict: "id" },
+    );
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
 });

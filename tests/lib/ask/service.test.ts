@@ -11,7 +11,7 @@ vi.mock("@/lib/observability/logger", () => ({
 import { fallbackInsightCard } from "@/lib/ask/contracts";
 import { logger } from "@/lib/observability/logger";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
-import { generateAskResponse } from "@/lib/ask/service";
+import { generateAskResponse, streamAskResponse } from "@/lib/ask/service";
 
 describe("generateAskResponse", () => {
   beforeEach(() => {
@@ -155,6 +155,45 @@ describe("generateAskResponse", () => {
       marketSeries: [4699.3, 4721.5, 4745.1, 4736.3],
       marketLevelScopeLabel: "Near-term levels",
     });
+  });
+
+  it("short-circuits direct forex market-status asks without calling the model", async () => {
+    const generateTextImpl = vi.fn();
+    const getMarketQuoteImpl = vi.fn().mockResolvedValue({
+      asset: "AUD/USD",
+      symbol: "AUDUSD",
+      price: 0.7166,
+      changePercent: 0.57,
+      direction: "up",
+      isMarketOpen: null,
+    });
+    const getMarketSeriesImpl = vi.fn().mockResolvedValue({
+      asset: "AUD/USD",
+      symbol: "AUDUSD",
+      timeframe: "1W",
+      closeValues: [0.7126, 0.7148, 0.7167, 0.7166],
+      resistance: 0.7167,
+      support: 0.7126,
+    });
+
+    const response = await generateAskResponse(
+      {
+        message: "status on aud/usd?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+        getMarketQuoteImpl,
+        getMarketSeriesImpl,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(getMarketQuoteImpl).toHaveBeenCalledWith("AUD/USD");
+    expect(getMarketSeriesImpl).toHaveBeenCalledWith("AUD/USD", "1W");
+    expect(response.data.type).toBe("briefing");
+    expect(response.data.type === "briefing" ? response.data.price : null).toBe("0.7166");
   });
 
   it("short-circuits direct broker safety checks without calling the model", async () => {
@@ -437,6 +476,30 @@ describe("generateAskResponse", () => {
     }
     expect(response.data.currencySymbol).toBe("$");
     expect(response.data.startBalance).toBe(500);
+    expect(response.data.monthlyAdd).toBe(100);
+  });
+
+  it("infers currency symbol from the full message when it is not in the start balance group", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "12-month projection 10k start $100/month",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data.type).toBe("projection");
+    if (response.data.type !== "projection") {
+      throw new Error("Expected a projection card.");
+    }
+    expect(response.data.currencySymbol).toBe("$");
+    expect(response.data.startBalance).toBe(10_000);
     expect(response.data.monthlyAdd).toBe(100);
   });
 
@@ -824,7 +887,115 @@ describe("generateAskResponse", () => {
     });
   });
 
-  it("configures the loop to stop after a successful submit_ask_card result", async () => {
+  it("prefers get_market_briefing (FMP) over submit_ask_card when both return a briefing card", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "check again",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "",
+          toolResults: [
+            {
+              toolName: "get_market_briefing",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "AUDUSD",
+                  price: "0.72",
+                  change: "+0.53%",
+                  direction: "up",
+                  level1: "0.72",
+                  level2: "0.71",
+                  event: null,
+                  verdict: "AUDUSD is holding above support. Watch resistance for continuation.",
+                },
+                uiMeta: { marketSeries: [0.7, 0.71, 0.72] },
+              },
+            },
+            {
+              toolName: "submit_ask_card",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "AUD / USD",
+                  price: "0.6390",
+                  change: "+0.53%",
+                  direction: "up",
+                  level1: "0.6450 resistance",
+                  level2: "0.6330 support",
+                  event: null,
+                  verdict: "Hallucinated narrative.",
+                },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data.type).toBe("briefing");
+    if (response.data.type !== "briefing") {
+      throw new Error("Expected a briefing card.");
+    }
+    expect(response.data.price).toBe("0.72");
+    expect(response.data.verdict).toContain("holding above support");
+  });
+
+  it("prefers get_market_briefing (FMP) over a valid model-generated briefing card", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "check again",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: JSON.stringify({
+            type: "briefing",
+            asset: "AUD / USD",
+            price: "0.6390",
+            change: "+0.53%",
+            direction: "up",
+            level1: "0.6450 resistance",
+            level2: "0.6330 support",
+            event: null,
+            verdict: "Hallucinated narrative.",
+          }),
+          toolResults: [
+            {
+              toolName: "get_market_briefing",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "AUDUSD",
+                  price: "0.72",
+                  change: "+0.53%",
+                  direction: "up",
+                  level1: "0.72",
+                  level2: "0.71",
+                  event: null,
+                  verdict: "AUDUSD is holding above support. Watch resistance for continuation.",
+                },
+                uiMeta: { marketSeries: [0.7, 0.71, 0.72] },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data.type).toBe("briefing");
+    if (response.data.type !== "briefing") {
+      throw new Error("Expected a briefing card.");
+    }
+    expect(response.data.price).toBe("0.72");
+    expect(response.data.verdict).toContain("holding above support");
+  });
+
+  it("configures structured output on the model path", async () => {
     const generateTextImpl = vi.fn().mockResolvedValue({
       text: "",
       toolResults: [],
@@ -840,27 +1011,10 @@ describe("generateAskResponse", () => {
     );
 
     const stopWhen = vi.mocked(generateTextImpl).mock.calls[0]?.[0]?.stopWhen;
+    const output = vi.mocked(generateTextImpl).mock.calls[0]?.[0]?.output;
     expect(Array.isArray(stopWhen)).toBe(true);
-    const submitStopCondition = Array.isArray(stopWhen) ? stopWhen[1] : null;
-    expect(submitStopCondition).toBeTypeOf("function");
-    expect(
-      submitStopCondition?.({
-        steps: [
-          {
-            toolResults: [{ toolName: "submit_ask_card" }],
-          },
-        ],
-      }),
-    ).toBe(true);
-    expect(
-      submitStopCondition?.({
-        steps: [
-          {
-            toolResults: [{ toolName: "get_market_briefing" }],
-          },
-        ],
-      }),
-    ).toBe(false);
+    expect(output).toBeDefined();
+    expect(stopWhen).toHaveLength(1);
   });
 
   it("prefers the model's final JSON card over a raw tool card", async () => {
@@ -1534,6 +1688,113 @@ describe("generateAskResponse", () => {
     expect(response.data.bias).toBe("Bullish");
   });
 
+  it("injects persisted session memory before recent conversation turns", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify(fallbackInsightCard),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    await generateAskResponse(
+      {
+        message: "How should I manage this from here?",
+        sessionId: crypto.randomUUID(),
+        sessionMemory: {
+          activeAsset: "GOLD / XAUUSD",
+          activeSide: "buy",
+          lastCardType: "setup",
+          recentUserGoals: ["Find a clean gold entry"],
+        },
+        history: [
+          { role: "user", content: "Remind me of the last gold idea." },
+          {
+            role: "assistant",
+            content: JSON.stringify({
+              type: "setup",
+              asset: "GOLD / XAUUSD",
+              bias: "Bullish",
+              entry: "4649.77",
+              stop: "4640.00",
+              target: "4669.31",
+              rr: "2:1",
+              rationale: "Wait for reclaim.",
+              confidence: "Low",
+              verdict: "Buy only after confirmation.",
+            }),
+          },
+        ],
+      },
+      { generateTextImpl },
+    );
+
+    const call = vi.mocked(generateTextImpl).mock.calls[0]?.[0];
+    const memoryMessageIndex =
+      call?.messages?.findIndex(
+        (message) =>
+          message.role === "system" &&
+          typeof message.content === "string" &&
+          message.content.startsWith("SESSION MEMORY"),
+      ) ?? -1;
+    const firstHistoryIndex =
+      call?.messages?.findIndex(
+        (message) =>
+          message.role !== "system" &&
+          typeof message.content === "string" &&
+          message.content.includes("Remind me of the last gold idea."),
+      ) ?? -1;
+
+    expect(memoryMessageIndex).toBeGreaterThan(-1);
+    expect(firstHistoryIndex).toBeGreaterThan(memoryMessageIndex);
+    expect(call?.messages?.[memoryMessageIndex]).toEqual(
+      expect.objectContaining({
+        role: "system",
+        content: expect.stringContaining("Find a clean gold entry"),
+      }),
+    );
+  });
+
+  it("uses the same assembled context for streaming asks", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify(fallbackInsightCard),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+    const streamTextImpl = vi.fn().mockReturnValue({ stream: "mock" });
+    const input = {
+      message: "Can you refine the risk on this?",
+      sessionId: crypto.randomUUID(),
+      sessionMemory: {
+        activeAsset: "GOLD / XAUUSD",
+        activeSide: "buy" as const,
+        lastCardType: "setup" as const,
+      },
+      history: [
+        { role: "user" as const, content: "Set up a gold long for me." },
+        {
+          role: "assistant" as const,
+          content: JSON.stringify({
+            type: "setup",
+            asset: "GOLD / XAUUSD",
+            bias: "Bullish",
+            entry: "4649.77",
+            stop: "4640.00",
+            target: "4669.31",
+            rr: "2:1",
+            rationale: "Wait for reclaim.",
+            confidence: "Low",
+            verdict: "Buy only after confirmation.",
+          }),
+        },
+      ],
+    };
+
+    await generateAskResponse(input, { generateTextImpl });
+    await streamAskResponse(input, {}, { streamTextImpl });
+
+    const generateCall = vi.mocked(generateTextImpl).mock.calls[0]?.[0];
+    const streamCall = vi.mocked(streamTextImpl).mock.calls[0]?.[0];
+
+    expect(streamCall?.messages).toEqual(generateCall?.messages);
+  });
+
   it("injects analysis rules into image requests before the user chart message", async () => {
     const generateTextImpl = vi.fn().mockResolvedValue({
       text: JSON.stringify({
@@ -1891,6 +2152,44 @@ describe("generateAskResponse", () => {
       count: 1,
       tools: ["submit_ask_card"],
     });
+  });
+
+  it("falls back to a validated submit_ask_card when structured output is missing", async () => {
+    const submitCardResult = {
+      toolName: "submit_ask_card",
+      output: {
+        card: {
+          type: "insight" as const,
+          headline: "AUD/USD Live Pulse",
+          body: "Price is holding above support while headlines stay mixed.",
+          verdict: "Wait for confirmation before chasing the move.",
+        },
+      },
+    };
+
+    const result = {
+      text: "",
+      toolResults: [submitCardResult],
+    } as { text: string; toolResults: unknown[]; output?: unknown };
+
+    Object.defineProperty(result, "output", {
+      get() {
+        throw new Error("No output generated.");
+      },
+    });
+
+    const generateTextImpl = vi.fn().mockResolvedValue(result) as unknown as typeof import("ai").generateText;
+
+    const response = await generateAskResponse(
+      {
+        message: "status and news on aud/usd in market?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    expect(response.data).toEqual(submitCardResult.output.card);
   });
 
   it("rejects unsupported image payloads", async () => {

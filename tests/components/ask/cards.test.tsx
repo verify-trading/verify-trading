@@ -83,4 +83,33 @@ describe("AskResponseCard", () => {
     expect(screen.getByText("Reviewed record")).toBeInTheDocument();
     expect(screen.queryByText("FCA")).not.toBeInTheDocument();
   });
+
+  it("renders projection stat tiles with the card's currencySymbol instead of hardcoded £", () => {
+    const { container } = render(
+      <AskResponseCard
+        card={{
+          type: "projection",
+          months: 6,
+          startBalance: 500,
+          monthlyAdd: 100,
+          currencySymbol: "$",
+          projectedBalance: 1200,
+          dataPoints: [500, 615, 733, 855, 981, 1200],
+          totalReturn: "60.0%",
+          lossEvents: 2,
+          verdict: "Base case with dollar amounts.",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("$500")).toBeInTheDocument();
+    expect(screen.getByText("$100")).toBeInTheDocument();
+    expect(screen.getByText(/\$1,200/)).toBeInTheDocument();
+
+    // Stat tiles should not contain £ — check non-SVG text nodes only
+    // (Recharts SVG tspans from prior test renders can leak in JSDOM)
+    const statTiles = container.querySelectorAll("[class*='rounded-xl']");
+    const tileTexts = Array.from(statTiles).map((el) => el.textContent ?? "");
+    expect(tileTexts.some((t) => t.includes("£"))).toBe(false);
+  });
 });

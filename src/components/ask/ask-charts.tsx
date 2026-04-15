@@ -15,6 +15,7 @@ import {
 } from "recharts";
 
 import type { ProjectionCard } from "@/lib/ask/contracts";
+import { formatMarketPrice } from "@/lib/ask/market-format";
 
 const tooltipBox =
   "rounded-[10px] border border-[rgba(76,110,245,0.28)] bg-[rgba(15,19,64,0.96)] px-2.5 py-1.5 text-xs text-white shadow-lg";
@@ -22,9 +23,11 @@ const tooltipBox =
 function ProjectionTooltip({
   active,
   payload,
+  currencySymbol,
 }: {
   active?: boolean;
   payload?: Array<{ payload: { month: number; value: number } }>;
+  currencySymbol: string;
 }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
@@ -33,7 +36,7 @@ function ProjectionTooltip({
     <div className={tooltipBox}>
       <div className="font-semibold text-white/80">Month {row.month}</div>
       <div className="tabular-nums text-[var(--vt-blue)]">
-        £{row.value.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
+        {currencySymbol}{row.value.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
       </div>
     </div>
   );
@@ -42,20 +45,16 @@ function ProjectionTooltip({
 function MarketTooltip({
   active,
   payload,
+  asset,
 }: {
   active?: boolean;
   payload?: Array<{ payload: { step: number; value: number } }>;
+  asset: string;
 }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
-  const v = row.value;
-  const formatted =
-    Math.abs(v) >= 1000 && Math.abs(v) < 1e6
-      ? v.toLocaleString("en-GB", { maximumFractionDigits: 0 })
-      : v >= 0.01 && v < 1000
-        ? v.toLocaleString("en-GB", { maximumFractionDigits: 0 })
-        : v.toFixed(Math.abs(v) < 1 ? 5 : 2);
+  const formatted = formatMarketPrice(row.value, { asset, symbol: asset });
   return (
     <div className={tooltipBox}>
       <div className="text-[10px] font-medium uppercase tracking-wide text-white/45">
@@ -76,6 +75,7 @@ export function InteractiveProjectionCurve({
 }) {
   const gid = useId().replace(/:/g, "");
   const fillId = `projection-fill-${gid}`;
+  const symbol = card.currencySymbol ?? "£";
 
   const data = useMemo(
     () =>
@@ -124,12 +124,12 @@ export function InteractiveProjectionCurve({
             axisLine={false}
             width={48}
             tickFormatter={(v) => {
-              if (Math.abs(v) >= 1_000_000) return `£${(v / 1_000_000).toFixed(1)}`;
-              if (Math.abs(v) >= 1000) return `£${(v / 1000).toFixed(0)}k`;
-              return `£${Math.round(v)}`;
+              if (Math.abs(v) >= 1_000_000) return `${symbol}${(v / 1_000_000).toFixed(1)}`;
+              if (Math.abs(v) >= 1000) return `${symbol}${(v / 1000).toFixed(0)}k`;
+              return `${symbol}${Math.round(v)}`;
             }}
           />
-          <Tooltip content={<ProjectionTooltip />} cursor={{ stroke: "rgba(76,110,245,0.45)" }} />
+          <Tooltip content={<ProjectionTooltip currencySymbol={symbol} />} cursor={{ stroke: "rgba(76,110,245,0.45)" }} />
           <Area
             type="monotone"
             dataKey="value"
@@ -161,7 +161,15 @@ export function InteractiveProjectionCurve({
 }
 
 /** Interactive market sparkline (briefing cards) — hover for level. */
-export function InteractiveMarketMiniChart({ points, up }: { points: number[]; up: boolean }) {
+export function InteractiveMarketMiniChart({
+  points,
+  up,
+  asset,
+}: {
+  points: number[];
+  up: boolean;
+  asset: string;
+}) {
   const data = useMemo(
     () =>
       points.map((value, i) => ({
@@ -196,7 +204,7 @@ export function InteractiveMarketMiniChart({ points, up }: { points: number[]; u
           <XAxis dataKey="step" hide />
           <YAxis domain={["auto", "auto"]} hide />
           <Tooltip
-            content={<MarketTooltip />}
+            content={<MarketTooltip asset={asset} />}
             cursor={{
               stroke: "rgba(255,255,255,0.45)",
               strokeWidth: 1,

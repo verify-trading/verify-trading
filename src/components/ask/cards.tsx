@@ -140,7 +140,7 @@ function BriefingCard({
           </div>
         </div>
         {uiMeta?.marketSeries ? (
-          <InteractiveMarketMiniChart points={uiMeta.marketSeries} up={isUp} />
+          <InteractiveMarketMiniChart points={uiMeta.marketSeries} up={isUp} asset={card.asset} />
         ) : null}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">

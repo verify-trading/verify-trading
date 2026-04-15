@@ -32,13 +32,14 @@ async function readResponseJson(response: Response) {
 describe("POST /api/ask", () => {
   const listSessions = vi.fn();
   const loadHistory = vi.fn();
+  const loadSessionMemory = vi.fn();
   const loadThreadPage = vi.fn();
   const saveExchange = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getSessionUser).mockResolvedValue({
-      user: { id: "00000000-0000-0000-0000-000000000001" },
+      user: { id: "00000000-0000-0000-0000-000000000001" } as never,
       supabase: {} as never,
     });
     vi.mocked(reserveAskQuery).mockResolvedValue({
@@ -50,10 +51,12 @@ describe("POST /api/ask", () => {
       listSessions,
       deleteSession: vi.fn(),
       loadHistory,
+      loadSessionMemory,
       loadThreadPage,
       saveExchange,
     });
     loadHistory.mockResolvedValue([]);
+    loadSessionMemory.mockResolvedValue(null);
     loadThreadPage.mockResolvedValue({ messages: [], nextCursor: null });
     saveExchange.mockResolvedValue(undefined);
   });
@@ -163,6 +166,51 @@ describe("POST /api/ask", () => {
       }),
       {},
       expect.objectContaining({ onToolCall: expect.any(Function) }),
+    );
+  });
+
+  it("loads persisted session memory and saves an updated summary", async () => {
+    loadSessionMemory.mockResolvedValue({
+      activeAsset: "GOLD / XAUUSD",
+      lastCardType: "setup",
+      activeSide: "buy",
+      recentUserGoals: ["What price should I buy gold at?"],
+    });
+    vi.mocked(generateAskResponse).mockResolvedValue({
+      data: fallbackInsightCard,
+      sessionId: crypto.randomUUID(),
+      messageId: crypto.randomUUID(),
+    });
+
+    await POST(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        body: JSON.stringify({
+          message: "Should I wait for confirmation?",
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    expect(generateAskResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionMemory: expect.objectContaining({
+          activeAsset: "GOLD / XAUUSD",
+          activeSide: "buy",
+        }),
+      }),
+      {},
+      expect.objectContaining({ onToolCall: expect.any(Function) }),
+    );
+    expect(saveExchange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionMemory: expect.objectContaining({
+          activeAsset: "GOLD / XAUUSD",
+          recentUserGoals: expect.arrayContaining(["Should I wait for confirmation?"]),
+        }),
+      }),
     );
   });
 

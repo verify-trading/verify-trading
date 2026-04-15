@@ -1,4 +1,5 @@
 import { askCardSchema, type AskCard, type AskHistoryPageMessage } from "@/lib/ask/contracts";
+import { ASK_MODEL_HISTORY_LIMIT } from "@/lib/ask/config";
 
 export function inferSessionTitle(message: string) {
   return message.trim().slice(0, 80) || "New Ask Session";
@@ -93,7 +94,7 @@ export function parseStoredCard(
 
 export function toHistory(messages: AskHistoryPageMessage[]) {
   return messages
-    .slice(-10)
+    .slice(-ASK_MODEL_HISTORY_LIMIT)
     .filter((message) => message.role === "assistant" || message.content.trim().length > 0)
     .map(({ role, content }) => ({ role, content }));
 }

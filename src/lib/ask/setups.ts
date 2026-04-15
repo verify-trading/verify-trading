@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { AskUiMeta, SetupCard } from "@/lib/ask/contracts";
+import { formatMarketPrice } from "@/lib/ask/market-format";
 import type { MarketQuote, MarketSeries } from "@/lib/ask/market";
 
 export const getMarketSetupInputSchema = z.object({
@@ -11,16 +12,10 @@ export const getMarketSetupInputSchema = z.object({
 
 export type MarketSetupInput = z.input<typeof getMarketSetupInputSchema>;
 
-function formatPrice(value: number) {
-  return value.toFixed(2);
-}
-
-function formatRange(min: number, max: number) {
-  if (Math.abs(max - min) < 0.005) {
-    return formatPrice(min);
-  }
-
-  return `${formatPrice(min)}-${formatPrice(max)}`;
+function formatRange(min: number, max: number, instrument: MarketQuote | MarketSeries) {
+  const formattedMin = formatMarketPrice(min, instrument);
+  const formattedMax = formatMarketPrice(max, instrument);
+  return formattedMin === formattedMax ? formattedMin : `${formattedMin}-${formattedMax}`;
 }
 
 export function buildMarketSetupCard(
@@ -47,18 +42,18 @@ export function buildMarketSetupCard(
         asset: quote.asset,
         bias: "Bullish",
         entry: counterTrend
-          ? formatPrice(entry)
-          : formatRange(Math.max(0, support - range * 0.1), entry),
-        stop: formatPrice(stop),
-        target: formatPrice(target),
+          ? formatMarketPrice(entry, quote)
+          : formatRange(Math.max(0, support - range * 0.1), entry, quote),
+        stop: formatMarketPrice(stop, quote),
+        target: formatMarketPrice(target, quote),
         rr: "2:1",
         rationale: counterTrend
           ? `${quote.asset} is still leaning heavy. For a long, wait for a clean reclaim above resistance instead of catching the knife into support.`
           : `${quote.asset} is holding up. Industry standard is buy the pullback into support, not chase the middle of the range.`,
         confidence: counterTrend ? "Low" : "Medium",
         verdict: counterTrend
-          ? `Do not buy weakness here. Buy only if price reclaims ${formatPrice(entry)} and holds.`
-          : `Buy the pullback only if support holds. Invalidation sits below ${formatPrice(stop)}.`,
+          ? `Do not buy weakness here. Buy only if price reclaims ${formatMarketPrice(entry, quote)} and holds.`
+          : `Buy the pullback only if support holds. Invalidation sits below ${formatMarketPrice(stop, quote)}.`,
       },
       uiMeta: {
         marketSeries: series.closeValues,
@@ -79,18 +74,18 @@ export function buildMarketSetupCard(
       asset: quote.asset,
       bias: "Bearish",
       entry: counterTrend
-        ? formatPrice(entry)
-        : formatRange(entry, resistance + range * 0.1),
-      stop: formatPrice(stop),
-      target: formatPrice(target),
+        ? formatMarketPrice(entry, quote)
+        : formatRange(entry, resistance + range * 0.1, quote),
+      stop: formatMarketPrice(stop, quote),
+      target: formatMarketPrice(target, quote),
       rr: "2:1",
       rationale: counterTrend
         ? `${quote.asset} is still bid. For a short, wait for a clean break below support instead of fading strength blindly.`
         : `${quote.asset} is leaning heavy. Industry standard is sell the pop into resistance, not chase the low after extension.`,
       confidence: counterTrend ? "Low" : "Medium",
       verdict: counterTrend
-        ? `Do not short strength here. Sell only if price breaks below ${formatPrice(entry)} and stays offered.`
-        : `Sell the rally only if resistance keeps capping price. Invalidation sits above ${formatPrice(stop)}.`,
+        ? `Do not short strength here. Sell only if price breaks below ${formatMarketPrice(entry, quote)} and stays offered.`
+        : `Sell the rally only if resistance keeps capping price. Invalidation sits above ${formatMarketPrice(stop, quote)}.`,
     },
     uiMeta: {
       marketSeries: series.closeValues,

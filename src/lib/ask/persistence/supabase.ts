@@ -1,7 +1,13 @@
-import { type AskAttachmentMeta, type AskUiMeta } from "@/lib/ask/contracts";
+import {
+  askSessionMemorySchema,
+  type AskAttachmentMeta,
+  type AskSessionMemory,
+  type AskUiMeta,
+} from "@/lib/ask/contracts";
 import {
   ASK_ATTACHMENTS_BUCKET,
   ASK_ATTACHMENT_SIGNED_URL_TTL_SECONDS,
+  ASK_MODEL_HISTORY_LIMIT,
 } from "@/lib/ask/config";
 import { decodeImageDataUrl } from "@/lib/ask/image-data-url";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -140,6 +146,11 @@ async function hydrateAttachmentMeta(
   };
 }
 
+function parseStoredSessionMemory(value: unknown): AskSessionMemory | null {
+  const parsed = askSessionMemorySchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 export function createSupabasePersistence(userId: string): AskPersistence {
   const persistence: AskPersistence = {
     async listSessions(limit = 40, cursor = null) {
@@ -216,8 +227,27 @@ export function createSupabasePersistence(userId: string): AskPersistence {
         throw new Error("Could not delete the Ask session.");
       }
     },
+    async loadSessionMemory(sessionId) {
+      const client = getSupabaseAdminClient();
+      if (!client) {
+        throw new Error("Supabase admin is not configured for Ask sessions.");
+      }
+
+      const { data, error } = await client
+        .from("chat_sessions")
+        .select("memory_summary")
+        .eq("id", sessionId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error || !data) {
+        return null;
+      }
+
+      return parseStoredSessionMemory(data.memory_summary);
+    },
     async loadHistory(sessionId) {
-      const page = await persistence.loadThreadPage(sessionId, { limit: 10 });
+      const page = await persistence.loadThreadPage(sessionId, { limit: ASK_MODEL_HISTORY_LIMIT });
       return toHistory(page.messages);
     },
     async loadThreadPage(sessionId, options = {}) {
@@ -328,6 +358,12 @@ export function createSupabasePersistence(userId: string): AskPersistence {
           id: input.sessionId,
           title: sessionTitle,
           user_id: userId,
+          ...(input.sessionMemory !== undefined
+            ? {
+                memory_summary: input.sessionMemory,
+                memory_updated_at: now,
+              }
+            : {}),
           updated_at: now,
         },
         {

@@ -15,6 +15,7 @@ import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { generateAskResponse } from "@/lib/ask/service";
 import type { AskStreamData, AskToolStatus } from "@/lib/ask/stream";
 import { AskValidationError } from "@/lib/ask/validation-error";
+import { buildUpdatedSessionMemory } from "@/lib/ask/session-memory";
 
 type AskRouteMessage = UIMessage<unknown, AskStreamData>;
 
@@ -187,12 +188,21 @@ function buildAskStreamResponse({
         });
 
         try {
+          const sessionMemory = buildUpdatedSessionMemory({
+            history: requestInput.history,
+            userMessage: parsedRequest.message,
+            assistantCard: response.data,
+            previousMemory: requestInput.sessionMemory,
+            lastUpdatedAt: new Date().toISOString(),
+          });
+
           await persistence.saveExchange({
             sessionId: response.sessionId,
             userMessage: parsedRequest.message,
             assistantCard: response.data,
             assistantUiMeta: response.uiMeta,
             attachmentMeta: parsedRequest.attachmentMeta ?? null,
+            sessionMemory,
             userImageDataUrl: parsedRequest.image ?? null,
           });
         } catch (error) {
@@ -294,16 +304,36 @@ export async function POST(request: Request) {
       crypto.randomUUID();
     const persistence = getAskPersistence({ userId: session.user.id });
     let history = parsedRequest.history;
+    let sessionMemory = parsedRequest.sessionMemory ?? null;
 
-    try {
-      const persistedHistory = await persistence.loadHistory(sessionId);
-      if (persistedHistory.length > 0) {
-        history = persistedHistory;
+    const [persistedHistoryResult, sessionMemoryResult] = await Promise.allSettled([
+      persistence.loadHistory(sessionId),
+      persistence.loadSessionMemory(sessionId),
+    ]);
+
+    if (persistedHistoryResult.status === "fulfilled") {
+      if (persistedHistoryResult.value.length > 0) {
+        history = persistedHistoryResult.value;
       }
-    } catch (error) {
+    } else {
       logger.warn("Could not load Ask history before generation.", {
         sessionId,
-        error: error instanceof Error ? error.message : "unknown",
+        error:
+          persistedHistoryResult.reason instanceof Error
+            ? persistedHistoryResult.reason.message
+            : "unknown",
+      });
+    }
+
+    if (sessionMemoryResult.status === "fulfilled") {
+      sessionMemory = sessionMemoryResult.value;
+    } else {
+      logger.warn("Could not load Ask session memory before generation.", {
+        sessionId,
+        error:
+          sessionMemoryResult.reason instanceof Error
+            ? sessionMemoryResult.reason.message
+            : "unknown",
       });
     }
 
@@ -311,6 +341,7 @@ export async function POST(request: Request) {
       ...parsedRequest,
       message: parsedRequest.message || (parsedRequest.image ? defaultAskImagePrompt : ""),
       sessionId,
+      sessionMemory,
       history,
     };
 

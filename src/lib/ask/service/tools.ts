@@ -25,6 +25,7 @@ import { getFcaStatus } from "@/lib/ask/fca";
 import { lookupVerifiedEntity, type LookupVerifiedEntityResult } from "@/lib/ask/entities";
 import { getMarketQuote, getMarketSeries, getMarketSeriesInputSchema } from "@/lib/ask/market";
 import { askCardSchema } from "@/lib/ask/contracts";
+import { formatMarketPrice } from "@/lib/ask/market-format";
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 import { generateProjectionCard, generateProjectionInputSchema } from "@/lib/ask/projections";
@@ -290,10 +291,6 @@ function normalizeVerificationName(name: string) {
   }
 }
 
-function formatPrice(value: number) {
-  return value.toFixed(2);
-}
-
 function formatChange(value: number) {
   return `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(2)}%`;
 }
@@ -322,11 +319,11 @@ export function buildBriefingCard(
   const card: BriefingCard = {
     type: "briefing",
     asset: quote.asset,
-    price: formatPrice(quote.price),
+    price: formatMarketPrice(quote.price, quote),
     change: formatChange(quote.changePercent),
     direction: quote.direction,
-    level1: formatPrice(resistance),
-    level2: formatPrice(support),
+    level1: formatMarketPrice(resistance, series),
+    level2: formatMarketPrice(support, series),
     event: null,
     verdict,
   };
@@ -529,7 +526,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     generate_projection: tool({
       description:
-        "Generate the full projection card for account growth and compounding questions. Requires months and startBalance. If return or drawdown assumptions are missing, it can still answer with sensible defaults, but the verdict must clearly separate user-supplied assumptions from assumed ones.",
+        "Generate the full projection card for account growth and compounding questions. Requires months and startBalance. If return or drawdown assumptions are missing, it can still answer with sensible defaults, but the verdict must clearly separate user-supplied assumptions from assumed ones. Always pass currencySymbol when the user's message contains a currency marker ($, £, or €) so the card and chart display the correct symbol.",
       inputSchema: generateProjectionInputSchema,
       execute: async (toolInput) => withCard(generateProjectionCard(toolInput)),
     }),

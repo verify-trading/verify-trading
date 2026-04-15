@@ -1,4 +1,5 @@
-import { APICallError, generateText, RetryError, stepCountIs, streamText, type ModelMessage } from "ai";
+import { APICallError, Output, generateText, RetryError, stepCountIs, streamText, type ModelMessage } from "ai";
+import { z } from "zod";
 
 import {
   buildAnalysisRulesPrompt,
@@ -32,11 +33,13 @@ import { extractGrowthPlanShortcutCard } from "@/lib/ask/plans";
 import { expandPromptTemplate } from "@/lib/site-config";
 import {
   extractJson,
+  extractMarketBriefingCard,
   extractSubmitAskCard,
   extractToolCard,
   extractUiMeta,
   parseImageDataUrl,
 } from "@/lib/ask/service/context";
+import { buildSessionMemoryMessage, deriveAskSessionMemory } from "@/lib/ask/session-memory";
 import {
   getMarketQuote,
   getMarketSeries,
@@ -61,8 +64,8 @@ import type { AskServiceDependencies } from "@/lib/ask/service/types";
 
 const ASK_MODEL_MAX_RETRIES = 2;
 
-/** Model + tool turns (e.g. search_news + get_market_briefing + submit_ask_card). */
-export const ASK_MAX_TOOL_STEPS = 6;
+/** Model + tool turns plus one final structured-output step. */
+export const ASK_MAX_TOOL_STEPS = 7;
 
 const ASK_MODEL_MAX_OUTPUT_TOKENS = 800;
 
@@ -180,6 +183,18 @@ function buildInsightCard(headline: string, body: string, verdict: string) {
   };
 }
 
+const askCardOutputEnvelopeSchema = z.object({
+  card_json: z
+    .string()
+    .describe("A single JSON object string for the final response card. It must match the ask card schema exactly."),
+});
+
+const askCardOutput = Output.object({
+  name: "AskCardEnvelope",
+  description: "Envelope that contains the final response card as a JSON string.",
+  schema: askCardOutputEnvelopeSchema,
+});
+
 type CompletedCard = {
   card: AskCard;
   source: string;
@@ -216,6 +231,14 @@ function buildCompletedAskResponse({
 
 function extractRecoveredToolCard(toolResults: Array<{ toolName?: string; output?: unknown }>) {
   const submitCard = extractSubmitAskCard(toolResults, askCardSchema);
+  const fmpBriefing = extractMarketBriefingCard(toolResults, askCardSchema);
+  if (submitCard?.type === "briefing" && fmpBriefing) {
+    return {
+      card: fmpBriefing,
+      source: "tool_result" as const,
+    };
+  }
+
   if (submitCard) {
     return {
       card: submitCard,
@@ -232,6 +255,21 @@ function extractRecoveredToolCard(toolResults: Array<{ toolName?: string; output
   }
 
   return null;
+}
+
+function extractOutputCard(result: { output?: unknown }) {
+  try {
+    const parsedEnvelope = askCardOutputEnvelopeSchema.safeParse(result.output);
+    if (!parsedEnvelope.success) {
+      return null;
+    }
+
+    const parsedCard = JSON.parse(parsedEnvelope.data.card_json);
+    const validatedCard = askCardSchema.safeParse(parsedCard);
+    return validatedCard.success ? validatedCard.data : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeWhitespace(value: string) {
@@ -273,173 +311,6 @@ function buildInsightCardFromModelText(text: string) {
   );
 }
 
-type DerivedSessionState = {
-  activeAsset?: string;
-  activeCardType?: AskCard["type"];
-  activeSide?: "buy" | "sell";
-  lastSetup?: {
-    entry: string;
-    stop: string;
-    target: string;
-    bias: "Bullish" | "Bearish" | "Neutral";
-  };
-  lastProjection?: {
-    months: number;
-    startBalance: number;
-    monthlyAdd: number;
-    totalReturn: string;
-  };
-  lastPlan?: {
-    startBalance: number;
-    monthlyAdd: number;
-    dailyTarget: string;
-    monthlyTarget: string;
-    projectionReturn: string;
-  };
-  lastVerifiedEntity?: {
-    name: string;
-    status: string;
-    kind: "broker" | "guru";
-  };
-  recentUserMessages: string[];
-};
-
-function inferTradeSideFromCard(card: AskCard): "buy" | "sell" | undefined {
-  if (card.type !== "setup" && card.type !== "chart") {
-    return undefined;
-  }
-
-  if (card.bias === "Bullish") {
-    return "buy";
-  }
-  if (card.bias === "Bearish") {
-    return "sell";
-  }
-
-  return undefined;
-}
-
-function deriveSessionState(history: AskRequest["history"] | undefined): DerivedSessionState | null {
-  const messages = history ?? [];
-
-  if (!messages.length) {
-    return null;
-  }
-
-  const state: DerivedSessionState = {
-    recentUserMessages: [],
-  };
-
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-
-    if (message.role === "user") {
-      if (message.content.trim() && state.recentUserMessages.length < 2) {
-        state.recentUserMessages.push(clampWords(message.content, 20));
-      }
-      continue;
-    }
-
-    const parsed = askCardSchema.safeParse(extractJson(message.content));
-    if (!parsed.success) {
-      continue;
-    }
-
-    const card = parsed.data;
-
-    state.activeCardType ??= card.type;
-
-    if ((card.type === "briefing" || card.type === "setup") && !state.activeAsset) {
-      state.activeAsset = card.asset;
-    }
-
-    if (card.type === "setup" && !state.lastSetup) {
-      state.lastSetup = {
-        entry: card.entry,
-        stop: card.stop,
-        target: card.target,
-        bias: card.bias,
-      };
-      state.activeSide ??= inferTradeSideFromCard(card);
-    }
-
-    if (card.type === "projection" && !state.lastProjection) {
-      state.lastProjection = {
-        months: card.months,
-        startBalance: card.startBalance,
-        monthlyAdd: card.monthlyAdd,
-        totalReturn: card.totalReturn,
-      };
-    }
-
-    if (card.type === "plan" && !state.lastPlan) {
-      state.lastPlan = {
-        startBalance: card.startBalance,
-        monthlyAdd: card.monthlyAdd,
-        dailyTarget: card.dailyTarget,
-        monthlyTarget: card.monthlyTarget,
-        projectionReturn: card.projectionReturn,
-      };
-    }
-
-    if ((card.type === "broker" || card.type === "guru") && !state.lastVerifiedEntity) {
-      state.lastVerifiedEntity = {
-        name: card.name,
-        status: card.status,
-        kind: card.type,
-      };
-    }
-  }
-
-  return Object.keys(state).length > 1 ? state : null;
-}
-
-function buildSessionStateMessage(state: DerivedSessionState | null) {
-  if (!state) {
-    return null;
-  }
-
-  const lines = [
-    "SESSION STATE",
-    "Use this only to resolve omitted context in follow-up questions. Explicit user input overrides it.",
-  ];
-
-  if (state.activeAsset) {
-    lines.push(`Active asset: ${state.activeAsset}`);
-  }
-  if (state.activeCardType) {
-    lines.push(`Last card type: ${state.activeCardType}`);
-  }
-  if (state.activeSide) {
-    lines.push(`Active trade side: ${state.activeSide}`);
-  }
-  if (state.lastSetup) {
-    lines.push(
-      `Last setup: bias ${state.lastSetup.bias}, entry ${state.lastSetup.entry}, stop ${state.lastSetup.stop}, target ${state.lastSetup.target}`,
-    );
-  }
-  if (state.lastProjection) {
-    lines.push(
-      `Last projection: ${state.lastProjection.months} months, start ${state.lastProjection.startBalance}, monthly add ${state.lastProjection.monthlyAdd}, total return ${state.lastProjection.totalReturn}`,
-    );
-  }
-  if (state.lastPlan) {
-    lines.push(
-      `Last plan: start ${state.lastPlan.startBalance}, monthly add ${state.lastPlan.monthlyAdd}, daily target ${state.lastPlan.dailyTarget}, monthly target ${state.lastPlan.monthlyTarget}, projection return ${state.lastPlan.projectionReturn}`,
-    );
-  }
-  if (state.lastVerifiedEntity) {
-    lines.push(
-      `Last verified entity: ${state.lastVerifiedEntity.name} (${state.lastVerifiedEntity.kind}, ${state.lastVerifiedEntity.status})`,
-    );
-  }
-  if (state.recentUserMessages.length > 0) {
-    lines.push(`Recent user messages: ${state.recentUserMessages.join(" | ")}`);
-  }
-
-  return lines.join("\n");
-}
-
 function parseFlexibleNumber(raw: string): number | null {
   const normalized = raw.replace(/[$£€,]/g, "").trim().toLowerCase();
   const match = normalized.match(/^(\d+(?:\.\d+)?)([km])?$/);
@@ -465,6 +336,12 @@ function parseFlexibleNumber(raw: string): number | null {
 
 function extractCurrencySymbol(raw: string) {
   return raw.match(/[$£€]/)?.[0];
+}
+
+/** Scan the full user message for the first currency symbol as a fallback. */
+function inferCurrencySymbolFromText(message: string): "$" | "£" | "€" | undefined {
+  const match = message.match(/[$£€]/);
+  return match ? (match[0] as "$" | "£" | "€") : undefined;
 }
 
 function extractProjectionShortcutCard(message: string) {
@@ -505,7 +382,9 @@ function extractProjectionShortcutCard(message: string) {
   const drawdownEveryMonths = drawdownEveryMonthsMatch
     ? Number.parseInt(drawdownEveryMonthsMatch[1], 10)
     : null;
-  const currencySymbol = startMatch ? extractCurrencySymbol(startMatch[1]) : undefined;
+  const currencySymbol =
+    (startMatch ? extractCurrencySymbol(startMatch[1]) : undefined) ??
+    inferCurrencySymbolFromText(message);
 
   if (!Number.isInteger(months) || months <= 0 || startBalance == null) {
     return null;
@@ -642,7 +521,7 @@ function extractDirectBriefingTimeframe(message: string): "1D" | "1W" | "1M" | "
 }
 
 function extractDirectForexPair(message: string) {
-  const match = message.match(/\b([a-z]{3})\/?([a-z]{3})\b/i);
+  const match = message.match(/\b([a-z]{3})\/([a-z]{3})\b/i);
   if (!match) {
     return null;
   }
@@ -786,13 +665,13 @@ function buildAskMessages({
   normalizedMessage,
   image,
   analysisRulesMessage,
-  sessionStateMessage,
+  sessionMemoryMessage,
 }: {
   history: AskRequest["history"];
   normalizedMessage: string;
   image: ReturnType<typeof parseImageDataUrl>;
   analysisRulesMessage: string | null;
-  sessionStateMessage?: string | null;
+  sessionMemoryMessage?: string | null;
 }): ModelMessage[] {
   const userMessage: ModelMessage = image
     ? {
@@ -817,7 +696,7 @@ function buildAskMessages({
   return [
     createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
     createSystemMessage(askResponseGuide),
-    ...(sessionStateMessage ? [createSystemMessage(sessionStateMessage)] : []),
+    ...(sessionMemoryMessage ? [createSystemMessage(sessionMemoryMessage)] : []),
     ...(image ? [createSystemMessage(askImageResponseGuide)] : []),
     ...(analysisRulesMessage ? [createSystemMessage(analysisRulesMessage)] : []),
     ...(history ?? []).map((message) => ({
@@ -826,6 +705,29 @@ function buildAskMessages({
     })),
     userMessage,
   ];
+}
+
+async function buildAskModelMessages(input: {
+  request: AskRequest;
+  image: ReturnType<typeof parseImageDataUrl>;
+  normalizedMessage: string;
+  getActiveAnalysisRulesImpl: typeof getActiveAnalysisRules;
+}) {
+  const { request, image, normalizedMessage, getActiveAnalysisRulesImpl } = input;
+  const analysisRulesMessage = image
+    ? buildAnalysisRulesPrompt(await getActiveAnalysisRulesImpl())
+    : null;
+  const sessionMemoryMessage = buildSessionMemoryMessage(
+    deriveAskSessionMemory(request.history, request.sessionMemory ?? null),
+  );
+
+  return buildAskMessages({
+    history: request.history,
+    normalizedMessage,
+    image,
+    analysisRulesMessage,
+    sessionMemoryMessage,
+  });
 }
 
 async function resolveDirectShortcut({
@@ -917,7 +819,8 @@ async function resolveDirectShortcut({
   const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
   const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
   const inferredAssets = inferMarketAssetsFromText(normalizedMessage);
-  const inferredAsset = inferredAssets.length === 1 ? inferredAssets[0] : null;
+  const inferredAsset =
+    inferredAssets.length === 1 ? inferredAssets[0] : extractDirectForexPair(normalizedMessage);
 
   if (!inferredAsset) {
     return null;
@@ -950,12 +853,13 @@ export async function generateAskResponse(
   const messageId = crypto.randomUUID();
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
-  const analysisRulesMessage = image
-    ? buildAnalysisRulesPrompt(await getActiveAnalysisRulesImpl())
-    : null;
+  const messages = await buildAskModelMessages({
+    request,
+    image,
+    normalizedMessage,
+    getActiveAnalysisRulesImpl,
+  });
   const completedToolResults: Array<{ toolName?: string; output?: unknown }> = [];
-  const sessionState = deriveSessionState(request.history);
-  const sessionStateMessage = buildSessionStateMessage(sessionState);
 
   logger.info("Ask generation started.", {
     sessionId,
@@ -987,7 +891,8 @@ export async function generateAskResponse(
       temperature: 0.2,
       maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
       maxRetries: ASK_MODEL_MAX_RETRIES,
-      stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS), stopAfterSubmitAskCardResult],
+      output: askCardOutput,
+      stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS)],
       onStepFinish({
         stepNumber,
         text,
@@ -1023,13 +928,7 @@ export async function generateAskResponse(
           });
         });
       },
-      messages: buildAskMessages({
-        history: request.history,
-        normalizedMessage,
-        image,
-        analysisRulesMessage,
-        sessionStateMessage,
-      }),
+      messages,
       tools: createAskTools(dependencies),
     });
   };
@@ -1086,18 +985,27 @@ export async function generateAskResponse(
     outputs: allToolResults.map((t) => JSON.stringify(t.output).slice(0, 200)),
   });
 
-  const parsedText = extractJson(result.text);
+  const outputCard = extractOutputCard(result as { output?: unknown });
+  const parsedText = outputCard ? null : extractJson(result.text);
   const parsedCard = parsedText ? askCardSchema.safeParse(parsedText) : null;
   const submitCard = extractSubmitAskCard(allToolResults, askCardSchema);
   const toolCard = extractToolCard(allToolResults, askCardSchema);
+  const fmpBriefing = extractMarketBriefingCard(allToolResults, askCardSchema);
+  const modelPreferredCard =
+    submitCard ?? outputCard ?? (parsedCard?.success ? parsedCard.data : null);
+  const preferFmpBriefingOverModel =
+    modelPreferredCard?.type === "briefing" && fmpBriefing !== null;
 
   logger.info("Card extraction results.", {
     sessionId,
     hasSubmitCard: !!submitCard,
+    hasOutputCard: !!outputCard,
     hasToolCard: !!toolCard,
     toolCardType: toolCard?.type ?? null,
     hasParsedCard: !!parsedCard?.success,
     parsedCardType: parsedCard?.success ? parsedCard.data?.type : null,
+    outputCardType: outputCard?.type ?? null,
+    preferFmpBriefingOverModel,
   });
 
   if (parsedText && parsedCard && !parsedCard.success) {
@@ -1121,8 +1029,8 @@ export async function generateAskResponse(
       : null;
 
   const card =
-    submitCard ??
-    (parsedCard?.success ? parsedCard.data : null) ??
+    (preferFmpBriefingOverModel ? fmpBriefing : null) ??
+    modelPreferredCard ??
     toolCard ??
     wrappedTextCard ??
     fallbackInsightCard;
@@ -1131,15 +1039,19 @@ export async function generateAskResponse(
     sessionId,
     messageId,
     finalCardType: card.type,
-    cardSource: submitCard
-      ? "submit_ask_card"
-      : parsedCard?.success
-        ? "model_text"
-        : toolCard
-          ? "tool_result"
-          : wrappedTextCard
-            ? "wrapped_text"
-          : "fallback",
+    cardSource: preferFmpBriefingOverModel
+      ? "tool_result"
+      : submitCard
+        ? "submit_ask_card"
+        : outputCard
+          ? "model_output"
+        : parsedCard?.success
+          ? "model_text_fallback"
+          : toolCard
+            ? "tool_result"
+            : wrappedTextCard
+              ? "wrapped_text"
+            : "fallback",
     toolResults: summarizeToolResults(allToolResults),
   });
 
@@ -1176,26 +1088,24 @@ async function streamAskResponseInternal(
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
   const getActiveAnalysisRulesImpl =
     dependencies.getActiveAnalysisRulesImpl ?? getActiveAnalysisRules;
-  const analysisRulesMessage = image
-    ? buildAnalysisRulesPrompt(await getActiveAnalysisRulesImpl())
-    : null;
+  const streamTextImpl = dependencies.streamTextImpl ?? streamText;
 
   const clarificationCard = resolveClarificationCard(request);
   if (clarificationCard) {
-    return streamText({
+    return streamTextImpl({
       model: getAskModel(),
       prompt: JSON.stringify(clarificationCard),
     });
   }
 
-  const messages = buildAskMessages({
-    history: request.history,
-    normalizedMessage,
+  const messages = await buildAskModelMessages({
+    request,
     image,
-    analysisRulesMessage,
+    normalizedMessage,
+    getActiveAnalysisRulesImpl,
   });
 
-  return streamText({
+  return streamTextImpl({
     model: getAskModel(),
     temperature: 0.2,
     maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
