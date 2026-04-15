@@ -1,13 +1,19 @@
 import { brandGradient } from "@/lib/brand";
 import { getAppName } from "@/lib/site-config";
 
+type LogoSize = "default" | "compact" | "large" | "avatar";
+
 interface LogoProps {
   large?: boolean;
   /** Smaller mark for dense mobile headers. */
   compact?: boolean;
+  /** Explicit size (overrides `large` / `compact` when set). */
+  size?: LogoSize;
   stacked?: boolean;
   /** Extra wordmark beside the mark (default off — label is inside the ring). */
   showWordmark?: boolean;
+  /** When false, only the gradient ring and inner disc show (no app name in the ring). */
+  innerWordmark?: boolean;
 }
 
 function WordmarkInner() {
@@ -44,21 +50,35 @@ function WordmarkInline() {
 export function Logo({
   large = false,
   compact = false,
+  size: sizeProp,
   stacked = false,
   showWordmark = false,
+  innerWordmark = true,
 }: LogoProps) {
-  const ringSize = large
-    ? "h-28 w-28 sm:h-32 sm:w-32"
-    : compact
-      ? "h-9 w-9"
-      : "h-11 w-11 sm:h-12 sm:w-12";
-  const innerInset = large ? "inset-[3px]" : compact ? "inset-[1.5px]" : "inset-[2px]";
-  const innerTextSize = large
-    ? "text-[15px] sm:text-[17px]"
-    : compact
-      ? "text-[7px]"
-      : "text-[8px] sm:text-[9px]";
-  const textSize = large ? "text-3xl" : "text-base";
+  const size: LogoSize =
+    sizeProp ??
+    (large ? "large" : compact ? "compact" : "default");
+  const ringSize =
+    size === "large"
+      ? "h-28 w-28 sm:h-32 sm:w-32"
+      : size === "compact"
+        ? "h-9 w-9"
+        : size === "avatar"
+          ? "h-8 w-8"
+          : "h-11 w-11 sm:h-12 sm:w-12";
+  const innerInset =
+    size === "large"
+      ? "inset-[3px]"
+      : size === "compact" || size === "avatar"
+        ? "inset-[1.5px]"
+        : "inset-[2px]";
+  const innerTextSize =
+    size === "large"
+      ? "text-[15px] sm:text-[17px]"
+      : size === "compact" || size === "avatar"
+        ? "text-[7px]"
+        : "text-[8px] sm:text-[9px]";
+  const textSize = size === "large" ? "text-3xl" : "text-base";
 
   return (
     <div
@@ -74,11 +94,13 @@ export function Logo({
           style={{ backgroundImage: brandGradient }}
         />
         <div
-          className={`absolute ${innerInset} z-10 flex items-center justify-center rounded-full border border-white/10 bg-[rgba(10,13,46,0.94)] text-center font-black leading-[1.05] tracking-[-0.06em] text-white ${innerTextSize}`}
+          className={`absolute ${innerInset} z-10 flex items-center justify-center rounded-full border border-white/10 bg-[rgba(10,13,46,0.94)] text-center font-black leading-[1.05] tracking-[-0.06em] text-white ${innerWordmark ? innerTextSize : ""}`}
         >
-          <span>
-            <WordmarkInner />
-          </span>
+          {innerWordmark ? (
+            <span>
+              <WordmarkInner />
+            </span>
+          ) : null}
         </div>
       </div>
       {showWordmark ? (

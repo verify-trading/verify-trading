@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Bot } from "lucide-react";
 
 import { AskResponseCard } from "@/components/ask/cards";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import {
 import type { AskMessage } from "@/components/ask/store";
 import type { AskToolStatus } from "@/lib/ask/stream";
 import { getAppName } from "@/lib/site-config";
+import { Logo } from "@/components/site/logo";
 
 function ChatAttachmentPreview({
   src,
@@ -60,8 +60,8 @@ function ChatAttachmentPreview({
 
 function AssistantAvatar() {
   return (
-    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--vt-blue)] to-[#6B21A8] shadow-[0_4px_16px_rgba(76,110,245,0.3)]">
-      <Bot className="size-4 text-white" strokeWidth={2} aria-hidden />
+    <div className="shrink-0 shadow-[0_4px_16px_rgba(76,110,245,0.3)]" aria-hidden>
+      <Logo size="avatar" innerWordmark={false} />
     </div>
   );
 }
