@@ -11,7 +11,6 @@ import { AuthDivider } from "@/components/auth/auth-divider";
 import {
   authFieldClassWithError,
   authInlineErrorBannerClass,
-  authInlineSuccessBannerFlexClass,
   authLabelClass,
   authSecondaryLinkClass,
 } from "@/components/auth/auth-field-styles";
@@ -136,7 +135,7 @@ function SignupPageContent() {
         <div className="flex flex-col items-center space-y-7 pt-1 text-center" aria-live="polite">
           <div className="space-y-3">
             <p className="text-[15px] leading-relaxed text-white/80">
-              We've dispatched a secure verification link to<br />
+              We have dispatched a secure verification link to<br />
               <span className="font-semibold tracking-wide text-white">{sentToEmail}</span>
             </p>
             <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-emerald-500/15 p-5 text-[14px] font-medium leading-relaxed text-emerald-50 shadow-[inset_0_1px_0_rgba(16,185,129,0.3)] ring-4 ring-emerald-500/5">
