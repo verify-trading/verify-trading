@@ -1,9 +1,10 @@
 /**
  * Legal destinations for footers and auth screens.
- * Terms and privacy live on one page (`/terms`); use `#privacy` for the privacy section.
+ * OAuth / store fronts often require the literal label "Privacy policy" on the home page.
  */
 export const LEGAL_LINKS = [
-  { href: "/terms", label: "Terms & Privacy", shortLabel: "Terms" },
+  { href: "/privacy", label: "Privacy policy", shortLabel: "Privacy" },
+  { href: "/terms", label: "Terms of use", shortLabel: "Terms" },
   { href: "/cookies", label: "Cookie Notice", shortLabel: "Cookies" },
   { href: "/risk-disclosure", label: "Risk disclosure", shortLabel: "Risk" },
 ] as const;

@@ -8,9 +8,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  async redirects() {
-    return [{ source: "/privacy", destination: "/terms", permanent: true }];
-  },
   async headers() {
     return [
       {

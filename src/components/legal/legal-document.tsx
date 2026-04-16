@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getAppName } from "@/lib/site-config";
 
 type LegalSection = {
-  /** Anchor for in-page links (e.g. `privacy` for `/terms#privacy`). */
+  /** Optional anchor id for in-page links. */
   id?: string;
   title: string;
   paragraphs: string[];

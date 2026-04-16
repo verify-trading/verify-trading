@@ -121,6 +121,23 @@ function HeroSection() {
               </Link>
             </Button>
           </div>
+          <p className="mt-5 text-xs leading-relaxed text-slate-500">
+            <Link
+              href="/privacy"
+              className="font-semibold text-slate-400 underline decoration-white/20 underline-offset-2 transition hover:text-white"
+            >
+              Privacy policy
+            </Link>
+            <span className="mx-2 text-slate-600" aria-hidden>
+              ·
+            </span>
+            <Link
+              href="/terms"
+              className="font-semibold text-slate-400 underline decoration-white/20 underline-offset-2 transition hover:text-white"
+            >
+              Terms of use
+            </Link>
+          </p>
           <ul className="mt-8 flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:gap-y-2">
             {["Stop bad trades in seconds", "Avoid any scams", "Control your risk"].map((t) => (
               <li key={t} className="flex items-center gap-2">

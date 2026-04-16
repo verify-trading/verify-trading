@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img" aria-label="verify.trading">
+  <defs>
+    <!-- Mirrors src/lib/brand.ts brandGradient (conic, approximated as linear for SVG) -->
+    <linearGradient id="vt-logo-ring" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4C6EF5" />
+      <stop offset="35%" stop-color="#6B21A8" />
+      <stop offset="70%" stop-color="#BE185D" />
+      <stop offset="100%" stop-color="#4C6EF5" />
+    </linearGradient>
+  </defs>
+  <!-- Same structure as nav Logo (default): gradient ring + inset disc + WordmarkInner -->
+  <circle cx="24" cy="24" r="24" fill="url(#vt-logo-ring)" />
+  <circle
+    cx="24"
+    cy="24"
+    r="22"
+    fill="rgba(10, 13, 46, 0.94)"
+    stroke="rgba(255, 255, 255, 0.1)"
+    stroke-width="0.35"
+  />
+  <!-- One <text>: each <tspan> must repeat x for horizontal center; dy stacks second line -->
+  <!-- Use web-safe font names so export/raster previews resolve glyphs; matches nav weight ~font-black -->
+  <text
+    fill="#ffffff"
+    font-family="Arial Black, Arial, Helvetica, sans-serif"
+    font-size="6.35"
+    font-weight="900"
+    letter-spacing="-0.06em"
+  >
+    <tspan x="24" y="20.1" text-anchor="middle">
+      verify<tspan fill="#F26D6D">.</tspan>
+    </tspan>
+    <tspan x="24" dy="7.85" text-anchor="middle">trading</tspan>
+  </text>
+</svg>
