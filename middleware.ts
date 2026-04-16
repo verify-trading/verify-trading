@@ -3,6 +3,29 @@ import { type NextRequest, NextResponse } from "next/server";
 import { AUTH_PAGE_PATHS } from "@/lib/auth/auth-paths";
 import { updateSession } from "@/lib/supabase/middleware";
 
+/**
+ * `updateSession` may set refreshed Supabase cookies on `sessionResponse`.
+ * A plain `NextResponse.redirect()` drops those `Set-Cookie` headers, so the
+ * browser can miss a token rotation and the next request looks logged out.
+ */
+function redirectPreservingSessionCookies(
+  sessionResponse: NextResponse,
+  destination: string | URL,
+): NextResponse {
+  const redirect = NextResponse.redirect(destination);
+  if (typeof sessionResponse.headers.getSetCookie === "function") {
+    for (const cookie of sessionResponse.headers.getSetCookie()) {
+      redirect.headers.append("Set-Cookie", cookie);
+    }
+    return redirect;
+  }
+
+  sessionResponse.cookies.getAll().forEach((cookie) => {
+    redirect.cookies.set(cookie);
+  });
+  return redirect;
+}
+
 export async function middleware(request: NextRequest) {
   const { response, user } = await updateSession(request);
   const pathname = request.nextUrl.pathname;
@@ -17,13 +40,13 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       const login = new URL("/login", request.url);
       login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-      return NextResponse.redirect(login);
+      return redirectPreservingSessionCookies(response, login);
     }
     return response;
   }
 
   if (AUTH_PAGE_PATHS.has(pathname) && user) {
-    return NextResponse.redirect(new URL("/ask", request.url));
+    return redirectPreservingSessionCookies(response, new URL("/ask", request.url));
   }
 
   return response;
