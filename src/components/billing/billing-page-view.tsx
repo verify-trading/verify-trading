@@ -73,6 +73,7 @@ export function BillingPageView({
           <div className="mb-10">
             <Link
               href="/ask"
+              prefetch={false}
               className="mb-6 inline-flex items-center gap-2 text-sm text-white/50 transition hover:text-white"
             >
               <ArrowLeft className="size-4" aria-hidden />

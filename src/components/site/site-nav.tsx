@@ -85,7 +85,12 @@ export function SiteNav() {
                 {visibleNavItems.map((item) => {
                   const active = pathname === item.href;
                   return (
-                    <Link key={item.href} href={item.href} className={siteNavLinkClass(active)}>
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      prefetch={false}
+                      className={siteNavLinkClass(active)}
+                    >
                       {item.label}
                     </Link>
                   );
@@ -131,6 +136,7 @@ export function SiteNav() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={sheetLinkClass(active)}
                   onClick={() => setMobileMenuOpen(false)}
                 >

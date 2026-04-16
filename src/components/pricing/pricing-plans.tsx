@@ -96,7 +96,9 @@ export function PricingPlansSection({
               </Button>
             ) : (
               <Button asChild variant="outline" size="pill" className="w-full">
-                <Link href="/ask">Open Ask</Link>
+                <Link href="/ask" prefetch={false}>
+                  Open Ask
+                </Link>
               </Button>
             )}
           </div>

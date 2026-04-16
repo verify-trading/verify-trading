@@ -116,7 +116,9 @@ function HeroSection() {
           </p>
           <div className="mt-8">
             <Button asChild variant="default" size="pill" className="px-6">
-              <Link href="/ask">VERIFY TRADE NOW</Link>
+              <Link href="/ask" prefetch={false}>
+                VERIFY TRADE NOW
+              </Link>
             </Button>
           </div>
           <ul className="mt-8 flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:gap-y-2">
@@ -523,7 +525,9 @@ function FinalCTASection() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="pill" className="px-6">
-                  <Link href="/ask">Open Ask</Link>
+                  <Link href="/ask" prefetch={false}>
+                    Open Ask
+                  </Link>
                 </Button>
               </div>
             </div>
