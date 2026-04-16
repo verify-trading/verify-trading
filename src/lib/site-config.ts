@@ -15,7 +15,7 @@ export function getSiteTitle(): string {
   if (t) {
     return t;
   }
-  return `${getAppName()} — Ask for traders`;
+  return `${getAppName()} — Verify Before You Trade`;
 }
 
 export function getSiteDescription(): string {
