@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
-import { beginOAuthFlow } from "@/lib/auth/oauth-flow";
+import { beginOAuthFlow, setAuthRedirectCookie } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
 import { loginSchema, type LoginFormValues } from "@/lib/auth/schemas";
@@ -29,7 +29,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 function LoginPageContent() {
-  const router = useRouter();
   const { supabase } = useSupabaseAuth();
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next");
@@ -88,8 +87,8 @@ function LoginPageContent() {
     }
 
     toast.success("Signed in.");
-    router.push(next);
-    router.refresh();
+    // Full navigation so Supabase session cookies are sent before /ask (avoids client nav race with middleware).
+    window.location.assign(next);
   }
 
   async function signInWithGoogle() {
@@ -103,6 +102,7 @@ function LoginPageContent() {
         return;
       }
       beginOAuthFlow("login_only");
+      setAuthRedirectCookie(next);
       const origin = window.location.origin;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",

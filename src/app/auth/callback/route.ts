@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 
 import {
+  AUTH_REDIRECT_COOKIE_NAME,
   OAUTH_FLOW_COOKIE_NAME,
   parseOAuthFlow,
   readCookie,
@@ -29,6 +30,13 @@ const AUTH_COOKIE_OPTIONS = {
 
 function clearOAuthFlowCookie(response: NextResponse) {
   response.cookies.set(OAUTH_FLOW_COOKIE_NAME, "", {
+    ...AUTH_COOKIE_OPTIONS,
+    maxAge: 0,
+  });
+}
+
+function clearAuthRedirectCookie(response: NextResponse) {
+  response.cookies.set(AUTH_REDIRECT_COOKIE_NAME, "", {
     ...AUTH_COOKIE_OPTIONS,
     maxAge: 0,
   });
@@ -66,7 +74,8 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const cookieHeader = request.headers.get("cookie");
   const code = searchParams.get("code");
-  const next = searchParams.get("next");
+  const next =
+    searchParams.get("next") ?? readCookie(cookieHeader, AUTH_REDIRECT_COOKIE_NAME);
   const oauthFlow = parseOAuthFlow(
     readCookie(cookieHeader, OAUTH_FLOW_COOKIE_NAME) ?? searchParams.get("oauth"),
   );
@@ -75,6 +84,7 @@ export async function GET(request: Request) {
   if (!code) {
     const response = NextResponse.redirect(new URL("/login?error=auth_code", origin));
     clearOAuthFlowCookie(response);
+    clearAuthRedirectCookie(response);
     return response;
   }
 
@@ -86,6 +96,7 @@ export async function GET(request: Request) {
       new URL(`/login?error=${encodeURIComponent(error.message)}`, origin),
     );
     clearOAuthFlowCookie(response);
+    clearAuthRedirectCookie(response);
     return response;
   }
 
@@ -101,12 +112,14 @@ export async function GET(request: Request) {
     login.searchParams.set("error", LOGIN_OAUTH_ERROR_CODE);
     const response = NextResponse.redirect(login);
     clearOAuthFlowCookie(response);
+    clearAuthRedirectCookie(response);
     return response;
   }
 
   const destination = getSafeRedirectPath(next, "/ask");
   const response = NextResponse.redirect(new URL(destination, origin));
   clearOAuthFlowCookie(response);
+  clearAuthRedirectCookie(response);
 
   if (oauthFlow === "signup" && data.user?.id) {
     setRecentOauthSignupCookie(response, data.user.id);

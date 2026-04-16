@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, MailOpen } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
-import { beginOAuthFlow } from "@/lib/auth/oauth-flow";
+import { beginOAuthFlow, setAuthRedirectCookie } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
 import { signupSchema, type SignupFormValues } from "@/lib/auth/schemas";
@@ -30,7 +30,6 @@ import { toast } from "sonner";
 const EMPTY_SIGNUP: SignupFormValues = { username: "", email: "", password: "" };
 
 function SignupPageContent() {
-  const router = useRouter();
   const { supabase } = useSupabaseAuth();
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next");
@@ -81,8 +80,7 @@ function SignupPageContent() {
 
     if (data.session) {
       toast.success("Welcome — you're signed in.");
-      router.push(next);
-      router.refresh();
+      window.location.assign(next);
       return;
     }
 
@@ -102,6 +100,7 @@ function SignupPageContent() {
         return;
       }
       beginOAuthFlow("signup");
+      setAuthRedirectCookie(next);
       const origin = window.location.origin;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",

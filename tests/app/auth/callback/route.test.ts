@@ -18,6 +18,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import { GET } from "@/app/auth/callback/route";
 import { logger } from "@/lib/observability/logger";
 import {
+  AUTH_REDIRECT_COOKIE_NAME,
   OAUTH_FLOW_COOKIE_NAME,
   RECENT_OAUTH_SIGNUP_COOKIE_NAME,
 } from "@/lib/auth/oauth-flow";
@@ -138,6 +139,30 @@ describe("GET /auth/callback", () => {
     expect(signOut).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe("http://localhost/ask");
     expect(response.cookies.get(RECENT_OAUTH_SIGNUP_COOKIE_NAME)?.value).toBe("user-1");
+  });
+
+  it("uses auth redirect cookie when next is missing from the callback URL", async () => {
+    exchangeCodeForSession.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-old",
+          created_at: "2025-01-01T00:00:00.000Z",
+          identities: [{ provider: "google" }],
+        },
+      },
+      error: null,
+    });
+
+    const response = await GET(
+      new Request("http://localhost/auth/callback?code=test-code", {
+        headers: {
+          cookie: `${AUTH_REDIRECT_COOKIE_NAME}=${encodeURIComponent("/guide")}`,
+        },
+      }),
+    );
+
+    expect(response.headers.get("location")).toBe("http://localhost/guide");
+    expect(response.cookies.get(AUTH_REDIRECT_COOKIE_NAME)?.value).toBe("");
   });
 
   it("falls back to /ask for unsafe next params", async () => {
