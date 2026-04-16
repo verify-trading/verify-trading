@@ -27,6 +27,17 @@ function redirectPreservingSessionCookies(
 }
 
 export async function middleware(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  /**
+   * When `redirectTo` is not allowlisted in Supabase, Auth falls back to **Site URL**
+   * and appends `?code=…` there — often `/` instead of `/auth/callback`. The PKCE
+   * exchange only runs in `app/auth/callback/route.ts`, so we forward the same query.
+   */
+  if (url.pathname === "/" && url.searchParams.has("code")) {
+    url.pathname = "/auth/callback";
+    return NextResponse.redirect(url);
+  }
+
   const { response, user } = await updateSession(request);
   const pathname = request.nextUrl.pathname;
 
