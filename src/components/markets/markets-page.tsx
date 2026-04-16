@@ -13,8 +13,6 @@ import type { MarketsAssetPayload } from "@/lib/markets/dashboard";
 import { MARKETS_TIMEFRAMES, type MarketsTimeframe } from "@/lib/markets/dashboard";
 import {
   buildTile,
-  fetchEconomicCalendar,
-  fetchMarketsIntelligence,
   fetchMarketsSnapshot,
   lockedMockTiles,
   marketCatalog,
@@ -25,27 +23,12 @@ import {
 import { cn } from "@/lib/utils";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
-import { EconomicCalendarSection } from "./economic-calendar-section";
-import { MarketIntelligenceSection } from "./market-intelligence-section";
 import { MarketsChartsSection } from "./markets-charts-section";
 import { MarketsCommunityCtas } from "./markets-community-ctas";
+import { MarketsTabUpcoming } from "./markets-tab-upcoming";
 import { MarketsViewTabs, type MarketsTabId } from "./markets-view-tabs";
 
 const MARKETS_QUERY_STALE_MS = 15 * 60_000;
-const MARKETS_INTELLIGENCE_STALE_MS = 15 * 60_000;
-const MARKETS_CALENDAR_STALE_MS = 30 * 60_000;
-
-function utcTodayDayLabel(): string {
-  const d = new Date();
-  const formatted = new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(d);
-  return `Today — ${formatted}`;
-}
 
 /**
  * Non-Pro paywall overlay + content blur. When `NEXT_PUBLIC_MARKETS_PAYWALL_UI_ENABLED` is the string `"false"`,
@@ -125,24 +108,6 @@ export function MarketsPage({ initialTier, pricing, billingContext }: MarketsPag
     refetchOnWindowFocus: false,
   });
 
-  const intelligenceQuery = useQuery({
-    queryKey: ["markets", "intelligence"],
-    queryFn: fetchMarketsIntelligence,
-    enabled: isPro && activeTab === "intelligence",
-    staleTime: MARKETS_INTELLIGENCE_STALE_MS,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const calendarQuery = useQuery({
-    queryKey: ["markets", "calendar"],
-    queryFn: fetchEconomicCalendar,
-    enabled: isPro && activeTab === "calendar",
-    staleTime: MARKETS_CALENDAR_STALE_MS,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
-  });
-
   const assetsById = new Map(marketsQuery.data?.assets.map((asset) => [asset.id, asset]) ?? []);
   const lockedTiles = marketCatalog.map((item) => ({
     ...lockedMockTiles[item.id],
@@ -162,23 +127,6 @@ export function MarketsPage({ initialTier, pricing, billingContext }: MarketsPag
   const showPaywallUi = !isPro && isMarketsPaywallUiEnabled();
   const showFetchError = isPro && marketsQuery.isError;
   const statusShowsLive = isPro && !showSkeleton && !marketsQuery.isFetching;
-
-  const economicCalendarDayLabel = useMemo(
-    () => calendarQuery.data?.dayLabel ?? utcTodayDayLabel(),
-    [calendarQuery.data?.dayLabel],
-  );
-
-  const intelligenceErrorMessage =
-    intelligenceQuery.isError && intelligenceQuery.error instanceof Error
-      ? intelligenceQuery.error.message
-      : null;
-  const calendarErrorMessage =
-    calendarQuery.isError && calendarQuery.error instanceof Error ? calendarQuery.error.message : null;
-
-  const intelligenceItems = intelligenceQuery.data?.items ?? [];
-  const calendarItems = calendarQuery.data?.items ?? [];
-  const intelligenceLoading = isPro && intelligenceQuery.isPending;
-  const calendarLoading = isPro && calendarQuery.isPending;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -213,18 +161,9 @@ export function MarketsPage({ initialTier, pricing, billingContext }: MarketsPag
                     marketsQuery={marketsQuery}
                   />
                 ) : activeTab === "intelligence" ? (
-                  <MarketIntelligenceSection
-                    items={intelligenceItems}
-                    isLoading={intelligenceLoading}
-                    errorMessage={intelligenceErrorMessage}
-                  />
+                  <MarketsTabUpcoming kind="intelligence" />
                 ) : (
-                  <EconomicCalendarSection
-                    items={calendarItems}
-                    dayLabel={economicCalendarDayLabel}
-                    isLoading={calendarLoading}
-                    errorMessage={calendarErrorMessage}
-                  />
+                  <MarketsTabUpcoming kind="calendar" />
                 )}
               </MarketsViewTabs>
 

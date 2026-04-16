@@ -54,52 +54,16 @@ function renderWithQueryClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-/** Routes `/api/markets/intelligence` and `/api/markets/calendar` before `/api/markets` snapshot. */
-function mockFetchForMarketTabs(marketsSnapshot: Record<string, unknown>) {
+function mockFetchMarketsSnapshot(marketsSnapshot: Record<string, unknown>) {
   global.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
-    if (url.includes("/api/markets/intelligence")) {
+    if (url.includes("/api/markets?")) {
       return {
         ok: true,
-        json: async () => ({
-          updatedAt: "2026-04-09T10:00:00.000Z",
-          items: [
-            {
-              id: "n1",
-              title: "Intel test headline for Markets tab",
-              source: "Reuters",
-              publishedAt: "2026-04-14T08:30:00.000Z",
-              summary: "Summary line",
-            },
-          ],
-        }),
+        json: async () => marketsSnapshot,
       };
     }
-    if (url.includes("/api/markets/calendar")) {
-      return {
-        ok: true,
-        json: async () => ({
-          updatedAt: "2026-04-09T10:00:00.000Z",
-          dayLabel: "Today — April 14, 2026",
-          items: [
-            {
-              id: "e1",
-              timeUtc: "2026-04-14T12:30:00.000Z",
-              timeLabel: "12:30 UTC",
-              currency: "USD",
-              event: "CPI m/m",
-              impact: "high",
-              forecast: "0.3%",
-              previous: "0.2%",
-            },
-          ],
-        }),
-      };
-    }
-    return {
-      ok: true,
-      json: async () => marketsSnapshot,
-    };
+    throw new Error(`Unexpected fetch: ${url}`);
   }) as unknown as typeof fetch;
 }
 
@@ -147,7 +111,7 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    mockFetchForMarketTabs({
+    mockFetchMarketsSnapshot({
       updatedAt: "2026-04-09T10:00:00.000Z",
       timeframe: "1W",
       assets: [
@@ -203,7 +167,7 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    mockFetchForMarketTabs({
+    mockFetchMarketsSnapshot({
       updatedAt: "2026-04-09T10:00:00.000Z",
       timeframe: "1W",
       assets: [
@@ -259,7 +223,7 @@ describe("MarketsPage", () => {
     });
   });
 
-  it("defaults the section selector to Charts and can switch to Market Intelligence content", async () => {
+  it("defaults the section selector to Charts and shows a coming soon placeholder for Market Intelligence", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
@@ -268,7 +232,7 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    mockFetchForMarketTabs({
+    mockFetchMarketsSnapshot({
       updatedAt: "2026-04-09T10:00:00.000Z",
       timeframe: "1W",
       assets: [
@@ -313,15 +277,13 @@ describe("MarketsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 2, name: /market intelligence/i })).toBeInTheDocument();
-      expect(screen.getByText(/Intel test headline for Markets tab/i)).toBeInTheDocument();
+      expect(screen.getByText(/^Coming soon$/i)).toBeInTheDocument();
     });
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/markets/intelligence");
-    });
+    expect(global.fetch).not.toHaveBeenCalledWith("/api/markets/intelligence");
   });
 
-  it("switches to Economic Calendar table", async () => {
+  it("switches to Economic Calendar coming soon placeholder", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
@@ -330,7 +292,7 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    mockFetchForMarketTabs({
+    mockFetchMarketsSnapshot({
       updatedAt: "2026-04-09T10:00:00.000Z",
       timeframe: "1W",
       assets: [
@@ -371,11 +333,9 @@ describe("MarketsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 2, name: /economic calendar/i })).toBeInTheDocument();
-      expect(screen.getByText("CPI m/m")).toBeInTheDocument();
+      expect(screen.getAllByText(/^Coming soon$/i).length).toBeGreaterThan(0);
     });
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/markets/calendar");
-    });
+    expect(global.fetch).not.toHaveBeenCalledWith("/api/markets/calendar");
   });
 });

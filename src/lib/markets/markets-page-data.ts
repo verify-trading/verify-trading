@@ -425,6 +425,7 @@ export function buildTile(
 
   const first = asset.series.closeValues[0];
   const last = asset.series.closeValues[asset.series.closeValues.length - 1];
+  /** Matches `deriveQuoteFromSeries` in `@/lib/ask/market`: percent from (last−first)/first; line chart uses same closes. */
   const absoluteChange = last - first;
 
   return {
