@@ -16,7 +16,7 @@ describe("rate-limit usage helpers", () => {
       used: 3,
       remaining: FREE_DAILY_ASK_LIMIT - 3,
       limit: FREE_DAILY_ASK_LIMIT,
-      progressPercent: 30,
+      progressPercent: 60,
     });
   });
 

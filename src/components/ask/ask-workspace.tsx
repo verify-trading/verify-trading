@@ -49,6 +49,7 @@ import { askToolStatusSchema, type AskToolStatus } from "@/lib/ask/stream";
 import { getAccountMenuQueryKey } from "@/lib/auth/account-menu-query";
 import { logger } from "@/lib/observability/logger";
 import { loadAskUsageState } from "@/lib/rate-limit/load-ask-usage";
+import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
 const ASK_SESSION_PAGE_SIZE = 40;
@@ -905,7 +906,7 @@ export function AskWorkspace({
                         Limit reached
                       </span>
                       <span className="hidden truncate text-xs text-white/50 sm:inline">
-                        All 10 free messages used today.
+                        {`All ${FREE_DAILY_ASK_LIMIT} free messages used today.`}
                       </span>
                     </div>
                     <Button

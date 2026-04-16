@@ -57,9 +57,9 @@ describe("BillingPageView", () => {
         subscription={null}
         freeAskUsage={{
           used: 4,
-          remaining: 6,
-          limit: 10,
-          progressPercent: 40,
+          remaining: 1,
+          limit: 5,
+          progressPercent: 80,
         }}
         checkoutState={null}
         checkoutSessionId={null}
@@ -67,8 +67,8 @@ describe("BillingPageView", () => {
     );
 
     expect(screen.getByText("Daily Ask usage")).toBeInTheDocument();
-    expect(screen.getByText("4/10")).toBeInTheDocument();
-    expect(screen.getByText(/6 free messages left today/)).toBeInTheDocument();
+    expect(screen.getByText("4/5")).toBeInTheDocument();
+    expect(screen.getByText(/1 free message left today/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /View pricing & upgrade/i })).toHaveAttribute("href", "/pricing");
   });
 });

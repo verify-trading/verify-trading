@@ -1,4 +1,4 @@
-export const FREE_DAILY_ASK_LIMIT = 10;
+export const FREE_DAILY_ASK_LIMIT = 5;
 
 export type FreeAskUsageSummary = {
   used: number;

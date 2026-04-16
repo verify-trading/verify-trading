@@ -1,3 +1,5 @@
+import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+
 export type BillingOfferVariant = "launch" | "standard";
 export type BillingPlanKey = "monthly" | "annual";
 
@@ -133,7 +135,7 @@ export function getPublicBillingPricing(now = new Date()): PublicBillingPricing 
     free: {
       badge: "Free",
       headline: formatGbp(0),
-      detail: "10 Ask chats per day with broker verification, trade analysis, and risk calculators.",
+      detail: `${FREE_DAILY_ASK_LIMIT} Ask chats per day with broker verification, trade analysis, and risk calculators.`,
     },
     monthly: {
       badge: "Most popular",

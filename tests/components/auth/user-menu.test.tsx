@@ -163,8 +163,8 @@ describe("UserMenu", () => {
       expect(screen.getByText("Daily message usage")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("3/10")).toBeInTheDocument();
-    expect(screen.getByText("7 free messages left today.")).toBeInTheDocument();
+    expect(screen.getByText("3/5")).toBeInTheDocument();
+    expect(screen.getByText("2 free messages left today.")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Daily message usage" })).toHaveAttribute(
       "aria-valuenow",
       "3",

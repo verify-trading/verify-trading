@@ -67,7 +67,7 @@ Deployment host and product copy are driven by env vars (`NEXT_PUBLIC_APP_NAME`,
 
 - **Secrets:** Keep `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and market API keys **server-only** (never `NEXT_PUBLIC_*` except Supabase URL + anon if you add them later). Rotate keys if exposed.
 - **Protected routes:** `/ask` and `/markets` require a signed-in session (middleware redirects to `/login?next=…`). **Auth pages:** logged-in users hitting `/login` or `/signup` are redirected to `/ask`.
-- **Ask API:** `POST /api/ask` and related `/api/ask/*` routes require a **signed-in Supabase user** (cookie session). **Free** users are limited to **10 Ask queries per UTC day** (see `migration_7.sql`); **Pro** tier has no daily cap, and Stripe billing now keeps `profiles.tier` in sync.
+- **Ask API:** `POST /api/ask` and related `/api/ask/*` routes require a **signed-in Supabase user** (cookie session). **Free** users are limited to **5 Ask queries per UTC day** (see `migration_12.sql`); **Pro** tier has no daily cap, and Stripe billing now keeps `profiles.tier` in sync.
 - **Billing:** Stripe checkout starts at `POST /api/stripe/checkout`, webhook events arrive at `POST /api/stripe/webhook`, the customer portal starts at `POST /api/stripe/customer-portal`, successful checkouts can be reconciled immediately via `POST /api/stripe/sync-checkout`, and in-app cancel/resume actions go through `POST /api/stripe/subscription`.
 - **Markets API:** `GET /api/markets` requires a signed-in user.
 - **Sessions:** Chat rows are tied to `auth.users` via `chat_sessions.user_id`. Storage paths for attachments use `{userId}/{sessionId}/…` to match storage RLS.

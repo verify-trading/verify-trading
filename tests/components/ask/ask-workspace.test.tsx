@@ -523,7 +523,7 @@ describe("AskWorkspace", () => {
       expect(screen.getByText("Limit reached")).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText(/All 10 free messages used today/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/All 5 free messages used today/).length).toBeGreaterThan(0);
     expect(screen.getAllByPlaceholderText("Upgrade to Pro to continue")[0]).toBeDisabled();
   });
 

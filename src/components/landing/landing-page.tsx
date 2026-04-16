@@ -23,6 +23,7 @@ import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
+import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { getAppName } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
@@ -488,7 +489,11 @@ function EmailCTASection() {
 /* ─── Final CTA ─── */
 
 function FinalCTASection() {
-  const benefits = ["10 free Ask chats per day", "No credit card required", "Cancel anytime"];
+  const benefits = [
+    `${FREE_DAILY_ASK_LIMIT} free Ask chats per day`,
+    "No credit card required",
+    "Cancel anytime",
+  ];
 
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
@@ -508,7 +513,7 @@ function FinalCTASection() {
                 Ready to trade with clearer answers?
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-slate-400 sm:text-base">
-                Start with 10 free Ask chats per day—no card required.
+                {`Start with ${FREE_DAILY_ASK_LIMIT} free Ask chats per day—no card required.`}
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild variant="default" size="pill" className="gap-2 px-6">

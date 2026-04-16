@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
+import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { cn } from "@/lib/utils";
 
 import { ProAnnualPlanCard, ProMonthlyPlanCard } from "./pro-plan-cards";
@@ -65,7 +66,7 @@ export function PricingPlansSection({
             Free to start. Pro when you need more.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-400">
-            Free includes 10 Ask chats per day. Pro unlocks unlimited Ask and premium app features.
+            {`Free includes ${FREE_DAILY_ASK_LIMIT} Ask chats per day. Pro unlocks unlimited Ask and premium app features.`}
           </p>
         </div>
       )}
@@ -76,7 +77,12 @@ export function PricingPlansSection({
           <h3 className="mt-4 text-3xl font-bold tracking-tight text-white">{pricing.free.headline}</h3>
           <p className="mt-3 text-sm leading-relaxed text-slate-400">{pricing.free.detail}</p>
           <ul className="mt-6 flex-1 space-y-2">
-            {["10 Ask chats per day", "Broker verification", "Trade Analysis", "Risk Calculators"].map((f) => (
+            {[
+              `${FREE_DAILY_ASK_LIMIT} Ask chats per day`,
+              "Broker verification",
+              "Trade Analysis",
+              "Risk Calculators",
+            ].map((f) => (
               <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
                 <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
                 {f}
