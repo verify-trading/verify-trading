@@ -82,6 +82,31 @@ describe("market tools", () => {
     expect(quote.direction).toBe("up");
   });
 
+  it("caches default quote reads (Markets / non-Ask paths)", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(mockJsonResponse([{ price: 4493.2, changePercentage: 1.1 }])) as unknown as typeof fetch;
+
+    await getMarketQuote("Gold");
+    await getMarketQuote("Gold");
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("Ask live path bypasses caches and uses no-store fetch", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(mockJsonResponse([{ price: 4493.2, changePercentage: 1.1 }])) as unknown as typeof fetch;
+
+    await getMarketQuote("Gold", { live: true });
+    await getMarketQuote("Gold", { live: true });
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(global.fetch).mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ cache: "no-store" }),
+    );
+  });
+
   it("resolves an unknown asset through symbol search before quoting", async () => {
     global.fetch = vi
       .fn()

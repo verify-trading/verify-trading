@@ -96,14 +96,9 @@ function HeroSection() {
   const appName = getAppName();
 
   return (
-    <section className="border-b border-white/[0.06]">
-      {/*
-        Hero video (right column): when ready, wrap content below in:
-        `grid w-full max-w-6xl gap-10 md:grid-cols-2 md:items-center md:gap-12 lg:gap-16`
-        and add a second column with e.g. aspect-video + embedded player.
-      */}
-      <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:py-24">
-        <div className="min-w-0 max-w-2xl text-left">
+    <section className="border-b border-white/[0.06] bg-[radial-gradient(ellipse_90%_70%_at_100%_35%,rgba(76,110,245,0.1),transparent_52%),var(--vt-navy)] max-md:bg-[radial-gradient(ellipse_100%_60%_at_50%_0%,rgba(76,110,245,0.1),transparent_45%),var(--vt-navy)]">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 sm:py-20 md:grid-cols-2 md:items-center md:gap-12 lg:gap-16 lg:py-24">
+        <div className="order-2 min-w-0 max-w-2xl text-left md:order-1">
           <h1 className="text-4xl font-bold tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08]">
             <span className="block">
               verify<span className="text-[var(--vt-coral)]">.</span>
@@ -146,6 +141,36 @@ function HeroSection() {
               </li>
             ))}
           </ul>
+        </div>
+        <div className="order-1 min-w-0 md:order-2">
+          <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-[var(--vt-navy)] shadow-[0_24px_64px_-28px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+            <video
+              className="h-full w-full object-cover [filter:brightness(0.97)_saturate(0.92)]"
+              src="/main-video.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              aria-label={`${appName} product preview`}
+            />
+            {/* Vignette + edge blend into page navy */}
+            <div
+              className="pointer-events-none absolute inset-0 z-[1] rounded-2xl shadow-[inset_0_0_72px_20px_rgba(10,13,46,0.75)]"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-0 z-[2] rounded-2xl bg-gradient-to-b from-[rgba(10,13,46,0.5)] via-transparent to-[rgba(10,13,46,0.45)]"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-0 z-[3] rounded-2xl bg-gradient-to-r from-[rgba(10,13,46,0.25)] via-transparent to-transparent max-md:bg-gradient-to-b max-md:from-[rgba(10,13,46,0.35)] max-md:via-transparent max-md:to-[rgba(10,13,46,0.2)]"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-0 z-[4] rounded-2xl ring-1 ring-inset ring-white/[0.05]"
+              aria-hidden
+            />
+          </div>
         </div>
       </div>
     </section>

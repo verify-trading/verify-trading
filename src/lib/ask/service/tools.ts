@@ -23,7 +23,12 @@ import {
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
 import { lookupVerifiedEntity, type LookupVerifiedEntityResult } from "@/lib/ask/entities";
-import { getMarketQuote, getMarketSeries, getMarketSeriesInputSchema } from "@/lib/ask/market";
+import {
+  getMarketQuote,
+  getMarketSeries,
+  getMarketSeriesInputSchema,
+  type MarketDataOptions,
+} from "@/lib/ask/market";
 import { askCardSchema } from "@/lib/ask/contracts";
 import { formatMarketPrice } from "@/lib/ask/market-format";
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
@@ -355,9 +360,11 @@ type VerificationToolResponse =
       };
     };
 
+const askLiveMarketOptions = { live: true } as const satisfies MarketDataOptions;
+
 async function enrichPositionSizeInput(
   toolInput: z.input<typeof calculatePositionSizeInputSchema>,
-  getMarketQuoteImpl: typeof getMarketQuote,
+  getMarketQuoteImpl: (asset: string, options?: MarketDataOptions) => ReturnType<typeof getMarketQuote>,
 ) {
   if (!toolInput.pair || toolInput.pipValuePerLot || toolInput.quoteToAccountRate || toolInput.exchangeRate) {
     return toolInput;
@@ -411,8 +418,11 @@ function buildProfitLossCard(result: ReturnType<typeof calculateProfitLoss>): As
 }
 
 export function createAskTools(dependencies: AskServiceDependencies) {
-  const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
-  const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
+  const getMarketQuoteImpl =
+    dependencies.getMarketQuoteImpl ?? ((asset: string) => getMarketQuote(asset, askLiveMarketOptions));
+  const getMarketSeriesImpl =
+    dependencies.getMarketSeriesImpl ?? ((asset: string, timeframe) =>
+      getMarketSeries(asset, timeframe, askLiveMarketOptions));
   const fetchNewsEverythingImpl =
     dependencies.fetchNewsEverythingImpl ?? fetchNewsEverything;
 

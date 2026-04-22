@@ -1072,8 +1072,10 @@ async function resolveDirectShortcut({
     return null;
   }
 
-  const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
-  const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
+  const getMarketQuoteImpl =
+    dependencies.getMarketQuoteImpl ?? ((a: string) => getMarketQuote(a, { live: true }));
+  const getMarketSeriesImpl =
+    dependencies.getMarketSeriesImpl ?? ((a: string, tf) => getMarketSeries(a, tf, { live: true }));
   const inferredAssets = inferMarketAssetsFromText(normalizedMessage);
   const inferredAsset =
     inferredAssets.length === 1 ? inferredAssets[0] : extractDirectForexPair(normalizedMessage);

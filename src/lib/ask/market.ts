@@ -136,6 +136,14 @@ export interface MarketSeries extends MarketInstrument {
   support: number;
 }
 
+/**
+ * Ask tab: pass `{ live: true }` to skip caches and bypass Next.js Data Cache on FMP (always fresh reads).
+ * Markets dashboard / API: omit (default) to keep 60s in-memory + FMP revalidation behaviour.
+ */
+export type MarketDataOptions = {
+  live?: boolean;
+};
+
 /** Builds a quote from historical closes so the dashboard can reuse one series response when needed. */
 export function deriveQuoteFromSeries(series: MarketSeries): MarketQuote {
   const { closeValues } = series;
@@ -352,7 +360,11 @@ function trimCloseValues(closeValues: number[], points: number): number[] {
   return closeValues.slice(-points);
 }
 
-async function fetchFmpData(pathname: string, params: Record<string, string>) {
+async function fetchFmpData(
+  pathname: string,
+  params: Record<string, string>,
+  options?: MarketDataOptions,
+) {
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) {
     throw new Error("FMP_API_KEY is not configured.");
@@ -363,9 +375,15 @@ async function fetchFmpData(pathname: string, params: Record<string, string>) {
     url.searchParams.set(key, value);
   });
 
-  const response = await fetchWithRetry(url, {
-    next: { revalidate: 60 },
-  });
+  const live = options?.live === true;
+  const response = await fetchWithRetry(
+    url,
+    live
+      ? { cache: "no-store" }
+      : {
+          next: { revalidate: 60 },
+        },
+  );
 
   const text = await response.text();
   if (!response.ok) {
@@ -395,20 +413,22 @@ async function fetchFmpData(pathname: string, params: Record<string, string>) {
   return parsed;
 }
 
-async function searchMarketInstrument(asset: string): Promise<MarketInstrument | null> {
+async function searchMarketInstrument(
+  asset: string,
+  options?: MarketDataOptions,
+): Promise<MarketInstrument | null> {
+  const live = options?.live === true;
   const cacheKey = normalizeAssetKey(asset);
-  const cached = getCached(instrumentCache, cacheKey);
-  if (cached) {
-    return cached;
+  if (!live) {
+    const cached = getCached(instrumentCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
   }
 
   const [symbolMatches, nameMatches] = await Promise.all([
-    fetchFmpData("stable/search-symbol", {
-      query: asset,
-    }).catch(() => []),
-    fetchFmpData("stable/search-name", {
-      query: asset,
-    }).catch(() => []),
+    fetchFmpData("stable/search-symbol", { query: asset }, options).catch(() => []),
+    fetchFmpData("stable/search-name", { query: asset }, options).catch(() => []),
   ]);
   const data = [...(Array.isArray(symbolMatches) ? symbolMatches : []), ...(Array.isArray(nameMatches) ? nameMatches : [])];
   const uniqueCandidates = Array.from(
@@ -446,17 +466,22 @@ async function searchMarketInstrument(asset: string): Promise<MarketInstrument |
     symbol: bestMatch.symbol,
   };
 
-  setCached(instrumentCache, cacheKey, instrument);
+  if (!live) {
+    setCached(instrumentCache, cacheKey, instrument);
+  }
   return instrument;
 }
 
-async function resolveMarketInstrument(asset: string): Promise<MarketInstrument> {
+async function resolveMarketInstrument(
+  asset: string,
+  options?: MarketDataOptions,
+): Promise<MarketInstrument> {
   const resolved = resolveSupportedAsset(asset);
   if (resolved) {
     return resolved;
   }
 
-  const searched = await searchMarketInstrument(asset);
+  const searched = await searchMarketInstrument(asset, options);
   if (searched) {
     return searched;
   }
@@ -464,18 +489,25 @@ async function resolveMarketInstrument(asset: string): Promise<MarketInstrument>
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export async function getMarketQuote(asset: string): Promise<MarketQuote> {
-  const resolved = await resolveMarketInstrument(asset);
+export async function getMarketQuote(asset: string, options?: MarketDataOptions): Promise<MarketQuote> {
+  const live = options?.live === true;
+  const resolved = await resolveMarketInstrument(asset, options);
 
   const cacheKey = resolved.symbol;
-  const cached = getCached(quoteCache, cacheKey);
-  if (cached) {
-    return cached;
+  if (!live) {
+    const cached = getCached(quoteCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
   }
 
-  const json = await fetchFmpData("stable/quote", {
-    symbol: resolved.symbol,
-  });
+  const json = await fetchFmpData(
+    "stable/quote",
+    {
+      symbol: resolved.symbol,
+    },
+    { live },
+  );
   const row = Array.isArray(json) ? (json[0] as Record<string, unknown> | undefined) : undefined;
   if (!row) {
     throw new Error(`FMP quote did not return data for ${resolved.symbol}.`);
@@ -505,33 +537,43 @@ export async function getMarketQuote(asset: string): Promise<MarketQuote> {
     ...(resolved.proxyAssumption ? { proxyAssumption: resolved.proxyAssumption } : {}),
   };
 
-  setCached(quoteCache, cacheKey, quote);
+  if (!live) {
+    setCached(quoteCache, cacheKey, quote);
+  }
   return quote;
 }
 
 export async function getMarketSeries(
   asset: string,
   timeframe: MarketSeries["timeframe"] = "1W",
+  options?: MarketDataOptions,
 ): Promise<MarketSeries> {
-  const resolved = await resolveMarketInstrument(asset);
+  const live = options?.live === true;
+  const resolved = await resolveMarketInstrument(asset, options);
   const window = formatTimeframe(timeframe);
 
   const cacheKey = `${resolved.symbol}:${timeframe}`;
-  const cached = getCached(seriesCache, cacheKey);
-  if (cached) {
-    const closeValues = trimCloseValues(cached.closeValues, window.points);
-    return {
-      ...cached,
-      closeValues,
-      support: Math.min(...closeValues),
-      resistance: Math.max(...closeValues),
-    };
+  if (!live) {
+    const cached = getCached(seriesCache, cacheKey);
+    if (cached) {
+      const closeValues = trimCloseValues(cached.closeValues, window.points);
+      return {
+        ...cached,
+        closeValues,
+        support: Math.min(...closeValues),
+        resistance: Math.max(...closeValues),
+      };
+    }
   }
 
-  const json = await fetchFmpData("stable/historical-price-eod/light", {
-    symbol: resolved.symbol,
-    limit: window.limit,
-  });
+  const json = await fetchFmpData(
+    "stable/historical-price-eod/light",
+    {
+      symbol: resolved.symbol,
+      limit: window.limit,
+    },
+    { live },
+  );
 
   const values = Array.isArray(json) ? json : [];
   const closeValues = trimCloseValues(parseTimeSeriesCloseValues(values), window.points);
@@ -550,6 +592,8 @@ export async function getMarketSeries(
     ...(resolved.proxyAssumption ? { proxyAssumption: resolved.proxyAssumption } : {}),
   };
 
-  setCached(seriesCache, cacheKey, series);
+  if (!live) {
+    setCached(seriesCache, cacheKey, series);
+  }
   return series;
 }
