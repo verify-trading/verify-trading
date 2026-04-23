@@ -113,7 +113,7 @@ export function AskEmptyState({
                   onClick={() => onPromptClick(prompt)}
                   className={askSuggestionChipClass}
                 >
-                  <span className="break-words">{prompt}</span>
+                  <span className="min-w-0 break-words text-pretty">{prompt}</span>
                 </Button>
               </li>
             ))}
