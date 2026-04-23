@@ -32,18 +32,19 @@ function WordmarkInner() {
   );
 }
 
-function WordmarkInline() {
+/** Inline wordmark (e.g. verify.trading) — shared with hero. */
+export function AppWordmarkInline({ className }: { className?: string }) {
   const name = getAppName();
   const dot = name.indexOf(".");
   if (dot === -1) {
-    return <span>{name}</span>;
+    return <span className={className}>{name}</span>;
   }
   return (
-    <>
+    <span className={className}>
       {name.slice(0, dot)}
       <span className="text-[var(--vt-coral)]">.</span>
       {name.slice(dot + 1)}
-    </>
+    </span>
   );
 }
 
@@ -115,7 +116,7 @@ export function Logo({
       </div>
       {showWordmark ? (
         <div className={`${textSize} font-black tracking-[-0.04em] text-white`}>
-          <WordmarkInline />
+          <AppWordmarkInline />
         </div>
       ) : null}
     </div>

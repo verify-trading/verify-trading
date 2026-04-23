@@ -18,7 +18,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
-import { Logo } from "@/components/site/logo";
+import { AppWordmarkInline, Logo } from "@/components/site/logo";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
 import type { PublicBillingPricing } from "@/lib/billing/config";
@@ -99,41 +99,29 @@ function HeroSection() {
     <section className="border-b border-white/[0.06] bg-[radial-gradient(ellipse_90%_70%_at_100%_35%,rgba(76,110,245,0.1),transparent_52%),var(--vt-navy)] max-md:bg-[radial-gradient(ellipse_100%_60%_at_50%_0%,rgba(76,110,245,0.1),transparent_45%),var(--vt-navy)]">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 sm:py-20 md:grid-cols-2 md:items-center md:gap-12 lg:gap-16 lg:py-24">
         <div className="order-2 min-w-0 max-w-2xl text-left md:order-1">
-          <h1 className="text-4xl font-bold tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08]">
+          <h1
+            className="text-4xl font-bold tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08]"
+            aria-label={`${appName}: One Check. Better Decisions. Fewer Losses.`}
+          >
             <span className="block">
-              verify<span className="text-[var(--vt-coral)]">.</span>
+              <AppWordmarkInline />
             </span>
-            <span className="mt-1 block">Before You Trade</span>
+            <span className="mt-2 block max-w-[22rem] text-lg font-medium leading-snug tracking-[-0.01em] text-slate-300 sm:mt-3 sm:max-w-xl sm:text-xl sm:leading-snug">
+              One Check. Better Decisions. Fewer Losses.
+            </span>
           </h1>
-          <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-400 sm:text-[17px] sm:leading-8">
+          <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-slate-400 sm:mt-6 sm:text-base sm:leading-7">
             {appName} helps you verify brokers, validate trades, and manage risk with live market data and
             purpose-built tools, so you get clear, actionable answers before you trade.
           </p>
-          <div className="mt-8">
+          <div className="mt-6 sm:mt-7">
             <Button asChild variant="default" size="pill" className="px-6">
               <Link href="/ask" prefetch={false}>
-                VERIFY TRADE NOW
+                Start Free Now
               </Link>
             </Button>
           </div>
-          <p className="mt-5 text-xs leading-relaxed text-slate-500">
-            <Link
-              href="/privacy"
-              className="font-semibold text-slate-400 underline decoration-white/20 underline-offset-2 transition hover:text-white"
-            >
-              Privacy policy
-            </Link>
-            <span className="mx-2 text-slate-600" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/terms"
-              className="font-semibold text-slate-400 underline decoration-white/20 underline-offset-2 transition hover:text-white"
-            >
-              Terms of use
-            </Link>
-          </p>
-          <ul className="mt-8 flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:gap-y-2">
+          <ul className="mt-5 flex flex-col gap-2 text-sm text-slate-500 sm:mt-6 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:gap-y-2">
             {["Stop bad trades in seconds", "Avoid any scams", "Control your risk"].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <CheckCircle2 className="size-3.5 shrink-0 text-[var(--vt-green)]" aria-hidden />
