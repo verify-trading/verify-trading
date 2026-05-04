@@ -12,6 +12,13 @@ import { Modal } from "@/components/ui/modal";
 type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>["variant"]>;
 type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
 
+// Rewardful global type
+declare global {
+  interface Window {
+    Rewardful?: { referral?: string };
+  }
+}
+
 type BillingActionButtonProps = {
   action: "checkout" | "portal" | "cancel" | "resume";
   children: React.ReactNode;
@@ -93,14 +100,26 @@ export function BillingActionButton({
     setIsPending(true);
 
     try {
+      // Automatically include Rewardful referral on checkout actions.
+      // For non-checkout actions or users without a referral, this is a no-op.
+      const rewardfulReferral =
+        action === "checkout" && typeof window !== "undefined"
+          ? window.Rewardful?.referral
+          : undefined;
+
+      const finalPayload =
+        action === "checkout"
+          ? { ...(payload ?? {}), ...(rewardfulReferral ? { rewardfulReferral } : {}) }
+          : payload;
+
       const response = await fetch(actionConfig[action].endpoint, {
         method: "POST",
-        headers: payload
+        headers: finalPayload
           ? {
               "content-type": "application/json",
             }
           : undefined,
-        body: payload ? JSON.stringify(payload) : undefined,
+        body: finalPayload ? JSON.stringify(finalPayload) : undefined,
       });
       const responsePayload = (await response.json().catch(() => null)) as
         | {
