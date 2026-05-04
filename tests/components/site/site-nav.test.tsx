@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let mockPathname = "/ask";
+let mockIsSignedIn = true;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname,
@@ -14,7 +15,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/supabase/auth-context", () => ({
   useSupabaseAuth: () => ({
     ready: true,
-    isSignedIn: true,
+    isSignedIn: mockIsSignedIn,
   }),
 }));
 
@@ -35,6 +36,7 @@ import { SiteNav } from "@/components/site/site-nav";
 describe("SiteNav", () => {
   beforeEach(() => {
     mockPathname = "/ask";
+    mockIsSignedIn = true;
   });
 
   it("hides app navigation on the password reset page", () => {
@@ -49,6 +51,14 @@ describe("SiteNav", () => {
   });
 
   it("shows the guide tab for signed-in users", () => {
+    render(<SiteNav />);
+
+    expect(screen.getAllByText("Guide").length).toBeGreaterThan(0);
+  });
+
+  it("shows the guide tab for signed-out users", () => {
+    mockIsSignedIn = false;
+
     render(<SiteNav />);
 
     expect(screen.getAllByText("Guide").length).toBeGreaterThan(0);

@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
   { href: "/markets", label: "Markets", icon: LineChart, requiresAuth: true },
-  { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: true },
+  { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: false },
 ] as const;
 
 /** Mobile header height for fixed overlays (single row + safe area). */
@@ -25,7 +25,9 @@ export const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
 function siteNavLinkClass(active: boolean) {
   return [
     "shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium tracking-tight transition sm:px-3",
-    active ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/[0.06] hover:text-white",
+    active
+      ? "bg-white/10 text-white"
+      : "text-white/45 hover:bg-white/[0.06] hover:text-white",
   ].join(" ");
 }
 
@@ -49,7 +51,9 @@ export function SiteNav() {
   const sheetLinkClass = (active: boolean) =>
     [
       "flex items-center gap-3 rounded-xl px-4 py-3.5 text-base font-semibold transition active:bg-white/10",
-      active ? "bg-white/[0.08] text-white" : "text-white/80 hover:bg-white/[0.05]",
+      active
+        ? "bg-white/[0.08] text-white"
+        : "text-white/80 hover:bg-white/[0.05]",
     ].join(" ");
 
   const visibleNavItems = hideAuthChrome
@@ -64,7 +68,11 @@ export function SiteNav() {
     <>
       <nav className="sticky top-0 z-50 border-b border-white/[0.07] bg-[rgb(10,13,46)]/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:min-h-14 lg:gap-4 lg:px-6">
-          <Link href="/" className="min-w-0 shrink-0" onClick={() => setMobileMenuOpen(false)}>
+          <Link
+            href="/"
+            className="min-w-0 shrink-0"
+            onClick={() => setMobileMenuOpen(false)}
+          >
             <span className="lg:hidden">
               <Logo compact />
             </span>
@@ -77,11 +85,16 @@ export function SiteNav() {
           <div
             className={cn(
               "hidden min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:items-center lg:px-4",
-              desktopNavCentered ? "lg:justify-center" : "lg:justify-end lg:gap-3",
+              desktopNavCentered
+                ? "lg:justify-center"
+                : "lg:justify-end lg:gap-3",
             )}
           >
             {visibleNavItems.length > 0 ? (
-              <nav className="flex min-w-max items-center gap-0.5 sm:gap-1" aria-label="Main">
+              <nav
+                className="flex min-w-max items-center gap-0.5 sm:gap-1"
+                aria-label="Main"
+              >
                 {visibleNavItems.map((item) => {
                   const active = pathname === item.href;
                   return (
@@ -140,7 +153,11 @@ export function SiteNav() {
                   className={sheetLinkClass(active)}
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  <Icon className="size-5 shrink-0 text-[var(--vt-muted)]" strokeWidth={2} aria-hidden />
+                  <Icon
+                    className="size-5 shrink-0 text-[var(--vt-muted)]"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
                   {item.label}
                 </Link>
               );

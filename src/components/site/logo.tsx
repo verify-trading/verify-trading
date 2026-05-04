@@ -1,4 +1,3 @@
-import { brandGradient } from "@/lib/brand";
 import { getAppName } from "@/lib/site-config";
 
 type LogoSize = "default" | "compact" | "large" | "avatar";
@@ -10,26 +9,10 @@ interface LogoProps {
   /** Explicit size (overrides `large` / `compact` when set). */
   size?: LogoSize;
   stacked?: boolean;
-  /** Extra wordmark beside the mark (default off — label is inside the ring). */
+  /** Extra wordmark beside the mark (default off). */
   showWordmark?: boolean;
-  /** When false, only the gradient ring and inner disc show (no app name in the ring). */
+  /** @deprecated No-op — kept for backward compat. The image logo has no inner wordmark. */
   innerWordmark?: boolean;
-}
-
-function WordmarkInner() {
-  const name = getAppName();
-  const dot = name.indexOf(".");
-  if (dot === -1) {
-    return <span className="px-0.5">{name}</span>;
-  }
-  return (
-    <>
-      {name.slice(0, dot)}
-      <span className="text-[var(--vt-coral)]">.</span>
-      <br />
-      {name.slice(dot + 1)}
-    </>
-  );
 }
 
 /** Inline wordmark (e.g. verify.trading) — shared with hero. */
@@ -54,12 +37,10 @@ export function Logo({
   size: sizeProp,
   stacked = false,
   showWordmark = false,
-  innerWordmark = true,
 }: LogoProps) {
   const size: LogoSize =
-    sizeProp ??
-    (large ? "large" : compact ? "compact" : "default");
-  const ringSize =
+    sizeProp ?? (large ? "large" : compact ? "compact" : "default");
+  const imgSize =
     size === "large"
       ? "h-28 w-28 sm:h-32 sm:w-32"
       : size === "compact"
@@ -67,53 +48,21 @@ export function Logo({
         : size === "avatar"
           ? "h-8 w-8"
           : "h-11 w-11 sm:h-12 sm:w-12";
-  const innerInset =
-    size === "large"
-      ? "inset-[3px]"
-      : size === "compact" || size === "avatar"
-        ? "inset-[1.5px]"
-        : "inset-[2px]";
-  const innerTextSize =
-    size === "large"
-      ? "text-[15px] sm:text-[17px]"
-      : size === "compact" || size === "avatar"
-        ? "text-[7px]"
-        : "text-[8px] sm:text-[9px]";
   const textSize = size === "large" ? "text-3xl" : "text-base";
-
-  const showGlowBlur = size !== "avatar";
 
   return (
     <div
       className={`flex items-center ${stacked ? "flex-col gap-3" : "gap-3"}`}
     >
-      <div
-        className={`relative ${ringSize} shrink-0 ${
+      <img
+        src="/logo.svg"
+        alt="verify.trading"
+        className={`${imgSize} shrink-0 ${
           size === "avatar"
             ? "drop-shadow-[0_4px_14px_rgba(76,110,245,0.28)]"
             : ""
         }`}
-      >
-        {showGlowBlur ? (
-          <div
-            className="absolute inset-0 rounded-full opacity-45 blur-md"
-            style={{ backgroundImage: brandGradient }}
-          />
-        ) : null}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{ backgroundImage: brandGradient }}
-        />
-        <div
-          className={`absolute ${innerInset} z-10 flex items-center justify-center rounded-full border border-white/10 bg-[rgba(10,13,46,0.94)] text-center font-black leading-[1.05] tracking-[-0.06em] text-white ${innerWordmark ? innerTextSize : ""}`}
-        >
-          {innerWordmark ? (
-            <span>
-              <WordmarkInner />
-            </span>
-          ) : null}
-        </div>
-      </div>
+      />
       {showWordmark ? (
         <div className={`${textSize} font-black tracking-[-0.04em] text-white`}>
           <AppWordmarkInline />

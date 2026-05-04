@@ -43,7 +43,6 @@ export async function middleware(request: NextRequest) {
 
   const requiresAuth =
     pathname.startsWith("/ask") ||
-    pathname.startsWith("/guide") ||
     pathname.startsWith("/markets") ||
     pathname.startsWith("/auth/update-password");
 

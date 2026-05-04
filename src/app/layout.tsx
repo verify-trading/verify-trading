@@ -8,7 +8,8 @@ export const metadata: Metadata = {
   title: getSiteTitle(),
   description: getSiteDescription(),
   icons: {
-    icon: "/favicon.svg",
+    icon: "/favicon.svg?v=4",
+    apple: "/favicon.svg?v=4",
   },
 };
 

@@ -12,10 +12,13 @@ import type { FreeAskUsageSummary } from "@/lib/rate-limit/usage";
 
 export const metadata: Metadata = {
   title: "Billing",
-  description: "Manage your verify.trading subscription and Stripe billing status.",
+  description:
+    "Manage your verify.trading subscription and Stripe billing status.",
 };
 
-type BillingPageSearchParams = Promise<Record<string, string | string[] | undefined>>;
+type BillingPageSearchParams = Promise<
+  Record<string, string | string[] | undefined>
+>;
 
 type ProfileRow = {
   display_name: string | null;
@@ -59,8 +62,14 @@ function formatBillingDate(value: string | null): string | null {
   }).format(date);
 }
 
-function formatRecurringAmount(subscription: BillingSubscriptionRow | null): string | null {
-  if (!subscription?.currency || typeof subscription.unit_amount !== "number" || !subscription.interval) {
+function formatRecurringAmount(
+  subscription: BillingSubscriptionRow | null,
+): string | null {
+  if (
+    !subscription?.currency ||
+    typeof subscription.unit_amount !== "number" ||
+    !subscription.interval
+  ) {
     return null;
   }
 
@@ -76,7 +85,9 @@ function formatRecurringAmount(subscription: BillingSubscriptionRow | null): str
   return `${amount}/${subscription.interval}`;
 }
 
-function isSubscriptionScheduledToCancel(subscription: BillingSubscriptionRow | null): boolean {
+function isSubscriptionScheduledToCancel(
+  subscription: BillingSubscriptionRow | null,
+): boolean {
   if (!subscription) {
     return false;
   }
@@ -132,10 +143,16 @@ export default async function BillingPage({
   const checkoutSessionId = readSearchParam(resolvedSearchParams, "session_id");
 
   const [profileResult, subscriptionResult] = await Promise.all([
-    session.supabase.from("profiles").select("display_name, tier").eq("id", session.user.id).maybeSingle(),
+    session.supabase
+      .from("profiles")
+      .select("display_name, tier")
+      .eq("id", session.user.id)
+      .maybeSingle(),
     session.supabase
       .from("billing_subscriptions")
-      .select("status, current_period_end, cancel_at_period_end, cancel_at, currency, unit_amount, interval, interval_count")
+      .select(
+        "status, current_period_end, cancel_at_period_end, cancel_at, currency, unit_amount, interval, interval_count",
+      )
       .eq("user_id", session.user.id)
       .in("status", [...MANAGEABLE_SUBSCRIPTION_STATUSES])
       .order("current_period_end", { ascending: false, nullsFirst: false })
@@ -152,19 +169,28 @@ export default async function BillingPage({
   }
 
   const profile = (profileResult.data as ProfileRow | null) ?? null;
-  const subscription = ((subscriptionResult.data as BillingSubscriptionRow[] | null) ?? [])[0] ?? null;
+  const subscription =
+    ((subscriptionResult.data as BillingSubscriptionRow[] | null) ?? [])[0] ??
+    null;
   const canOpenPortal = canManageSubscription(subscription?.status);
 
   let freeAskUsage: FreeAskUsageSummary | null = null;
   if (!canOpenPortal && profile?.tier !== "pro") {
-    const usageState = await loadAskUsageState(session.supabase, session.user.id);
+    const usageState = await loadAskUsageState(
+      session.supabase,
+      session.user.id,
+    );
     freeAskUsage = usageState.usage;
   }
   const isCanceling = isSubscriptionScheduledToCancel(subscription);
-  const renewalDate = formatBillingDate(subscription?.current_period_end ?? null);
+  const renewalDate = formatBillingDate(
+    subscription?.current_period_end ?? null,
+  );
   const recurringAmount = formatRecurringAmount(subscription);
   const customerName =
-    profile?.display_name?.trim() || session.user.email?.split("@")[0] || "there";
+    profile?.display_name?.trim() ||
+    session.user.email?.split("@")[0] ||
+    "there";
   const currentPlanLabel = getCurrentPlanLabel(profile, subscription);
 
   return (
