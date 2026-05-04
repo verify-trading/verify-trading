@@ -19,6 +19,7 @@ type ProfileRow = {
 
 const checkoutRequestSchema = z.object({
   plan: z.enum(["monthly", "annual"]).default("monthly"),
+  rewardfulReferral: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -84,12 +85,13 @@ export async function POST(request: Request) {
 
     const stripe = getStripeServerClient();
     const origin = new URL(request.url).origin;
-    const metadata = {
-      supabaseUserId: session.user.id,
-      planKey: "pro",
-      billingPlan: offer.planKey,
-      offerVariant: offer.variant,
-    };
+   const metadata = {
+  supabaseUserId: session.user.id,
+  planKey: "pro",
+  billingPlan: offer.planKey,
+  offerVariant: offer.variant,
+  ...(payload.rewardfulReferral && { rewardful_referral: payload.rewardfulReferral }),
+};
 
     if (checkoutClaim.replacedCheckoutSessionId) {
       await stripe.checkout.sessions.expire(checkoutClaim.replacedCheckoutSessionId).catch(() => undefined);
@@ -99,8 +101,9 @@ export async function POST(request: Request) {
       {
         mode: "subscription",
         customer: customerId,
-        client_reference_id: session.user.id,
+        client_reference_id: payload.rewardfulReferral || session.user.id,
         billing_address_collection: "auto",
+
         line_items: [
           {
             price: offer.checkoutPriceId,
