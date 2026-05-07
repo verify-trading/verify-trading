@@ -73,6 +73,14 @@ select vault.create_secret('same-value-as-CRON_SECRET', 'markets_cron_secret');
 
 3. Run database migrations. `database/migrations/20260508_supabase_markets_cron.sql` schedules `refresh-market-cache` every 5 minutes and calls `/api/cron/markets` with the bearer token.
 
+The cron route writes the latest run summary to `market_cache` under `cron:markets:last-run`:
+
+```sql
+select fetched_at, payload
+from market_cache
+where cache_key = 'cron:markets:last-run';
+```
+
 ### Fresh branding (no client-specific origins in code)
 
 Deployment host and product copy are driven by env vars (`NEXT_PUBLIC_APP_NAME`, optional title/description). There is no hardcoded client origin list in this app; configure CORS or Supabase URL allowlists in those services if needed.

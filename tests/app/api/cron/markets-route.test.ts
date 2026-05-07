@@ -73,8 +73,10 @@ describe("GET /api/cron/markets", () => {
     vi.mocked(shouldRefreshEconomicCalendar).mockReturnValue(false);
 
     const response = await GET(new Request("http://localhost/api/cron/markets"));
+    const json = await response.json();
 
     expect(response.status).toBe(200);
+    expect(json.errors).toEqual([]);
     expect(fetchMarketSeries).not.toHaveBeenCalled();
     expect(getMarketIntelligenceSnapshot).not.toHaveBeenCalled();
 
@@ -88,6 +90,17 @@ describe("GET /api/cron/markets", () => {
         "BTC/USD": { symbol: "BTC/USD", price: 80000, percent_change: 1.2 },
       },
     });
+    expect(upsertCache).toHaveBeenCalledWith(
+      "cron:markets:last-run",
+      expect.objectContaining({
+        ok: true,
+        actions: expect.arrayContaining(["marketState:0", "quotes:2/3", "dividends:0"]),
+        errors: [],
+        startedAt: expect.any(String),
+        finishedAt: expect.any(String),
+        durationMs: expect.any(Number),
+      }),
+    );
   });
 
   it("refreshes market intelligence when the shared cache is stale", async () => {
@@ -156,8 +169,12 @@ describe("GET /api/cron/markets", () => {
     });
 
     const response = await GET(new Request("http://localhost/api/cron/markets"));
+    const json = await response.json();
 
     expect(response.status).toBe(200);
+    expect(json.errors).toEqual(
+      expect.arrayContaining([expect.stringContaining("series-symbol:temporary symbol failure")]),
+    );
     expect(fetchMarketSeries).toHaveBeenCalledWith("EUR/USD", "1W");
     expect(upsertCache).toHaveBeenCalledWith("series:1W", {
       timeframe: "1W",
@@ -253,10 +270,19 @@ describe("GET /api/cron/markets", () => {
 
     expect(response.status).toBe(200);
     expect(json.actions).toContain("economicCalendar:error");
+    expect(json.errors).toEqual(expect.arrayContaining(["economicCalendar:provider down"]));
     expect(upsertCache).not.toHaveBeenCalledWith("events:economic:week", expect.anything());
     expect(upsertCache).toHaveBeenCalledWith("intelligence:news", {
       updatedAt: "2026-05-05T10:00:00.000Z",
       items: [],
     });
+    expect(upsertCache).toHaveBeenCalledWith(
+      "cron:markets:last-run",
+      expect.objectContaining({
+        ok: true,
+        actions: expect.arrayContaining(["economicCalendar:error"]),
+        errors: expect.arrayContaining(["economicCalendar:provider down"]),
+      }),
+    );
   });
 });
