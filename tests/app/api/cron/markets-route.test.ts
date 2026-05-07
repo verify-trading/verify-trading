@@ -51,6 +51,39 @@ describe("GET /api/cron/markets", () => {
     vi.unstubAllEnvs();
   });
 
+  it("skips provider calls when the current 5-minute window already updated quotes", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(5 * 60 * 1000);
+    vi.stubEnv("CRON_SECRET", "");
+    vi.mocked(readCacheRow).mockImplementation(async (key: string) => {
+      if (key === "quotes:all") {
+        return {
+          fetchedAt: new Date(5 * 60 * 1000).toISOString(),
+          payload: { quotes: { "EUR/USD": { symbol: "EUR/USD" } } },
+        } as never;
+      }
+      return null;
+    });
+
+    const response = await GET(new Request("http://localhost/api/cron/markets"));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.actions).toEqual(["skipped:quotes-cache-current-window"]);
+    expect(json.skipReason).toBe("quotes-cache-current-window");
+    expect(fetchMarketState).not.toHaveBeenCalled();
+    expect(fetchQuotes).not.toHaveBeenCalled();
+    expect(fetchMarketSeries).not.toHaveBeenCalled();
+    expect(upsertCache).toHaveBeenCalledWith(
+      "cron:markets:last-run",
+      expect.objectContaining({
+        ok: true,
+        actions: ["skipped:quotes-cache-current-window"],
+        skipReason: "quotes-cache-current-window",
+      }),
+    );
+  });
+
   it("merges priority dividend-run quotes into the existing full quote cache", async () => {
     vi.spyOn(Date, "now").mockReturnValue(0);
     vi.stubEnv("CRON_SECRET", "");

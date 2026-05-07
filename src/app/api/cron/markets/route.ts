@@ -47,14 +47,22 @@ type MarketsCronRunPayload = MarketsCronResults & {
   startedAt: string;
   finishedAt: string;
   durationMs: number;
+  skipReason?: string;
   nextSeries?: string;
   nextDividend?: string;
   error?: string;
 };
 
-function getRunNumber(): number {
-  const now = Date.now();
-  return Math.floor(now / (5 * 60 * 1000));
+function getRunNumber(timestampMs = Date.now()): number {
+  return Math.floor(timestampMs / (5 * 60 * 1000));
+}
+
+function getFetchedAtRunNumber(fetchedAt: string | null | undefined): number | null {
+  if (!fetchedAt) {
+    return null;
+  }
+  const fetchedAtMs = new Date(fetchedAt).getTime();
+  return Number.isFinite(fetchedAtMs) ? getRunNumber(fetchedAtMs) : null;
 }
 
 function shouldRefreshIntelligence(fetchedAt: string | null | undefined): boolean {
@@ -78,6 +86,7 @@ function buildRunPayload({
   results,
   nextSeries,
   nextDividend,
+  skipReason,
   error,
 }: {
   ok: boolean;
@@ -85,6 +94,7 @@ function buildRunPayload({
   results: MarketsCronResults;
   nextSeries?: string;
   nextDividend?: string;
+  skipReason?: string;
   error?: string;
 }): MarketsCronRunPayload {
   const finishedAt = new Date();
@@ -94,6 +104,7 @@ function buildRunPayload({
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - startedAt.getTime(),
+    ...(skipReason ? { skipReason } : {}),
     ...(nextSeries ? { nextSeries } : {}),
     ...(nextDividend ? { nextDividend } : {}),
     ...(error ? { error } : {}),
@@ -139,6 +150,31 @@ export async function GET(request: Request) {
   logger.info("markets cron started", { run, isDividendRun, detailTimeframe });
 
   try {
+    const [previousRunLog, quotesCacheRow] = await Promise.all([
+      readCacheRow<MarketsCronRunPayload>(MARKETS_CRON_RUN_CACHE_KEY),
+      readCacheRow<{ quotes?: Record<string, TwelveDataQuote> }>("quotes:all"),
+    ]);
+    const quotesCacheRun = quotesCacheRow?.payload?.quotes ? getFetchedAtRunNumber(quotesCacheRow.fetchedAt) : null;
+    const previousLogRun = previousRunLog?.payload?.run ?? null;
+    if (previousLogRun === run || quotesCacheRun === run) {
+      const skipReason = previousLogRun === run ? "run-log-current-window" : "quotes-cache-current-window";
+      const action = `skipped:${skipReason}`;
+      results.actions.push(action);
+      const payload = buildRunPayload({
+        ok: true,
+        startedAt,
+        results,
+        skipReason,
+      });
+      await writeRunLog(payload);
+      logger.info("markets cron skipped duplicate run", {
+        ...payload,
+        previousRunLogFetchedAt: previousRunLog?.fetchedAt ?? null,
+        quotesCacheFetchedAt: quotesCacheRow?.fetchedAt ?? null,
+      });
+      return NextResponse.json(payload);
+    }
+
     // 1. Market state (1 credit — always fetch)
     const marketState = await fetchMarketState();
     const majorOpen = marketState.filter((m) =>
