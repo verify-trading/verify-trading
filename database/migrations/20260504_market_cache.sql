@@ -1,5 +1,5 @@
 -- Single-table market cache for Twelve Data persistence
--- All market data (quotes, sparklines, events) stored as JSONB blobs
+-- Market data snapshots are stored as JSONB blobs keyed by cache_key.
 
 create table if not exists public.market_cache (
   id uuid primary key default gen_random_uuid(),
@@ -20,6 +20,5 @@ alter table if exists public.market_cache disable row level security;
 insert into public.market_cache (cache_key, payload, fetched_at)
 values 
   ('quotes:all', '{"quotes":{}}'::jsonb, now()),
-  ('sparklines:all', '{"sparklines":{}}'::jsonb, now()),
-  ('events:dividends', '{"items":[]}'::jsonb, now())
+  ('sparklines:all', '{"sparklines":{}}'::jsonb, now())
 on conflict (cache_key) do nothing;

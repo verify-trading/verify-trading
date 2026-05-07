@@ -6,11 +6,9 @@ vi.mock("@/lib/markets/twelve-data-adapter", () => ({
     commodities: { symbols: ["XAU/USD"] },
     crypto: { symbols: ["BTC/USD"] },
   },
-  fetchDividendsCalendar: vi.fn(),
   fetchMarketSeries: vi.fn(),
   fetchMarketState: vi.fn(),
   fetchQuotes: vi.fn(),
-  readCache: vi.fn(),
   readCacheRow: vi.fn(),
   upsertCache: vi.fn(),
 }));
@@ -32,11 +30,9 @@ import {
   shouldRefreshEconomicCalendar,
 } from "@/lib/markets/rapidapi-economic-calendar";
 import {
-  fetchDividendsCalendar,
   fetchMarketSeries,
   fetchMarketState,
   fetchQuotes,
-  readCache,
   readCacheRow,
   upsertCache,
 } from "@/lib/markets/twelve-data-adapter";
@@ -84,7 +80,7 @@ describe("GET /api/cron/markets", () => {
     );
   });
 
-  it("merges priority dividend-run quotes into the existing full quote cache", async () => {
+  it("refreshes all quotes and the selected-detail timeframe on every run", async () => {
     vi.spyOn(Date, "now").mockReturnValue(0);
     vi.stubEnv("CRON_SECRET", "");
     vi.mocked(fetchMarketState).mockResolvedValue([]);
@@ -92,17 +88,13 @@ describe("GET /api/cron/markets", () => {
       fetchedAt: new Date(0).toISOString(),
       payload: { updatedAt: new Date(0).toISOString(), items: [] },
     } as never);
-    vi.mocked(readCache).mockResolvedValue({
-      quotes: {
-        "EUR/USD": { symbol: "EUR/USD", price: 1, percent_change: 0 },
-        "AUD/USD": { symbol: "AUD/USD", price: 0.7, percent_change: 0.2 },
-      },
-    } as never);
     vi.mocked(fetchQuotes).mockResolvedValue([
       { symbol: "EUR/USD", price: 1.1, percent_change: 0.5 },
+      { symbol: "AUD/USD", price: 0.7, percent_change: 0.2 },
+      { symbol: "XAU/USD", price: 2300, percent_change: -0.1 },
       { symbol: "BTC/USD", price: 80000, percent_change: 1.2 },
     ] as never);
-    vi.mocked(fetchDividendsCalendar).mockResolvedValue([]);
+    vi.mocked(fetchMarketSeries).mockResolvedValue({ symbol: "EUR/USD", values: [1, 2, 3] });
     vi.mocked(shouldRefreshEconomicCalendar).mockReturnValue(false);
 
     const response = await GET(new Request("http://localhost/api/cron/markets"));
@@ -110,7 +102,8 @@ describe("GET /api/cron/markets", () => {
 
     expect(response.status).toBe(200);
     expect(json.errors).toEqual([]);
-    expect(fetchMarketSeries).not.toHaveBeenCalled();
+    expect(fetchQuotes).toHaveBeenCalledWith(["EUR/USD", "AUD/USD", "XAU/USD", "BTC/USD"]);
+    expect(fetchMarketSeries).toHaveBeenCalledTimes(4);
     expect(getMarketIntelligenceSnapshot).not.toHaveBeenCalled();
 
     const quotesWrite = vi
@@ -120,6 +113,7 @@ describe("GET /api/cron/markets", () => {
       quotes: {
         "EUR/USD": { symbol: "EUR/USD", price: 1.1, percent_change: 0.5 },
         "AUD/USD": { symbol: "AUD/USD", price: 0.7, percent_change: 0.2 },
+        "XAU/USD": { symbol: "XAU/USD", price: 2300, percent_change: -0.1 },
         "BTC/USD": { symbol: "BTC/USD", price: 80000, percent_change: 1.2 },
       },
     });
@@ -127,11 +121,12 @@ describe("GET /api/cron/markets", () => {
       "cron:markets:last-run",
       expect.objectContaining({
         ok: true,
-        actions: expect.arrayContaining(["marketState:0", "quotes:2/3", "dividends:0"]),
+        actions: expect.arrayContaining(["marketState:0", "quotes:4/4", "series:1D:4/4"]),
         errors: [],
         startedAt: expect.any(String),
         finishedAt: expect.any(String),
         durationMs: expect.any(Number),
+        nextSeries: "1D refreshed",
       }),
     );
   });
@@ -140,7 +135,6 @@ describe("GET /api/cron/markets", () => {
     vi.spyOn(Date, "now").mockReturnValue(60 * 60 * 1000);
     vi.stubEnv("CRON_SECRET", "");
     vi.mocked(fetchMarketState).mockResolvedValue([]);
-    vi.mocked(readCache).mockResolvedValue({ quotes: {} } as never);
     vi.mocked(readCacheRow).mockResolvedValue({
       fetchedAt: new Date(0).toISOString(),
       payload: { updatedAt: new Date(0).toISOString(), items: [] },
@@ -178,20 +172,22 @@ describe("GET /api/cron/markets", () => {
     });
   });
 
-  it("refreshes one selected-detail timeframe on non-dividend runs and keeps existing symbols on failures", async () => {
+  it("refreshes one selected-detail timeframe and keeps existing symbols on failures", async () => {
     vi.spyOn(Date, "now").mockReturnValue(5 * 60 * 1000);
     vi.stubEnv("CRON_SECRET", "");
     vi.mocked(fetchMarketState).mockResolvedValue([]);
-    vi.mocked(readCache).mockImplementation(async (key: string) => {
+    vi.mocked(readCacheRow).mockImplementation(async (key: string) => {
       if (key === "series:1W") {
-        return { series: { "AUD/USD": [0.7, 0.72] } } as never;
+        return {
+          fetchedAt: new Date(0).toISOString(),
+          payload: { series: { "AUD/USD": [0.7, 0.72] } },
+        } as never;
       }
-      return { quotes: {} } as never;
+      return {
+        fetchedAt: new Date(0).toISOString(),
+        payload: { updatedAt: new Date(0).toISOString(), items: [] },
+      } as never;
     });
-    vi.mocked(readCacheRow).mockResolvedValue({
-      fetchedAt: new Date(5 * 60 * 1000).toISOString(),
-      payload: { updatedAt: new Date(5 * 60 * 1000).toISOString(), items: [] },
-    } as never);
     vi.mocked(fetchQuotes).mockResolvedValue([]);
     vi.mocked(shouldRefreshEconomicCalendar).mockReturnValue(false);
     vi.mocked(fetchMarketSeries).mockImplementation(async (symbol: string) => {
@@ -224,7 +220,6 @@ describe("GET /api/cron/markets", () => {
     vi.spyOn(Date, "now").mockReturnValue(2 * 60 * 60 * 1000);
     vi.stubEnv("CRON_SECRET", "");
     vi.mocked(fetchMarketState).mockResolvedValue([]);
-    vi.mocked(readCache).mockResolvedValue({ quotes: {} } as never);
     vi.mocked(readCacheRow).mockResolvedValue({
       fetchedAt: new Date(0).toISOString(),
       payload: { updatedAt: new Date(0).toISOString(), dayLabel: "old", items: [] },
@@ -284,7 +279,6 @@ describe("GET /api/cron/markets", () => {
     vi.spyOn(Date, "now").mockReturnValue(60 * 60 * 1000);
     vi.stubEnv("CRON_SECRET", "");
     vi.mocked(fetchMarketState).mockResolvedValue([]);
-    vi.mocked(readCache).mockResolvedValue({ quotes: {} } as never);
     vi.mocked(readCacheRow).mockResolvedValue({
       fetchedAt: new Date(0).toISOString(),
       payload: { updatedAt: new Date(0).toISOString(), dayLabel: "old", items: [] },

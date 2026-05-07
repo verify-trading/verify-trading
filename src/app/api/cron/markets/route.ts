@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 
 import {
-  fetchDividendsCalendar,
   fetchMarketSeries,
   fetchMarketState,
   fetchQuotes,
   MARKET_CATEGORIES,
   type MarketSeriesTimeframe,
-  readCache,
   readCacheRow,
   type TwelveDataQuote,
   upsertCache,
@@ -22,15 +20,13 @@ import {
 import { logger } from "@/lib/observability/logger";
 
 /**
- * Vercel Cron: runs every 5 minutes to fetch Twelve Data market snapshots.
+ * Markets cron: runs every 5 minutes to fetch Twelve Data market snapshots.
  * Credit budget (55/min):
  * - Base: Quotes (18) + Market State (1) = 19 credits
  * - One selected-detail timeframe run (+18): 37 credits
- * - Dividend run (+40): 59 credits → SKIP sparklines, refresh priority quotes, keep cached remainder = 47 credits
  */
 
 const ALL_SYMBOLS = Object.values(MARKET_CATEGORIES).flatMap((c) => c.symbols);
-const PRIORITY_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "XAU/USD", "BTC/USD", "ETH/USD"];
 const DETAIL_TIMEFRAMES: MarketSeriesTimeframe[] = ["1D", "1W", "1M", "3M"];
 const INTELLIGENCE_CACHE_KEY = "intelligence:news";
 const INTELLIGENCE_REFRESH_MS = 60 * 60 * 1000;
@@ -49,7 +45,6 @@ type MarketsCronRunPayload = MarketsCronResults & {
   durationMs: number;
   skipReason?: string;
   nextSeries?: string;
-  nextDividend?: string;
   error?: string;
 };
 
@@ -85,7 +80,6 @@ function buildRunPayload({
   startedAt,
   results,
   nextSeries,
-  nextDividend,
   skipReason,
   error,
 }: {
@@ -93,7 +87,6 @@ function buildRunPayload({
   startedAt: Date;
   results: MarketsCronResults;
   nextSeries?: string;
-  nextDividend?: string;
   skipReason?: string;
   error?: string;
 }): MarketsCronRunPayload {
@@ -106,7 +99,6 @@ function buildRunPayload({
     durationMs: finishedAt.getTime() - startedAt.getTime(),
     ...(skipReason ? { skipReason } : {}),
     ...(nextSeries ? { nextSeries } : {}),
-    ...(nextDividend ? { nextDividend } : {}),
     ...(error ? { error } : {}),
   };
 }
@@ -133,7 +125,6 @@ export async function GET(request: Request) {
 
   const startedAt = new Date();
   const run = getRunNumber();
-  const isDividendRun = run % 6 === 0; // Every 30 min
   const detailTimeframe = DETAIL_TIMEFRAMES[run % DETAIL_TIMEFRAMES.length] ?? "1D";
 
   const results: MarketsCronResults = { run, actions: [], errors: [] };
@@ -147,7 +138,7 @@ export async function GET(request: Request) {
     logger.error("markets cron action failed", { action, run, error: message, ...meta });
   };
 
-  logger.info("markets cron started", { run, isDividendRun, detailTimeframe });
+  logger.info("markets cron started", { run, detailTimeframe });
 
   try {
     const [previousRunLog, quotesCacheRow] = await Promise.all([
@@ -183,62 +174,43 @@ export async function GET(request: Request) {
     await upsertCache("market:state", { markets: marketState, majorOpen });
     recordAction(`marketState:${marketState.length}`, { majorOpen: majorOpen.length });
 
-    // 2. Quotes (use priority list on dividend runs to stay under 55 credits)
-    const symbolsToFetch = isDividendRun ? PRIORITY_SYMBOLS : ALL_SYMBOLS;
-    const existingQuotes = isDividendRun
-      ? ((await readCache<{ quotes?: Record<string, TwelveDataQuote> }>("quotes:all"))?.quotes ?? {})
-      : {};
-    const quotes = await fetchQuotes(symbolsToFetch);
-    const quotesMap = {
-      ...existingQuotes,
-      ...Object.fromEntries(quotes.map((q) => [q.symbol, q])),
-    };
+    // 2. Quotes
+    const quotes = await fetchQuotes(ALL_SYMBOLS);
+    const quotesMap = Object.fromEntries(quotes.map((q) => [q.symbol, q]));
     await upsertCache("quotes:all", { quotes: quotesMap });
     recordAction(`quotes:${quotes.length}/${Object.keys(quotesMap).length}`, {
-      requested: symbolsToFetch.length,
-      retained: Object.keys(quotesMap).length - quotes.length,
+      requested: ALL_SYMBOLS.length,
     });
 
-    // 3. Selected-detail chart series (one timeframe per non-dividend run to stay under Grow 55/min)
-    if (!isDividendRun) {
-      const existingSeries =
-        (await readCache<{ series?: Record<string, number[]> }>(`series:${detailTimeframe}`))?.series ?? {};
-      const series: Record<string, number[]> = {};
-      for (const sym of ALL_SYMBOLS) {
-        try {
-          const data = await fetchMarketSeries(sym, detailTimeframe);
-          series[sym] = data.values;
-        } catch (error) {
-          recordError("series-symbol", error, "Temporary symbol series failure.", {
-            symbol: sym,
-            timeframe: detailTimeframe,
-          });
-          // Keep the existing cached series for this symbol instead of replacing it with a failed fetch.
-        }
+    // 3. Selected-detail chart series (one timeframe per run to stay under Grow 55/min)
+    const seriesCache = await readCacheRow<{ series?: Record<string, number[]> }>(`series:${detailTimeframe}`);
+    const existingSeries = seriesCache?.payload.series ?? {};
+    const series: Record<string, number[]> = {};
+    for (const sym of ALL_SYMBOLS) {
+      try {
+        const data = await fetchMarketSeries(sym, detailTimeframe);
+        series[sym] = data.values;
+      } catch (error) {
+        recordError("series-symbol", error, "Temporary symbol series failure.", {
+          symbol: sym,
+          timeframe: detailTimeframe,
+        });
+        // Keep the existing cached series for this symbol instead of replacing it with a failed fetch.
       }
-      const mergedSeries = {
-        ...existingSeries,
-        ...series,
-      };
-      if (Object.keys(series).length > 0) {
-        await upsertCache(`series:${detailTimeframe}`, { timeframe: detailTimeframe, series: mergedSeries });
-        if (detailTimeframe === "1D") {
-          await upsertCache("sparklines:all", { sparklines: mergedSeries });
-        }
+    }
+    const mergedSeries = {
+      ...existingSeries,
+      ...series,
+    };
+    if (Object.keys(series).length > 0) {
+      await upsertCache(`series:${detailTimeframe}`, { timeframe: detailTimeframe, series: mergedSeries });
+      if (detailTimeframe === "1D") {
+        await upsertCache("sparklines:all", { sparklines: mergedSeries });
       }
-      recordAction(`series:${detailTimeframe}:${Object.keys(series).length}/${Object.keys(mergedSeries).length}`);
     }
+    recordAction(`series:${detailTimeframe}:${Object.keys(series).length}/${Object.keys(mergedSeries).length}`);
 
-    // 4. Dividends calendar (every 30 min, 40 credits)
-    if (isDividendRun) {
-      const today = new Date().toISOString().slice(0, 10);
-      const nextWeek = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
-      const dividends = await fetchDividendsCalendar(today, nextWeek);
-      await upsertCache("events:dividends", { items: dividends });
-      recordAction(`dividends:${dividends.length}`, { from: today, to: nextWeek });
-    }
-
-    // 5. Economic calendar (RapidAPI: shared weekly cache, refresh at most every 2 hours)
+    // 4. Economic calendar (RapidAPI: shared weekly cache, refresh at most every 2 hours)
     try {
       const economicCalendarCache = await readCacheRow<EconomicCalendarSnapshot>(ECONOMIC_CALENDAR_CACHE_KEY);
       if (shouldRefreshEconomicCalendar(economicCalendarCache?.fetchedAt, economicCalendarCache?.payload?.from ?? null)) {
@@ -259,7 +231,7 @@ export async function GET(request: Request) {
       recordError("economicCalendar", error, "Economic calendar refresh failed.");
     }
 
-    // 6. Market intelligence (NewsData free tier: keep shared cache, refresh at most hourly)
+    // 5. Market intelligence (NewsData free tier: keep shared cache, refresh at most hourly)
     const intelligenceCache = await readCacheRow(INTELLIGENCE_CACHE_KEY);
     if (shouldRefreshIntelligence(intelligenceCache?.fetchedAt)) {
       const intelligence = await getMarketIntelligenceSnapshot();
@@ -271,14 +243,11 @@ export async function GET(request: Request) {
       });
     }
 
-    const nextSeries = isDividendRun ? "5 min" : `${detailTimeframe} refreshed`;
-    const nextDividend = isDividendRun ? "30 min" : `${(6 - (run % 6)) * 5} min`;
     const payload = buildRunPayload({
       ok: true,
       startedAt,
       results,
-      nextSeries,
-      nextDividend,
+      nextSeries: `${detailTimeframe} refreshed`,
     });
     await writeRunLog(payload);
     logger.info("markets cron completed", payload);

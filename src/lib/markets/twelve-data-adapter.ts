@@ -48,27 +48,6 @@ const MARKET_SERIES_TIMEFRAME_CONFIG: Record<MarketSeriesTimeframe, { interval: 
   "3M": { interval: "1day", outputsize: "90" },
 };
 
-export type DividendEvent = {
-  symbol: string;
-  name: string;
-  ex_date: string;
-  amount: number;
-  currency: string;
-};
-
-export type MarketEvents = {
-  dividends: DividendEvent[];
-  macro: Array<{
-    date: string;
-    time: string;
-    currency: string;
-    event: string;
-    impact: "low" | "medium" | "high";
-    forecast: string | null;
-    previous: string | null;
-  }>;
-};
-
 function buildUrl(endpoint: string, params: Record<string, string>): string {
   if (!API_KEY) {
     throw new Error("TWELVE_DATA_API_KEY is not set");
@@ -152,24 +131,6 @@ export async function fetchMarketSeries(symbol: string, timeframe: MarketSeriesT
     .reverse(); // oldest first
 
   return { symbol, values };
-}
-
-/** Fetch ex-dividend calendar for a date range (40 credits per request). */
-export async function fetchDividendsCalendar(startDate: string, endDate: string): Promise<DividendEvent[]> {
-  const url = buildUrl("dividends_calendar", { start_date: startDate, end_date: endDate });
-  const data = (await fetchJson(url)) as Array<Record<string, unknown>>;
-
-  if (!Array.isArray(data)) return [];
-
-  return data
-    .map((item) => ({
-      symbol: String(item.symbol ?? ""),
-      name: String(item.name ?? item.symbol ?? ""),
-      ex_date: String(item.ex_date ?? ""),
-      amount: parseFloat(String(item.amount ?? 0)),
-      currency: String(item.currency ?? "USD"),
-    }))
-    .filter((d) => d.symbol && d.amount > 0);
 }
 
 /** Fetch market state for all exchanges (1 credit per request). */
@@ -262,7 +223,6 @@ export async function readCacheRow<T>(key: string): Promise<{ payload: T; fetche
 export async function verifyTwelveData(): Promise<{
   quotes: Record<string, TwelveDataQuote[]>;
   sparklines: Record<string, TwelveDataSparkline>;
-  dividends: DividendEvent[];
   creditUsage: { current: number; limit: number };
 }> {
   console.log("\n🔍 Verifying Twelve Data API...\n");
@@ -300,27 +260,11 @@ export async function verifyTwelveData(): Promise<{
     }
   }
 
-  // 3. Fetch dividends calendar
-  console.log("\nFetching dividends calendar (7-day window)...");
-  const today = new Date().toISOString().slice(0, 10);
-  const nextWeek = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
-  let dividends: DividendEvent[] = [];
-  try {
-    dividends = await fetchDividendsCalendar(today, nextWeek);
-    console.log(`  ✅ ${dividends.length} dividend events`);
-    dividends.slice(0, 5).forEach((d) => {
-      console.log(`     ${d.symbol}: $${d.amount} ex-date ${d.ex_date}`);
-    });
-    if (dividends.length > 5) console.log(`     ... and ${dividends.length - 5} more`);
-  } catch (e) {
-    console.log(`  ❌ Failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  // 4. Check credit usage
+  // 3. Check credit usage
   console.log("\nChecking API credit usage...");
   const usageRes = await fetch(buildUrl("api_usage", {}), { cache: "no-store" });
   const usage = (await usageRes.json()) as { current_usage: number; plan_limit: number };
   console.log(`  📊 Used: ${usage.current_usage} / ${usage.plan_limit} credits`);
 
-  return { quotes, sparklines, dividends, creditUsage: { current: usage.current_usage, limit: usage.plan_limit } };
+  return { quotes, sparklines, creditUsage: { current: usage.current_usage, limit: usage.plan_limit } };
 }
