@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { MarketsPage } from "@/components/markets/markets-page";
+import { TwelveMarketsPage } from "@/components/markets/twelve-markets-page";
 import { getSessionUser } from "@/lib/auth/session";
 import { getPricingPageData } from "@/lib/billing/pricing-page-data";
 
@@ -25,5 +25,5 @@ export default async function MarketsRoute() {
 
   const { pricing, billingContext } = await getPricingPageData();
 
-  return <MarketsPage initialTier={initialTier} pricing={pricing} billingContext={billingContext} />;
+  return <TwelveMarketsPage initialTier={initialTier} pricing={pricing} billingContext={billingContext} />;
 }

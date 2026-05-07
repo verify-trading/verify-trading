@@ -14,9 +14,9 @@ const TABS: {
   shortLabel: string;
   icon: typeof LineChart;
 }[] = [
-  { id: "charts", label: "Charts", shortLabel: "Charts", icon: LineChart },
-  { id: "intelligence", label: "Market Intelligence", shortLabel: "Intelligence", icon: Newspaper },
-  { id: "calendar", label: "Economic Calendar", shortLabel: "Calendar", icon: Calendar },
+  { id: "charts", label: "Markets", shortLabel: "Markets", icon: LineChart },
+  { id: "intelligence", label: "Intelligence", shortLabel: "Intel", icon: Newspaper },
+  { id: "calendar", label: "Events", shortLabel: "Events", icon: Calendar },
 ];
 
 function tabPanelId(tab: MarketsTabId): string {
@@ -70,7 +70,7 @@ export function MarketsViewTabs({ activeTab, onTabChange, children }: MarketsVie
       </div>
 
       <div
-        className="mb-8 hidden flex-wrap gap-2 border-b border-white/[0.08] pb-4 md:flex"
+        className="mb-7 hidden items-center gap-7 border-b border-white/[0.08] md:flex"
         role="tablist"
         aria-label="Markets tabs"
       >
@@ -86,16 +86,16 @@ export function MarketsViewTabs({ activeTab, onTabChange, children }: MarketsVie
               aria-selected={isActive}
               aria-controls={tabPanelId(t.id)}
               tabIndex={isActive ? 0 : -1}
-              variant={isActive ? "default" : "ghost"}
+              variant="ghost"
               onClick={() => onTabChange(t.id)}
               className={cn(
-                "h-auto rounded-xl px-4 py-2.5 text-[13px] font-semibold",
-                !isActive && "text-[var(--vt-muted)] hover:bg-white/[0.06] hover:text-white",
+                "relative h-auto rounded-none border-0 bg-transparent px-0 pb-4 pt-1 text-sm font-semibold shadow-none hover:bg-transparent",
+                !isActive && "text-[var(--vt-muted)] hover:text-white",
                 isActive &&
-                  "shadow-[0_4px_16px_rgba(242,109,109,0.35)] hover:brightness-110 focus-visible:ring-[var(--vt-coral)]/35",
+                  "text-white after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[var(--vt-coral)]",
               )}
             >
-              <Icon size={15} className={isActive ? "text-white" : "text-[var(--vt-muted)]"} aria-hidden />
+              <Icon size={16} className={isActive ? "text-[var(--vt-coral)]" : "text-[var(--vt-muted)]"} aria-hidden />
               <span className="hidden sm:inline">{t.label}</span>
               <span className="sm:hidden">{t.shortLabel}</span>
             </Button>

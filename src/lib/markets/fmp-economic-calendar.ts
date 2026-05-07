@@ -167,7 +167,8 @@ function mapCalendarRow(row: Record<string, unknown>): EconomicEventItem | null 
     return null;
   }
 
-  const currency = pickString(row, ["currency", "country", "symbol"]) || "—";
+  const country = pickString(row, ["country"]) || "—";
+  const currency = pickString(row, ["currency", "symbol"]) || country;
   const forecast =
     formatMaybeNumberish(row.estimate) ??
     formatMaybeNumberish(row.forecast) ??
@@ -177,12 +178,13 @@ function mapCalendarRow(row: Record<string, unknown>): EconomicEventItem | null 
 
   const impact = parseImpact(row.impact ?? row.importance ?? row.impactLevel);
 
-  const id = stableEventId([parsed.timeUtc, currency, event]);
+  const id = stableEventId([parsed.timeUtc, country, currency, event]);
 
   return {
     id,
     timeUtc: parsed.timeUtc,
     timeLabel: parsed.timeLabel,
+    country,
     currency,
     event,
     impact,

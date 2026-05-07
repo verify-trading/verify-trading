@@ -1,63 +1,66 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-import { deriveQuoteFromSeries, getMarketSeries } from "@/lib/ask/market";
-import {
-  MARKETS_DASHBOARD_ASSETS,
-  type MarketsAssetPayload,
-  type MarketsSnapshot,
-  type MarketsTimeframe,
-} from "@/lib/markets/dashboard";
+import { jsonApiError } from "@/lib/http/json-response";
+import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
+import type { MarketSeriesTimeframe } from "@/lib/markets/twelve-data-adapter";
 import { MARKETS_PRIVATE_CACHE_HEADERS, requireMarketsProSession } from "@/lib/markets/markets-api-auth";
 
-function parseTimeframe(value: string | null): MarketsTimeframe {
-  if (value === "1D" || value === "1W" || value === "1M" || value === "3M" || value === "1Y") {
-    return value;
-  }
+export type TwelveMarketsSnapshot = {
+  updatedAt: string | null;
+  quotes: Record<string, {
+    symbol: string;
+    name: string;
+    price: number;
+    change: number;
+    percent_change: number;
+    open: number;
+    high: number;
+    low: number;
+    previous_close: number;
+    is_market_open: boolean;
+    exchange: string;
+  }>;
+  sparklines: Record<string, number[]>;
+  seriesByTimeframe: Partial<Record<MarketSeriesTimeframe, Record<string, number[]>>>;
+};
 
-  return "1W";
-}
-
-export async function GET(request: NextRequest) {
+export async function GET() {
   const access = await requireMarketsProSession();
   if (!access.ok) {
     return access.response;
   }
 
-  const timeframe = parseTimeframe(request.nextUrl.searchParams.get("timeframe"));
+  try {
+    const quotesData = await readCacheRow<{ quotes: TwelveMarketsSnapshot["quotes"] }>("quotes:all");
+    const sparklinesData = await readCacheRow<{ sparklines: Record<string, number[]> }>("sparklines:all");
+    const [series1D, series1W, series1M, series3M] = await Promise.all([
+      readCacheRow<{ series: Record<string, number[]> }>("series:1D"),
+      readCacheRow<{ series: Record<string, number[]> }>("series:1W"),
+      readCacheRow<{ series: Record<string, number[]> }>("series:1M"),
+      readCacheRow<{ series: Record<string, number[]> }>("series:3M"),
+    ]);
 
-  /** One history fetch per asset keeps the dashboard simple and free-plan friendly. */
-  const settled = await Promise.all(
-    MARKETS_DASHBOARD_ASSETS.map(async (asset): Promise<MarketsAssetPayload> => {
-      try {
-        const series = await getMarketSeries(asset.query, timeframe);
-        const quote = deriveQuoteFromSeries(series);
-        return {
-          id: asset.id,
-          label: asset.label,
-          quote,
-          series,
-          error: null,
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load market data.";
-        return {
-          id: asset.id,
-          label: asset.label,
-          quote: null,
-          series: null,
-          error: message,
-        };
-      }
-    }),
-  );
+    const snapshot: TwelveMarketsSnapshot = {
+      updatedAt: quotesData?.fetchedAt ?? series1D?.fetchedAt ?? sparklinesData?.fetchedAt ?? null,
+      quotes: quotesData?.payload.quotes ?? {},
+      sparklines: series1D?.payload.series ?? sparklinesData?.payload.sparklines ?? {},
+      seriesByTimeframe: {
+        ...(series1D?.payload.series
+          ? { "1D": series1D.payload.series }
+          : sparklinesData?.payload.sparklines
+            ? { "1D": sparklinesData.payload.sparklines }
+            : {}),
+        ...(series1W?.payload.series ? { "1W": series1W.payload.series } : {}),
+        ...(series1M?.payload.series ? { "1M": series1M.payload.series } : {}),
+        ...(series3M?.payload.series ? { "3M": series3M.payload.series } : {}),
+      },
+    };
 
-  const snapshot: MarketsSnapshot = {
-    updatedAt: new Date().toISOString(),
-    timeframe,
-    assets: settled,
-  };
-
-  return NextResponse.json(snapshot, {
-    headers: MARKETS_PRIVATE_CACHE_HEADERS,
-  });
+    return NextResponse.json(snapshot, {
+      headers: MARKETS_PRIVATE_CACHE_HEADERS,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load market data.";
+    return jsonApiError(500, "markets_failed", message);
+  }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import {
   Activity,
@@ -427,6 +428,7 @@ function FAQSection() {
 /* ─── Email CTA ─── */
 
 function EmailCTASection() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -451,6 +453,7 @@ function EmailCTASection() {
       if (res.ok && data.ok) {
         setStatus("success");
         setEmail("");
+        router.push("/guide");
       } else {
         setStatus("error");
         setErrorMsg(data.error ?? "Something went wrong. Please try again.");
