@@ -16,7 +16,7 @@ export async function GET() {
     const cached = await readCacheRow<EconomicCalendarSnapshot>(ECONOMIC_CALENDAR_CACHE_KEY);
     const snapshot: EconomicCalendarSnapshot = cached?.payload ?? {
       updatedAt: new Date().toISOString(),
-      dayLabel: "This week",
+      dayLabel: "Upcoming events",
       items: [],
     };
 

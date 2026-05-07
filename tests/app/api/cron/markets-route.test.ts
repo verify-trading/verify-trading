@@ -232,7 +232,7 @@ describe("GET /api/cron/markets", () => {
       from: "2026-05-05",
       to: "2026-05-12",
       countries: ["US", "CN"],
-      dayLabel: "This week — 2026-05-05 to 2026-05-12",
+      dayLabel: "Upcoming events",
       items: [
         {
           id: "event-1",
@@ -257,7 +257,7 @@ describe("GET /api/cron/markets", () => {
       from: "2026-05-05",
       to: "2026-05-12",
       countries: ["US", "CN"],
-      dayLabel: "This week — 2026-05-05 to 2026-05-12",
+      dayLabel: "Upcoming events",
       items: [
         {
           id: "event-1",

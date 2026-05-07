@@ -98,6 +98,7 @@ describe("TwelveMarketsPage", () => {
     cleanup();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    vi.useRealTimers();
   });
 
   beforeEach(() => {
@@ -209,6 +210,8 @@ describe("TwelveMarketsPage", () => {
   });
 
   it("defaults to Charts tab with 3 options and can switch to Events", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-05-05T12:00:00.000Z"));
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
@@ -225,7 +228,7 @@ describe("TwelveMarketsPage", () => {
       },
       {
         updatedAt: "2026-04-09T10:00:00.000Z",
-        dayLabel: "This week — 2026-05-05 to 2026-05-12",
+        dayLabel: "Upcoming events",
         items: [
           {
             id: "event-1",
@@ -258,7 +261,7 @@ describe("TwelveMarketsPage", () => {
     fireEvent.change(sectionSelect, { target: { value: "calendar" } });
 
     await waitFor(() => {
-      expect(screen.getByText("This week — 2026-05-05 to 2026-05-12")).toBeInTheDocument();
+      expect(screen.getByText("May 5 - May 11")).toBeInTheDocument();
       expect(screen.getAllByText("ISM Services PMI").length).toBeGreaterThan(0);
     });
 

@@ -37,7 +37,7 @@ describe("GET /api/markets/calendar", () => {
     expect(readCacheRow).not.toHaveBeenCalled();
   });
 
-  it("returns cached weekly economic calendar for pro users", async () => {
+  it("returns cached economic calendar for pro users", async () => {
     vi.mocked(requireMarketsProSession).mockResolvedValue({
       ok: true,
       userId: "user-pro",
@@ -50,7 +50,7 @@ describe("GET /api/markets/calendar", () => {
         from: "2026-05-05",
         to: "2026-05-12",
         countries: ["US", "CN"],
-        dayLabel: "This week — 2026-05-05 to 2026-05-12",
+        dayLabel: "Upcoming events",
         items: [
           {
             id: "event-1",
@@ -75,11 +75,11 @@ describe("GET /api/markets/calendar", () => {
     expect(json.items).toHaveLength(1);
     expect(json.items[0].id).toBe("event-1");
     expect(json.items[0].event).toBe("ISM N-Mfg PMI");
-    expect(json.dayLabel).toContain("This week");
+    expect(json.dayLabel).toContain("Upcoming events");
     expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0");
   });
 
-  it("returns an empty weekly snapshot before the cache is warm", async () => {
+  it("returns an empty economic calendar snapshot before the cache is warm", async () => {
     vi.mocked(requireMarketsProSession).mockResolvedValue({
       ok: true,
       userId: "user-pro",
@@ -91,6 +91,6 @@ describe("GET /api/markets/calendar", () => {
 
     expect(response.status).toBe(200);
     expect(json.items).toEqual([]);
-    expect(json.dayLabel).toBe("This week");
+    expect(json.dayLabel).toBe("Upcoming events");
   });
 });

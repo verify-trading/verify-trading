@@ -48,8 +48,9 @@ describe("rapidapi economic calendar", () => {
       new Date("2026-05-05T12:00:00.000Z"),
     );
 
-    expect(snapshot.from).toBe("2026-05-05");
-    expect(snapshot.to).toBe("2026-05-12");
+    expect(snapshot.from).toBe("2026-05-04");
+    expect(snapshot.to).toBe("2026-05-13");
+    expect(snapshot.dayLabel).toBe("Upcoming events");
     expect(snapshot.items).toHaveLength(1);
     expect(snapshot.items[0]).toMatchObject({
       id: "de-1",
@@ -175,14 +176,14 @@ describe("rapidapi economic calendar", () => {
     expect(
       shouldRefreshEconomicCalendar(
         "2026-05-05T23:50:00.000Z",
-        "2026-05-05",
+        "2026-05-04",
         new Date("2026-05-06T00:10:00.000Z"),
       ),
     ).toBe(true);
     expect(
       shouldRefreshEconomicCalendar(
         "2026-05-05T23:50:00.000Z",
-        "2026-05-06",
+        "2026-05-05",
         new Date("2026-05-06T00:10:00.000Z"),
       ),
     ).toBe(false);

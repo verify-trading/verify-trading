@@ -46,6 +46,12 @@ const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
+const MONTH_DAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
 function countryOptionLabel(country: EconomicCalendarCountry): string {
   return `${ECONOMIC_CALENDAR_COUNTRY_LABELS[country]} (${country})`;
 }
@@ -101,6 +107,33 @@ function formatDateLabel(dateKey: string, formatter: Intl.DateTimeFormat): strin
     return dateKey;
   }
   return formatter.format(date);
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  if (!year || !month || !day) {
+    return dateKey;
+  }
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function getLocalDateWindow(timeZone: string, now: Date): { startKey: string; endKey: string } {
+  const startKey = getDateKey(now.toISOString(), timeZone);
+  return {
+    startKey,
+    endKey: addDaysToDateKey(startKey, 6),
+  };
+}
+
+function isDateKeyInWindow(dateKey: string, window: { startKey: string; endKey: string }): boolean {
+  return dateKey >= window.startKey && dateKey <= window.endKey;
+}
+
+function formatDateWindowLabel(window: { startKey: string; endKey: string }): string {
+  return `${formatDateLabel(window.startKey, MONTH_DAY_FORMATTER)} - ${formatDateLabel(
+    window.endKey,
+    MONTH_DAY_FORMATTER,
+  )}`;
 }
 
 function formatEventTimeLabel(timeUtc: string, timeZone: string, fallback: string): string {
@@ -487,6 +520,7 @@ export type MarketEventsSectionProps = {
   isLoading?: boolean;
   errorMessage?: string | null;
   timeZone?: string;
+  now?: Date;
 };
 
 export function MarketEventsSection({
@@ -494,15 +528,26 @@ export function MarketEventsSection({
   isLoading = false,
   errorMessage = null,
   timeZone,
+  now,
 }: MarketEventsSectionProps) {
   const [dateFilter, setDateFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
   const [impactFilter, setImpactFilter] = useState<ImpactFilter>(["high", "medium"]);
   const resolvedTimeZone = useEventTimeZone(timeZone);
+  const dateWindow = useMemo(
+    () => getLocalDateWindow(resolvedTimeZone, now ?? new Date()),
+    [resolvedTimeZone, now],
+  );
+  const dateWindowLabel = useMemo(() => formatDateWindowLabel(dateWindow), [dateWindow]);
 
   const items = useMemo(() => {
-    return (snapshot?.items ?? []).filter((item) => isSupportedEventCountry(item.country));
-  }, [snapshot?.items]);
+    return (snapshot?.items ?? []).filter((item) => {
+      if (!isSupportedEventCountry(item.country)) {
+        return false;
+      }
+      return isDateKeyInWindow(getDateKey(item.timeUtc, resolvedTimeZone), dateWindow);
+    });
+  }, [dateWindow, resolvedTimeZone, snapshot?.items]);
   const countries = useMemo(() => {
     const itemCountries = new Set(items.map((item) => item.country));
     return ECONOMIC_CALENDAR_COUNTRIES.filter((country) => itemCountries.has(country));
@@ -569,7 +614,7 @@ export function MarketEventsSection({
         <div className="flex items-center gap-2">
           <Calendar className="size-4 text-[var(--vt-coral)]" />
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--vt-muted)]">
-            {snapshot?.dayLabel ?? "This week's events"}
+            {dateWindowLabel}
           </h3>
         </div>
 

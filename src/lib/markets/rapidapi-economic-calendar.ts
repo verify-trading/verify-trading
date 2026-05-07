@@ -33,14 +33,17 @@ type EconomicCalendarWindow = {
 
 const API_HOST = "ultimate-economic-calendar.p.rapidapi.com";
 const API_URL = `https://${API_HOST}/economic-events/tradingview`;
+const CACHE_LOOKBACK_DAYS = 1;
+const CACHE_LOOKAHEAD_DAYS = 8;
 
 function formatDateUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
 export function getEconomicCalendarWindow(now = new Date()): EconomicCalendarWindow {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const utcToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const start = new Date(utcToday.getTime() - CACHE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const end = new Date(utcToday.getTime() + CACHE_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000);
   return {
     from: formatDateUtc(start),
     to: formatDateUtc(end),
@@ -245,7 +248,7 @@ export async function getEconomicCalendarWeekSnapshot(
     from: window.from,
     to: window.to,
     countries: [...ECONOMIC_CALENDAR_COUNTRIES],
-    dayLabel: `This week — ${window.from} to ${window.to}`,
+    dayLabel: "Upcoming events",
     items,
   };
 }
