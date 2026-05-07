@@ -123,7 +123,7 @@ export async function GET(request: Request) {
     // 5. Economic calendar (RapidAPI: shared weekly cache, refresh at most every 2 hours)
     try {
       const economicCalendarCache = await readCacheRow<EconomicCalendarSnapshot>(ECONOMIC_CALENDAR_CACHE_KEY);
-      if (shouldRefreshEconomicCalendar(economicCalendarCache?.fetchedAt)) {
+      if (shouldRefreshEconomicCalendar(economicCalendarCache?.fetchedAt, economicCalendarCache?.payload?.from ?? null)) {
         const calendar = await getEconomicCalendarWeekSnapshot(economicCalendarCache?.payload ?? null);
         await upsertCache(ECONOMIC_CALENDAR_CACHE_KEY, calendar);
         results.actions.push(`economicCalendar:${calendar.items.length}`);

@@ -168,4 +168,23 @@ describe("rapidapi economic calendar", () => {
     expect(shouldRefreshEconomicCalendar("2026-05-05T10:01:00.000Z")).toBe(false);
     expect(shouldRefreshEconomicCalendar("2026-05-05T10:00:00.000Z")).toBe(true);
   });
+
+  it("refreshes before the TTL when the cached window is for the previous UTC day", () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-05-06T00:10:00.000Z").getTime());
+
+    expect(
+      shouldRefreshEconomicCalendar(
+        "2026-05-05T23:50:00.000Z",
+        "2026-05-05",
+        new Date("2026-05-06T00:10:00.000Z"),
+      ),
+    ).toBe(true);
+    expect(
+      shouldRefreshEconomicCalendar(
+        "2026-05-05T23:50:00.000Z",
+        "2026-05-06",
+        new Date("2026-05-06T00:10:00.000Z"),
+      ),
+    ).toBe(false);
+  });
 });

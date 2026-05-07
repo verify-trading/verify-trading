@@ -47,12 +47,19 @@ export function getEconomicCalendarWindow(now = new Date()): EconomicCalendarWin
   };
 }
 
-export function shouldRefreshEconomicCalendar(fetchedAt: string | null | undefined): boolean {
+export function shouldRefreshEconomicCalendar(
+  fetchedAt: string | null | undefined,
+  cachedWindowFrom?: string | null,
+  now = new Date(),
+): boolean {
   if (!fetchedAt) {
     return true;
   }
   const fetchedAtMs = new Date(fetchedAt).getTime();
-  return !Number.isFinite(fetchedAtMs) || Date.now() - fetchedAtMs >= ECONOMIC_CALENDAR_REFRESH_MS;
+  if (!Number.isFinite(fetchedAtMs) || Date.now() - fetchedAtMs >= ECONOMIC_CALENDAR_REFRESH_MS) {
+    return true;
+  }
+  return cachedWindowFrom !== undefined && cachedWindowFrom !== getEconomicCalendarWindow(now).from;
 }
 
 function asString(value: unknown): string {
