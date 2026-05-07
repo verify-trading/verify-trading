@@ -15,9 +15,11 @@ import {
   Upload,
   Scale,
   X,
+  PlayCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
 import { AppWordmarkInline, Logo } from "@/components/site/logo";
 import { SiteNav } from "@/components/site/site-nav";
@@ -93,36 +95,120 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
 
 /* ─── Hero ─── */
 
+function ProductPreviewVideo({ appName }: { appName: string }) {
+  return (
+    <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-[var(--vt-navy)] shadow-[0_24px_64px_-28px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+      <video
+        className="h-full w-full object-cover [filter:brightness(0.97)_saturate(0.92)]"
+        src="/main-video.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        aria-label={`${appName} product preview`}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] rounded-2xl shadow-[inset_0_0_72px_20px_rgba(10,13,46,0.75)]"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[2] rounded-2xl bg-gradient-to-b from-[rgba(10,13,46,0.5)] via-transparent to-[rgba(10,13,46,0.45)]"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[3] rounded-2xl bg-gradient-to-r from-[rgba(10,13,46,0.25)] via-transparent to-transparent max-md:bg-gradient-to-b max-md:from-[rgba(10,13,46,0.35)] max-md:via-transparent max-md:to-[rgba(10,13,46,0.2)]"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[4] rounded-2xl ring-1 ring-inset ring-white/[0.05]"
+        aria-hidden
+      />
+    </div>
+  );
+}
+
+function ProductVideoModal({
+  appName,
+  open,
+  onClose,
+}: {
+  appName: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Modal open={open} onClose={onClose} size="2xl" aria-label={`${appName} walkthrough video`}>
+      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/85 backdrop-blur transition hover:bg-black/75 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+          aria-label="Close video"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+        <video
+          key={open ? "open" : "closed"}
+          className="aspect-video w-full bg-black object-cover"
+          src="/main-video.mp4"
+          autoPlay
+          controls
+          playsInline
+          aria-label={`${appName} walkthrough video`}
+        />
+      </div>
+    </Modal>
+  );
+}
+
 function HeroSection() {
   const appName = getAppName();
+  const [videoOpen, setVideoOpen] = useState(false);
 
   return (
     <section className="border-b border-white/[0.06] bg-[radial-gradient(ellipse_90%_70%_at_100%_35%,rgba(76,110,245,0.1),transparent_52%),var(--vt-navy)] max-md:bg-[radial-gradient(ellipse_100%_60%_at_50%_0%,rgba(76,110,245,0.1),transparent_45%),var(--vt-navy)]">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 sm:py-20 md:grid-cols-2 md:items-center md:gap-12 lg:gap-16 lg:py-24">
-        <div className="order-2 min-w-0 max-w-2xl text-left md:order-1">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-12 sm:px-6 sm:py-16 md:grid-cols-2 md:items-center md:gap-12 md:py-20 lg:gap-16 lg:py-24">
+        <div className="min-w-0 max-w-2xl text-left">
           <h1
-            className="text-4xl font-bold tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08]"
+            className="text-[2.125rem] font-semibold leading-[1.05] tracking-normal text-white sm:text-4xl sm:leading-[1.06] lg:text-5xl"
             aria-label={`${appName}: One Check. Better Decisions. Fewer Losses.`}
           >
-            <span className="block">
+            <span className="mb-3 block text-xl font-bold tracking-normal sm:mb-4 sm:text-2xl">
               <AppWordmarkInline />
             </span>
-            <span className="mt-2 block max-w-[22rem] text-lg font-medium leading-snug tracking-[-0.01em] text-slate-300 sm:mt-3 sm:max-w-xl sm:text-xl sm:leading-snug">
-              One Check. Better Decisions. Fewer Losses.
+            <span className="block">One Check.</span>
+            <span className="block bg-gradient-to-r from-[var(--vt-blue)] via-[#8b5cf6] to-[var(--vt-coral)] bg-clip-text text-transparent">
+              Better Decisions.
+            </span>
+            <span className="block">Fewer Losses.</span>
+            <span className="mt-4 block max-w-xl text-sm font-normal leading-6 text-slate-400 sm:text-[15px]">
+              Verify traders, validate trades, and manage risk with live data & AI - all in one place.
             </span>
           </h1>
-          <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-slate-400 sm:mt-6 sm:text-base sm:leading-7">
-            {appName} helps you verify brokers, validate trades, and manage risk with live market data and
-            purpose-built tools, so you get clear, actionable answers before you trade.
-          </p>
-          <div className="mt-6 sm:mt-7">
-            <Button asChild variant="default" size="pill" className="px-6">
+          <div className="mt-7 flex w-full max-w-[13rem] flex-col items-stretch gap-3 sm:mt-8">
+            <Button
+              asChild
+              variant="default"
+              size="pill"
+              className="min-w-48 justify-between bg-gradient-to-r from-[var(--vt-blue)] via-[#8b5cf6] to-[var(--vt-coral)] px-6 shadow-[0_18px_36px_-12px_rgba(242,109,109,0.7)] hover:brightness-110"
+            >
               <Link href="/ask" prefetch={false}>
                 Start Free Now
+                <ArrowRight className="size-4" aria-hidden />
               </Link>
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="pill"
+              className="justify-between border-white/15 bg-white/[0.02] px-6 text-white/90 hover:bg-white/[0.06]"
+              onClick={() => setVideoOpen(true)}
+            >
+              See How It Works
+              <PlayCircle className="size-4" aria-hidden />
+            </Button>
           </div>
-          <ul className="mt-5 flex flex-col gap-2 text-sm text-slate-500 sm:mt-6 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:gap-y-2">
+          <ul className="mt-5 flex flex-col items-start gap-2 text-sm text-slate-500 sm:mt-6 sm:flex-row sm:flex-wrap sm:justify-start sm:gap-x-8 sm:gap-y-2">
             {["Stop bad trades in seconds", "Avoid any scams", "Control your risk"].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <CheckCircle2 className="size-3.5 shrink-0 text-[var(--vt-green)]" aria-hidden />
@@ -131,37 +217,11 @@ function HeroSection() {
             ))}
           </ul>
         </div>
-        <div className="order-1 min-w-0 md:order-2">
-          <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-[var(--vt-navy)] shadow-[0_24px_64px_-28px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
-            <video
-              className="h-full w-full object-cover [filter:brightness(0.97)_saturate(0.92)]"
-              src="/main-video.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              aria-label={`${appName} product preview`}
-            />
-            {/* Vignette + edge blend into page navy */}
-            <div
-              className="pointer-events-none absolute inset-0 z-[1] rounded-2xl shadow-[inset_0_0_72px_20px_rgba(10,13,46,0.75)]"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute inset-0 z-[2] rounded-2xl bg-gradient-to-b from-[rgba(10,13,46,0.5)] via-transparent to-[rgba(10,13,46,0.45)]"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute inset-0 z-[3] rounded-2xl bg-gradient-to-r from-[rgba(10,13,46,0.25)] via-transparent to-transparent max-md:bg-gradient-to-b max-md:from-[rgba(10,13,46,0.35)] max-md:via-transparent max-md:to-[rgba(10,13,46,0.2)]"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute inset-0 z-[4] rounded-2xl ring-1 ring-inset ring-white/[0.05]"
-              aria-hidden
-            />
-          </div>
+        <div className="hidden min-w-0 md:block">
+          <ProductPreviewVideo appName={appName} />
         </div>
       </div>
+      <ProductVideoModal appName={appName} open={videoOpen} onClose={() => setVideoOpen(false)} />
     </section>
   );
 }

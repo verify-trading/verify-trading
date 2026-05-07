@@ -43,7 +43,7 @@ export default function RootLayout({
         </Script>
 
         {/* Rewardful tracking */}
-        <Script id="rewardful-queue" strategy="beforeInteractive">
+        <Script id="rewardful-queue" strategy="afterInteractive">
           {`(function(w,r){w._rwq=r;w[r]=w[r]||function(){(w[r].q=w[r].q||[]).push(arguments)}})(window,'rewardful');`}
         </Script>
         <Script
