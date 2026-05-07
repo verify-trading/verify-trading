@@ -4,6 +4,7 @@
  */
 
 const DEFAULT_APP_NAME = "verify.trading";
+const DEFAULT_BOOKING_CALL_URL = "https://calendly.com/verifytrading/-";
 
 export function getAppName(): string {
   const raw = process.env.NEXT_PUBLIC_APP_NAME?.trim();
@@ -28,7 +29,7 @@ export function getSiteDescription(): string {
 
 export function getOnboardingCallUrl(): string | null {
   const raw = process.env.NEXT_PUBLIC_ONBOARDING_CALL_URL?.trim();
-  return raw || null;
+  return raw || DEFAULT_BOOKING_CALL_URL;
 }
 
 /** Prefer `NEXT_PUBLIC_TRADER_SUPPORT_CALL_URL`; falls back to onboarding booking URL. */

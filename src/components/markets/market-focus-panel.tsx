@@ -100,16 +100,16 @@ export function MarketFocusPanel({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+      <div className="mt-5 grid grid-cols-2 gap-3">
         {market.stats.map((stat) => (
           <div
             key={`${market.id}-${stat.label}`}
-            className="rounded-2xl border border-[color:var(--vt-border)] bg-gradient-to-b from-white/[0.04] to-transparent px-4 py-3 transition-colors hover:border-white/[0.12]"
+            className="min-w-0 rounded-2xl border border-[color:var(--vt-border)] bg-gradient-to-b from-white/[0.04] to-transparent px-3 py-3 transition-colors hover:border-white/[0.12] sm:px-4"
           >
-            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--vt-muted)] sm:tracking-[0.16em]">
               {stat.label}
             </div>
-            <div className="mt-1 text-sm font-semibold text-white">{stat.value}</div>
+            <div className="mt-1 break-words text-sm font-semibold text-white">{stat.value}</div>
           </div>
         ))}
       </div>

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { jsonApiError } from "@/lib/http/json-response";
-import { getMarketIntelligenceSnapshot } from "@/lib/markets/fmp-market-intelligence";
+import type { MarketIntelligenceSnapshot } from "@/lib/markets/market-intelligence";
 import { MARKETS_PRIVATE_CACHE_HEADERS, requireMarketsProSession } from "@/lib/markets/markets-api-auth";
+import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
 
 export async function GET() {
   const access = await requireMarketsProSession();
@@ -11,7 +12,20 @@ export async function GET() {
   }
 
   try {
-    const snapshot = await getMarketIntelligenceSnapshot();
+    const cached = await readCacheRow<MarketIntelligenceSnapshot>("intelligence:news");
+    if (!cached?.payload) {
+      return jsonApiError(
+        503,
+        "market_intelligence_cache_empty",
+        "Market intelligence is warming up. Please try again shortly.",
+      );
+    }
+
+    const snapshot: MarketIntelligenceSnapshot = {
+      ...cached.payload,
+      updatedAt: cached.payload.updatedAt || cached.fetchedAt || new Date().toISOString(),
+    };
+
     return NextResponse.json(snapshot, {
       headers: MARKETS_PRIVATE_CACHE_HEADERS,
     });

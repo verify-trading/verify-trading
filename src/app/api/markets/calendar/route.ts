@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
+import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
 import { jsonApiError } from "@/lib/http/json-response";
-import { getEconomicCalendarSnapshot } from "@/lib/markets/fmp-economic-calendar";
+import { ECONOMIC_CALENDAR_CACHE_KEY } from "@/lib/markets/rapidapi-economic-calendar";
+import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
 import { MARKETS_PRIVATE_CACHE_HEADERS, requireMarketsProSession } from "@/lib/markets/markets-api-auth";
 
 export async function GET() {
@@ -11,7 +13,13 @@ export async function GET() {
   }
 
   try {
-    const snapshot = await getEconomicCalendarSnapshot();
+    const cached = await readCacheRow<EconomicCalendarSnapshot>(ECONOMIC_CALENDAR_CACHE_KEY);
+    const snapshot: EconomicCalendarSnapshot = cached?.payload ?? {
+      updatedAt: new Date().toISOString(),
+      dayLabel: "This week",
+      items: [],
+    };
+
     return NextResponse.json(snapshot, {
       headers: MARKETS_PRIVATE_CACHE_HEADERS,
     });

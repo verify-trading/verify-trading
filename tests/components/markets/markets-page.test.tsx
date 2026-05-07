@@ -2,14 +2,15 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/supabase/auth-context", () => ({
   useSupabaseAuth: vi.fn(),
 }));
 
-import { MarketsPage } from "@/components/markets/markets-page";
+import { TwelveMarketsPage } from "@/components/markets/twelve-markets-page";
 import { getPublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
@@ -54,21 +55,47 @@ function renderWithQueryClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-function mockFetchMarketsSnapshot(marketsSnapshot: Record<string, unknown>) {
+function mockFetchMarkets(
+  marketsSnapshot: Record<string, unknown>,
+  calendarSnapshot?: Record<string, unknown>,
+  intelligenceSnapshot?: Record<string, unknown>,
+) {
   global.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
-    if (url.includes("/api/markets?")) {
+    if (url === "/api/markets") {
       return {
         ok: true,
         json: async () => marketsSnapshot,
+      };
+    }
+    if (url === "/api/markets/calendar") {
+      return {
+        ok: true,
+        json: async () =>
+          calendarSnapshot ?? {
+            updatedAt: new Date().toISOString(),
+            dayLabel: "Today — Test Date",
+            items: [],
+          },
+      };
+    }
+    if (url === "/api/markets/intelligence") {
+      return {
+        ok: true,
+        json: async () =>
+          intelligenceSnapshot ?? {
+            updatedAt: new Date().toISOString(),
+            items: [],
+          },
       };
     }
     throw new Error(`Unexpected fetch: ${url}`);
   }) as unknown as typeof fetch;
 }
 
-describe("MarketsPage", () => {
+describe("TwelveMarketsPage", () => {
   afterEach(() => {
+    cleanup();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
@@ -77,7 +104,7 @@ describe("MarketsPage", () => {
     vi.stubEnv("NEXT_PUBLIC_MARKETS_PAYWALL_UI_ENABLED", "true");
   });
 
-  it("renders the locked preview for non-pro users without fetching live data", async () => {
+  it("renders the paywall for non-pro users without fetching live data", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: null,
       user: null,
@@ -89,20 +116,18 @@ describe("MarketsPage", () => {
     global.fetch = vi.fn() as unknown as typeof fetch;
 
     renderWithQueryClient(
-      <MarketsPage pricing={marketsTestPricing} billingContext={signedOutBillingContext} />,
+      <TwelveMarketsPage pricing={marketsTestPricing} billingContext={signedOutBillingContext} />,
     );
 
-    expect(screen.getByRole("heading", { level: 2, name: /top assets/i })).toBeInTheDocument();
     expect(screen.getByText("Sign in and upgrade to Pro to unlock Markets.")).toBeInTheDocument();
-    expect(screen.getByText("Unlimited Ask")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Major Pairs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Commodities" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Crypto" })).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: /Open Gold Futures market card/i })).toBeInTheDocument();
-    expect(screen.getByText("Preview mode")).toBeInTheDocument();
-    expect(screen.getAllByText("4,761").length).toBeGreaterThan(0);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("renders the finance card grid and live detail panel for pro users", async () => {
+  it("renders category tabs and fetches live data for pro users", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
@@ -111,54 +136,47 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    mockFetchMarketsSnapshot({
+    mockFetchMarkets({
       updatedAt: "2026-04-09T10:00:00.000Z",
-      timeframe: "1W",
-      assets: [
-        {
-          id: "nasdaq",
-          label: "NASDAQ",
-          error: null,
-          quote: {
-            asset: "NASDAQ",
-            symbol: "^IXIC",
-            price: 20948.12,
-            changePercent: 2.89,
-            direction: "up",
-            isMarketOpen: null,
-          },
-          series: {
-            asset: "NASDAQ",
-            symbol: "^IXIC",
-            timeframe: "1W",
-            closeValues: [20100, 20280, 20410, 20680, 20948.12],
-            support: 20100,
-            resistance: 20948.12,
-          },
+      quotes: {
+        "EUR/USD": {
+          symbol: "EUR/USD",
+          name: "Euro / US Dollar",
+          price: 1.08542,
+          change: 0.0023,
+          percent_change: 0.21,
+          open: 1.08312,
+          high: 1.08651,
+          low: 1.08234,
+          previous_close: 1.08312,
+          is_market_open: true,
+          exchange: "FOREX",
         },
-      ],
+      },
+      sparklines: {
+        "EUR/USD": [1.082, 1.083, 1.084, 1.085, 1.08542],
+      },
     });
 
     renderWithQueryClient(
-      <MarketsPage
+      <TwelveMarketsPage
         initialTier="pro"
         pricing={marketsTestPricing}
         billingContext={freeSignedInBillingContext}
       />,
     );
 
-    expect(screen.getAllByRole("heading", { level: 2, name: /top assets/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Major Pairs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Commodities" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Crypto" })).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/markets?timeframe=1W");
-      expect(screen.getAllByText("Focus Panel").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("20,948.12").length).toBeGreaterThan(0);
+      expect(global.fetch).toHaveBeenCalledWith("/api/markets");
+      expect(screen.getAllByText("1.08542").length).toBeGreaterThan(0);
     });
-
-    expect(screen.getAllByRole("button", { name: "Refresh" }).length).toBeGreaterThan(0);
   });
 
-  it("updates the focus panel when a market card is selected", async () => {
+  it("switches active category when a category button is clicked", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
@@ -167,63 +185,30 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    mockFetchMarketsSnapshot({
+    mockFetchMarkets({
       updatedAt: "2026-04-09T10:00:00.000Z",
-      timeframe: "1W",
-      assets: [
-        {
-          id: "oil",
-          label: "OIL",
-          error: null,
-          quote: {
-            asset: "OIL / WTI",
-            symbol: "BZUSD",
-            price: 94.43,
-            changePercent: -13.58,
-            direction: "down",
-            isMarketOpen: null,
-            proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
-          },
-          series: {
-            asset: "OIL / WTI",
-            symbol: "BZUSD",
-            timeframe: "1W",
-            closeValues: [109.27, 104.4, 100.9, 97.8, 94.43],
-            support: 94.43,
-            resistance: 109.27,
-            proxyAssumption: "Using Brent crude futures as the free-plan oil proxy.",
-          },
-        },
-      ],
+      quotes: {},
+      sparklines: {},
     });
 
     renderWithQueryClient(
-      <MarketsPage
+      <TwelveMarketsPage
         initialTier="pro"
         pricing={marketsTestPricing}
         billingContext={freeSignedInBillingContext}
       />,
     );
 
-    await waitFor(() => {
-      expect(screen.getAllByText("94.43").length).toBeGreaterThan(0);
-    });
+    expect(screen.getByRole("button", { name: "Major Pairs" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Open Brent Crude market card" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Commodities" }));
 
     await waitFor(() => {
-      const focusPanels = screen.getAllByTestId("market-focus-panel");
-      expect(
-        focusPanels.some((panel) => within(panel).queryByText("BZUSD · COMMODITY") !== null),
-      ).toBe(true);
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("Using Brent crude futures as the free-plan oil proxy.")).toBeInTheDocument();
+      expect(screen.getByText("XAU/USD")).toBeInTheDocument();
     });
   });
 
-  it("defaults the section selector to Charts and shows a coming soon placeholder for Market Intelligence", async () => {
+  it("defaults to Charts tab with 3 options and can switch to Events", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
@@ -232,36 +217,34 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    mockFetchMarketsSnapshot({
-      updatedAt: "2026-04-09T10:00:00.000Z",
-      timeframe: "1W",
-      assets: [
-        {
-          id: "gold",
-          label: "GOLD",
-          error: null,
-          quote: {
-            asset: "Gold",
-            symbol: "GCUSD",
-            price: 3000,
-            changePercent: 1,
-            direction: "up",
-            isMarketOpen: null,
+    mockFetchMarkets(
+      {
+        updatedAt: "2026-04-09T10:00:00.000Z",
+        quotes: {},
+        sparklines: {},
+      },
+      {
+        updatedAt: "2026-04-09T10:00:00.000Z",
+        dayLabel: "This week — 2026-05-05 to 2026-05-12",
+        items: [
+          {
+            id: "event-1",
+            timeUtc: "2026-05-05T14:00:00.000Z",
+            timeLabel: "14:00 UTC",
+            country: "US",
+            currency: "USD",
+            event: "ISM Services PMI",
+            impact: "high",
+            actual: null,
+            forecast: "53.7",
+            previous: "54.0",
           },
-          series: {
-            asset: "Gold",
-            symbol: "GCUSD",
-            timeframe: "1W",
-            closeValues: [2900, 2950, 3000],
-            support: 2900,
-            resistance: 3000,
-          },
-        },
-      ],
-    });
+        ],
+      },
+    );
 
     renderWithQueryClient(
-      <MarketsPage
+      <TwelveMarketsPage
         initialTier="pro"
         pricing={marketsTestPricing}
         billingContext={freeSignedInBillingContext}
@@ -271,19 +254,18 @@ describe("MarketsPage", () => {
     const sectionSelect = screen.getByLabelText(/markets view/i) as HTMLSelectElement;
     expect(sectionSelect.options).toHaveLength(3);
     expect(sectionSelect.value).toBe("charts");
-    expect(screen.getAllByRole("heading", { level: 2, name: /top assets/i }).length).toBeGreaterThan(0);
 
-    fireEvent.change(sectionSelect, { target: { value: "intelligence" } });
+    fireEvent.change(sectionSelect, { target: { value: "calendar" } });
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { level: 2, name: /market intelligence/i })).toBeInTheDocument();
-      expect(screen.getByText(/^Coming soon$/i)).toBeInTheDocument();
+      expect(screen.getByText("This week — 2026-05-05 to 2026-05-12")).toBeInTheDocument();
+      expect(screen.getAllByText("ISM Services PMI").length).toBeGreaterThan(0);
     });
 
-    expect(global.fetch).not.toHaveBeenCalledWith("/api/markets/intelligence");
+    expect(global.fetch).toHaveBeenCalledWith("/api/markets/calendar");
   });
 
-  it("switches to Economic Calendar coming soon placeholder", async () => {
+  it("can switch to market intelligence and render NewsData headlines", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: supabaseClientForProAccountMenu() as never,
       user: { id: "user-1" } as never,
@@ -292,50 +274,43 @@ describe("MarketsPage", () => {
       isSignedIn: true,
     });
 
-    mockFetchMarketsSnapshot({
-      updatedAt: "2026-04-09T10:00:00.000Z",
-      timeframe: "1W",
-      assets: [
-        {
-          id: "gold",
-          label: "GOLD",
-          error: null,
-          quote: {
-            asset: "Gold",
-            symbol: "GCUSD",
-            price: 3000,
-            changePercent: 1,
-            direction: "up",
-            isMarketOpen: null,
+    mockFetchMarkets(
+      {
+        updatedAt: "2026-04-09T10:00:00.000Z",
+        quotes: {},
+        sparklines: {},
+      },
+      undefined,
+      {
+        updatedAt: "2026-05-05T10:00:00.000Z",
+        items: [
+          {
+            id: "n1",
+            title: "Dollar steadies before Fed decision",
+            source: "Reuters",
+            publishedAt: new Date().toISOString(),
+            summary: "Markets wait for the Fed.",
+            url: "https://example.com/news",
+            tag: "FX",
           },
-          series: {
-            asset: "Gold",
-            symbol: "GCUSD",
-            timeframe: "1W",
-            closeValues: [2900, 2950, 3000],
-            support: 2900,
-            resistance: 3000,
-          },
-        },
-      ],
-    });
+        ],
+      },
+    );
 
     renderWithQueryClient(
-      <MarketsPage
+      <TwelveMarketsPage
         initialTier="pro"
         pricing={marketsTestPricing}
         billingContext={freeSignedInBillingContext}
       />,
     );
 
-    const sectionSelect = screen.getByLabelText(/markets view/i) as HTMLSelectElement;
-    fireEvent.change(sectionSelect, { target: { value: "calendar" } });
+    fireEvent.change(screen.getByLabelText(/markets view/i), { target: { value: "intelligence" } });
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { level: 2, name: /economic calendar/i })).toBeInTheDocument();
-      expect(screen.getAllByText(/^Coming soon$/i).length).toBeGreaterThan(0);
+      expect(screen.getByText("Dollar steadies before Fed decision")).toBeInTheDocument();
     });
 
-    expect(global.fetch).not.toHaveBeenCalledWith("/api/markets/calendar");
+    expect(global.fetch).toHaveBeenCalledWith("/api/markets/intelligence");
   });
 });
