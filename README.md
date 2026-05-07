@@ -59,6 +59,20 @@ See `.env.example` for all keys. **Never commit `.env` or `.env.local`** (they a
 
 In Vercel → Project → **Domains**, attach your domain. Set the same env vars for **Preview** if you want PR previews to hit real APIs (use caution with production keys).
 
+### Markets cache cron
+
+Markets data is refreshed by Supabase Cron, not Vercel Cron. This avoids Vercel Hobby's once-per-day cron limit while keeping the existing Next.js refresh route.
+
+1. Set `CRON_SECRET` in Vercel.
+2. Store the production base URL and matching cron secret in Supabase Vault:
+
+```sql
+select vault.create_secret('https://your-production-domain.com', 'markets_cron_base_url');
+select vault.create_secret('same-value-as-CRON_SECRET', 'markets_cron_secret');
+```
+
+3. Run database migrations. `database/migrations/20260508_supabase_markets_cron.sql` schedules `refresh-market-cache` every 5 minutes and calls `/api/cron/markets` with the bearer token.
+
 ### Fresh branding (no client-specific origins in code)
 
 Deployment host and product copy are driven by env vars (`NEXT_PUBLIC_APP_NAME`, optional title/description). There is no hardcoded client origin list in this app; configure CORS or Supabase URL allowlists in those services if needed.

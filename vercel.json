@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/markets",
-      "schedule": "*/5 * * * *"
-    }
-  ]
-}
