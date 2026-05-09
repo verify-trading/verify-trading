@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 
 const APPLY_URL = "https://verify-trading.getrewardful.com/signup";
 const SUPPORT_EMAIL = "affiliates@verify.trading";
+const ARROW = "\u2192";
 
 export default function AffiliatesPage() {
   return (
@@ -37,7 +38,7 @@ export default function AffiliatesPage() {
             >
               Partner with verify.trading
               <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white/20 text-xs">
-                →
+                {ARROW}
               </span>
             </a>
           </div>
@@ -52,7 +53,7 @@ export default function AffiliatesPage() {
                 className="flex items-center gap-2 text-sm text-slate-400"
               >
                 <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-emerald-500/15 text-[11px] font-bold text-emerald-400">
-                  ✓
+                  {"\u2713"}
                 </span>
                 {item}
               </span>
@@ -115,35 +116,40 @@ export default function AffiliatesPage() {
           <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
-                icon: "💰",
+                icon: "\uD83D\uDCB0",
                 title: "Recurring commission",
                 body: "Earn 30% of every Pro subscription, every single month they stay. No caps, no expiry — pure recurring income.",
                 gradientText: true,
               },
               {
-                icon: "🎯",
+                icon: "\uD83C\uDFAF",
                 title: "Real product, real demand",
                 body: "verify.trading helps traders verify brokers and signals — a genuine pain point that converts naturally.",
+                gradientText: false,
               },
               {
-                icon: "📅",
+                icon: "\uD83D\uDCC5",
                 title: "Monthly payouts",
                 body: "Get paid via PayPal or Wise once your balance hits £20. Predictable. Automated. No chasing invoices.",
+                gradientText: false,
               },
               {
-                icon: "📊",
+                icon: "\uD83D\uDCCA",
                 title: "Real-time dashboard",
                 body: "Track clicks, signups, and earnings in real time. Powered by Rewardful + Stripe — accurate down to the second.",
+                gradientText: false,
               },
               {
-                icon: "⏱️",
+                icon: "\u23F1\uFE0F",
                 title: "60-day cookie window",
                 body: "Get credit for signups up to 60 days after the click. Plenty of time to convert your traffic.",
+                gradientText: false,
               },
               {
-                icon: "🚀",
+                icon: "\uD83D\uDE80",
                 title: "Built for creators",
                 body: "Twitter/X, Discord, trading educators, course creators. Built around how real audiences actually convert.",
+                gradientText: false,
               },
             ].map((card) => (
               <div
@@ -213,14 +219,14 @@ export default function AffiliatesPage() {
               </thead>
               <tbody>
                 {[
-                  ["1", "referral", "£6 / month", "£72 / year"],
-                  ["5", "referrals", "£30 / month", "£360 / year"],
-                  ["10", "referrals", "£60 / month", "£720 / year"],
-                  ["25", "referrals", "£150 / month", "£1,800 / year"],
-                  ["50", "referrals", "£300 / month", "£3,600 / year"],
-                ].map(([num, label, monthly, annual], idx, arr) => (
+                  { num: "1", label: "referral", monthly: "£6 / month", annual: "£72 / year" },
+                  { num: "5", label: "referrals", monthly: "£30 / month", annual: "£360 / year" },
+                  { num: "10", label: "referrals", monthly: "£60 / month", annual: "£720 / year" },
+                  { num: "25", label: "referrals", monthly: "£150 / month", annual: "£1,800 / year" },
+                  { num: "50", label: "referrals", monthly: "£300 / month", annual: "£3,600 / year" },
+                ].map((row, idx, arr) => (
                   <tr
-                    key={num}
+                    key={row.num}
                     className={`transition hover:bg-violet-500/[0.05] ${
                       idx < arr.length - 1
                         ? "border-b border-violet-500/[0.08]"
@@ -229,15 +235,15 @@ export default function AffiliatesPage() {
                   >
                     <td className="px-7 py-6 text-base font-medium text-slate-200">
                       <span className="mr-1.5 text-lg font-semibold text-white">
-                        {num}
+                        {row.num}
                       </span>
-                      {label}
+                      {row.label}
                     </td>
                     <td className="bg-gradient-to-r from-pink-500 to-violet-400 bg-clip-text px-7 py-6 text-base font-semibold text-transparent">
-                      {monthly}
+                      {row.monthly}
                     </td>
                     <td className="bg-gradient-to-r from-pink-500 to-violet-400 bg-clip-text px-7 py-6 text-base font-semibold text-transparent">
-                      {annual}
+                      {row.annual}
                     </td>
                   </tr>
                 ))}
@@ -252,7 +258,7 @@ export default function AffiliatesPage() {
             >
               Partner with verify.trading
               <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white/20 text-xs">
-                →
+                {ARROW}
               </span>
             </a>
             <p className="mt-4 text-xs text-slate-500">
@@ -285,32 +291,32 @@ export default function AffiliatesPage() {
           <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
-                icon: "🛡️",
+                icon: "\uD83D\uDEE1\uFE0F",
                 title: "Broker verification",
                 body: "Help traders avoid scams. Verify brokers, regulations, and licensing instantly with live data.",
               },
               {
-                icon: "📈",
+                icon: "\uD83D\uDCC8",
                 title: "Signal authenticity",
                 body: "Cut through the noise. Verify trading signals against real market data — no fake promises.",
               },
               {
-                icon: "⚡",
+                icon: "\u26A1",
                 title: "Live market data",
                 body: "Real-time data and AI-powered checks. No stale info, no guesswork — answers in seconds.",
               },
               {
-                icon: "💸",
+                icon: "\uD83D\uDCB8",
                 title: "Affordable pricing",
                 body: "£5 first-month launch offer makes it an easy yes. Low barrier = higher conversion from your traffic.",
               },
               {
-                icon: "🎯",
+                icon: "\uD83C\uDFAF",
                 title: "Simple onboarding",
                 body: "Sign up and get value in minutes. No setup, no friction — just one check and better decisions.",
               },
               {
-                icon: "🤝",
+                icon: "\uD83E\uDD1D",
                 title: "Trader-first product",
                 body: "Built by traders, for traders. Your audience will recognise the value the moment they try it.",
               },
@@ -347,7 +353,7 @@ export default function AffiliatesPage() {
               </span>
             </h2>
             <p className="mt-4 text-base text-slate-400">
-              You're a few simple steps away from earning your first commission.
+              You&apos;re a few simple steps away from earning your first commission.
             </p>
           </div>
 
@@ -393,7 +399,7 @@ export default function AffiliatesPage() {
             >
               Partner with verify.trading
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[13px]">
-                →
+                {ARROW}
               </span>
             </a>
             <p className="mt-5 text-sm text-slate-500">
