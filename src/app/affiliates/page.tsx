@@ -1,4 +1,23 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Coins,
+  Target,
+  Calendar,
+  BarChart3,
+  Clock,
+  Rocket,
+  Shield,
+  TrendingUp,
+  Zap,
+  Wallet,
+  Sparkles,
+  Users,
+} from "lucide-react";
+
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Affiliate Programme — Earn 30% Recurring | verify.trading",
@@ -8,412 +27,424 @@ export const metadata: Metadata = {
 
 const APPLY_URL = "https://verify-trading.getrewardful.com/signup";
 const SUPPORT_EMAIL = "affiliates@verify.trading";
-const ARROW = "\u2192";
 
-export default function AffiliatesPage() {
+const surface = "rounded-xl border border-white/[0.08] bg-white/[0.02]";
+
+type IconTheme = "blue" | "amber" | "coral" | "purple" | "green" | "cyan";
+
+const featureIconClass: Record<IconTheme, string> = {
+  blue: "border-[rgba(76,110,245,0.35)] bg-[rgba(76,110,245,0.12)] text-[var(--vt-blue)]",
+  amber: "border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.1)] text-[var(--vt-amber)]",
+  coral: "border-[rgba(242,109,109,0.35)] bg-[rgba(242,109,109,0.1)] text-[var(--vt-coral)]",
+  purple: "border-[rgba(168,85,247,0.35)] bg-[rgba(168,85,247,0.1)] text-purple-400",
+  green: "border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.1)] text-[var(--vt-green)]",
+  cyan: "border-[rgba(34,211,238,0.35)] bg-[rgba(34,211,238,0.1)] text-cyan-400",
+};
+
+const ctaButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 px-8 text-sm font-semibold text-white shadow-[0_0_40px_rgba(139,92,246,0.3)] transition hover:-translate-y-0.5 hover:shadow-[0_0_50px_rgba(139,92,246,0.45)]";
+
+function SectionEyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <main className="bg-[#0a0e1f] text-slate-200">
-      {/* SECTION 1 — HERO */}
-      <section className="relative overflow-hidden px-6 pb-32 pt-24 text-center sm:pt-28">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_1000px_500px_at_50%_0%,rgba(139,92,246,0.15),rgba(236,72,153,0.08)_30%,transparent_70%)]" />
-        <div className="relative mx-auto max-w-4xl">
-          <p className="mb-6 text-xs font-medium uppercase tracking-[0.2em] text-violet-400">
-            Affiliate Programme
-          </p>
-          <h1 className="text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl">
-            Turn referrals into{" "}
-            <span className="block bg-gradient-to-r from-pink-500 via-violet-400 to-violet-500 bg-clip-text text-transparent">
-              recurring revenue.
-            </span>
-          </h1>
-          <p className="mx-auto mt-8 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
-            Earn 30% commission every month, for every trader you refer to
-            verify.trading. No caps. No expiry. Real recurring income, paid
-            monthly.
-          </p>
-          <div className="mt-10 flex justify-center">
-            
-              href={APPLY_URL}
-              className="inline-flex h-[50px] items-center gap-2.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 px-8 text-sm font-semibold text-white shadow-[0_0_50px_rgba(139,92,246,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_0_60px_rgba(139,92,246,0.5)]"
+    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">
+      {children}
+    </p>
+  );
+}
+
+function CtaButton({ size = "default", className }: { size?: "default" | "large"; className?: string }) {
+  const sizeClass = size === "large" ? "h-[52px] text-[15px]" : "h-12";
+  return (
+    <Link href={APPLY_URL} prefetch={false} className={cn(ctaButtonClass, sizeClass, className)}>
+      Partner with verify.trading
+      <ArrowRight className="size-4" aria-hidden />
+    </Link>
+  );
+}
+
+/* ─── Hero ─── */
+
+function HeroSection() {
+  return (
+    <section className="border-b border-white/[0.06] bg-[radial-gradient(ellipse_90%_70%_at_50%_0%,rgba(76,110,245,0.12),transparent_55%),var(--vt-navy)]">
+      <div className="mx-auto w-full max-w-5xl px-4 py-16 text-center sm:px-6 sm:py-24">
+        <SectionEyebrow>Affiliate Programme</SectionEyebrow>
+        <h1 className="mt-4 text-4xl font-bold tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.05] lg:text-6xl">
+          Turn referrals into{" "}
+          <span className="text-[var(--vt-blue)]">recurring revenue.</span>
+        </h1>
+        <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-slate-400 sm:mt-7 sm:text-lg">
+          Earn 30% commission every month, for every trader you refer to verify.trading. No caps. No expiry. Real recurring income, paid monthly.
+        </p>
+        <div className="mt-8 flex justify-center sm:mt-10">
+          <CtaButton />
+        </div>
+        <ul className="mt-10 flex flex-col items-center justify-center gap-3 text-sm text-slate-400 sm:mt-12 sm:flex-row sm:flex-wrap sm:gap-x-7 sm:gap-y-2">
+          {["30% recurring commission", "Monthly payouts", "60-day cookie window"].map((t) => (
+            <li key={t} className="flex items-center gap-2">
+              <CheckCircle2 className="size-3.5 shrink-0 text-[var(--vt-green)]" aria-hidden />
+              {t}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Stats Band (overlapping) ─── */
+
+function StatsBandSection() {
+  const stats = [
+    { label: "Earn", value: "30%", sub: "recurring commission" },
+    { label: "For", value: "Every", sub: "month they stay" },
+    { label: "Payout in", value: "30 days", sub: "every month" },
+  ];
+
+  return (
+    <section className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+      <div className="-mt-12 grid grid-cols-1 gap-6 rounded-2xl border border-white/[0.08] bg-[var(--vt-navy)]/95 p-8 shadow-[0_24px_64px_-28px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur sm:-mt-16 sm:grid-cols-3 sm:p-10">
+        {stats.map((s, i) => (
+          <div
+            key={s.label}
+            className={cn(
+              "text-center sm:px-6",
+              i === 1 && "border-y border-white/[0.06] py-4 sm:border-x sm:border-y-0 sm:py-0",
+            )}
+          >
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">
+              {s.label}
+            </p>
+            <p className="mt-3 text-5xl font-bold tracking-[-0.03em] text-[var(--vt-blue)] sm:text-6xl">
+              {s.value}
+            </p>
+            <p className="mt-2 text-sm font-semibold text-slate-200 sm:text-base">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ─── Why Partner (6 cards) ─── */
+
+function WhyPartnerSection() {
+  const cards: Array<{ icon: typeof Coins; theme: IconTheme; title: string; body: string }> = [
+    {
+      icon: Coins,
+      theme: "blue",
+      title: "Recurring commission",
+      body: "Earn 30% of every Pro subscription, every single month they stay. No caps, no expiry — pure recurring income.",
+    },
+    {
+      icon: Target,
+      theme: "coral",
+      title: "Real product, real demand",
+      body: "verify.trading helps traders verify brokers and signals — a genuine pain point that converts naturally.",
+    },
+    {
+      icon: Calendar,
+      theme: "green",
+      title: "Monthly payouts",
+      body: "Get paid via PayPal or Wise once your balance hits £20. Predictable. Automated. No chasing invoices.",
+    },
+    {
+      icon: BarChart3,
+      theme: "purple",
+      title: "Real-time dashboard",
+      body: "Track clicks, signups, and earnings in real time. Powered by Rewardful + Stripe — accurate down to the second.",
+    },
+    {
+      icon: Clock,
+      theme: "amber",
+      title: "60-day cookie window",
+      body: "Get credit for signups up to 60 days after the click. Plenty of time to convert your traffic.",
+    },
+    {
+      icon: Rocket,
+      theme: "cyan",
+      title: "Built for creators",
+      body: "Twitter/X, Discord, trading educators, course creators. Built around how real audiences actually convert.",
+    },
+  ];
+
+  return (
+    <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
+      <div className="max-w-2xl">
+        <SectionEyebrow>Why partner</SectionEyebrow>
+        <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+          Why partner with verify.trading?
+        </h2>
+        <p className="mt-4 text-base leading-relaxed text-slate-400">
+          Six reasons creators, educators, and community admins choose us.
+        </p>
+      </div>
+
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((c) => {
+          const Icon = c.icon;
+          return (
+            <div
+              key={c.title}
+              className={cn(
+                surface,
+                "flex h-full flex-col p-6 transition-colors hover:border-white/[0.12] hover:bg-white/[0.03]",
+              )}
             >
-              Partner with verify.trading
-              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white/20 text-xs">
-                {ARROW}
-              </span>
-            </a>
-          </div>
-          <div className="mt-16 flex flex-wrap items-center justify-center gap-x-7 gap-y-4">
-            {[
-              "30% recurring commission",
-              "Monthly payouts",
-              "60-day cookie window",
-            ].map((item) => (
-              <span
-                key={item}
-                className="flex items-center gap-2 text-sm text-slate-400"
-              >
-                <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-emerald-500/15 text-[11px] font-bold text-emerald-400">
-                  {"\u2713"}
-                </span>
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 2 — STATS CARD (overlapping) */}
-      <section className="relative z-10 -mt-20 px-6">
-        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 rounded-3xl bg-white p-12 shadow-[0_20px_80px_rgba(0,0,0,0.4)] sm:grid-cols-3 sm:p-12">
-          <div className="text-center sm:px-6">
-            <p className="text-sm font-medium text-slate-500">Earn</p>
-            <p className="mt-3 bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-5xl font-bold leading-none tracking-tight text-transparent sm:text-6xl">
-              30%
-            </p>
-            <p className="mt-3 text-base font-semibold text-slate-900 sm:text-lg">
-              recurring commission
-            </p>
-          </div>
-          <div className="text-center sm:border-x sm:border-slate-200 sm:px-6">
-            <p className="text-sm font-medium text-slate-500">For</p>
-            <p className="mt-3 bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-5xl font-bold leading-none tracking-tight text-transparent sm:text-6xl">
-              Every
-            </p>
-            <p className="mt-3 text-base font-semibold text-slate-900 sm:text-lg">
-              month they stay
-            </p>
-          </div>
-          <div className="text-center sm:px-6">
-            <p className="text-sm font-medium text-slate-500">Payout in</p>
-            <p className="mt-3 bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-5xl font-bold leading-none tracking-tight text-transparent sm:text-6xl">
-              30 days
-            </p>
-            <p className="mt-3 text-base font-semibold text-slate-900 sm:text-lg">
-              every month
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 3 — WHY PARTNER (6 cards) */}
-      <section className="px-6 py-24">
-        <div className="mx-auto max-w-6xl">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-violet-400">
-              Why partner
-            </p>
-            <h2 className="text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-              Why partner with{" "}
-              <span className="bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-transparent">
-                verify.trading?
-              </span>
-            </h2>
-            <p className="mt-4 text-base text-slate-400">
-              Six reasons creators, educators, and community admins choose us.
-            </p>
-          </div>
-
-          <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                icon: "\uD83D\uDCB0",
-                title: "Recurring commission",
-                body: "Earn 30% of every Pro subscription, every single month they stay. No caps, no expiry — pure recurring income.",
-                gradientText: true,
-              },
-              {
-                icon: "\uD83C\uDFAF",
-                title: "Real product, real demand",
-                body: "verify.trading helps traders verify brokers and signals — a genuine pain point that converts naturally.",
-                gradientText: false,
-              },
-              {
-                icon: "\uD83D\uDCC5",
-                title: "Monthly payouts",
-                body: "Get paid via PayPal or Wise once your balance hits £20. Predictable. Automated. No chasing invoices.",
-                gradientText: false,
-              },
-              {
-                icon: "\uD83D\uDCCA",
-                title: "Real-time dashboard",
-                body: "Track clicks, signups, and earnings in real time. Powered by Rewardful + Stripe — accurate down to the second.",
-                gradientText: false,
-              },
-              {
-                icon: "\u23F1\uFE0F",
-                title: "60-day cookie window",
-                body: "Get credit for signups up to 60 days after the click. Plenty of time to convert your traffic.",
-                gradientText: false,
-              },
-              {
-                icon: "\uD83D\uDE80",
-                title: "Built for creators",
-                body: "Twitter/X, Discord, trading educators, course creators. Built around how real audiences actually convert.",
-                gradientText: false,
-              },
-            ].map((card) => (
               <div
-                key={card.title}
-                className="group relative overflow-hidden rounded-2xl border border-violet-500/15 bg-gradient-to-br from-violet-950/40 to-slate-900/30 p-8 transition hover:-translate-y-1 hover:border-violet-400/40"
+                className={cn(
+                  "flex size-11 shrink-0 items-center justify-center rounded-lg border",
+                  featureIconClass[c.theme],
+                )}
               >
-                <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.15),transparent_70%)]" />
-                <div className="relative">
-                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-violet-400/25 bg-gradient-to-br from-pink-500/15 to-violet-500/15 text-2xl">
-                    {card.icon}
-                  </div>
-                  <h3
-                    className={
-                      card.gradientText
-                        ? "mb-3 bg-gradient-to-r from-white to-pink-200 bg-clip-text text-xl font-semibold leading-tight text-transparent"
-                        : "mb-3 text-xl font-semibold leading-tight text-white"
-                    }
-                  >
-                    {card.title}
-                  </h3>
-                  <p className="text-sm leading-relaxed text-slate-400">
-                    {card.body}
-                  </p>
-                </div>
+                <Icon className="size-5" strokeWidth={1.75} aria-hidden />
               </div>
-            ))}
-          </div>
+              <h3 className="mt-4 text-lg font-semibold tracking-tight text-white">{c.title}</h3>
+              <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-400">{c.body}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ─── Earnings Table ─── */
+
+function EarningsSection() {
+  const rows = [
+    { num: "1", label: "referral", monthly: "£6 / month", annual: "£72 / year" },
+    { num: "5", label: "referrals", monthly: "£30 / month", annual: "£360 / year" },
+    { num: "10", label: "referrals", monthly: "£60 / month", annual: "£720 / year" },
+    { num: "25", label: "referrals", monthly: "£150 / month", annual: "£1,800 / year" },
+    { num: "50", label: "referrals", monthly: "£300 / month", annual: "£3,600 / year" },
+  ];
+
+  return (
+    <section className="border-y border-white/[0.06] bg-[radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(76,110,245,0.06),transparent_70%)]">
+      <div className="mx-auto w-full max-w-4xl px-4 py-16 sm:px-6 sm:py-24">
+        <div className="text-center">
+          <SectionEyebrow>Earning potential</SectionEyebrow>
+          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+            Your earning potential.
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-slate-400">
+            30% recurring commission on every Pro subscription. Based on £20/month plan.
+          </p>
         </div>
-      </section>
 
-      {/* SECTION 4 — EARNINGS TABLE */}
-      <section className="relative px-6 py-24">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-400/30 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-violet-400/30 to-transparent" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_800px_500px_at_50%_50%,rgba(139,92,246,0.08),transparent_70%)]" />
-        <div className="relative mx-auto max-w-4xl">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-violet-400">
-              Earning potential
-            </p>
-            <h2 className="text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-              Your{" "}
-              <span className="bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-transparent">
-                earning potential.
-              </span>
-            </h2>
-            <p className="mt-4 text-base text-slate-400">
-              30% recurring commission on every Pro subscription. Based on
-              £20/month plan.
-            </p>
-          </div>
-
-          <div className="mt-12 overflow-hidden rounded-3xl border border-violet-500/20 bg-gradient-to-b from-violet-950/30 to-slate-900/40 shadow-[0_20px_60px_rgba(139,92,246,0.1)]">
-            <table className="w-full text-left">
-              <thead className="bg-gradient-to-r from-pink-500/[0.08] to-violet-500/[0.08]">
-                <tr>
-                  <th className="border-b border-violet-500/20 px-7 py-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-300">
-                    Referrals
-                  </th>
-                  <th className="border-b border-violet-500/20 px-7 py-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-300">
-                    Monthly earnings
-                  </th>
-                  <th className="border-b border-violet-500/20 px-7 py-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-300">
-                    Annual earnings
-                  </th>
+        <div className={cn(surface, "mt-10 overflow-hidden")}>
+          <table className="w-full text-left">
+            <thead className="bg-[rgba(76,110,245,0.06)]">
+              <tr>
+                <th className="border-b border-white/[0.08] px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--vt-blue)] sm:px-7 sm:py-5">
+                  Referrals
+                </th>
+                <th className="border-b border-white/[0.08] px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--vt-blue)] sm:px-7 sm:py-5">
+                  Monthly
+                </th>
+                <th className="border-b border-white/[0.08] px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--vt-blue)] sm:px-7 sm:py-5">
+                  Annual
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr
+                  key={r.num}
+                  className={cn(
+                    "transition-colors hover:bg-white/[0.02]",
+                    i < rows.length - 1 && "border-b border-white/[0.04]",
+                  )}
+                >
+                  <td className="px-5 py-5 text-sm text-slate-300 sm:px-7 sm:py-6 sm:text-base">
+                    <span className="mr-1.5 text-base font-semibold text-white sm:text-lg">
+                      {r.num}
+                    </span>
+                    {r.label}
+                  </td>
+                  <td className="px-5 py-5 text-sm font-semibold text-[var(--vt-blue)] sm:px-7 sm:py-6 sm:text-base">
+                    {r.monthly}
+                  </td>
+                  <td className="px-5 py-5 text-sm font-semibold text-[var(--vt-blue)] sm:px-7 sm:py-6 sm:text-base">
+                    {r.annual}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {[
-                  { num: "1", label: "referral", monthly: "£6 / month", annual: "£72 / year" },
-                  { num: "5", label: "referrals", monthly: "£30 / month", annual: "£360 / year" },
-                  { num: "10", label: "referrals", monthly: "£60 / month", annual: "£720 / year" },
-                  { num: "25", label: "referrals", monthly: "£150 / month", annual: "£1,800 / year" },
-                  { num: "50", label: "referrals", monthly: "£300 / month", annual: "£3,600 / year" },
-                ].map((row, idx, arr) => (
-                  <tr
-                    key={row.num}
-                    className={`transition hover:bg-violet-500/[0.05] ${
-                      idx < arr.length - 1
-                        ? "border-b border-violet-500/[0.08]"
-                        : ""
-                    }`}
-                  >
-                    <td className="px-7 py-6 text-base font-medium text-slate-200">
-                      <span className="mr-1.5 text-lg font-semibold text-white">
-                        {row.num}
-                      </span>
-                      {row.label}
-                    </td>
-                    <td className="bg-gradient-to-r from-pink-500 to-violet-400 bg-clip-text px-7 py-6 text-base font-semibold text-transparent">
-                      {row.monthly}
-                    </td>
-                    <td className="bg-gradient-to-r from-pink-500 to-violet-400 bg-clip-text px-7 py-6 text-base font-semibold text-transparent">
-                      {row.annual}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-12 text-center">
-            
-              href={APPLY_URL}
-              className="inline-flex h-[50px] items-center gap-2.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 px-8 text-sm font-semibold text-white shadow-[0_0_50px_rgba(139,92,246,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_0_60px_rgba(139,92,246,0.5)]"
-            >
-              Partner with verify.trading
-              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white/20 text-xs">
-                {ARROW}
-              </span>
-            </a>
-            <p className="mt-4 text-xs text-slate-500">
-              *Estimates based on full retention. Actual earnings vary by
-              audience and churn.
-            </p>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </section>
 
-      {/* SECTION 5 — WHY TRADERS CHOOSE (6 features) */}
-      <section className="px-6 py-24">
-        <div className="mx-auto max-w-6xl">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-violet-400">
-              Why it converts
-            </p>
-            <h2 className="text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-              Why traders choose{" "}
-              <span className="bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-transparent">
-                verify.trading.
-              </span>
-            </h2>
-            <p className="mt-4 text-base text-slate-400">
-              A product that converts because it solves a real problem. Easy for
-              your audience to say yes to.
-            </p>
-          </div>
+        <div className="mt-10 text-center">
+          <CtaButton />
+          <p className="mt-4 text-xs text-slate-500">
+            *Estimates based on full retention. Actual earnings vary by audience and churn.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-          <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                icon: "\uD83D\uDEE1\uFE0F",
-                title: "Broker verification",
-                body: "Help traders avoid scams. Verify brokers, regulations, and licensing instantly with live data.",
-              },
-              {
-                icon: "\uD83D\uDCC8",
-                title: "Signal authenticity",
-                body: "Cut through the noise. Verify trading signals against real market data — no fake promises.",
-              },
-              {
-                icon: "\u26A1",
-                title: "Live market data",
-                body: "Real-time data and AI-powered checks. No stale info, no guesswork — answers in seconds.",
-              },
-              {
-                icon: "\uD83D\uDCB8",
-                title: "Affordable pricing",
-                body: "£5 first-month launch offer makes it an easy yes. Low barrier = higher conversion from your traffic.",
-              },
-              {
-                icon: "\uD83C\uDFAF",
-                title: "Simple onboarding",
-                body: "Sign up and get value in minutes. No setup, no friction — just one check and better decisions.",
-              },
-              {
-                icon: "\uD83E\uDD1D",
-                title: "Trader-first product",
-                body: "Built by traders, for traders. Your audience will recognise the value the moment they try it.",
-              },
-            ].map((feat) => (
-              <div key={feat.title}>
-                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-violet-400/25 bg-gradient-to-br from-pink-500/12 to-violet-500/12 text-2xl">
-                  {feat.icon}
-                </div>
-                <h3 className="mb-2.5 text-lg font-semibold text-white">
-                  {feat.title}
-                </h3>
-                <p className="text-sm leading-relaxed text-slate-400">
-                  {feat.body}
+/* ─── Why Traders Choose (6 features) ─── */
+
+function WhyTradersChooseSection() {
+  const features: Array<{ icon: typeof Shield; theme: IconTheme; title: string; body: string }> = [
+    {
+      icon: Shield,
+      theme: "green",
+      title: "Broker verification",
+      body: "Help traders avoid scams. Verify brokers, regulations, and licensing instantly with live data.",
+    },
+    {
+      icon: TrendingUp,
+      theme: "blue",
+      title: "Signal authenticity",
+      body: "Cut through the noise. Verify trading signals against real market data — no fake promises.",
+    },
+    {
+      icon: Zap,
+      theme: "amber",
+      title: "Live market data",
+      body: "Real-time data and AI-powered checks. No stale info, no guesswork — answers in seconds.",
+    },
+    {
+      icon: Wallet,
+      theme: "coral",
+      title: "Affordable pricing",
+      body: "£5 first-month launch offer makes it an easy yes. Low barrier = higher conversion from your traffic.",
+    },
+    {
+      icon: Sparkles,
+      theme: "purple",
+      title: "Simple onboarding",
+      body: "Sign up and get value in minutes. No setup, no friction — just one check and better decisions.",
+    },
+    {
+      icon: Users,
+      theme: "cyan",
+      title: "Trader-first product",
+      body: "Built by traders, for traders. Your audience will recognise the value the moment they try it.",
+    },
+  ];
+
+  return (
+    <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
+      <div className="max-w-2xl">
+        <SectionEyebrow>Why it converts</SectionEyebrow>
+        <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+          Why traders choose verify.trading.
+        </h2>
+        <p className="mt-4 text-base leading-relaxed text-slate-400">
+          A product that converts because it solves a real problem. Easy for your audience to say yes to.
+        </p>
+      </div>
+
+      <div className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        {features.map((f) => {
+          const Icon = f.icon;
+          return (
+            <div key={f.title}>
+              <div
+                className={cn(
+                  "flex size-11 shrink-0 items-center justify-center rounded-lg border",
+                  featureIconClass[f.theme],
+                )}
+              >
+                <Icon className="size-5" strokeWidth={1.75} aria-hidden />
+              </div>
+              <h3 className="mt-4 text-base font-semibold tracking-tight text-white">{f.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-400">{f.body}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ─── Steps (Join as a partner) ─── */
+
+function StepsSection() {
+  const steps = [
+    {
+      num: "01",
+      title: "Apply in 60 seconds",
+      body: "Sign up, share a few details about your audience, and get approved fast.",
+    },
+    {
+      num: "02",
+      title: "Share your link",
+      body: "Drop your unique referral link in tweets, Discord, newsletters, videos — anywhere your audience hangs out.",
+    },
+    {
+      num: "03",
+      title: "Earn every month",
+      body: "30% recurring commission lands in your account every month, for as long as they stay subscribed.",
+    },
+  ];
+
+  return (
+    <section className="border-t border-white/[0.06]">
+      <div className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 sm:py-24">
+        <div className="max-w-2xl">
+          <SectionEyebrow>Get started</SectionEyebrow>
+          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+            Join as a partner today.
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-slate-400">
+            You&apos;re a few simple steps away from earning your first commission.
+          </p>
+        </div>
+
+        <div className="relative mt-14">
+          <div
+            className="pointer-events-none absolute left-[14%] right-[14%] top-[60px] hidden h-px bg-gradient-to-r from-transparent via-[var(--vt-blue)]/30 to-transparent sm:block"
+            aria-hidden
+          />
+          <div className="relative grid gap-10 sm:grid-cols-3">
+            {steps.map((s) => (
+              <div key={s.num} className="text-center">
+                <p className="inline-block text-7xl font-bold leading-none tracking-[-0.04em] text-[var(--vt-blue)] sm:text-8xl">
+                  {s.num}
+                </p>
+                <h3 className="mt-6 text-lg font-semibold text-white sm:text-xl">{s.title}</h3>
+                <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-400">
+                  {s.body}
                 </p>
               </div>
             ))}
           </div>
         </div>
-      </section>
 
-      {/* SECTION 6 — JOIN AS A PARTNER (01/02/03) */}
-      <section className="relative px-6 py-24">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-400/30 to-transparent" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_900px_500px_at_50%_100%,rgba(139,92,246,0.1),transparent_70%)]" />
-        <div className="relative mx-auto max-w-5xl">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-violet-400">
-              Get started
-            </p>
-            <h2 className="text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-              Join as a{" "}
-              <span className="bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-transparent">
-                partner today.
-              </span>
-            </h2>
-            <p className="mt-4 text-base text-slate-400">
-              You&apos;re a few simple steps away from earning your first commission.
-            </p>
-          </div>
-
-          <div className="relative mt-20">
-            <div className="pointer-events-none absolute left-[14%] right-[14%] top-[60px] hidden h-px bg-gradient-to-r from-transparent via-violet-400/30 to-transparent sm:block" />
-            <div className="relative grid grid-cols-1 gap-12 sm:grid-cols-3">
-              {[
-                {
-                  num: "01",
-                  title: "Apply in 60 seconds",
-                  body: "Sign up, share a few details about your audience, and get approved fast.",
-                },
-                {
-                  num: "02",
-                  title: "Share your link",
-                  body: "Drop your unique referral link in tweets, Discord, newsletters, videos — anywhere your audience hangs out.",
-                },
-                {
-                  num: "03",
-                  title: "Earn every month",
-                  body: "30% recurring commission lands in your account every month, for as long as they stay subscribed.",
-                },
-              ].map((step) => (
-                <div key={step.num} className="px-4 text-center">
-                  <p className="inline-block bg-gradient-to-b from-pink-500 to-violet-500 bg-clip-text text-7xl font-bold leading-none tracking-tighter text-transparent sm:text-8xl">
-                    {step.num}
-                  </p>
-                  <h3 className="mt-6 text-xl font-semibold text-white sm:text-[22px]">
-                    {step.title}
-                  </h3>
-                  <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-slate-400">
-                    {step.body}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-20 text-center">
+        <div className="mt-14 text-center">
+          <CtaButton size="large" />
+          <p className="mt-4 text-sm text-slate-500">
+            Questions? Email{" "}
             
-              href={APPLY_URL}
-              className="inline-flex h-[54px] items-center gap-2.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 px-10 text-[15px] font-semibold text-white shadow-[0_0_60px_rgba(139,92,246,0.4)] transition hover:-translate-y-0.5 hover:shadow-[0_0_70px_rgba(139,92,246,0.55)]"
+              href={"mailto:" + SUPPORT_EMAIL}
+              className="text-[var(--vt-blue)] transition-colors hover:text-[var(--vt-coral)]"
             >
-              Partner with verify.trading
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[13px]">
-                {ARROW}
-              </span>
+              {SUPPORT_EMAIL}
             </a>
-            <p className="mt-5 text-sm text-slate-500">
-              Questions? Email{" "}
-              
-                href={`mailto:${SUPPORT_EMAIL}`}
-                className="text-violet-400 transition hover:text-pink-400"
-              >
-                {SUPPORT_EMAIL}
-              </a>
-            </p>
-          </div>
+          </p>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Page ─── */
+
+export default function AffiliatesPage() {
+  return (
+    <main>
+      <HeroSection />
+      <StatsBandSection />
+      <WhyPartnerSection />
+      <EarningsSection />
+      <WhyTradersChooseSection />
+      <StepsSection />
     </main>
   );
 }
