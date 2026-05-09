@@ -364,7 +364,6 @@ function WhyTradersChooseSection() {
 }
 
 /* ─── Steps (Join as a partner) ─── */
-
 function StepsSection() {
   const steps = [
     {
@@ -398,20 +397,13 @@ function StepsSection() {
         </div>
 
         <div className="relative mt-14">
-          <div
-            className="pointer-events-none absolute left-[14%] right-[14%] top-[60px] hidden h-px bg-gradient-to-r from-transparent via-[var(--vt-blue)]/30 to-transparent sm:block"
-            aria-hidden
-          />
+          <div className="pointer-events-none absolute left-[14%] right-[14%] top-[60px] hidden h-px bg-gradient-to-r from-transparent via-[var(--vt-blue)]/30 to-transparent sm:block" aria-hidden />
           <div className="relative grid gap-10 sm:grid-cols-3">
             {steps.map((s) => (
               <div key={s.num} className="text-center">
-                <p className="inline-block text-7xl font-bold leading-none tracking-[-0.04em] text-[var(--vt-blue)] sm:text-8xl">
-                  {s.num}
-                </p>
+                <p className="inline-block text-7xl font-bold leading-none tracking-[-0.04em] text-[var(--vt-blue)] sm:text-8xl">{s.num}</p>
                 <h3 className="mt-6 text-lg font-semibold text-white sm:text-xl">{s.title}</h3>
-                <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-400">
-                  {s.body}
-                </p>
+                <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-400">{s.body}</p>
               </div>
             ))}
           </div>
@@ -420,13 +412,7 @@ function StepsSection() {
         <div className="mt-14 text-center">
           <CtaButton size="large" />
           <p className="mt-4 text-sm text-slate-500">
-            Questions? Email{" "}
-            
-              href={"mailto:" + SUPPORT_EMAIL}
-              className="text-[var(--vt-blue)] transition-colors hover:text-[var(--vt-coral)]"
-            >
-              {SUPPORT_EMAIL}
-            </a>
+            Questions? Email <a href={"mailto:" + SUPPORT_EMAIL} className="text-[var(--vt-blue)] transition-colors hover:text-[var(--vt-coral)]">{SUPPORT_EMAIL}</a>
           </p>
         </div>
       </div>
