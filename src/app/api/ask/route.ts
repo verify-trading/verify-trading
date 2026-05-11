@@ -77,6 +77,14 @@ function buildToolStatus(toolName: string, rawArgs: unknown): AskToolStatus {
         label: "Scanning headlines",
         detail: entity ? `Searching recent news for ${entity}.` : "Searching for fresh market-moving headlines.",
       };
+    case "get_economic_calendar":
+      return {
+        id: crypto.randomUUID(),
+        phase: "working",
+        toolName,
+        label: "Checking economic calendar",
+        detail: "Reading scheduled macro events, impact, and release values.",
+      };
     case "calculate_position_size":
       return {
         id: crypto.randomUUID(),

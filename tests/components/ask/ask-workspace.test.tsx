@@ -162,6 +162,10 @@ function createQueryBuilder(result: { data: unknown; error: unknown }) {
 describe("AskWorkspace", () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      value: vi.fn(),
+    });
     latestUseChatOptions = undefined;
     mockSendMessage.mockReset();
     mockSetMessages.mockReset();
@@ -294,6 +298,23 @@ describe("AskWorkspace", () => {
     );
 
     expect(screen.getAllByText("Restoring session…").length).toBeGreaterThan(0);
+  });
+
+  it("loads a URL prefill into the composer and removes it from the address", async () => {
+    mockSearchParams = new URLSearchParams({
+      prefill: "Brief me on Gold before this session.",
+    });
+
+    renderWithQueryClient(<AskWorkspace />);
+
+    const composer = screen.getAllByPlaceholderText("Message…").at(-1);
+    if (!composer) {
+      throw new Error("Missing Ask composer.");
+    }
+    await waitFor(() => {
+      expect(composer).toHaveValue("Brief me on Gold before this session.");
+      expect(mockReplace).toHaveBeenCalledWith("/ask", { scroll: false });
+    });
   });
 
   it("shows a full chat-pane drop target while dragging an image", () => {

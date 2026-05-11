@@ -1,8 +1,8 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Calendar, Check, ChevronDown } from "lucide-react";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { Check, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -39,19 +39,6 @@ const LONG_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
-const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-
-const MONTH_DAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  month: "long",
-  day: "numeric",
-  timeZone: "UTC",
-});
-
 function countryOptionLabel(country: EconomicCalendarCountry): string {
   return `${ECONOMIC_CALENDAR_COUNTRY_LABELS[country]} (${country})`;
 }
@@ -79,23 +66,17 @@ function useEventTimeZone(timeZone: string | undefined): string {
 
 function getDateKey(timeUtc: string, timeZone: string): string {
   const date = new Date(timeUtc);
-  if (!Number.isFinite(date.getTime())) {
-    return timeUtc.slice(0, 10);
-  }
-
+  if (!Number.isFinite(date.getTime())) return timeUtc.slice(0, 10);
   try {
-    const dateParts = new Intl.DateTimeFormat("en-US", {
+    const parts = new Intl.DateTimeFormat("en-US", {
       timeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     }).formatToParts(date);
-    const part = (type: Intl.DateTimeFormatPartTypes) =>
-      dateParts.find((datePart) => datePart.type === type)?.value;
-    const year = part("year");
-    const month = part("month");
-    const day = part("day");
-    return year && month && day ? `${year}-${month}-${day}` : date.toISOString().slice(0, 10);
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
+    const y = part("year"), m = part("month"), d = part("day");
+    return y && m && d ? `${y}-${m}-${d}` : date.toISOString().slice(0, 10);
   } catch {
     return date.toISOString().slice(0, 10);
   }
@@ -103,45 +84,28 @@ function getDateKey(timeUtc: string, timeZone: string): string {
 
 function formatDateLabel(dateKey: string, formatter: Intl.DateTimeFormat): string {
   const date = new Date(`${dateKey}T12:00:00.000Z`);
-  if (!Number.isFinite(date.getTime())) {
-    return dateKey;
-  }
+  if (!Number.isFinite(date.getTime())) return dateKey;
   return formatter.format(date);
 }
 
 function addDaysToDateKey(dateKey: string, days: number): string {
   const [year, month, day] = dateKey.split("-").map(Number);
-  if (!year || !month || !day) {
-    return dateKey;
-  }
+  if (!year || !month || !day) return dateKey;
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
 function getLocalDateWindow(timeZone: string, now: Date): { startKey: string; endKey: string } {
   const startKey = getDateKey(now.toISOString(), timeZone);
-  return {
-    startKey,
-    endKey: addDaysToDateKey(startKey, 6),
-  };
+  return { startKey, endKey: addDaysToDateKey(startKey, 6) };
 }
 
 function isDateKeyInWindow(dateKey: string, window: { startKey: string; endKey: string }): boolean {
   return dateKey >= window.startKey && dateKey <= window.endKey;
 }
 
-function formatDateWindowLabel(window: { startKey: string; endKey: string }): string {
-  return `${formatDateLabel(window.startKey, MONTH_DAY_FORMATTER)} - ${formatDateLabel(
-    window.endKey,
-    MONTH_DAY_FORMATTER,
-  )}`;
-}
-
 function formatEventTimeLabel(timeUtc: string, timeZone: string, fallback: string): string {
   const date = new Date(timeUtc);
-  if (!Number.isFinite(date.getTime())) {
-    return fallback;
-  }
-
+  if (!Number.isFinite(date.getTime())) return fallback;
   try {
     return new Intl.DateTimeFormat("en-US", {
       timeZone,
@@ -154,65 +118,297 @@ function formatEventTimeLabel(timeUtc: string, timeZone: string, fallback: strin
   }
 }
 
-/* ── Impact color ──────────────────────────────────────────────────────── */
+function formatCountdown(timeUtc: string, now: Date): string | null {
+  const eventMs = new Date(timeUtc).getTime();
+  if (!Number.isFinite(eventMs)) return null;
+  const diffMs = eventMs - now.getTime();
+  if (diffMs <= 0) return "now";
+  const totalMinutes = Math.max(0, Math.floor(diffMs / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes}m`;
+  return `${hours}h ${minutes}m`;
+}
 
-function impactColor(impact: string): string {
-  if (impact === "high") return "text-rose-400";
-  if (impact === "medium") return "text-amber-400";
-  return "text-emerald-400";
+function findNextHighImpactEvent(
+  items: NonNullable<EconomicCalendarSnapshot["items"]>,
+  now: Date,
+) {
+  return items
+    .filter((item) => item.impact === "high")
+    .filter((item) => {
+      const eventMs = new Date(item.timeUtc).getTime();
+      return Number.isFinite(eventMs) && eventMs >= now.getTime();
+    })
+    .sort((a, b) => a.timeUtc.localeCompare(b.timeUtc))[0] ?? null;
+}
+
+function impactDotStyle(impact: string): { backgroundColor: string } {
+  if (impact === "high") return { backgroundColor: "#EF4444" };
+  if (impact === "medium") return { backgroundColor: "#F59E0B" };
+  return { backgroundColor: "#6B7280" };
 }
 
 function impactLabel(impact: string): string {
   if (impact === "high") return "High";
-  if (impact === "medium") return "Medium";
+  if (impact === "medium") return "Med";
   return "Low";
 }
 
+function impactColor(impact: string): string {
+  if (impact === "high") return "text-rose-400";
+  if (impact === "medium") return "text-amber-400";
+  return "text-gray-400";
+}
+
 function orderedImpacts(impacts: readonly SelectedImpact[]): SelectedImpact[] {
-  return IMPACT_FILTER_OPTIONS
-    .map((option) => option.value)
-    .filter((impact) => impacts.includes(impact));
+  return IMPACT_FILTER_OPTIONS.map((o) => o.value).filter((v) => impacts.includes(v));
 }
 
 function impactMatchesFilter(filter: ImpactFilter, impact: string): boolean {
-  if (filter === "all") {
-    return true;
-  }
-  return filter.some((selectedImpact) => selectedImpact === impact);
+  if (filter === "all") return true;
+  return filter.some((s) => s === impact);
 }
 
 function nextImpactFilter(filter: ImpactFilter, impact: SelectedImpact): ImpactFilter {
   const current = filter === "all" ? [] : filter;
   const next = current.includes(impact)
-    ? current.filter((selectedImpact) => selectedImpact !== impact)
+    ? current.filter((s) => s !== impact)
     : orderedImpacts([...current, impact]);
-
   return next.length > 0 ? next : "all";
 }
 
-function ImpactFilterValue({ value }: { value: ImpactFilter }) {
-  if (value === "all") {
-    return <span className="truncate">All</span>;
+function buildEventAskPrompt(
+  item: NonNullable<EconomicCalendarSnapshot["items"]>[number],
+  timeZone: string,
+): string {
+  const time = formatEventTimeLabel(item.timeUtc, timeZone, item.timeLabel);
+  if (item.actual) {
+    return `${item.event} came in at ${item.actual} vs estimate ${item.forecast ?? "not available"}. What does this mean for my trades right now?`;
   }
+  return `${item.event} is at ${time} today. Estimate: ${item.forecast ?? "not available"}. Previous: ${item.previous ?? "not available"}. What does this mean for my USD pairs and Gold today?`;
+}
+
+/* ── Week day strip ────────────────────────────────────────────────────── */
+
+function HighImpactCountdown({
+  items,
+  now,
+  timeZone,
+  onAskPrompt,
+}: {
+  items: NonNullable<EconomicCalendarSnapshot["items"]>;
+  now: Date;
+  timeZone: string;
+  onAskPrompt?: (prompt: string) => void;
+}) {
+  const next = findNextHighImpactEvent(items, now);
+  const countdown = next ? formatCountdown(next.timeUtc, now) : null;
+
+  if (!next || !countdown) return null;
+
+  const time = formatEventTimeLabel(next.timeUtc, timeZone, next.timeLabel);
 
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
-      {value.map((impact) => {
-        const option = IMPACT_FILTER_OPTIONS.find((item) => item.value === impact);
-        return (
-          <span
-            key={impact}
-            className="rounded-md bg-white/[0.07] px-2 py-0.5 text-[11px] font-bold text-white/90"
-          >
-            {option?.label ?? impact}
-          </span>
-        );
-      })}
-    </span>
+    <button
+      type="button"
+      onClick={() => onAskPrompt?.(buildEventAskPrompt(next, timeZone))}
+      className="mb-4 flex w-full items-center gap-3.5 rounded-xl border border-rose-500/[0.22] bg-rose-500/[0.07] px-4 py-3.5 text-left transition-colors hover:bg-rose-500/[0.11]"
+    >
+      {/* Pulsing dot */}
+      <span className="relative flex size-2.5 shrink-0">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-40" />
+        <span className="relative inline-flex size-2.5 rounded-full bg-rose-500" />
+      </span>
+
+      {/* Event info */}
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-rose-400/80">
+          Next High Impact
+        </p>
+        <p className="mt-0.5 truncate text-sm font-semibold text-white">{next.event}</p>
+        <p className="mt-0.5 text-[11px] text-white/45">
+          {next.country} · {next.currency} · {time}
+        </p>
+      </div>
+
+      {/* Countdown badge */}
+      <div className="shrink-0">
+        <span className="inline-flex items-center rounded-lg bg-rose-500/[0.18] px-3 py-1.5 text-sm font-bold tabular-nums text-rose-300">
+          {countdown}
+        </span>
+      </div>
+    </button>
   );
 }
 
-/* ── Filter dropdown ───────────────────────────────────────────────────── */
+function WeekDayStrip({
+  dateWindow,
+  items,
+  selectedDate,
+  onSelectDate,
+  timeZone,
+}: {
+  dateWindow: { startKey: string; endKey: string };
+  items: NonNullable<EconomicCalendarSnapshot["items"]>;
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+  timeZone: string;
+}) {
+  const today = getDateKey(new Date().toISOString(), timeZone);
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const dateKey = addDaysToDateKey(dateWindow.startKey, i);
+    const date = new Date(`${dateKey}T12:00:00.000Z`);
+    const dayItems = items.filter((item) => getDateKey(item.timeUtc, timeZone) === dateKey);
+    const highCount = dayItems.filter((item) => item.impact === "high").length;
+    const medCount = dayItems.filter((item) => item.impact === "medium").length;
+
+    const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(date);
+    const fullDateLabel = formatDateLabel(dateKey, LONG_DATE_FORMATTER);
+    const dayNum = new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "UTC" }).format(date);
+    const monthStr = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(date);
+
+    return {
+      dateKey,
+      dayName,
+      dayNum,
+      monthStr,
+      fullDateLabel,
+      totalCount: dayItems.length,
+      highCount,
+      medCount,
+      isToday: dateKey === today,
+      isSelected: dateKey === selectedDate,
+    };
+  });
+
+  return (
+    <div className="mb-5 overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
+      <div className="grid grid-cols-7 divide-x divide-white/[0.05]">
+        {days.map(({ dateKey, dayName, dayNum, monthStr, fullDateLabel, totalCount, highCount, medCount, isToday, isSelected }) => (
+          <button
+            key={dateKey}
+            type="button"
+            onClick={() => onSelectDate(isSelected ? "all" : dateKey)}
+            aria-label={fullDateLabel}
+            className={cn(
+              "flex flex-col items-center px-1 py-5 text-center transition-colors",
+              isSelected ? "bg-white/[0.08]" : "hover:bg-white/[0.03]",
+            )}
+          >
+            {/* Day name */}
+            <span
+              className={cn(
+                "text-[10px] font-semibold uppercase tracking-wide",
+                isSelected ? "text-white/60" : "text-[var(--vt-muted)]",
+              )}
+            >
+              {dayName}
+            </span>
+
+            {/* DD Mon */}
+            <span
+              className={cn(
+                "mt-2 text-[11px] font-bold leading-tight sm:text-sm",
+                isSelected && "text-white",
+                isToday && !isSelected && "text-[var(--vt-coral)]",
+                !isToday && !isSelected && "text-white/80",
+              )}
+            >
+              {dayNum} {monthStr}
+            </span>
+
+            {/* Event count */}
+            <div className="mt-2.5 flex min-h-[14px] items-center gap-0.5">
+              {totalCount === 0 ? (
+                <span className="text-[9px] text-white/25">—</span>
+              ) : (
+                <>
+                  {highCount > 0 && <span className="size-1.5 rounded-full bg-rose-500/80" />}
+                  {medCount > 0 && <span className="size-1.5 rounded-full bg-amber-500/70" />}
+                  <span className="ml-0.5 text-[9px] font-semibold text-white/55">
+                    {totalCount}
+                  </span>
+                </>
+              )}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Event row ─────────────────────────────────────────────────────────── */
+
+function EventRow({
+  item,
+  isLast,
+  timeZone,
+  onAskPrompt,
+}: {
+  item: NonNullable<EconomicCalendarSnapshot["items"]>[number];
+  isLast: boolean;
+  timeZone: string;
+  onAskPrompt?: (prompt: string) => void;
+}) {
+  const hasData = item.actual || item.forecast || item.previous;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onAskPrompt?.(buildEventAskPrompt(item, timeZone))}
+      className={cn(
+        "w-full px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03]",
+        !isLast && "border-b border-white/[0.04]",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-1.5 size-2 shrink-0 rounded-full" style={impactDotStyle(item.impact)} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium leading-snug text-white">{item.event}</p>
+          <p className="mt-0.5 text-[11px] text-[var(--vt-muted)]">
+            {item.country} · {item.currency}
+            {item.period ? ` · ${item.period}` : ""}
+          </p>
+          {hasData ? (
+            <div className="mt-1.5 flex flex-wrap gap-3 text-[11px]">
+              {item.actual && (
+                <span>
+                  <span className="text-white/45">Actual </span>
+                  <span className="font-semibold text-white/90">{item.actual}</span>
+                </span>
+              )}
+              {item.forecast && (
+                <span>
+                  <span className="text-white/45">Fcst </span>
+                  <span className="text-white/70">{item.forecast}</span>
+                </span>
+              )}
+              {item.previous && (
+                <span>
+                  <span className="text-white/45">Prev </span>
+                  <span className="text-white/70">{item.previous}</span>
+                </span>
+              )}
+            </div>
+          ) : null}
+        </div>
+        <div className="shrink-0 text-right">
+          <span className="text-sm tabular-nums text-white/75">
+            {formatEventTimeLabel(item.timeUtc, timeZone, item.timeLabel)}
+          </span>
+          <p className={cn("mt-0.5 text-[10px] font-bold uppercase", impactColor(item.impact))}>
+            {impactLabel(item.impact)}
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ── Filter dropdowns ──────────────────────────────────────────────────── */
 
 function EventFilterDropdown({
   label,
@@ -225,25 +421,25 @@ function EventFilterDropdown({
   options: FilterOption[];
   onChange: (value: string) => void;
 }) {
-  const selected = options.find((option) => option.value === value) ?? options[0];
+  const selected = options.find((o) => o.value === value) ?? options[0];
 
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          className="inline-flex h-9 min-w-[9rem] items-center justify-between gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-semibold text-white/80 outline-none transition-colors hover:border-white/[0.14] hover:text-white focus-visible:border-[var(--vt-coral)] focus-visible:ring-2 focus-visible:ring-[var(--vt-coral)]/20"
+          className="inline-flex h-8 items-center justify-between gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-semibold text-white/80 outline-none transition-colors hover:border-white/[0.14] hover:text-white focus-visible:border-[var(--vt-coral)]"
           aria-label={label}
         >
           <span className="truncate">{selected?.label}</span>
-          <ChevronDown className="size-3.5 shrink-0 text-[var(--vt-muted)]" aria-hidden />
+          <ChevronDown className="size-3 shrink-0 text-[var(--vt-muted)]" aria-hidden />
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="end"
-          sideOffset={8}
-          className="z-50 min-w-[12rem] overflow-hidden rounded-xl border border-white/[0.08] bg-[#11143f] p-1 shadow-2xl shadow-black/40"
+          sideOffset={6}
+          className="z-50 min-w-[11rem] overflow-hidden rounded-xl border border-white/[0.08] bg-[#11143f] p-1 shadow-2xl shadow-black/40"
         >
           {options.map((option) => {
             const isSelected = option.value === value;
@@ -259,7 +455,7 @@ function EventFilterDropdown({
                 onSelect={() => onChange(option.value)}
               >
                 <span>{option.label}</span>
-                {isSelected ? <Check className="size-4 text-[var(--vt-coral)]" aria-hidden /> : null}
+                {isSelected ? <Check className="size-3.5 text-[var(--vt-coral)]" aria-hidden /> : null}
               </DropdownMenu.Item>
             );
           })}
@@ -269,47 +465,54 @@ function EventFilterDropdown({
   );
 }
 
-function ImpactFilterDropdown({
-  value,
-  onChange,
-}: {
-  value: ImpactFilter;
-  onChange: (value: ImpactFilter) => void;
-}) {
+function ImpactFilterValue({ value }: { value: ImpactFilter }) {
+  if (value === "all") return <span className="truncate">All Impact</span>;
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      {value.map((impact) => {
+        const option = IMPACT_FILTER_OPTIONS.find((o) => o.value === impact);
+        return (
+          <span key={impact} className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-bold text-white/90">
+            {option?.label ?? impact}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function ImpactFilterDropdown({ value, onChange }: { value: ImpactFilter; onChange: (v: ImpactFilter) => void }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          className="inline-flex h-9 min-w-[9rem] items-center justify-between gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-semibold text-white/80 outline-none transition-colors hover:border-white/[0.14] hover:text-white focus-visible:border-[var(--vt-coral)] focus-visible:ring-2 focus-visible:ring-[var(--vt-coral)]/20"
+          className="inline-flex h-8 items-center justify-between gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-semibold text-white/80 outline-none transition-colors hover:border-white/[0.14] hover:text-white focus-visible:border-[var(--vt-coral)]"
           aria-label="Filter events by impact"
         >
           <ImpactFilterValue value={value} />
-          <ChevronDown className="size-3.5 shrink-0 text-[var(--vt-muted)]" aria-hidden />
+          <ChevronDown className="size-3 shrink-0 text-[var(--vt-muted)]" aria-hidden />
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="end"
-          sideOffset={8}
-          className="z-50 min-w-[12rem] space-y-1 overflow-hidden rounded-xl border border-white/[0.08] bg-[#11143f] p-1.5 shadow-2xl shadow-black/40"
+          sideOffset={6}
+          className="z-50 flex min-w-[11rem] flex-col gap-1.5 overflow-hidden rounded-xl border border-white/[0.08] bg-[#11143f] p-1.5 shadow-2xl shadow-black/40"
         >
           <DropdownMenu.CheckboxItem
             checked={value === "all"}
             className={cn(
-              "flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3.5 py-2.5 text-sm font-semibold outline-none transition-colors",
+              "flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm font-semibold outline-none transition-colors",
               value === "all"
-                ? "bg-[var(--vt-coral)]/15 text-white"
-                : "text-[var(--vt-muted)] hover:bg-white/[0.06] hover:text-white data-[highlighted]:bg-white/[0.06] data-[highlighted]:text-white",
+                ? "border-white/[0.08] bg-[var(--vt-coral)]/15 text-white"
+                : "border-transparent text-[var(--vt-muted)] hover:bg-white/[0.06] hover:text-white data-[highlighted]:bg-white/[0.06] data-[highlighted]:text-white",
             )}
-            onSelect={() => {
-              onChange("all");
-            }}
+            onSelect={() => onChange("all")}
           >
             <span>All</span>
-            {value === "all" ? <Check className="size-4 text-[var(--vt-coral)]" aria-hidden /> : null}
+            {value === "all" ? <Check className="size-3.5 text-[var(--vt-coral)]" aria-hidden /> : null}
           </DropdownMenu.CheckboxItem>
-
           {IMPACT_FILTER_OPTIONS.map((option) => {
             const isSelected = value !== "all" && value.includes(option.value);
             return (
@@ -317,18 +520,18 @@ function ImpactFilterDropdown({
                 key={option.value}
                 checked={isSelected}
                 className={cn(
-                  "flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3.5 py-2.5 text-sm font-semibold outline-none transition-colors",
+                  "flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm font-semibold outline-none transition-colors",
                   isSelected
-                    ? "bg-[var(--vt-coral)]/15 text-white"
-                    : "text-[var(--vt-muted)] hover:bg-white/[0.06] hover:text-white data-[highlighted]:bg-white/[0.06] data-[highlighted]:text-white",
+                    ? "border-white/[0.08] bg-[var(--vt-coral)]/15 text-white"
+                    : "border-transparent text-[var(--vt-muted)] hover:bg-white/[0.06] hover:text-white data-[highlighted]:bg-white/[0.06] data-[highlighted]:text-white",
                 )}
-                onSelect={(event) => {
-                  event.preventDefault();
+                onSelect={(e) => {
+                  e.preventDefault();
                   onChange(nextImpactFilter(value, option.value));
                 }}
               >
                 <span>{option.label}</span>
-                {isSelected ? <Check className="size-4 text-[var(--vt-coral)]" aria-hidden /> : null}
+                {isSelected ? <Check className="size-3.5 text-[var(--vt-coral)]" aria-hidden /> : null}
               </DropdownMenu.CheckboxItem>
             );
           })}
@@ -338,185 +541,11 @@ function ImpactFilterDropdown({
   );
 }
 
-/* ── Grid column definition (single source of truth) ───────────────────── */
-
-const GRID_COLS = "6rem 2fr 1fr 1fr 1fr 5rem";
-
-/* ── Desktop table header ──────────────────────────────────────────────── */
-
-function EventsTableHeader() {
-  return (
-    <div
-      className="hidden gap-x-3 border-b border-white/[0.06] px-4 py-2.5 md:grid"
-      style={{ gridTemplateColumns: GRID_COLS }}
-      role="row"
-      aria-hidden
-    >
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-white/70">
-        Time
-      </span>
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-white/70">
-        Event
-      </span>
-      <span className="text-right text-[10px] font-semibold uppercase tracking-widest text-white/70">
-        Actual
-      </span>
-      <span className="text-right text-[10px] font-semibold uppercase tracking-widest text-white/70">
-        Forecast
-      </span>
-      <span className="text-right text-[10px] font-semibold uppercase tracking-widest text-white/70">
-        Previous
-      </span>
-      <span className="text-right text-[10px] font-semibold uppercase tracking-widest text-white/70">
-        Impact
-      </span>
-    </div>
-  );
-}
-
-/* ── Desktop event row ─────────────────────────────────────────────────── */
-
-function EventRowDesktop({
-  item,
-  isLast,
-  timeZone,
-}: {
-  item: NonNullable<EconomicCalendarSnapshot["items"]>[number];
-  isLast: boolean;
-  timeZone: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "hidden items-center gap-x-3 px-4 py-3 md:grid",
-        !isLast && "border-b border-white/[0.04]",
-      )}
-      style={{ gridTemplateColumns: GRID_COLS }}
-    >
-      {/* Time */}
-      <span className="text-sm tabular-nums text-white/80">
-        {formatEventTimeLabel(item.timeUtc, timeZone, item.timeLabel)}
-      </span>
-
-      {/* Event info */}
-      <div className="min-w-0 pr-3">
-        <div className="flex items-center gap-1.5">
-          <span className="shrink-0 text-[11px] font-semibold text-white/75">
-            {item.country}
-          </span>
-          <span className="text-[11px] text-white/60">{item.currency}</span>
-          {item.period ? (
-            <span className="text-[11px] text-white/60">· {item.period}</span>
-          ) : null}
-        </div>
-        <p className="mt-0.5 truncate text-sm font-medium text-white">
-          {item.event}
-        </p>
-        {item.source ? (
-          <p className="mt-0.5 truncate text-[11px] text-white/55">{item.source}</p>
-        ) : null}
-      </div>
-
-      {/* Actual */}
-      <span className="truncate text-right text-sm font-semibold tabular-nums text-white">
-        {item.actual ?? "—"}
-      </span>
-
-      {/* Forecast */}
-      <span className="truncate text-right text-sm tabular-nums text-white/80">
-        {item.forecast ?? "—"}
-      </span>
-
-      {/* Previous */}
-      <span className="truncate text-right text-sm tabular-nums text-white/80">
-        {item.previous ?? "—"}
-      </span>
-
-      {/* Impact */}
-      <span
-        className={cn(
-          "text-right text-xs font-bold uppercase",
-          impactColor(item.impact),
-        )}
-      >
-        {impactLabel(item.impact)}
-      </span>
-    </div>
-  );
-}
-
-/* ── Mobile event card ─────────────────────────────────────────────────── */
-
-function EventRowMobile({
-  item,
-  isLast,
-  timeZone,
-}: {
-  item: NonNullable<EconomicCalendarSnapshot["items"]>[number];
-  isLast: boolean;
-  timeZone: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "px-3.5 py-3 md:hidden",
-        !isLast && "border-b border-white/[0.04]",
-      )}
-    >
-      {/* Top row: time + country + impact */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs tabular-nums text-white/80">
-            {formatEventTimeLabel(item.timeUtc, timeZone, item.timeLabel)}
-          </span>
-          <span className="text-[11px] font-semibold text-white/75">{item.country}</span>
-          <span className="text-[11px] text-white/60">{item.currency}</span>
-        </div>
-        <span
-          className={cn(
-            "text-[11px] font-bold uppercase",
-            impactColor(item.impact),
-          )}
-        >
-          {impactLabel(item.impact)}
-        </span>
-      </div>
-
-      {/* Event name */}
-      <p className="mt-1 text-sm font-medium text-white">{item.event}</p>
-      {item.period ? (
-        <p className="mt-0.5 text-[11px] text-white/60">{item.period}</p>
-      ) : null}
-
-      {/* Data row */}
-      <div className="mt-2 grid grid-cols-3 gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Actual</p>
-          <p className="mt-0.5 truncate text-xs font-semibold tabular-nums text-white">
-            {item.actual ?? "—"}
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Forecast</p>
-          <p className="mt-0.5 truncate text-xs tabular-nums text-white/80">
-            {item.forecast ?? "—"}
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Previous</p>
-          <p className="mt-0.5 truncate text-xs tabular-nums text-white/80">
-            {item.previous ?? "—"}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Main section ──────────────────────────────────────────────────────── */
 
 export type MarketEventsSectionProps = {
   snapshot: EconomicCalendarSnapshot | undefined;
+  onAskPrompt?: (prompt: string) => void;
   isLoading?: boolean;
   errorMessage?: string | null;
   timeZone?: string;
@@ -525,6 +554,7 @@ export type MarketEventsSectionProps = {
 
 export function MarketEventsSection({
   snapshot,
+  onAskPrompt,
   isLoading = false,
   errorMessage = null,
   timeZone,
@@ -534,55 +564,47 @@ export function MarketEventsSection({
   const [countryFilter, setCountryFilter] = useState("all");
   const [impactFilter, setImpactFilter] = useState<ImpactFilter>(["high", "medium"]);
   const resolvedTimeZone = useEventTimeZone(timeZone);
-  const dateWindow = useMemo(
-    () => getLocalDateWindow(resolvedTimeZone, now ?? new Date()),
-    [resolvedTimeZone, now],
-  );
-  const dateWindowLabel = useMemo(() => formatDateWindowLabel(dateWindow), [dateWindow]);
+  const [liveTime, setLiveTime] = useState(() => new Date());
+
+  useEffect(() => {
+    if (now) return;
+    const id = window.setInterval(() => setLiveTime(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, [now]);
+
+  const currentTime = now ?? liveTime;
+  const dateWindow = useMemo(() => getLocalDateWindow(resolvedTimeZone, currentTime), [currentTime, resolvedTimeZone]);
+
+  const supportedItems = useMemo(() => {
+    return (snapshot?.items ?? []).filter((item) => isSupportedEventCountry(item.country));
+  }, [snapshot?.items]);
 
   const items = useMemo(() => {
-    return (snapshot?.items ?? []).filter((item) => {
-      if (!isSupportedEventCountry(item.country)) {
-        return false;
-      }
+    return supportedItems.filter((item) => {
       return isDateKeyInWindow(getDateKey(item.timeUtc, resolvedTimeZone), dateWindow);
     });
-  }, [dateWindow, resolvedTimeZone, snapshot?.items]);
+  }, [dateWindow, resolvedTimeZone, supportedItems]);
+
   const countries = useMemo(() => {
-    const itemCountries = new Set(items.map((item) => item.country));
-    return ECONOMIC_CALENDAR_COUNTRIES.filter((country) => itemCountries.has(country));
+    const set = new Set(items.map((item) => item.country));
+    return ECONOMIC_CALENDAR_COUNTRIES.filter((c) => set.has(c));
   }, [items]);
+
   const countryOptions = useMemo<FilterOption[]>(() => {
     return [
       { label: "All countries", value: "all" },
-      ...countries.map((country) => ({
-        label: countryOptionLabel(country),
-        value: country,
-      })),
+      ...countries.map((c) => ({ label: countryOptionLabel(c), value: c })),
     ];
   }, [countries]);
-  const dateOptions = useMemo<FilterOption[]>(() => {
-    const dateKeys = Array.from(new Set(items.map((item) => getDateKey(item.timeUtc, resolvedTimeZone)))).sort();
-    return [
-      { label: "All dates", value: "all" },
-      ...dateKeys.map((dateKey) => ({
-        label: formatDateLabel(dateKey, SHORT_DATE_FORMATTER),
-        value: dateKey,
-      })),
-    ];
-  }, [items, resolvedTimeZone]);
-  const activeDateFilter = dateOptions.some((option) => option.value === dateFilter) ? dateFilter : "all";
-  const activeCountryFilter = countryOptions.some((option) => option.value === countryFilter) ? countryFilter : "all";
+
+  const activeCountryFilter = countryOptions.some((o) => o.value === countryFilter) ? countryFilter : "all";
 
   const filteredItems = items.filter((item) => {
-    if (activeDateFilter !== "all" && getDateKey(item.timeUtc, resolvedTimeZone) !== activeDateFilter) {
-      return false;
-    }
-    if (activeCountryFilter !== "all" && item.country !== activeCountryFilter) {
-      return false;
-    }
+    if (dateFilter !== "all" && getDateKey(item.timeUtc, resolvedTimeZone) !== dateFilter) return false;
+    if (activeCountryFilter !== "all" && item.country !== activeCountryFilter) return false;
     return impactMatchesFilter(impactFilter, item.impact);
   });
+
   const dayGroups = useMemo<DayGroup[]>(() => {
     const groups = new Map<string, DayGroup>();
     for (const item of filteredItems) {
@@ -591,56 +613,47 @@ export function MarketEventsSection({
       if (existing) {
         existing.items.push(item);
       } else {
-        groups.set(key, {
-          key,
-          label: formatDateLabel(key, LONG_DATE_FORMATTER),
-          items: [item],
-        });
+        groups.set(key, { key, label: formatDateLabel(key, LONG_DATE_FORMATTER), items: [item] });
       }
     }
-
     return Array.from(groups.values())
       .sort((a, b) => a.key.localeCompare(b.key))
-      .map((group) => ({
-        ...group,
-        items: [...group.items].sort((a, b) => a.timeUtc.localeCompare(b.timeUtc)),
-      }));
+      .map((g) => ({ ...g, items: [...g.items].sort((a, b) => a.timeUtc.localeCompare(b.timeUtc)) }));
   }, [filteredItems, resolvedTimeZone]);
 
   return (
-    <div className="mt-6">
-      {/* Header + Filters */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <Calendar className="size-4 text-[var(--vt-coral)]" />
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--vt-muted)]">
-            {dateWindowLabel}
-          </h3>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <EventFilterDropdown
-            label="Filter events by date"
-            value={activeDateFilter}
-            options={dateOptions}
-            onChange={setDateFilter}
-          />
-          <EventFilterDropdown
-            label="Filter events by country"
-            value={activeCountryFilter}
-            options={countryOptions}
-            onChange={setCountryFilter}
-          />
-          <ImpactFilterDropdown
-            value={impactFilter}
-            onChange={setImpactFilter}
-          />
-        </div>
+    <div className="mt-4">
+      {/* Filters */}
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <EventFilterDropdown
+          label="Filter by country"
+          value={activeCountryFilter}
+          options={countryOptions}
+          onChange={setCountryFilter}
+        />
+        <ImpactFilterDropdown value={impactFilter} onChange={setImpactFilter} />
       </div>
+
+      {/* Next high-impact event banner */}
+      <HighImpactCountdown
+        items={supportedItems}
+        now={currentTime}
+        timeZone={resolvedTimeZone}
+        onAskPrompt={onAskPrompt}
+      />
+
+      {/* Week day strip */}
+      <WeekDayStrip
+        dateWindow={dateWindow}
+        items={items}
+        selectedDate={dateFilter}
+        onSelectDate={setDateFilter}
+        timeZone={resolvedTimeZone}
+      />
 
       {/* Content */}
       {errorMessage ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-[var(--vt-card)] p-8 text-center" role="alert">
+        <div className="rounded-xl border border-white/[0.06] bg-[var(--vt-card)] p-8 text-center" role="alert">
           <p className="text-sm text-[var(--vt-coral)]">{errorMessage}</p>
         </div>
       ) : isLoading ? (
@@ -649,58 +662,44 @@ export function MarketEventsSection({
           aria-busy="true"
           aria-label="Loading economic calendar"
         >
-          <EventsTableHeader />
-          {Array.from({ length: 5 }).map((_, index) => (
-            <div
-              key={index}
-              className={cn("px-4 py-3", index < 4 && "border-b border-white/[0.04]")}
-            >
-              <div className="grid gap-3 md:grid-cols-[6rem_2fr_1fr_1fr_1fr_5rem]">
-                <div className="h-4 animate-pulse rounded bg-white/[0.08]" />
-                <div className="h-4 animate-pulse rounded bg-white/[0.1]" />
-                <div className="h-4 animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-4 animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-4 animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-4 animate-pulse rounded bg-white/[0.08]" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className={cn("px-4 py-3.5", i < 5 && "border-b border-white/[0.04]")}>
+              <div className="flex items-start gap-3">
+                <div className="mt-1.5 size-2 animate-pulse rounded-full bg-white/[0.1]" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-3.5 w-4/5 animate-pulse rounded bg-white/[0.08]" />
+                  <div className="h-3 w-2/5 animate-pulse rounded bg-white/[0.05]" />
+                </div>
+                <div className="h-4 w-12 animate-pulse rounded bg-white/[0.06]" />
               </div>
             </div>
           ))}
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-[var(--vt-card)] p-8 text-center">
+        <div className="rounded-xl border border-white/[0.06] bg-[var(--vt-card)] p-8 text-center">
           <p className="text-sm text-[var(--vt-muted)]">No events match these filters.</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {dayGroups.map((group) => (
             <section key={group.key} aria-labelledby={`events-${group.key}`}>
-              {/* Day header */}
-              <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
-                <h4 id={`events-${group.key}`} className="text-sm font-bold text-white sm:text-base">
+              <div className="mb-2 flex items-baseline justify-between gap-3 px-0.5">
+                <h4 id={`events-${group.key}`} className="text-sm font-bold text-white">
                   {group.label}
                 </h4>
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-white/45">
                   {group.items.length} {group.items.length === 1 ? "event" : "events"}
                 </span>
               </div>
-
-              {/* Table card */}
-              <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-[var(--vt-card)]">
-                <EventsTableHeader />
-
+              <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
                 {group.items.map((item, index) => (
-                  <div key={item.id}>
-                    <EventRowDesktop
-                      item={item}
-                      isLast={index === group.items.length - 1}
-                      timeZone={resolvedTimeZone}
-                    />
-                    <EventRowMobile
-                      item={item}
-                      isLast={index === group.items.length - 1}
-                      timeZone={resolvedTimeZone}
-                    />
-                  </div>
+                  <EventRow
+                    key={item.id}
+                    item={item}
+                    isLast={index === group.items.length - 1}
+                    timeZone={resolvedTimeZone}
+                    onAskPrompt={onAskPrompt}
+                  />
                 ))}
               </div>
             </section>

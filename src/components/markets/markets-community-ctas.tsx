@@ -32,7 +32,7 @@ export function MarketsCommunityCtas() {
         >
           <a href={telegramUrl} target="_blank" rel="noopener noreferrer">
             <Send className="size-4 shrink-0" aria-hidden />
-            Join Verify Trading Community Group Chat on Telegram
+            Join Community
           </a>
         </Button>
       ) : null}

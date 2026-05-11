@@ -7,7 +7,7 @@ import type {
 import { ECONOMIC_CALENDAR_COUNTRIES } from "@/lib/markets/economic-calendar";
 
 export const ECONOMIC_CALENDAR_CACHE_KEY = "events:economic:week";
-export const ECONOMIC_CALENDAR_REFRESH_MS = 2 * 60 * 60 * 1000;
+export const ECONOMIC_CALENDAR_REFRESH_MS = 60 * 60 * 1000;
 
 type RawEconomicEvent = {
   id?: unknown;

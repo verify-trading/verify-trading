@@ -163,11 +163,11 @@ describe("rapidapi economic calendar", () => {
     expect(snapshot.items.map((item) => item.id)).toEqual(["us-current"]);
   });
 
-  it("uses a two-hour refresh threshold", () => {
+  it("uses a one-hour refresh threshold", () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-05-05T12:00:00.000Z").getTime());
 
-    expect(shouldRefreshEconomicCalendar("2026-05-05T10:01:00.000Z")).toBe(false);
-    expect(shouldRefreshEconomicCalendar("2026-05-05T10:00:00.000Z")).toBe(true);
+    expect(shouldRefreshEconomicCalendar("2026-05-05T11:01:00.000Z")).toBe(false);
+    expect(shouldRefreshEconomicCalendar("2026-05-05T11:00:00.000Z")).toBe(true);
   });
 
   it("refreshes before the TTL when the cached window is for the previous UTC day", () => {
@@ -182,7 +182,7 @@ describe("rapidapi economic calendar", () => {
     ).toBe(true);
     expect(
       shouldRefreshEconomicCalendar(
-        "2026-05-05T23:50:00.000Z",
+        "2026-05-06T00:00:00.000Z",
         "2026-05-05",
         new Date("2026-05-06T00:10:00.000Z"),
       ),

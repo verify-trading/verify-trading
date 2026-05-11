@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ProPlansPricingPanel } from "@/components/pricing/pro-plans-pricing-panel";
@@ -8,16 +9,13 @@ import { useAccountMenuQuery } from "@/lib/auth/use-account-menu-query";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { deriveMarketsAccessTier } from "@/lib/markets/derive-markets-access-tier";
-import type { MarketSeriesTimeframe } from "@/lib/markets/twelve-data-adapter";
 import type { MarketsAccessTier } from "@/lib/markets/markets-access-tier";
 import {
   buildCategoryCards,
-  buildSparklinePath,
   CATEGORY_CONFIG,
   fetchEconomicCalendar,
   fetchMarketIntelligence,
   fetchTwelveMarketsSnapshot,
-  formatPrice,
   type MarketsCategory,
 } from "@/lib/markets/twelve-markets-data";
 import { cn } from "@/lib/utils";
@@ -27,12 +25,21 @@ import { MarketEventsSection } from "./market-events-section";
 import { MarketIntelligenceSection } from "./market-intelligence-section";
 import { MarketPriceCard } from "./market-price-card";
 import { MarketsCommunityCtas } from "./markets-community-ctas";
+import { MarketsTabUpcoming } from "./markets-tab-upcoming";
 import { MarketsViewTabs, type MarketsTabId } from "./markets-view-tabs";
 
 const CATEGORIES: MarketsCategory[] = ["major_pairs", "commodities", "crypto"];
-const DETAIL_TIMEFRAMES: MarketSeriesTimeframe[] = ["1D", "1W", "1M", "3M"];
 
 const MARKETS_QUERY_STALE_MS = 5 * 60_000;
+
+const ASK_ASSET_NAMES: Record<string, string> = {
+  "XAU/USD": "Gold",
+  "XAG/USD": "Silver",
+  "WTI/USD": "Oil",
+  "XBR/USD": "Oil",
+  "XPT/USD": "Platinum",
+  "XPD/USD": "Palladium",
+};
 
 function isMarketsPaywallUiEnabled(): boolean {
   return process.env.NEXT_PUBLIC_MARKETS_PAYWALL_UI_ENABLED !== "false";
@@ -49,20 +56,6 @@ function paywallHeadline(tier: MarketsAccessTier): string {
   }
 }
 
-function formatPeriodReturn(values: number[]): string {
-  if (values.length < 2) {
-    return "—";
-  }
-  const first = values[0]!;
-  const last = values[values.length - 1]!;
-  if (!Number.isFinite(first) || !Number.isFinite(last) || first === 0) {
-    return "—";
-  }
-  const pct = ((last - first) / first) * 100;
-  const sign = pct >= 0 ? "+" : "";
-  return `${sign}${pct.toFixed(2)}% this period`;
-}
-
 export type MarketsPageProps = {
   initialTier?: "pro" | "free";
   pricing: PublicBillingPricing;
@@ -70,11 +63,11 @@ export type MarketsPageProps = {
 };
 
 export function TwelveMarketsPage({ initialTier, pricing, billingContext }: MarketsPageProps) {
+  const router = useRouter();
   const { ready, isSignedIn } = useSupabaseAuth();
   const accountMenuQuery = useAccountMenuQuery();
   const [activeCategory, setActiveCategory] = useState<MarketsCategory>("major_pairs");
   const [activeTab, setActiveTab] = useState<MarketsTabId>("charts");
-  const [detailTimeframe, setDetailTimeframe] = useState<MarketSeriesTimeframe>("1D");
 
   const accessTier = deriveMarketsAccessTier({
     authReady: ready,
@@ -117,19 +110,18 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
   });
 
   const cards = buildCategoryCards(activeCategory, marketsQuery.data);
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(cards[0]?.symbol ?? "EUR/USD");
-  const selectedCard = cards.find((c) => c.symbol === selectedSymbol) ?? cards[0];
-  const cachedSelectedSeries = selectedCard
-    ? marketsQuery.data?.seriesByTimeframe?.[detailTimeframe]?.[selectedCard.symbol]
-    : undefined;
-  const selectedSeries = cachedSelectedSeries ?? (detailTimeframe === "1D" ? selectedCard?.sparkline : undefined) ?? [];
-  const selectedPeriodReturn = formatPeriodReturn(selectedSeries);
-  const selectedTone = selectedSeries.length >= 2
-    ? selectedSeries[selectedSeries.length - 1]! >= selectedSeries[0]!
-    : selectedCard?.isUp;
 
   const showSkeleton = isPro && marketsQuery.isPending;
   const showPaywallUi = !isPro && isMarketsPaywallUiEnabled();
+
+  function openAskWithPrefill(prompt: string) {
+    router.push(`/ask?prefill=${encodeURIComponent(prompt)}`);
+  }
+
+  function openAssetInAsk(symbol: string) {
+    const assetName = ASK_ASSET_NAMES[symbol] ?? symbol;
+    openAskWithPrefill(`Brief me on ${assetName} before this session. Key levels, bias and what to watch.`);
+  }
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -149,22 +141,19 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
                 {activeTab === "charts" ? (
                   <div>
                     {/* Category Tabs */}
-                    <div className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-1.5">
+                    <div className="mb-4 flex gap-1.5">
                       {CATEGORIES.map((cat) => {
                         const config = CATEGORY_CONFIG[cat];
                         const isActive = cat === activeCategory;
                         return (
                           <button
                             key={cat}
-                            onClick={() => {
-                              setActiveCategory(cat);
-                              setSelectedSymbol(CATEGORY_CONFIG[cat].symbols[0] ?? "EUR/USD");
-                            }}
+                            onClick={() => setActiveCategory(cat)}
                             className={cn(
-                              "inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition-all",
+                              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all",
                               isActive
-                                ? "border border-[var(--vt-coral)]/45 bg-[var(--vt-coral)]/[0.1] text-white"
-                                : "border border-transparent text-[var(--vt-muted)] hover:bg-white/[0.05] hover:text-white",
+                                ? "bg-white/[0.08] text-white"
+                                : "text-[var(--vt-muted)] hover:bg-white/[0.04] hover:text-white/80",
                             )}
                           >
                             <span
@@ -182,152 +171,34 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
 
                     {/* Price Cards Grid */}
                     {showSkeleton ? (
-                      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
                         {Array.from({ length: 6 }).map((_, i) => (
                           <div
                             key={i}
-                            className="h-32 animate-pulse rounded-2xl border border-white/[0.04] bg-white/[0.02]"
+                            className="h-28 animate-pulse rounded-xl border border-white/[0.04] bg-white/[0.02]"
                           />
                         ))}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
                         {cards.map((card) => (
                           <MarketPriceCard
                             key={card.symbol}
                             data={card}
-                            isSelected={card.symbol === selectedSymbol}
-                            onClick={() => setSelectedSymbol(card.symbol)}
+                            isSelected={false}
+                            onClick={() => openAssetInAsk(card.symbol)}
                           />
                         ))}
                       </div>
                     )}
 
-                    {/* Selected Detail */}
-                    {selectedCard && (
-                      <div className="mt-6 rounded-2xl border border-white/[0.06] bg-[var(--vt-card)] p-5 sm:p-6">
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-wider text-[var(--vt-muted)]">
-                              {selectedCard.name}
-                            </p>
-                            <p className="mt-1 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                              {formatPrice(selectedCard.symbol, selectedCard.price)}
-                            </p>
-                          </div>
-                          <div
-                            className={cn(
-                              "text-right text-lg font-bold",
-                              selectedCard.isUp ? "text-emerald-400" : "text-rose-400",
-                            )}
-                          >
-                            <span className="mr-1">{selectedCard.isUp ? "▲" : "▼"}</span>
-                            {selectedCard.percent_change.toFixed(2)}%
-                          </div>
-                        </div>
-
-                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-                          <div
-                            className={cn(
-                              "text-sm font-bold",
-                              selectedTone ? "text-emerald-400" : "text-rose-400",
-                            )}
-                          >
-                            {selectedPeriodReturn !== "—" ? (
-                              <>
-                                <span className="mr-1">{selectedTone ? "▲" : "▼"}</span>
-                                {selectedPeriodReturn}
-                              </>
-                            ) : (
-                              "Period data loading..."
-                            )}
-                          </div>
-
-                          <div className="inline-flex rounded-xl border border-white/[0.07] bg-white/[0.035] p-1">
-                            {DETAIL_TIMEFRAMES.map((timeframe) => {
-                              const isActive = detailTimeframe === timeframe;
-                              return (
-                                <button
-                                  key={timeframe}
-                                  type="button"
-                                  onClick={() => setDetailTimeframe(timeframe)}
-                                  className={cn(
-                                    "rounded-lg px-3 py-1.5 text-xs font-bold transition-colors",
-                                    isActive
-                                      ? "bg-[var(--vt-green)] text-[var(--vt-navy)]"
-                                      : "text-[var(--vt-muted)] hover:bg-white/[0.06] hover:text-white",
-                                  )}
-                                >
-                                  {timeframe}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Detail sparkline */}
-                        <div className="mt-4 h-32 w-full">
-                          {selectedSeries.length >= 2 ? (
-                            <svg viewBox="0 0 480 128" className="h-full w-full" preserveAspectRatio="none">
-                              <defs>
-                                <linearGradient id="selected-market-chart-fill" x1="0" y1="0" x2="0" y2="1">
-                                  <stop
-                                    offset="0%"
-                                    stopColor={selectedTone ? "#34d399" : "#fb7185"}
-                                    stopOpacity="0.22"
-                                  />
-                                  <stop
-                                    offset="100%"
-                                    stopColor={selectedTone ? "#34d399" : "#fb7185"}
-                                    stopOpacity="0"
-                                  />
-                                </linearGradient>
-                              </defs>
-                              <line
-                                x1="0"
-                                y1="96"
-                                x2="480"
-                                y2="96"
-                                stroke="rgba(255,255,255,0.22)"
-                                strokeDasharray="5 5"
-                              />
-                              <path
-                                d={`${buildSparklinePath(selectedSeries, 480, 128)} L 480 128 L 0 128 Z`}
-                                fill="url(#selected-market-chart-fill)"
-                              />
-                              <path
-                                d={buildSparklinePath(selectedSeries, 480, 128)}
-                                fill="none"
-                                stroke={selectedTone ? "#34d399" : "#fb7185"}
-                                strokeWidth="3"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                              <circle
-                                cx="476"
-                                cy={(() => {
-                                  const min = Math.min(...selectedSeries);
-                                  const max = Math.max(...selectedSeries);
-                                  const range = max - min || 1;
-                                  const last = selectedSeries[selectedSeries.length - 1]!;
-                                  return 126 - ((last - min) / range) * 124;
-                                })()}
-                                r="4.5"
-                                fill={selectedTone ? "#34d399" : "#fb7185"}
-                              />
-                            </svg>
-                          ) : (
-                            <div className="flex h-full items-center justify-center">
-                              <span className="text-sm text-[var(--vt-muted)]">Chart data loading...</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ) : activeTab === "intelligence" ? (
                   <MarketIntelligenceSection
                     items={intelligenceQuery.data?.items ?? []}
+                    dailyBrief={intelligenceQuery.data?.dailyBrief ?? null}
+                    updatedAt={intelligenceQuery.data?.updatedAt ?? null}
+                    onAskPrompt={openAskWithPrefill}
                     isLoading={intelligenceQuery.isPending}
                     errorMessage={
                       intelligenceQuery.isError
@@ -337,9 +208,10 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
                         : null
                     }
                   />
-                ) : (
+                ) : activeTab === "calendar" ? (
                   <MarketEventsSection
                     snapshot={calendarQuery.data}
+                    onAskPrompt={openAskWithPrefill}
                     isLoading={calendarQuery.isPending}
                     errorMessage={
                       calendarQuery.isError
@@ -349,6 +221,10 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
                         : null
                     }
                   />
+                ) : activeTab === "journal" ? (
+                  <MarketsTabUpcoming kind="journal" />
+                ) : (
+                  <MarketsTabUpcoming kind="mind" />
                 )}
               </MarketsViewTabs>
 

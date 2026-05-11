@@ -23,6 +23,7 @@ export function AskComposer({
   onOpenPicker,
   onClearAttachment,
   onPreviewAttachment,
+  focusSignal = 0,
 }: {
   draft: string;
   attachment: AskAttachment | null;
@@ -36,6 +37,7 @@ export function AskComposer({
   onOpenPicker: () => void;
   onClearAttachment: () => void;
   onPreviewAttachment: (previewUrl: string, alt: string) => void;
+  focusSignal?: number;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -52,6 +54,20 @@ export function AskComposer({
     );
     textarea.style.height = `${nextHeight}px`;
   }, [draft]);
+
+  useEffect(() => {
+    if (focusSignal <= 0 || disabled) {
+      return;
+    }
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    });
+  }, [disabled, focusSignal]);
 
   const shellClassName = [
     "mx-auto w-full max-w-4xl rounded-2xl border px-2 py-1.5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:rounded-3xl sm:px-3 sm:py-2.5",

@@ -36,6 +36,9 @@ import type { AskServiceDependencies } from "@/lib/ask/service/types";
 import { generateProjectionCard, generateProjectionInputSchema } from "@/lib/ask/projections";
 import { generateGrowthPlanCard, generateGrowthPlanInputSchema } from "@/lib/ask/plans";
 import { buildMarketSetupCard, getMarketSetupInputSchema } from "@/lib/ask/setups";
+import type { EconomicCalendarSnapshot, EconomicEventItem } from "@/lib/markets/economic-calendar";
+import { ECONOMIC_CALENDAR_CACHE_KEY } from "@/lib/markets/rapidapi-economic-calendar";
+import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
 
 const verifyEntityInputSchema = z.object({
   name: z.string().min(1).describe("Broker, prop firm, guru, or brand name to verify."),
@@ -72,8 +75,40 @@ const searchNewsInputSchema = z.object({
     .describe("Two-letter language code, default en."),
 });
 
+const economicCalendarInputSchema = z.object({
+  scope: z
+    .enum(["today", "tomorrow", "week", "upcoming", "all"])
+    .default("upcoming")
+    .describe(
+      "Calendar window to inspect. Use today for today's releases, upcoming for the next unreleased events, week for the cached weekly window.",
+    ),
+  impact: z
+    .enum(["all", "high", "medium", "low"])
+    .default("all")
+    .describe("Filter by expected market impact. Use high for major events such as CPI, NFP, central-bank decisions, and rate decisions."),
+  currency: z
+    .string()
+    .min(1)
+    .max(8)
+    .optional()
+    .describe("Optional currency code such as USD, GBP, EUR, JPY, CAD, AUD, NZD, or CNY."),
+  country: z
+    .string()
+    .min(2)
+    .max(3)
+    .optional()
+    .describe("Optional country code such as US, GB, DE, JP, CA, AU, NZ, or CN."),
+  query: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Optional event search term, e.g. CPI, NFP, Fed, unemployment, PMI, GDP, retail sales."),
+  limit: z.number().int().min(1).max(12).default(8).describe("Maximum events to return."),
+});
+
 const MAX_NEWS_TOOL_ARTICLES = 4;
 const MAX_NEWS_DESCRIPTION_CHARS = 160;
+const MAX_CALENDAR_TOOL_EVENTS = 12;
 
 function buildInsightCard(headline: string, body: string, verdict: string): AskCard {
   return {
@@ -94,6 +129,178 @@ function truncateNewsDescription(value: string | null | undefined) {
   }
 
   return `${normalized.slice(0, MAX_NEWS_DESCRIPTION_CHARS - 1).trimEnd()}…`;
+}
+
+async function getCachedEconomicCalendarSnapshot() {
+  const cached = await readCacheRow<EconomicCalendarSnapshot>(ECONOMIC_CALENDAR_CACHE_KEY);
+  return cached?.payload ?? null;
+}
+
+function getDateKeyUtc(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addUtcDays(date: Date, days: number) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+}
+
+function normalizeCalendarSearch(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function eventMatchesQuery(item: EconomicEventItem, query: string | undefined) {
+  if (!query) {
+    return true;
+  }
+
+  const normalizedQuery = normalizeCalendarSearch(query);
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const aliases: Record<string, string[]> = {
+    cpi: ["cpi", "consumer price index", "inflation"],
+    nfp: ["nfp", "nonfarm payroll", "non farm payroll", "payroll"],
+    fed: ["fed", "fomc", "federal reserve", "rate decision"],
+    boe: ["boe", "bank of england", "rate decision"],
+    ecb: ["ecb", "european central bank", "rate decision"],
+    pmi: ["pmi", "purchasing managers"],
+    gdp: ["gdp", "gross domestic product"],
+  };
+  const expandedTerms = aliases[normalizedQuery] ?? [normalizedQuery];
+  const haystack = normalizeCalendarSearch(
+    [item.event, item.currency, item.country, item.period ?? "", item.source ?? ""].join(" "),
+  );
+
+  return expandedTerms.some((term) => haystack.includes(term));
+}
+
+function eventMatchesScope(item: EconomicEventItem, scope: z.infer<typeof economicCalendarInputSchema>["scope"], now: Date) {
+  if (scope === "all" || scope === "week") {
+    return true;
+  }
+
+  const eventDate = item.timeUtc.slice(0, 10);
+  if (scope === "today") {
+    return eventDate === getDateKeyUtc(now);
+  }
+  if (scope === "tomorrow") {
+    return eventDate === getDateKeyUtc(addUtcDays(now, 1));
+  }
+
+  const eventMs = new Date(item.timeUtc).getTime();
+  return Number.isFinite(eventMs) && eventMs >= now.getTime();
+}
+
+function formatTimeUntil(timeUtc: string, now: Date) {
+  const eventMs = new Date(timeUtc).getTime();
+  if (!Number.isFinite(eventMs)) {
+    return null;
+  }
+  const diffMs = eventMs - now.getTime();
+  if (diffMs <= 0) {
+    return "released";
+  }
+  const totalMinutes = Math.max(0, Math.floor(diffMs / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) {
+    return `${minutes}m`;
+  }
+  return `${hours}h ${minutes}m`;
+}
+
+function serializeCalendarEvent(item: EconomicEventItem, now: Date) {
+  return {
+    event: item.event,
+    timeUtc: item.timeUtc,
+    timeLabel: item.timeLabel,
+    timeUntil: formatTimeUntil(item.timeUtc, now),
+    country: item.country,
+    currency: item.currency,
+    impact: item.impact,
+    actual: item.actual ?? null,
+    forecast: item.forecast ?? null,
+    previous: item.previous ?? null,
+    status: item.actual ? "released" : "scheduled",
+    period: item.period ?? null,
+    source: item.source ?? null,
+  };
+}
+
+function findNextHighImpactEvent(items: EconomicEventItem[], now: Date) {
+  return items
+    .filter((item) => item.impact === "high")
+    .filter((item) => {
+      const eventMs = new Date(item.timeUtc).getTime();
+      return Number.isFinite(eventMs) && eventMs >= now.getTime();
+    })
+    .sort((a, b) => a.timeUtc.localeCompare(b.timeUtc))[0] ?? null;
+}
+
+function buildEconomicCalendarToolResult(
+  snapshot: EconomicCalendarSnapshot | null,
+  input: z.infer<typeof economicCalendarInputSchema>,
+) {
+  const now = new Date();
+  if (!snapshot?.items?.length) {
+    return {
+      updatedAt: snapshot?.updatedAt ?? null,
+      now: now.toISOString(),
+      from: snapshot?.from ?? null,
+      to: snapshot?.to ?? null,
+      filters: input,
+      nextHighImpactEvent: null,
+      events: [],
+      totalMatched: 0,
+      note: "Economic calendar cache is empty. Ask the trader to refresh the Markets calendar after the cron warms the cache.",
+    };
+  }
+
+  const impact = input.impact ?? "all";
+  const currency = input.currency?.trim().toUpperCase();
+  const country = input.country?.trim().toUpperCase();
+  const scope = input.scope ?? "upcoming";
+  const limit = Math.min(input.limit ?? 8, MAX_CALENDAR_TOOL_EVENTS);
+  const sorted = [...snapshot.items].sort((a, b) => a.timeUtc.localeCompare(b.timeUtc));
+  const nextHighImpactEvent = findNextHighImpactEvent(sorted, now);
+  const events = sorted.filter((item) => {
+    if (!eventMatchesScope(item, scope, now)) {
+      return false;
+    }
+    if (impact !== "all" && item.impact !== impact) {
+      return false;
+    }
+    if (currency && item.currency.toUpperCase() !== currency) {
+      return false;
+    }
+    if (country && item.country.toUpperCase() !== country) {
+      return false;
+    }
+    return eventMatchesQuery(item, input.query);
+  });
+
+  return {
+    updatedAt: snapshot.updatedAt,
+    now: now.toISOString(),
+    from: snapshot.from ?? null,
+    to: snapshot.to ?? null,
+    filters: {
+      scope,
+      impact,
+      currency: currency ?? null,
+      country: country ?? null,
+      query: input.query ?? null,
+      limit,
+    },
+    nextHighImpactEvent: nextHighImpactEvent ? serializeCalendarEvent(nextHighImpactEvent, now) : null,
+    events: events.slice(0, limit).map((item) => serializeCalendarEvent(item, now)),
+    totalMatched: events.length,
+    note:
+      events.length > 0
+        ? "Use forecast, previous, actual, impact, and timing to explain trade risk. Do not invent missing actual values."
+        : "No matching events found in the cached calendar window.",
+  };
 }
 
 function normalizeSubmittedBriefingCard(value: unknown) {
@@ -425,6 +632,8 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       getMarketSeries(asset, timeframe, askLiveMarketOptions));
   const fetchNewsEverythingImpl =
     dependencies.fetchNewsEverythingImpl ?? fetchNewsEverything;
+  const getEconomicCalendarSnapshotImpl =
+    dependencies.getEconomicCalendarSnapshotImpl ?? getCachedEconomicCalendarSnapshot;
 
   return {
     verify_entity: tool({
@@ -458,7 +667,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     search_news: tool({
       description:
-        "Recent headlines with descriptions (NewsData). Use it for macro, geopolitics, policy, earnings, sector themes, or scheduled-event context when the user wants what matters next. Optional from date only if the user stated it. Read the descriptions for context, not just titles. Use the result to explain market impact, and submit the final card yourself instead of echoing raw headlines.",
+        "Recent headlines with descriptions (NewsData). Use it for macro reactions, geopolitics, policy, earnings, sector themes, or deeper context after a scheduled event is known. Use get_economic_calendar for scheduled event timing and actual/forecast/previous values. Optional from date only if the user stated it. Read the descriptions for context, not just titles. Use the result to explain market impact, and submit the final card yourself instead of echoing raw headlines.",
       inputSchema: searchNewsInputSchema,
       execute: async (input) => {
         try {
@@ -485,6 +694,12 @@ export function createAskTools(dependencies: AskServiceDependencies) {
           };
         }
       },
+    }),
+    get_economic_calendar: tool({
+      description:
+        "Cached economic calendar events for scheduled macro releases. Use this for questions like economic calendar today/this week, what high-impact events are next, CPI/NFP/Fed timings, USD/GBP/EUR events, and what a release means for FX pairs or Gold. This reads the cached calendar only; do not use it for breaking-news reactions.",
+      inputSchema: economicCalendarInputSchema,
+      execute: async (input) => buildEconomicCalendarToolResult(await getEconomicCalendarSnapshotImpl(), input),
     }),
     calculate_position_size: tool({
       description:
