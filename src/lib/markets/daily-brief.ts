@@ -53,22 +53,11 @@ function londonDateParts(now: Date): { dateKey: string; weekday: string; hour: n
 }
 
 export function shouldRefreshDailyMarketBrief(
-  cached: DailyMarketBrief | null | undefined,
-  fetchedAt: string | null | undefined,
-  now = new Date(),
+  _cached: DailyMarketBrief | null | undefined,
+  _fetchedAt: string | null | undefined,
+  _now = new Date(),
 ): boolean {
-  const london = londonDateParts(now);
-  if (london.hour < 7) {
-    return false;
-  }
-  if (!cached || cached.date !== london.dateKey) {
-    return true;
-  }
-  if (!fetchedAt) {
-    return true;
-  }
-  const fetchedAtMs = new Date(fetchedAt).getTime();
-  return !Number.isFinite(fetchedAtMs);
+  return false;
 }
 
 function extractJsonObject(text: string): string {

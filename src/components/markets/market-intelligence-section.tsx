@@ -225,7 +225,7 @@ export function MarketIntelligenceSection({
 
   return (
     <div className="min-w-0 space-y-4">
-      {dailyBrief ? <DailyBriefCard brief={dailyBrief} onAskPrompt={onAskPrompt} /> : null}
+      {/* {dailyBrief ? <DailyBriefCard brief={dailyBrief} onAskPrompt={onAskPrompt} /> : null} */}
       <MarketSummaryCard
         item={summaryItem}
         sourceCount={sourceCount ?? sourceItems.length}
