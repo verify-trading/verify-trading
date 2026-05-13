@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, ChevronDown, Newspaper } from "lucide-react";
+import { Bot, Newspaper } from "lucide-react";
 
 import type { DailyMarketBrief, MarketIntelligenceItem } from "@/lib/markets/market-intelligence";
 import { cn } from "@/lib/utils";
@@ -73,7 +73,7 @@ function DailyBriefCard({
   return (
     <section className="overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
-        <h2 className="text-sm font-bold text-white">Daily Brief</h2>
+        <h2 className="text-sm font-bold uppercase tracking-[0.08em] text-white">Daily Market Brief</h2>
         <span className="text-[11px] text-[var(--vt-muted)]">{formatBriefDate(brief.date)}</span>
       </div>
       <div className="divide-y divide-white/[0.05] px-5">
@@ -99,13 +99,16 @@ function DailyBriefCard({
   );
 }
 
-function isAiSummary(item: MarketIntelligenceItem): boolean {
+export function isAiSummary(item: MarketIntelligenceItem): boolean {
   return item.source === "verify.trading AI" || item.category === "Market Summary";
 }
 
 function SummaryText({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   const shouldCollapse = text.length > 420;
+  
+  // Check if content is actually being truncated by line-clamp-4
+  const hasMoreContent = shouldCollapse && text.split('\n').length > 4;
 
   return (
     <div className="mt-3">
@@ -117,16 +120,85 @@ function SummaryText({ text }: { text: string }) {
       >
         {text}
       </p>
-      {shouldCollapse ? (
+      {hasMoreContent ? (
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="mt-2 text-xs font-bold text-[var(--vt-green)] transition-colors hover:text-white"
+          className="mt-2 text-xs font-bold text-[var(--vt-blue)] transition-colors hover:text-white"
         >
           {expanded ? "Show less" : "Read more"}
         </button>
       ) : null}
     </div>
+  );
+}
+
+export function MarketSummaryCard({
+  item,
+  sourceCount,
+  updatedAt,
+  onAskPrompt,
+  isLoading = false,
+}: {
+  item: MarketIntelligenceItem | null;
+  sourceCount?: number | null;
+  updatedAt?: string | null;
+  onAskPrompt?: (prompt: string) => void;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--vt-card)]">
+        <div className="space-y-3 p-4">
+          <div className="h-4 w-32 animate-pulse rounded bg-white/[0.08]" />
+          <div className="h-5 w-3/4 animate-pulse rounded bg-white/[0.08]" />
+          <div className="h-4 w-full animate-pulse rounded bg-white/[0.05]" />
+          <div className="h-4 w-11/12 animate-pulse rounded bg-white/[0.05]" />
+          <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.05]" />
+        </div>
+      </section>
+    );
+  }
+
+  if (!item) return null;
+
+  const updatedLabel = updatedAt ? formatRelativeTime(updatedAt) : formatRelativeTime(item.publishedAt);
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--vt-card)]">
+      <div className="p-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Bot className="size-4 text-[var(--vt-green)]" aria-hidden />
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--vt-green)]">AI Summary</span>
+          </div>
+          <span className="text-xs text-white/40">{updatedLabel}</span>
+        </div>
+
+        {/* Content */}
+        <div className="mt-3">
+          <h3 className="text-base font-semibold leading-snug text-white">{item.title}</h3>
+          {item.summary ? (
+            <div className="mt-2">
+              <SummaryText text={item.summary} />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
+          <span className="text-xs text-white/40">{sourceCount ?? 0} sources</span>
+          <button
+            type="button"
+            onClick={() => onAskPrompt?.(`${item.title} — what should I focus on first?`)}
+            className="text-xs font-semibold text-[var(--vt-blue)] transition-colors hover:text-white"
+          >
+            Ask about this →
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -141,12 +213,9 @@ export function MarketIntelligenceSection({
   isLoading = false,
   errorMessage = null,
 }: MarketIntelligenceSectionProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const showEmpty = !isLoading && !errorMessage && items.length === 0;
   const summaryItem = items.find(isAiSummary) ?? null;
   const sourceItems = summaryItem ? items.filter((item) => item.id !== summaryItem.id) : items;
-  const activeExpandedId = expandedId ?? sourceItems[0]?.id ?? null;
 
   const updatedLabel = updatedAt
     ? formatRelativeTime(updatedAt)
@@ -157,14 +226,21 @@ export function MarketIntelligenceSection({
   return (
     <div className="min-w-0 space-y-4">
       {dailyBrief ? <DailyBriefCard brief={dailyBrief} onAskPrompt={onAskPrompt} /> : null}
+      <MarketSummaryCard
+        item={summaryItem}
+        sourceCount={sourceCount ?? sourceItems.length}
+        updatedAt={updatedAt}
+        onAskPrompt={onAskPrompt}
+        isLoading={isLoading}
+      />
 
       <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4">
           <div>
-            <h2 className="text-[15px] font-semibold text-white">Market Intelligence</h2>
+            <h2 className="text-[15px] font-semibold text-white">Market Radar</h2>
             <p className="mt-0.5 text-[11px] font-medium text-[var(--vt-muted)]">
-              AI summary with source headlines
+              Source headlines that open Ask inside verify.trading
             </p>
           </div>
           {updatedLabel && (
@@ -197,33 +273,6 @@ export function MarketIntelligenceSection({
           </p>
         ) : (
           <div className="border-t border-white/[0.06]">
-            {summaryItem ? (
-              <div className="border-b border-white/[0.06] bg-white/[0.025] px-5 py-5">
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="inline-flex size-8 items-center justify-center rounded-lg border border-[rgba(30,213,115,0.22)] bg-[rgba(30,213,115,0.10)] text-[var(--vt-green)]">
-                    <Bot className="size-4" aria-hidden />
-                  </span>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--vt-green)]">
-                      AI Market Summary
-                    </p>
-                    <p className="text-[11px] text-[var(--vt-muted)]">
-                      Synthesized from {sourceCount ?? sourceItems.length} market sources
-                    </p>
-                  </div>
-                </div>
-                <h3 className="text-[17px] font-semibold leading-snug text-white">{summaryItem.title}</h3>
-                {summaryItem.summary ? <SummaryText text={summaryItem.summary} /> : null}
-                <button
-                  type="button"
-                  onClick={() => onAskPrompt?.(`${summaryItem.title} — what should I focus on first?`)}
-                  className="mt-4 inline-flex h-9 items-center rounded-full border border-[rgba(244,117,96,0.28)] bg-[rgba(244,117,96,0.08)] px-4 text-xs font-bold text-[var(--vt-coral)] transition-colors hover:bg-[rgba(244,117,96,0.14)] hover:text-white"
-                >
-                  Ask about this summary
-                </button>
-              </div>
-            ) : null}
-
             {sourceItems.length > 0 ? (
               <div className="flex items-center gap-2 px-5 py-3">
                 <Newspaper className="size-4 text-white/40" aria-hidden />
@@ -235,44 +284,31 @@ export function MarketIntelligenceSection({
 
             <ul>
               {sourceItems.map((item) => {
-                const isOpen = activeExpandedId === item.id;
                 const askPrompt = `${item.title} — what does this mean for my trades today?`;
 
                 return (
                   <li key={item.id} className="border-b border-white/[0.05] last:border-0">
                     <button
                       type="button"
-                      onClick={() => setExpandedId(isOpen ? null : item.id)}
-                      className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-white/[0.02]"
+                      onClick={() => onAskPrompt?.(askPrompt)}
+                      className="block w-full px-5 py-4 text-left transition-colors hover:bg-white/[0.02]"
                     >
-                      <span className="min-w-0 flex-1 text-[15px] font-normal leading-snug text-white/95">
+                      <span className="block text-[15px] font-normal leading-snug text-white/95">
                         {item.title}
                       </span>
-                      <ChevronDown
-                        className={cn(
-                          "mt-1 size-4 shrink-0 text-[var(--vt-muted)] transition-transform duration-200",
-                          isOpen && "rotate-180",
-                        )}
-                        aria-hidden
-                      />
+                      <span className="mt-1.5 block text-[11px] font-medium text-[var(--vt-muted)]">
+                        {item.source} · {formatRelativeTime(item.publishedAt)}
+                        {item.category ? ` · ${item.category}` : ""}
+                      </span>
+                      {item.summary ? (
+                        <span className="mt-2 line-clamp-2 block text-sm leading-relaxed text-[var(--vt-muted)]">
+                          {item.summary}
+                        </span>
+                      ) : null}
+                      <span className="mt-3 block text-xs font-bold text-[var(--vt-coral)]">
+                        Ask about this →
+                      </span>
                     </button>
-
-                    {isOpen && (
-                      <div className="px-5 pb-4">
-                        {item.summary && (
-                          <p className="mb-4 text-sm leading-relaxed text-[var(--vt-muted)]">
-                            {item.summary}
-                          </p>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => onAskPrompt?.(askPrompt)}
-                          className="text-xs font-bold text-[var(--vt-coral)] transition-colors hover:text-white"
-                        >
-                          Ask about this →
-                        </button>
-                      </div>
-                    )}
                   </li>
                 );
               })}

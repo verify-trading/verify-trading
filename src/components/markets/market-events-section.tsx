@@ -118,33 +118,16 @@ function formatEventTimeLabel(timeUtc: string, timeZone: string, fallback: strin
   }
 }
 
-type CountdownPart = {
-  label: string;
-  value: string;
-};
-
-function getCountdownParts(timeUtc: string, now: Date): CountdownPart[] | null {
+function formatCountdown(timeUtc: string, now: Date): string | null {
   const eventMs = new Date(timeUtc).getTime();
   if (!Number.isFinite(eventMs)) return null;
   const diffMs = eventMs - now.getTime();
-  if (diffMs <= 0) return [{ label: "Now", value: "00" }];
-
-  const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
-  const days = Math.floor(totalSeconds / 86_400);
-  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const parts: CountdownPart[] = [];
-  if (days > 0) {
-    parts.push({ label: days === 1 ? "Day" : "Days", value: String(days) });
-  }
-  parts.push(
-    { label: "Hr", value: String(hours).padStart(2, "0") },
-    { label: "Min", value: String(minutes).padStart(2, "0") },
-    { label: "Sec", value: String(seconds).padStart(2, "0") },
-  );
-  return parts;
+  if (diffMs <= 0) return "now";
+  const totalMinutes = Math.max(0, Math.floor(diffMs / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes}m`;
+  return `${hours}h ${minutes}m`;
 }
 
 function findNextHighImpactEvent(
@@ -163,7 +146,7 @@ function findNextHighImpactEvent(
 function impactDotStyle(impact: string): { backgroundColor: string } {
   if (impact === "high") return { backgroundColor: "#EF4444" };
   if (impact === "medium") return { backgroundColor: "#F59E0B" };
-  return { backgroundColor: "#6B7280" };
+  return { backgroundColor: "#9CA3AF" };
 }
 
 function impactLabel(impact: string): string {
@@ -220,9 +203,9 @@ function HighImpactCountdown({
   onAskPrompt?: (prompt: string) => void;
 }) {
   const next = findNextHighImpactEvent(items, now);
-  const countdownParts = next ? getCountdownParts(next.timeUtc, now) : null;
+  const countdown = next ? formatCountdown(next.timeUtc, now) : null;
 
-  if (!next || !countdownParts) return null;
+  if (!next || !countdown) return null;
 
   const time = formatEventTimeLabel(next.timeUtc, timeZone, next.timeLabel);
 
@@ -230,38 +213,24 @@ function HighImpactCountdown({
     <button
       type="button"
       onClick={() => onAskPrompt?.(buildEventAskPrompt(next, timeZone))}
-      className="mb-4 flex w-full items-center gap-3.5 rounded-xl border border-rose-500/[0.22] bg-rose-500/[0.07] px-4 py-3.5 text-left transition-colors hover:bg-rose-500/[0.11]"
+      className="mb-4 flex w-full flex-col gap-2 rounded-lg border border-rose-500/20 bg-rose-500/[0.06] p-3 text-left transition-colors hover:border-rose-500/30 hover:bg-rose-500/[0.09]"
     >
-      {/* Pulsing dot */}
-      <span className="relative flex size-2.5 shrink-0">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-40" />
-        <span className="relative inline-flex size-2.5 rounded-full bg-rose-500" />
-      </span>
-
-      {/* Event info */}
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-rose-400/80">
-          Next High Impact
-        </p>
-        <p className="mt-0.5 truncate text-sm font-semibold text-white">{next.event}</p>
-        <p className="mt-0.5 text-[11px] text-white/45">
-          {next.country} · {next.currency} · {time}
-        </p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="relative flex size-2 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-40" />
+            <span className="relative inline-flex size-2 rounded-full bg-rose-500" />
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-wide text-rose-400/80">High Impact</span>
+        </div>
+        <span className="rounded bg-rose-500/20 px-2 py-1 text-xs font-bold tabular-nums text-rose-300">{countdown}</span>
       </div>
 
-      {/* Countdown badge */}
-      <div className="grid shrink-0 grid-flow-col gap-1.5">
-        {countdownParts.map((part) => (
-          <span
-            key={part.label}
-            className="flex min-w-11 flex-col items-center rounded-lg bg-rose-500/[0.18] px-2.5 py-1.5 tabular-nums text-rose-200 ring-1 ring-rose-400/10"
-          >
-            <span className="text-sm font-black leading-none">{part.value}</span>
-            <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-rose-200/60">
-              {part.label}
-            </span>
-          </span>
-        ))}
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-white">{next.event}</p>
+        <p className="mt-0.5 truncate text-xs text-white/50">
+          {next.country} · {next.currency} · {time}
+        </p>
       </div>
     </button>
   );
@@ -292,13 +261,11 @@ function WeekDayStrip({
     const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(date);
     const fullDateLabel = formatDateLabel(dateKey, LONG_DATE_FORMATTER);
     const dayNum = new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "UTC" }).format(date);
-    const monthStr = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(date);
 
     return {
       dateKey,
       dayName,
       dayNum,
-      monthStr,
       fullDateLabel,
       totalCount: dayItems.length,
       highCount,
@@ -309,118 +276,52 @@ function WeekDayStrip({
   });
 
   return (
-    <div className="mb-5">
-      {/* Header with "This Week" label */}
-      <div className="mb-3 flex items-center justify-between px-1">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-white/50">This Week</h3>
-        {selectedDate !== "all" && (
+    <div className="mb-4">
+      <div className="flex gap-1.5">
+        {days.map(({ dateKey, dayName, dayNum, fullDateLabel, totalCount, highCount, medCount, isToday, isSelected }) => (
           <button
+            key={dateKey}
             type="button"
-            onClick={() => onSelectDate("all")}
-            className="text-xs font-semibold text-[var(--vt-coral)] transition-colors hover:text-[var(--vt-coral)]/80"
+            onClick={() => onSelectDate(isSelected ? "all" : dateKey)}
+            aria-label={fullDateLabel}
+            className={cn(
+              "flex flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2.5 transition-all",
+              isSelected
+                ? "bg-[var(--vt-coral)] shadow-md"
+                : "border border-white/[0.08] hover:border-white/20 hover:bg-white/[0.03]",
+            )}
           >
-            Clear filter
-          </button>
-        )}
-      </div>
-
-      {/* Days grid - responsive: scroll on mobile, grid on larger screens */}
-      <div className="overflow-x-auto pb-2 -mx-1 px-1">
-        <div className="flex gap-2 min-w-max sm:grid sm:grid-cols-7 sm:gap-2.5">
-          {days.map(({ dateKey, dayName, dayNum, monthStr, fullDateLabel, totalCount, highCount, medCount, isToday, isSelected }) => (
-            <button
-              key={dateKey}
-              type="button"
-              onClick={() => onSelectDate(isSelected ? "all" : dateKey)}
-              aria-label={fullDateLabel}
+            <span
               className={cn(
-                "group relative flex min-w-[90px] flex-col items-center rounded-xl border px-4 py-4 text-center transition-all duration-200 sm:min-w-0",
-                isSelected
-                  ? "border-[var(--vt-coral)]/40 bg-[var(--vt-coral)]/[0.12] shadow-[0_0_20px_rgba(255,107,107,0.15)]"
-                  : isToday
-                    ? "border-[var(--vt-blue)]/30 bg-[var(--vt-blue)]/[0.08] hover:border-[var(--vt-blue)]/50 hover:bg-[var(--vt-blue)]/[0.12]"
-                    : "border-white/[0.08] bg-[var(--vt-card)] hover:border-white/[0.15] hover:bg-white/[0.06]",
+                "text-[9px] font-medium uppercase leading-none",
+                isSelected ? "text-white/80" : isToday ? "text-[var(--vt-coral)]" : "text-white/40",
               )}
             >
-              {/* Today indicator */}
-              {isToday && !isSelected && (
-                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center rounded-full bg-[var(--vt-blue)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-lg">
-                    Today
-                  </span>
-                </div>
+              {dayName}
+            </span>
+
+            <span
+              className={cn(
+                "mt-1 text-base font-bold tabular-nums leading-none",
+                isSelected ? "text-white" : "text-white/85",
               )}
+            >
+              {dayNum}
+            </span>
 
-              {/* Selected indicator */}
-              {isSelected && (
-                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center rounded-full bg-[var(--vt-coral)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-lg">
-                    Active
-                  </span>
-                </div>
+            <div className="mt-1 flex items-center gap-1 text-[9px] font-semibold leading-none">
+              {highCount > 0 && (
+                <span className={isSelected ? "text-white" : "text-rose-400"}>{highCount}H</span>
               )}
-
-              {/* Day name */}
-              <span
-                className={cn(
-                  "text-[10px] font-bold uppercase tracking-[0.08em]",
-                  isSelected ? "text-[var(--vt-coral)]" : isToday ? "text-[var(--vt-blue)]" : "text-white/50",
-                )}
-              >
-                {dayName}
-              </span>
-
-              {/* Date number - larger and more prominent */}
-              <span
-                className={cn(
-                  "mt-2 text-2xl font-black tabular-nums leading-none",
-                  isSelected ? "text-white" : isToday ? "text-white" : "text-white/85",
-                )}
-              >
-                {dayNum}
-              </span>
-
-              {/* Month */}
-              <span
-                className={cn(
-                  "mt-1 text-[11px] font-semibold uppercase tracking-wide",
-                  isSelected ? "text-white/70" : isToday ? "text-white/60" : "text-white/50",
-                )}
-              >
-                {monthStr}
-              </span>
-
-              {/* Event indicators */}
-              <div className="mt-3 flex min-h-[20px] flex-col items-center gap-1.5">
-                {totalCount === 0 ? (
-                  <span className="text-[10px] font-medium text-white/30">No events</span>
-                ) : (
-                  <>
-                    {/* Impact dots */}
-                    <div className="flex items-center gap-1">
-                      {highCount > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="size-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
-                          <span className="text-[10px] font-bold text-rose-400">{highCount}</span>
-                        </div>
-                      )}
-                      {medCount > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="size-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                          <span className="text-[10px] font-bold text-amber-400">{medCount}</span>
-                        </div>
-                      )}
-                    </div>
-                    {/* Total count */}
-                    <span className="text-[10px] font-semibold text-white/60">
-                      {totalCount} total
-                    </span>
-                  </>
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
+              {medCount > 0 && (
+                <span className={isSelected ? "text-white/80" : "text-amber-400"}>{medCount}M</span>
+              )}
+              {totalCount === 0 && (
+                <span className={isSelected ? "text-white/50" : "text-white/25"}>—</span>
+              )}
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );

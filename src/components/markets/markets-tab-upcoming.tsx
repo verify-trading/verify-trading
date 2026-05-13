@@ -2,17 +2,15 @@
 
 import { BookOpen, Brain, Sparkles } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-
 const COPY = {
   journal: {
     title: "Trading Journal",
-    body: "Every trade you verify will be automatically saved here. Your full decision history, ITVE scores and outcomes in one place.",
+    body: "Coming soon. Every trade you verify will be automatically saved here. Your full decision history, ITVE scores and outcomes in one place.",
     Icon: BookOpen,
   },
   mind: {
     title: "Psychological AI",
-    body: "Emotional state checks, post-loss management and session readiness scoring — all before you enter a single trade.",
+    body: "Coming soon. Emotional state checks, post-loss management and session readiness scoring — all before you enter a single trade.",
     Icon: Brain,
   },
 } as const;
