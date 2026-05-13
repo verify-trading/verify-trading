@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { Bot, ChevronDown, Newspaper } from "lucide-react";
 
 import type { DailyMarketBrief, MarketIntelligenceItem } from "@/lib/markets/market-intelligence";
 import { cn } from "@/lib/utils";
@@ -99,6 +99,10 @@ function DailyBriefCard({
   );
 }
 
+function isAiSummary(item: MarketIntelligenceItem): boolean {
+  return item.source === "verify.trading AI" || item.category === "Market Summary";
+}
+
 /* ── Main section ──────────────────────────────────────────────────────── */
 
 export function MarketIntelligenceSection({
@@ -113,7 +117,9 @@ export function MarketIntelligenceSection({
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const showEmpty = !isLoading && !errorMessage && items.length === 0;
-  const activeExpandedId = expandedId ?? items[0]?.id ?? null;
+  const summaryItem = items.find(isAiSummary) ?? null;
+  const sourceItems = summaryItem ? items.filter((item) => item.id !== summaryItem.id) : items;
+  const activeExpandedId = expandedId ?? sourceItems[0]?.id ?? null;
 
   const updatedLabel = updatedAt
     ? formatRelativeTime(updatedAt)
@@ -128,7 +134,12 @@ export function MarketIntelligenceSection({
       <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4">
-          <h2 className="text-[15px] font-semibold text-white">Market Summary</h2>
+          <div>
+            <h2 className="text-[15px] font-semibold text-white">Market Intelligence</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-[var(--vt-muted)]">
+              AI summary with source headlines
+            </p>
+          </div>
           {updatedLabel && (
             <span className="text-[11px] text-[var(--vt-muted)]">Updated {updatedLabel}</span>
           )}
@@ -158,52 +169,90 @@ export function MarketIntelligenceSection({
             No headlines right now.
           </p>
         ) : (
-          <ul className="border-t border-white/[0.06]">
-            {items.map((item) => {
-              const isOpen = activeExpandedId === item.id;
-              const askPrompt = `${item.title} — what does this mean for my trades today?`;
+          <div className="border-t border-white/[0.06]">
+            {summaryItem ? (
+              <div className="border-b border-white/[0.06] bg-white/[0.025] px-5 py-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="inline-flex size-8 items-center justify-center rounded-lg border border-[rgba(30,213,115,0.22)] bg-[rgba(30,213,115,0.10)] text-[var(--vt-green)]">
+                    <Bot className="size-4" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--vt-green)]">
+                      AI Market Summary
+                    </p>
+                    <p className="text-[11px] text-[var(--vt-muted)]">
+                      Synthesized from {sourceCount ?? sourceItems.length} market sources
+                    </p>
+                  </div>
+                </div>
+                <h3 className="text-[17px] font-semibold leading-snug text-white">{summaryItem.title}</h3>
+                {summaryItem.summary ? (
+                  <p className="mt-3 text-sm leading-relaxed text-white/72">{summaryItem.summary}</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onAskPrompt?.(`${summaryItem.title} — what should I focus on first?`)}
+                  className="mt-4 inline-flex h-9 items-center rounded-full border border-[rgba(244,117,96,0.28)] bg-[rgba(244,117,96,0.08)] px-4 text-xs font-bold text-[var(--vt-coral)] transition-colors hover:bg-[rgba(244,117,96,0.14)] hover:text-white"
+                >
+                  Ask about this summary
+                </button>
+              </div>
+            ) : null}
 
-              return (
-                <li key={item.id} className="border-b border-white/[0.05] last:border-0">
-                  {/* Row header — always visible, click to toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(isOpen ? null : item.id)}
-                    className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-white/[0.02]"
-                  >
-                    <span className="min-w-0 flex-1 text-[15px] font-normal leading-snug text-white/95">
-                      {item.title}
-                    </span>
-                    <ChevronDown
-                      className={cn(
-                        "mt-1 size-4 shrink-0 text-[var(--vt-muted)] transition-transform duration-200",
-                        isOpen && "rotate-180",
-                      )}
-                      aria-hidden
-                    />
-                  </button>
+            {sourceItems.length > 0 ? (
+              <div className="flex items-center gap-2 px-5 py-3">
+                <Newspaper className="size-4 text-white/40" aria-hidden />
+                <p className="text-[11px] font-black uppercase tracking-[0.12em] text-white/55">
+                  Source Headlines
+                </p>
+              </div>
+            ) : null}
 
-                  {/* Expanded body */}
-                  {isOpen && (
-                    <div className="px-5 pb-4">
-                      {item.summary && (
-                        <p className="mb-4 text-sm leading-relaxed text-[var(--vt-muted)]">
-                          {item.summary}
-                        </p>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => onAskPrompt?.(askPrompt)}
-                        className="text-xs font-bold text-[var(--vt-coral)] transition-colors hover:text-white"
-                      >
-                        Ask about this →
-                      </button>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+            <ul>
+              {sourceItems.map((item) => {
+                const isOpen = activeExpandedId === item.id;
+                const askPrompt = `${item.title} — what does this mean for my trades today?`;
+
+                return (
+                  <li key={item.id} className="border-b border-white/[0.05] last:border-0">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(isOpen ? null : item.id)}
+                      className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-white/[0.02]"
+                    >
+                      <span className="min-w-0 flex-1 text-[15px] font-normal leading-snug text-white/95">
+                        {item.title}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          "mt-1 size-4 shrink-0 text-[var(--vt-muted)] transition-transform duration-200",
+                          isOpen && "rotate-180",
+                        )}
+                        aria-hidden
+                      />
+                    </button>
+
+                    {isOpen && (
+                      <div className="px-5 pb-4">
+                        {item.summary && (
+                          <p className="mb-4 text-sm leading-relaxed text-[var(--vt-muted)]">
+                            {item.summary}
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onAskPrompt?.(askPrompt)}
+                          className="text-xs font-bold text-[var(--vt-coral)] transition-colors hover:text-white"
+                        >
+                          Ask about this →
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
 
         {/* Footer */}
