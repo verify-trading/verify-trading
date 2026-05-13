@@ -160,7 +160,7 @@ export async function getMarketIntelligenceSnapshot(): Promise<MarketIntelligenc
 
   return {
     updatedAt: new Date().toISOString(),
-    items: mapSummaryItems(summary, sourceItems),
+    items: [...mapSummaryItems(summary, sourceItems), ...sourceItems],
     sourceCount: sourceItems.length,
   };
 }

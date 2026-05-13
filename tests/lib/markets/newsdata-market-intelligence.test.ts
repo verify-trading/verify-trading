@@ -65,11 +65,13 @@ describe("getMarketIntelligenceSnapshot (NewsData)", () => {
     const snapshot = await getMarketIntelligenceSnapshot();
 
     expect(generateText).toHaveBeenCalledOnce();
-    expect(snapshot.items).toHaveLength(1);
+    expect(snapshot.items).toHaveLength(3);
     expect(snapshot.sourceCount).toBe(2);
     expect(snapshot.items[0]?.title).toBe("Gold bid firms while dollar traders wait on Fed");
     expect(snapshot.items[0]?.source).toBe("verify.trading AI");
     expect(snapshot.items[0]?.category).toBe("Market Summary");
+    expect(snapshot.items[1]?.title).toBe("Gold rises as oil steadies");
+    expect(snapshot.items[2]?.title).toBe("Dollar holds gains before Fed decision");
   });
 
   it("throws when no upstream query returns headlines", async () => {
