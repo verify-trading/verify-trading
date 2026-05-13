@@ -58,7 +58,7 @@ export function shouldRefreshDailyMarketBrief(
   now = new Date(),
 ): boolean {
   const london = londonDateParts(now);
-  if (["Sat", "Sun"].includes(london.weekday) || london.hour < 6) {
+  if (london.hour < 7) {
     return false;
   }
   if (!cached || cached.date !== london.dateKey) {

@@ -249,7 +249,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // 6. Daily market brief (Claude: weekday 06:00 Europe/London, cached for the UI)
+    // 6. Daily market brief (Claude: daily after 07:00 Europe/London, cached for the UI)
     try {
       const dailyBriefCache = await readCacheRow<DailyMarketBrief>(DAILY_MARKET_BRIEF_CACHE_KEY);
       if (shouldRefreshDailyMarketBrief(dailyBriefCache?.payload ?? null, dailyBriefCache?.fetchedAt ?? null, startedAt)) {
