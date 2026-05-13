@@ -196,6 +196,7 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
                 ) : activeTab === "intelligence" ? (
                   <MarketIntelligenceSection
                     items={intelligenceQuery.data?.items ?? []}
+                    sourceCount={intelligenceQuery.data?.sourceCount ?? null}
                     dailyBrief={intelligenceQuery.data?.dailyBrief ?? null}
                     updatedAt={intelligenceQuery.data?.updatedAt ?? null}
                     onAskPrompt={openAskWithPrefill}

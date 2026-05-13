@@ -33,5 +33,6 @@ export type DailyMarketBrief = {
 export type MarketIntelligenceSnapshot = {
   updatedAt: string;
   items: MarketIntelligenceItem[];
+  sourceCount?: number;
   dailyBrief?: DailyMarketBrief | null;
 };
