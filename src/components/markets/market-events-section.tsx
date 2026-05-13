@@ -118,16 +118,33 @@ function formatEventTimeLabel(timeUtc: string, timeZone: string, fallback: strin
   }
 }
 
-function formatCountdown(timeUtc: string, now: Date): string | null {
+type CountdownPart = {
+  label: string;
+  value: string;
+};
+
+function getCountdownParts(timeUtc: string, now: Date): CountdownPart[] | null {
   const eventMs = new Date(timeUtc).getTime();
   if (!Number.isFinite(eventMs)) return null;
   const diffMs = eventMs - now.getTime();
-  if (diffMs <= 0) return "now";
-  const totalMinutes = Math.max(0, Math.floor(diffMs / 60_000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours <= 0) return `${minutes}m`;
-  return `${hours}h ${minutes}m`;
+  if (diffMs <= 0) return [{ label: "Now", value: "00" }];
+
+  const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts: CountdownPart[] = [];
+  if (days > 0) {
+    parts.push({ label: days === 1 ? "Day" : "Days", value: String(days) });
+  }
+  parts.push(
+    { label: "Hr", value: String(hours).padStart(2, "0") },
+    { label: "Min", value: String(minutes).padStart(2, "0") },
+    { label: "Sec", value: String(seconds).padStart(2, "0") },
+  );
+  return parts;
 }
 
 function findNextHighImpactEvent(
@@ -203,9 +220,9 @@ function HighImpactCountdown({
   onAskPrompt?: (prompt: string) => void;
 }) {
   const next = findNextHighImpactEvent(items, now);
-  const countdown = next ? formatCountdown(next.timeUtc, now) : null;
+  const countdownParts = next ? getCountdownParts(next.timeUtc, now) : null;
 
-  if (!next || !countdown) return null;
+  if (!next || !countdownParts) return null;
 
   const time = formatEventTimeLabel(next.timeUtc, timeZone, next.timeLabel);
 
@@ -233,10 +250,18 @@ function HighImpactCountdown({
       </div>
 
       {/* Countdown badge */}
-      <div className="shrink-0">
-        <span className="inline-flex items-center rounded-lg bg-rose-500/[0.18] px-3 py-1.5 text-sm font-bold tabular-nums text-rose-300">
-          {countdown}
-        </span>
+      <div className="grid shrink-0 grid-flow-col gap-1.5">
+        {countdownParts.map((part) => (
+          <span
+            key={part.label}
+            className="flex min-w-11 flex-col items-center rounded-lg bg-rose-500/[0.18] px-2.5 py-1.5 tabular-nums text-rose-200 ring-1 ring-rose-400/10"
+          >
+            <span className="text-sm font-black leading-none">{part.value}</span>
+            <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.08em] text-rose-200/60">
+              {part.label}
+            </span>
+          </span>
+        ))}
       </div>
     </button>
   );
@@ -284,57 +309,118 @@ function WeekDayStrip({
   });
 
   return (
-    <div className="mb-5 overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
-      <div className="grid grid-cols-7 divide-x divide-white/[0.05]">
-        {days.map(({ dateKey, dayName, dayNum, monthStr, fullDateLabel, totalCount, highCount, medCount, isToday, isSelected }) => (
+    <div className="mb-5">
+      {/* Header with "This Week" label */}
+      <div className="mb-3 flex items-center justify-between px-1">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-white/50">This Week</h3>
+        {selectedDate !== "all" && (
           <button
-            key={dateKey}
             type="button"
-            onClick={() => onSelectDate(isSelected ? "all" : dateKey)}
-            aria-label={fullDateLabel}
-            className={cn(
-              "flex flex-col items-center px-1 py-5 text-center transition-colors",
-              isSelected ? "bg-white/[0.08]" : "hover:bg-white/[0.03]",
-            )}
+            onClick={() => onSelectDate("all")}
+            className="text-xs font-semibold text-[var(--vt-coral)] transition-colors hover:text-[var(--vt-coral)]/80"
           >
-            {/* Day name */}
-            <span
-              className={cn(
-                "text-[10px] font-semibold uppercase tracking-wide",
-                isSelected ? "text-white/60" : "text-[var(--vt-muted)]",
-              )}
-            >
-              {dayName}
-            </span>
-
-            {/* DD Mon */}
-            <span
-              className={cn(
-                "mt-2 text-[11px] font-bold leading-tight sm:text-sm",
-                isSelected && "text-white",
-                isToday && !isSelected && "text-[var(--vt-coral)]",
-                !isToday && !isSelected && "text-white/80",
-              )}
-            >
-              {dayNum} {monthStr}
-            </span>
-
-            {/* Event count */}
-            <div className="mt-2.5 flex min-h-[14px] items-center gap-0.5">
-              {totalCount === 0 ? (
-                <span className="text-[9px] text-white/25">—</span>
-              ) : (
-                <>
-                  {highCount > 0 && <span className="size-1.5 rounded-full bg-rose-500/80" />}
-                  {medCount > 0 && <span className="size-1.5 rounded-full bg-amber-500/70" />}
-                  <span className="ml-0.5 text-[9px] font-semibold text-white/55">
-                    {totalCount}
-                  </span>
-                </>
-              )}
-            </div>
+            Clear filter
           </button>
-        ))}
+        )}
+      </div>
+
+      {/* Days grid - responsive: scroll on mobile, grid on larger screens */}
+      <div className="overflow-x-auto pb-2 -mx-1 px-1">
+        <div className="flex gap-2 min-w-max sm:grid sm:grid-cols-7 sm:gap-2.5">
+          {days.map(({ dateKey, dayName, dayNum, monthStr, fullDateLabel, totalCount, highCount, medCount, isToday, isSelected }) => (
+            <button
+              key={dateKey}
+              type="button"
+              onClick={() => onSelectDate(isSelected ? "all" : dateKey)}
+              aria-label={fullDateLabel}
+              className={cn(
+                "group relative flex min-w-[90px] flex-col items-center rounded-xl border px-4 py-4 text-center transition-all duration-200 sm:min-w-0",
+                isSelected
+                  ? "border-[var(--vt-coral)]/40 bg-[var(--vt-coral)]/[0.12] shadow-[0_0_20px_rgba(255,107,107,0.15)]"
+                  : isToday
+                    ? "border-[var(--vt-blue)]/30 bg-[var(--vt-blue)]/[0.08] hover:border-[var(--vt-blue)]/50 hover:bg-[var(--vt-blue)]/[0.12]"
+                    : "border-white/[0.08] bg-[var(--vt-card)] hover:border-white/[0.15] hover:bg-white/[0.06]",
+              )}
+            >
+              {/* Today indicator */}
+              {isToday && !isSelected && (
+                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
+                  <span className="inline-flex items-center rounded-full bg-[var(--vt-blue)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-lg">
+                    Today
+                  </span>
+                </div>
+              )}
+
+              {/* Selected indicator */}
+              {isSelected && (
+                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
+                  <span className="inline-flex items-center rounded-full bg-[var(--vt-coral)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-lg">
+                    Active
+                  </span>
+                </div>
+              )}
+
+              {/* Day name */}
+              <span
+                className={cn(
+                  "text-[10px] font-bold uppercase tracking-[0.08em]",
+                  isSelected ? "text-[var(--vt-coral)]" : isToday ? "text-[var(--vt-blue)]" : "text-white/50",
+                )}
+              >
+                {dayName}
+              </span>
+
+              {/* Date number - larger and more prominent */}
+              <span
+                className={cn(
+                  "mt-2 text-2xl font-black tabular-nums leading-none",
+                  isSelected ? "text-white" : isToday ? "text-white" : "text-white/85",
+                )}
+              >
+                {dayNum}
+              </span>
+
+              {/* Month */}
+              <span
+                className={cn(
+                  "mt-1 text-[11px] font-semibold uppercase tracking-wide",
+                  isSelected ? "text-white/70" : isToday ? "text-white/60" : "text-white/50",
+                )}
+              >
+                {monthStr}
+              </span>
+
+              {/* Event indicators */}
+              <div className="mt-3 flex min-h-[20px] flex-col items-center gap-1.5">
+                {totalCount === 0 ? (
+                  <span className="text-[10px] font-medium text-white/30">No events</span>
+                ) : (
+                  <>
+                    {/* Impact dots */}
+                    <div className="flex items-center gap-1">
+                      {highCount > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="size-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
+                          <span className="text-[10px] font-bold text-rose-400">{highCount}</span>
+                        </div>
+                      )}
+                      {medCount > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="size-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+                          <span className="text-[10px] font-bold text-amber-400">{medCount}</span>
+                        </div>
+                      )}
+                    </div>
+                    {/* Total count */}
+                    <span className="text-[10px] font-semibold text-white/60">
+                      {totalCount} total
+                    </span>
+                  </>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -568,7 +654,7 @@ export function MarketEventsSection({
 
   useEffect(() => {
     if (now) return;
-    const id = window.setInterval(() => setLiveTime(new Date()), 60_000);
+    const id = window.setInterval(() => setLiveTime(new Date()), 1000);
     return () => window.clearInterval(id);
   }, [now]);
 

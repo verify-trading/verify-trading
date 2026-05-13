@@ -73,7 +73,12 @@ describe("MarketEventsSection", () => {
   it("defaults to high and medium impact events and supports country/impact filtering", () => {
     render(<MarketEventsSection snapshot={weeklySnapshot} timeZone="UTC" now={new Date("2026-05-05T12:00:00.000Z")} />);
 
-    expect(screen.getByText("ISM Services PMI in 2h 0m")).toBeInTheDocument();
+    expect(screen.getByText("Next High Impact")).toBeInTheDocument();
+    expect(screen.getByText("02")).toBeInTheDocument();
+    expect(screen.getByText("Hr")).toBeInTheDocument();
+    expect(screen.getAllByText("00")).toHaveLength(2);
+    expect(screen.getByText("Min")).toBeInTheDocument();
+    expect(screen.getByText("Sec")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Tuesday, May 5" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Saturday, May 9" })).toBeInTheDocument();
     expect(screen.getAllByText("ISM Services PMI").length).toBeGreaterThan(0);
@@ -87,13 +92,13 @@ describe("MarketEventsSection", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Saturday, May 9" }));
 
-    expect(screen.queryByText("ISM Services PMI")).not.toBeInTheDocument();
+    expect(screen.getAllByText("ISM Services PMI")).toHaveLength(1);
     expect(screen.getAllByText("CPI YY").length).toBeGreaterThan(0);
 
     fireEvent.pointerDown(screen.getByRole("button", { name: /filter by country/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: "China (CN)" }));
 
-    expect(screen.queryByText("ISM Services PMI")).not.toBeInTheDocument();
+    expect(screen.getAllByText("ISM Services PMI")).toHaveLength(1);
     expect(screen.getAllByText("CPI YY").length).toBeGreaterThan(0);
 
     fireEvent.pointerDown(screen.getByRole("button", { name: /filter events by impact/i }));
@@ -188,7 +193,10 @@ describe("MarketEventsSection", () => {
       />,
     );
 
-    expect(screen.getByText("Fed Speaker in 8h 30m")).toBeInTheDocument();
+    expect(screen.getAllByText("Fed Speaker").length).toBeGreaterThan(0);
+    expect(screen.getByText("08")).toBeInTheDocument();
+    expect(screen.getByText("30")).toBeInTheDocument();
+    expect(screen.getByText("Sec")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Monday, May 4" })).toBeInTheDocument();
     expect(screen.getAllByText("8:30 PM").length).toBeGreaterThan(0);
     expect(screen.queryByText("France Flash PMI")).not.toBeInTheDocument();
