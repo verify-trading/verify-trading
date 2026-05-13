@@ -16,6 +16,7 @@
     "@ai-sdk/anthropic": "^3.0.66",
     "@ai-sdk/react": "^3.0.148",
     "@hookform/resolvers": "^5.2.2",
+    "@marsidev/react-turnstile": "^1.5.2",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-slot": "^1.2.4",
     "@supabase/ssr": "^0.10.0",

@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Turnstile } from "@marsidev/react-turnstile";
 import { ArrowLeft, MailOpen } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -28,6 +29,7 @@ import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
 
 const EMPTY_SIGNUP: SignupFormValues = { username: "", email: "", password: "" };
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 function SignupPageContent() {
   const { supabase } = useSupabaseAuth();
@@ -39,7 +41,10 @@ function SignupPageContent() {
   const [sentToEmail, setSentToEmail] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
   const verificationSent = sentToEmail !== null;
+  const captchaRequired = Boolean(TURNSTILE_SITE_KEY);
 
   const {
     register,
@@ -59,12 +64,19 @@ function SignupPageContent() {
       setApiError(AUTH_NOT_CONFIGURED_MESSAGE);
       return;
     }
+
+    if (captchaRequired && !captchaToken) {
+      setApiError("Please complete the security check before creating your account.");
+      return;
+    }
+
     const origin = window.location.origin;
     const username = values.username.trim();
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: values.email.trim(),
       password: values.password,
       options: {
+        captchaToken: captchaToken ?? undefined,
         emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
         data: {
           username: username.toLowerCase(),
@@ -75,6 +87,8 @@ function SignupPageContent() {
 
     if (signUpError) {
       setApiError(signUpError.message);
+      setCaptchaToken(null);
+      setCaptchaKey((key) => key + 1);
       return;
     }
 
@@ -85,6 +99,8 @@ function SignupPageContent() {
     }
 
     setSentToEmail(values.email.trim());
+    setCaptchaToken(null);
+    setCaptchaKey((key) => key + 1);
     reset(EMPTY_SIGNUP);
   }
 
@@ -227,7 +243,24 @@ function SignupPageContent() {
                 <p className="mt-1.5 text-xs text-(--vt-muted)">Use at least 8 characters.</p>
               ) : null}
             </div>
-            <Button type="submit" variant="default" size="pill" className="w-full" disabled={googleBusy || isSubmitting}>
+            {TURNSTILE_SITE_KEY ? (
+              <Turnstile
+                key={captchaKey}
+                siteKey={TURNSTILE_SITE_KEY}
+                onSuccess={setCaptchaToken}
+                onExpire={() => setCaptchaToken(null)}
+                onError={() => setCaptchaToken(null)}
+                options={{ theme: "dark", size: "flexible" }}
+                className="min-h-[65px] w-full"
+              />
+            ) : null}
+            <Button
+              type="submit"
+              variant="default"
+              size="pill"
+              className="w-full"
+              disabled={googleBusy || isSubmitting || (captchaRequired && !captchaToken)}
+            >
               {isSubmitting ? "Creating…" : "Create account with email"}
             </Button>
           </form>
