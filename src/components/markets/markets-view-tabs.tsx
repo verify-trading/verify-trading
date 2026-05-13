@@ -1,22 +1,24 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Calendar, ChevronDown, LineChart, Newspaper } from "lucide-react";
+import { BookOpen, Brain, Calendar, LineChart, Lock, Newspaper } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type MarketsTabId = "charts" | "intelligence" | "calendar";
+export type MarketsTabId = "charts" | "intelligence" | "calendar" | "journal" | "mind";
 
 const TABS: {
   id: MarketsTabId;
   label: string;
-  shortLabel: string;
   icon: typeof LineChart;
+  locked?: boolean;
 }[] = [
-  { id: "charts", label: "Markets", shortLabel: "Markets", icon: LineChart },
-  { id: "intelligence", label: "Intelligence", shortLabel: "Intel", icon: Newspaper },
-  { id: "calendar", label: "Events", shortLabel: "Events", icon: Calendar },
+  { id: "charts", label: "Markets", icon: LineChart },
+  { id: "intelligence", label: "Intelligence", icon: Newspaper },
+  { id: "calendar", label: "Economic Calendar", icon: Calendar },
+  { id: "journal", label: "Journal", icon: BookOpen, locked: true },
+  { id: "mind", label: "Mind", icon: Brain, locked: true },
 ];
 
 function tabPanelId(tab: MarketsTabId): string {
@@ -34,43 +36,10 @@ export type MarketsViewTabsProps = {
 };
 
 export function MarketsViewTabs({ activeTab, onTabChange, children }: MarketsViewTabsProps) {
-  const activeMeta = TABS.find((t) => t.id === activeTab) ?? TABS[0]!;
-  const ActiveIcon = activeMeta.icon;
-
   return (
     <div className="mb-8">
-      <div className="mb-6 md:hidden">
-        <div className="relative">
-          <label htmlFor="markets-tab-select" className="sr-only">
-            Markets view
-          </label>
-          <select
-            id="markets-tab-select"
-            value={activeTab}
-            onChange={(e) => onTabChange(e.target.value as MarketsTabId)}
-            className="w-full appearance-none rounded-2xl border border-[color:var(--vt-border)] bg-[var(--vt-card)] px-4 py-3.5 pl-10 text-sm font-bold text-white outline-none transition-colors focus:border-[var(--vt-coral)]"
-          >
-            {TABS.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          <ActiveIcon
-            size={16}
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--vt-coral)]"
-            aria-hidden
-          />
-          <ChevronDown
-            size={16}
-            className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--vt-muted)]"
-            aria-hidden
-          />
-        </div>
-      </div>
-
       <div
-        className="mb-7 hidden items-center gap-7 border-b border-white/[0.08] md:flex"
+        className="mb-7 flex items-center gap-1 overflow-x-auto border-b border-white/[0.08] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label="Markets tabs"
       >
@@ -89,15 +58,15 @@ export function MarketsViewTabs({ activeTab, onTabChange, children }: MarketsVie
               variant="ghost"
               onClick={() => onTabChange(t.id)}
               className={cn(
-                "relative h-auto rounded-none border-0 bg-transparent px-0 pb-4 pt-1 text-sm font-semibold shadow-none hover:bg-transparent",
+                "relative h-auto shrink-0 rounded-none border-0 bg-transparent px-3 pb-4 pt-1 text-sm font-semibold shadow-none hover:bg-transparent",
                 !isActive && "text-[var(--vt-muted)] hover:text-white",
                 isActive &&
                   "text-white after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[var(--vt-coral)]",
               )}
             >
               <Icon size={16} className={isActive ? "text-[var(--vt-coral)]" : "text-[var(--vt-muted)]"} aria-hidden />
-              <span className="hidden sm:inline">{t.label}</span>
-              <span className="sm:hidden">{t.shortLabel}</span>
+              {t.label}
+              {t.locked ? <Lock size={13} className="text-[var(--vt-muted)]" aria-hidden /> : null}
             </Button>
           );
         })}

@@ -10,6 +10,14 @@ vi.mock("@/lib/supabase/auth-context", () => ({
   useSupabaseAuth: vi.fn(),
 }));
 
+const mockRouterPush = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockRouterPush,
+  }),
+}));
+
 import { TwelveMarketsPage } from "@/components/markets/twelve-markets-page";
 import { getPublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
@@ -99,6 +107,7 @@ describe("TwelveMarketsPage", () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.useRealTimers();
+    mockRouterPush.mockReset();
   });
 
   beforeEach(() => {
@@ -175,6 +184,12 @@ describe("TwelveMarketsPage", () => {
       expect(global.fetch).toHaveBeenCalledWith("/api/markets");
       expect(screen.getAllByText("1.08542").length).toBeGreaterThan(0);
     });
+
+    fireEvent.click(screen.getByRole("button", { name: /EUR\/USD/i }));
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      "/ask?prefill=Brief%20me%20on%20EUR%2FUSD%20before%20this%20session.%20Key%20levels%2C%20bias%20and%20what%20to%20watch.",
+    );
   });
 
   it("switches active category when a category button is clicked", async () => {
@@ -209,7 +224,7 @@ describe("TwelveMarketsPage", () => {
     });
   });
 
-  it("defaults to Charts tab with 3 options and can switch to Events", async () => {
+  it("defaults to Charts tab with 5 options and can switch to Economic Calendar", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-05-05T12:00:00.000Z"));
     vi.mocked(useSupabaseAuth).mockReturnValue({
@@ -254,14 +269,13 @@ describe("TwelveMarketsPage", () => {
       />,
     );
 
-    const sectionSelect = screen.getByLabelText(/markets view/i) as HTMLSelectElement;
-    expect(sectionSelect.options).toHaveLength(3);
-    expect(sectionSelect.value).toBe("charts");
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    expect(screen.getByRole("tab", { name: /markets/i })).toHaveAttribute("aria-selected", "true");
 
-    fireEvent.change(sectionSelect, { target: { value: "calendar" } });
+    fireEvent.click(screen.getByRole("tab", { name: /economic calendar/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("May 5 - May 11")).toBeInTheDocument();
+      expect(screen.getByText("ISM Services PMI in 2h 0m")).toBeInTheDocument();
       expect(screen.getAllByText("ISM Services PMI").length).toBeGreaterThan(0);
     });
 
@@ -308,12 +322,18 @@ describe("TwelveMarketsPage", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText(/markets view/i), { target: { value: "intelligence" } });
+    fireEvent.click(screen.getByRole("tab", { name: /intelligence/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Dollar steadies before Fed decision")).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByRole("button", { name: /Dollar steadies before Fed decision/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Ask about this/i }));
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      "/ask?prefill=Dollar%20steadies%20before%20Fed%20decision%20%E2%80%94%20what%20does%20this%20mean%20for%20my%20trades%20today%3F",
+    );
     expect(global.fetch).toHaveBeenCalledWith("/api/markets/intelligence");
   });
 });

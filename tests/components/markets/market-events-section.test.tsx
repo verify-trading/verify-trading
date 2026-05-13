@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MarketEventsSection } from "@/components/markets/market-events-section";
 import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
@@ -73,7 +73,7 @@ describe("MarketEventsSection", () => {
   it("defaults to high and medium impact events and supports country/impact filtering", () => {
     render(<MarketEventsSection snapshot={weeklySnapshot} timeZone="UTC" now={new Date("2026-05-05T12:00:00.000Z")} />);
 
-    expect(screen.getByText("May 5 - May 11")).toBeInTheDocument();
+    expect(screen.getByText("ISM Services PMI in 2h 0m")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Tuesday, May 5" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Saturday, May 9" })).toBeInTheDocument();
     expect(screen.getAllByText("ISM Services PMI").length).toBeGreaterThan(0);
@@ -85,13 +85,12 @@ describe("MarketEventsSection", () => {
     expect(within(impactButton).getByText("Medium")).toBeInTheDocument();
     expect(impactButton).not.toHaveTextContent(",");
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: /filter events by date/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Sat, May 9" }));
+    fireEvent.click(screen.getByRole("button", { name: "Saturday, May 9" }));
 
     expect(screen.queryByText("ISM Services PMI")).not.toBeInTheDocument();
     expect(screen.getAllByText("CPI YY").length).toBeGreaterThan(0);
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: /filter events by country/i }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: /filter by country/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: "China (CN)" }));
 
     expect(screen.queryByText("ISM Services PMI")).not.toBeInTheDocument();
@@ -102,9 +101,8 @@ describe("MarketEventsSection", () => {
     expect(screen.getByRole("menuitemcheckbox", { name: "High" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("menuitemcheckbox", { name: "Medium" })).toHaveAttribute("aria-checked", "true");
     fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "All" }));
-    fireEvent.pointerDown(screen.getByRole("button", { name: /filter events by date/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "All dates" }));
-    fireEvent.pointerDown(screen.getByRole("button", { name: /filter events by country/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Saturday, May 9" }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: /filter by country/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: "United States (US)" }));
 
     expect(screen.getAllByText("ISM Services PMI").length).toBeGreaterThan(0);
@@ -129,6 +127,24 @@ describe("MarketEventsSection", () => {
     expect(screen.getAllByText("ISM Services PMI").length).toBeGreaterThan(0);
     expect(screen.getAllByText("CPI YY").length).toBeGreaterThan(0);
     expect(screen.queryByText("Monthly Budget Statement")).not.toBeInTheDocument();
+  });
+
+  it("opens Ask prompts when an event is tapped", () => {
+    const onAskPrompt = vi.fn();
+    render(
+      <MarketEventsSection
+        snapshot={weeklySnapshot}
+        timeZone="UTC"
+        now={new Date("2026-05-05T12:00:00.000Z")}
+        onAskPrompt={onAskPrompt}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /ISM Services PMI/i })[0]);
+
+    expect(onAskPrompt).toHaveBeenCalledWith(
+      "ISM Services PMI is at 2:00 PM today. Estimate: 53.7. Previous: 54.0. What does this mean for my USD pairs and Gold today?",
+    );
   });
 
   it("uses the browser time zone for dates and event times", () => {
@@ -172,17 +188,14 @@ describe("MarketEventsSection", () => {
       />,
     );
 
-    expect(screen.getByText("May 4 - May 10")).toBeInTheDocument();
+    expect(screen.getByText("Fed Speaker in 8h 30m")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Monday, May 4" })).toBeInTheDocument();
     expect(screen.getAllByText("8:30 PM").length).toBeGreaterThan(0);
     expect(screen.queryByText("France Flash PMI")).not.toBeInTheDocument();
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: /filter events by date/i }));
-    const localDateOption = screen.getByRole("menuitem", { name: "Mon, May 4" });
-    expect(localDateOption).toBeInTheDocument();
-    fireEvent.click(localDateOption);
+    expect(screen.getByRole("button", { name: "Monday, May 4" })).toBeInTheDocument();
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: /filter events by country/i }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: /filter by country/i }));
     expect(screen.getByRole("menuitem", { name: "United States (US)" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /france/i })).not.toBeInTheDocument();
   });

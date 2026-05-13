@@ -1,6 +1,53 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createAskTools } from "@/lib/ask/service/tools";
+import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
+
+const economicCalendarSnapshot: EconomicCalendarSnapshot = {
+  updatedAt: "2026-05-08T06:00:00.000Z",
+  from: "2026-05-07",
+  to: "2026-05-16",
+  countries: ["US", "GB", "DE"],
+  dayLabel: "Upcoming events",
+  items: [
+    {
+      id: "us-nfp",
+      timeUtc: "2026-05-08T13:30:00.000Z",
+      timeLabel: "13:30 UTC",
+      country: "US",
+      currency: "USD",
+      event: "Nonfarm Payrolls",
+      impact: "high",
+      forecast: "180K",
+      previous: "165K",
+      actual: null,
+    },
+    {
+      id: "us-cpi",
+      timeUtc: "2026-05-08T15:00:00.000Z",
+      timeLabel: "15:00 UTC",
+      country: "US",
+      currency: "USD",
+      event: "Consumer Price Index",
+      impact: "high",
+      forecast: "3.1%",
+      previous: "3.0%",
+      actual: "3.4%",
+    },
+    {
+      id: "gb-gdp",
+      timeUtc: "2026-05-09T09:30:00.000Z",
+      timeLabel: "09:30 UTC",
+      country: "GB",
+      currency: "GBP",
+      event: "GDP m/m",
+      impact: "medium",
+      forecast: "0.2%",
+      previous: "0.1%",
+      actual: null,
+    },
+  ],
+};
 
 describe("createAskTools", () => {
   it("uses the live quote when margin price is missing", async () => {
@@ -554,6 +601,142 @@ describe("createAskTools", () => {
       title: "T4",
       source: "S4",
       description: "Fourth description",
+    });
+  });
+
+  it("answers a real calendar scenario for high-impact USD events today", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-08T11:16:00.000Z"));
+    try {
+      const tools = createAskTools({
+        getEconomicCalendarSnapshotImpl: vi.fn().mockResolvedValue(economicCalendarSnapshot),
+      });
+
+      const result = await tools.get_economic_calendar.execute?.(
+        {
+          scope: "today",
+          impact: "high",
+          currency: "USD",
+          limit: 8,
+        },
+        {} as never,
+      );
+
+      expect(result).toMatchObject({
+        totalMatched: 2,
+        nextHighImpactEvent: {
+          event: "Nonfarm Payrolls",
+          timeUntil: "2h 14m",
+          currency: "USD",
+          impact: "high",
+        },
+      });
+      expect(result?.events).toEqual([
+        expect.objectContaining({
+          event: "Nonfarm Payrolls",
+          forecast: "180K",
+          previous: "165K",
+          actual: null,
+          status: "scheduled",
+        }),
+        expect.objectContaining({
+          event: "Consumer Price Index",
+          actual: "3.4%",
+          forecast: "3.1%",
+          status: "released",
+        }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("handles next-major-event questions through the upcoming high-impact filter", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-08T14:00:00.000Z"));
+    try {
+      const tools = createAskTools({
+        getEconomicCalendarSnapshotImpl: vi.fn().mockResolvedValue(economicCalendarSnapshot),
+      });
+
+      const result = await tools.get_economic_calendar.execute?.(
+        {
+          scope: "upcoming",
+          impact: "high",
+          limit: 1,
+        },
+        {} as never,
+      );
+
+      expect(result?.events).toEqual([
+        expect.objectContaining({
+          event: "Consumer Price Index",
+          timeUntil: "1h 0m",
+          actual: "3.4%",
+        }),
+      ]);
+      expect(result?.nextHighImpactEvent).toMatchObject({
+        event: "Consumer Price Index",
+        timeUntil: "1h 0m",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("supports trader shorthand like CPI when filtering calendar events", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-08T11:16:00.000Z"));
+    try {
+      const tools = createAskTools({
+        getEconomicCalendarSnapshotImpl: vi.fn().mockResolvedValue(economicCalendarSnapshot),
+      });
+
+      const result = await tools.get_economic_calendar.execute?.(
+        {
+          scope: "week",
+          impact: "all",
+          query: "CPI",
+          limit: 5,
+        },
+        {} as never,
+      );
+
+      expect(result).toMatchObject({
+        totalMatched: 1,
+        events: [
+          expect.objectContaining({
+            event: "Consumer Price Index",
+            actual: "3.4%",
+            forecast: "3.1%",
+          }),
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns a clear empty-cache result instead of failing calendar questions", async () => {
+    const tools = createAskTools({
+      getEconomicCalendarSnapshotImpl: vi.fn().mockResolvedValue(null),
+    });
+
+    const result = await tools.get_economic_calendar.execute?.(
+      {
+        scope: "today",
+        impact: "high",
+        currency: "USD",
+        limit: 8,
+      },
+      {} as never,
+    );
+
+    expect(result).toMatchObject({
+      events: [],
+      totalMatched: 0,
+      nextHighImpactEvent: null,
+      note: expect.stringContaining("cache is empty"),
     });
   });
 

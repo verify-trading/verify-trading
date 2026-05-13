@@ -168,6 +168,8 @@ export function AskWorkspace({
   const composerStripRef = useRef<HTMLDivElement | null>(null);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [composerStripHeight, setComposerStripHeight] = useState(0);
+  const [prefillFocusSignal, setPrefillFocusSignal] = useState(0);
+  const handledPrefillRef = useRef<string | null>(null);
   const [liveToolStatuses, setLiveToolStatuses] = useState<AskToolStatus[]>([]);
   const [isDailyLimitReached, setIsDailyLimitReached] = useState(false);
 
@@ -682,6 +684,22 @@ export function AskWorkspace({
   }, [refreshSessions]);
 
   useEffect(() => {
+    const prefill = searchParams.get("prefill")?.trim();
+    if (!prefill || handledPrefillRef.current === prefill) {
+      return;
+    }
+
+    handledPrefillRef.current = prefill;
+    setDraft(prefill.slice(0, 2_000));
+    setPrefillFocusSignal((value) => value + 1);
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("prefill");
+    const query = nextParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams, setDraft]);
+
+  useEffect(() => {
     void refreshUsageState();
   }, [refreshUsageState]);
 
@@ -944,6 +962,7 @@ export function AskWorkspace({
                 isDragActive={isDragActive}
                 placeholder={isComposerLocked ? "Upgrade to Pro to continue" : "Message…"}
                 inputProps={getInputProps()}
+                focusSignal={prefillFocusSignal}
                 onDraftChange={setDraft}
                 onSubmit={() => void submit()}
                 onOpenPicker={openFilePicker}

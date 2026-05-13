@@ -14,7 +14,24 @@ export type MarketIntelligenceItem = {
   tag?: string;
 };
 
+export type DailyMarketBriefAsset = {
+  level: string;
+  bias: string;
+  verdict: string;
+};
+
+export type DailyMarketBrief = {
+  date: string;
+  generatedAt: string;
+  gold: DailyMarketBriefAsset;
+  oil: DailyMarketBriefAsset;
+  eurusd: DailyMarketBriefAsset;
+  gbpusd: DailyMarketBriefAsset;
+  session_tone: string;
+};
+
 export type MarketIntelligenceSnapshot = {
   updatedAt: string;
   items: MarketIntelligenceItem[];
+  dailyBrief?: DailyMarketBrief | null;
 };

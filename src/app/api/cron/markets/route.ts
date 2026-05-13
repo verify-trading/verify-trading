@@ -11,6 +11,12 @@ import {
   upsertCache,
 } from "@/lib/markets/twelve-data-adapter";
 import { getMarketIntelligenceSnapshot } from "@/lib/markets/newsdata-market-intelligence";
+import {
+  DAILY_MARKET_BRIEF_CACHE_KEY,
+  generateDailyMarketBrief,
+  shouldRefreshDailyMarketBrief,
+} from "@/lib/markets/daily-brief";
+import type { DailyMarketBrief } from "@/lib/markets/market-intelligence";
 import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
 import {
   ECONOMIC_CALENDAR_CACHE_KEY,
@@ -123,7 +129,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const startedAt = new Date();
+  const startedAt = new Date(Date.now());
   const run = getRunNumber();
   const detailTimeframe = DETAIL_TIMEFRAMES[run % DETAIL_TIMEFRAMES.length] ?? "1D";
 
@@ -210,7 +216,7 @@ export async function GET(request: Request) {
     }
     recordAction(`series:${detailTimeframe}:${Object.keys(series).length}/${Object.keys(mergedSeries).length}`);
 
-    // 4. Economic calendar (RapidAPI: shared weekly cache, refresh at most every 2 hours)
+    // 4. Economic calendar (RapidAPI: shared weekly cache, refresh at most hourly)
     try {
       const economicCalendarCache = await readCacheRow<EconomicCalendarSnapshot>(ECONOMIC_CALENDAR_CACHE_KEY);
       if (shouldRefreshEconomicCalendar(economicCalendarCache?.fetchedAt, economicCalendarCache?.payload?.from ?? null)) {
@@ -241,6 +247,24 @@ export async function GET(request: Request) {
       recordAction("intelligence:cached", {
         fetchedAt: intelligenceCache?.fetchedAt ?? null,
       });
+    }
+
+    // 6. Daily market brief (Claude: weekday 06:00 Europe/London, cached for the UI)
+    try {
+      const dailyBriefCache = await readCacheRow<DailyMarketBrief>(DAILY_MARKET_BRIEF_CACHE_KEY);
+      if (shouldRefreshDailyMarketBrief(dailyBriefCache?.payload ?? null, dailyBriefCache?.fetchedAt ?? null, startedAt)) {
+        const brief = await generateDailyMarketBrief(startedAt);
+        await upsertCache(DAILY_MARKET_BRIEF_CACHE_KEY, brief);
+        recordAction(`dailyBrief:${brief.date}`);
+      } else {
+        recordAction("dailyBrief:cached", {
+          fetchedAt: dailyBriefCache?.fetchedAt ?? null,
+          date: dailyBriefCache?.payload?.date ?? null,
+        });
+      }
+    } catch (error) {
+      recordAction("dailyBrief:error");
+      recordError("dailyBrief", error, "Daily market brief refresh failed.");
     }
 
     const payload = buildRunPayload({

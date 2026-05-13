@@ -151,7 +151,7 @@ function LoginPageContent() {
         ) : null}
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3.5">
         <GoogleOAuthButton
           onClick={signInWithGoogle}
           disabled={isSubmitting}
@@ -161,7 +161,7 @@ function LoginPageContent() {
         <AuthDivider label="or with email" />
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5" noValidate>
         <div>
           <label htmlFor="login-email" className={authLabelClass}>
             Email
@@ -211,7 +211,7 @@ function LoginPageContent() {
       </p>
 
       <nav
-        className="mt-8 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/[0.06] pt-6"
+        className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/[0.06] pt-5"
         aria-label="Legal"
       >
         {LEGAL_LINKS.map((link) => (
