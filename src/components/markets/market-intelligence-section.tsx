@@ -103,6 +103,33 @@ function isAiSummary(item: MarketIntelligenceItem): boolean {
   return item.source === "verify.trading AI" || item.category === "Market Summary";
 }
 
+function SummaryText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const shouldCollapse = text.length > 420;
+
+  return (
+    <div className="mt-3">
+      <p
+        className={cn(
+          "text-[15px] leading-7 text-white/76",
+          shouldCollapse && !expanded && "line-clamp-4",
+        )}
+      >
+        {text}
+      </p>
+      {shouldCollapse ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="mt-2 text-xs font-bold text-[var(--vt-green)] transition-colors hover:text-white"
+        >
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /* ── Main section ──────────────────────────────────────────────────────── */
 
 export function MarketIntelligenceSection({
@@ -186,9 +213,7 @@ export function MarketIntelligenceSection({
                   </div>
                 </div>
                 <h3 className="text-[17px] font-semibold leading-snug text-white">{summaryItem.title}</h3>
-                {summaryItem.summary ? (
-                  <p className="mt-3 text-sm leading-relaxed text-white/72">{summaryItem.summary}</p>
-                ) : null}
+                {summaryItem.summary ? <SummaryText text={summaryItem.summary} /> : null}
                 <button
                   type="button"
                   onClick={() => onAskPrompt?.(`${summaryItem.title} — what should I focus on first?`)}
