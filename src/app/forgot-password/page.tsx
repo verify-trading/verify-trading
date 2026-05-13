@@ -16,11 +16,14 @@ import {
 } from "@/components/auth/auth-field-styles";
 import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
+import { CaptchaWidget } from "@/components/auth/captcha-widget";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
 import { forgotPasswordSchema, type ForgotPasswordFormValues } from "@/lib/auth/schemas";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 function ForgotPasswordPageContent() {
   const { supabase } = useSupabaseAuth();
@@ -31,6 +34,9 @@ function ForgotPasswordPageContent() {
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
+  const captchaRequired = Boolean(TURNSTILE_SITE_KEY);
 
   const {
     register,
@@ -51,14 +57,23 @@ function ForgotPasswordPageContent() {
         setApiError(AUTH_NOT_CONFIGURED_MESSAGE);
         return;
       }
+
+      if (captchaRequired && !captchaToken) {
+        setApiError("Please complete the security check before continuing.");
+        return;
+      }
+
       const origin = window.location.origin;
       const updatePasswordPath = appendSafeNextParam("/auth/update-password", next);
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email.trim(), {
         redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(updatePasswordPath)}`,
+        captchaToken: captchaToken ?? undefined,
       });
 
       if (resetError) {
         setApiError(resetError.message);
+        setCaptchaToken(null);
+        setCaptchaKey((key) => key + 1);
         return;
       }
 
@@ -103,7 +118,14 @@ function ForgotPasswordPageContent() {
           />
           <AuthFieldError message={errors.email?.message} />
         </div>
-        <Button type="submit" variant="default" size="pill" className="w-full" disabled={loading}>
+        <CaptchaWidget
+          siteKey={TURNSTILE_SITE_KEY ?? ""}
+          captchaKey={captchaKey}
+          onSuccess={setCaptchaToken}
+          onExpire={() => setCaptchaToken(null)}
+          onError={() => setCaptchaToken(null)}
+        />
+        <Button type="submit" variant="default" size="pill" className="w-full" disabled={loading || (captchaRequired && !captchaToken)}>
           {loading ? "Sending…" : "Send reset link"}
         </Button>
       </form>

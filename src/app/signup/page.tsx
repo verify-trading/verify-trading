@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Turnstile } from "@marsidev/react-turnstile";
 import { ArrowLeft, MailOpen } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -18,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
+import { CaptchaWidget } from "@/components/auth/captcha-widget";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { beginOAuthFlow, setAuthRedirectCookie } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
@@ -243,17 +243,13 @@ function SignupPageContent() {
                 <p className="mt-1.5 text-xs text-(--vt-muted)">Use at least 8 characters.</p>
               ) : null}
             </div>
-            {TURNSTILE_SITE_KEY ? (
-              <Turnstile
-                key={captchaKey}
-                siteKey={TURNSTILE_SITE_KEY}
-                onSuccess={setCaptchaToken}
-                onExpire={() => setCaptchaToken(null)}
-                onError={() => setCaptchaToken(null)}
-                options={{ theme: "dark", size: "flexible" }}
-                className="min-h-[65px] w-full"
-              />
-            ) : null}
+            <CaptchaWidget
+              siteKey={TURNSTILE_SITE_KEY ?? ""}
+              captchaKey={captchaKey}
+              onSuccess={setCaptchaToken}
+              onExpire={() => setCaptchaToken(null)}
+              onError={() => setCaptchaToken(null)}
+            />
             <Button
               type="submit"
               variant="default"
