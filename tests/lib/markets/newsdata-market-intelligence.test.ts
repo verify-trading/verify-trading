@@ -4,11 +4,20 @@ vi.mock("@/lib/ask/newsdata", () => ({
   fetchNewsEverything: vi.fn(),
 }));
 
+vi.mock("@ai-sdk/anthropic", () => ({
+  anthropic: vi.fn((model: string) => model),
+}));
+
+vi.mock("ai", () => ({
+  generateText: vi.fn(),
+}));
+
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
 import { getMarketIntelligenceSnapshot } from "@/lib/markets/newsdata-market-intelligence";
+import { generateText } from "ai";
 
 describe("getMarketIntelligenceSnapshot (NewsData)", () => {
-  it("merges, dedupes, and sorts market headlines", async () => {
+  it("merges source headlines and asks Claude for a market summary", async () => {
     vi.mocked(fetchNewsEverything)
       .mockResolvedValueOnce({
         query: "forex market",
@@ -46,13 +55,21 @@ describe("getMarketIntelligenceSnapshot (NewsData)", () => {
         query: "Federal Reserve inflation markets",
         articles: [],
       });
+    vi.mocked(generateText).mockResolvedValue({
+      text: JSON.stringify({
+        title: "Gold bid firms while dollar traders wait on Fed",
+        summary: "Commodities are catching a defensive bid while FX traders wait for the next Fed signal.",
+      }),
+    } as Awaited<ReturnType<typeof generateText>>);
 
     const snapshot = await getMarketIntelligenceSnapshot();
 
-    expect(snapshot.items).toHaveLength(2);
-    expect(snapshot.items[0]?.title).toBe("Gold rises as oil steadies");
-    expect(snapshot.items[0]?.category).toBe("Commodities");
-    expect(snapshot.items[1]?.title).toBe("Dollar holds gains before Fed decision");
+    expect(generateText).toHaveBeenCalledOnce();
+    expect(snapshot.items).toHaveLength(1);
+    expect(snapshot.sourceCount).toBe(2);
+    expect(snapshot.items[0]?.title).toBe("Gold bid firms while dollar traders wait on Fed");
+    expect(snapshot.items[0]?.source).toBe("verify.trading AI");
+    expect(snapshot.items[0]?.category).toBe("Market Summary");
   });
 
   it("throws when no upstream query returns headlines", async () => {

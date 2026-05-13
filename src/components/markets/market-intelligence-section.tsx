@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 export type MarketIntelligenceSectionProps = {
   items: readonly MarketIntelligenceItem[];
+  sourceCount?: number | null;
   dailyBrief?: DailyMarketBrief | null;
   updatedAt?: string | null;
   onAskPrompt?: (prompt: string) => void;
@@ -102,6 +103,7 @@ function DailyBriefCard({
 
 export function MarketIntelligenceSection({
   items,
+  sourceCount,
   dailyBrief = null,
   updatedAt,
   onAskPrompt,
@@ -126,7 +128,7 @@ export function MarketIntelligenceSection({
       <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4">
-          <h2 className="text-[15px] font-semibold text-white">Market Radar</h2>
+          <h2 className="text-[15px] font-semibold text-white">Market Summary</h2>
           {updatedLabel && (
             <span className="text-[11px] text-[var(--vt-muted)]">Updated {updatedLabel}</span>
           )}
@@ -208,7 +210,7 @@ export function MarketIntelligenceSection({
         {!isLoading && !errorMessage && items.length > 0 && (
           <div className="border-t border-white/[0.05]">
             <p className="px-5 py-3 text-[11px] font-semibold text-[var(--vt-muted)]">
-              {items.length} market sources scanned
+              {sourceCount ?? items.length} market sources scanned
             </p>
           </div>
         )}
