@@ -54,11 +54,11 @@ export function AuthShell({
 
       <div className="relative z-10 flex min-h-dvh flex-col">
         <SiteNav />
-        <main className="flex flex-1 flex-col justify-start px-4 pb-10 pt-8 sm:px-6 sm:pt-10 md:pt-12 lg:pt-14">
+        <main className="flex flex-1 flex-col justify-start px-4 pb-8 pt-4 sm:px-6 sm:pt-6 md:pt-8 lg:pt-10">
           <div className="relative mx-auto w-full max-w-sm sm:max-w-md">
-            <div className="relative rounded-[24px] border border-[color:var(--vt-border)] bg-[var(--vt-card)] p-6 shadow-[0_32px_80px_rgba(0,0,0,0.5)] ring-1 ring-white/5 sm:p-8 md:p-9">
+            <div className="relative rounded-[24px] border border-[color:var(--vt-border)] bg-[var(--vt-card)] p-5 shadow-[0_32px_80px_rgba(0,0,0,0.5)] ring-1 ring-white/5 sm:p-6 md:p-7">
               {leadingIcon ? (
-                <div className="mb-5 flex justify-center" aria-hidden>
+                <div className="mb-4 flex justify-center" aria-hidden>
                   <div className="flex size-13 items-center justify-center rounded-2xl border border-white/8 bg-linear-to-b from-white/8 to-white/2 text-(--vt-blue) shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                     {leadingIcon}
                   </div>
@@ -68,11 +68,11 @@ export function AuthShell({
                 {title}
               </h1>
               {subtitle ? (
-                <p className="mt-3 text-center text-[15px] font-medium leading-relaxed text-[var(--vt-muted)]">
+                <p className="mt-2.5 text-center text-[15px] font-medium leading-relaxed text-[var(--vt-muted)]">
                   {subtitle}
                 </p>
               ) : null}
-              <div className="mt-8 space-y-5">{children}</div>
+              <div className="mt-6 space-y-4">{children}</div>
             </div>
           </div>
         </main>

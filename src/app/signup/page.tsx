@@ -148,8 +148,8 @@ function SignupPageContent() {
       }
     >
       {verificationSent ? (
-        <div className="flex flex-col items-center space-y-7 pt-1 text-center" aria-live="polite">
-          <div className="space-y-3">
+        <div className="flex flex-col items-center space-y-5 pt-1 text-center" aria-live="polite">
+          <div className="space-y-2.5">
             <p className="text-[15px] leading-relaxed text-white/80">
               We have dispatched a secure verification link to<br />
               <span className="font-semibold tracking-wide text-white">{sentToEmail}</span>
@@ -160,7 +160,7 @@ function SignupPageContent() {
             </div>
           </div>
           
-          <div className="w-full pt-2">
+          <div className="w-full pt-1.5">
             <button
               type="button"
               className="group flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3.5 text-[14px] font-medium text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
@@ -180,7 +180,7 @@ function SignupPageContent() {
             {apiError ? <div className={authInlineErrorBannerClass}>{apiError}</div> : null}
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <GoogleOAuthButton
               onClick={signUpWithGoogle}
               disabled={isSubmitting}
@@ -190,7 +190,7 @@ function SignupPageContent() {
             <AuthDivider label="or with email" />
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5" noValidate>
             <div>
               <label htmlFor="signup-username" className={authLabelClass}>
                 Username
@@ -275,7 +275,7 @@ function SignupPageContent() {
       </p>
 
       <nav
-        className="mt-8 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/[0.06] pt-6"
+        className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/[0.06] pt-5"
         aria-label="Legal"
       >
         {LEGAL_LINKS.map((link) => (
