@@ -107,12 +107,22 @@ function formatEventTimeLabel(timeUtc: string, timeZone: string, fallback: strin
   const date = new Date(timeUtc);
   if (!Number.isFinite(date.getTime())) return fallback;
   try {
-    return new Intl.DateTimeFormat("en-US", {
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isTomorrow = date.toDateString() === tomorrow.toDateString();
+
+    const time = new Intl.DateTimeFormat("en-US", {
       timeZone,
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
     }).format(date);
+
+    if (isToday) return `${time} today`;
+    if (isTomorrow) return `${time} tomorrow`;
+    return `${time} on ${new Intl.DateTimeFormat("en-US", { timeZone, month: "short", day: "numeric" }).format(date)}`;
   } catch {
     return fallback;
   }
@@ -186,7 +196,7 @@ function buildEventAskPrompt(
   if (item.actual) {
     return `${item.event} came in at ${item.actual} vs estimate ${item.forecast ?? "not available"}. What does this mean for my trades right now?`;
   }
-  return `${item.event} is at ${time} today. Estimate: ${item.forecast ?? "not available"}. Previous: ${item.previous ?? "not available"}. What does this mean for my USD pairs and Gold today?`;
+  return `${item.event} is at ${time}. Estimate: ${item.forecast ?? "not available"}. Previous: ${item.previous ?? "not available"}. What does this mean for my USD pairs and Gold?`;
 }
 
 /* ── Week day strip ────────────────────────────────────────────────────── */

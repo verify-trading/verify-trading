@@ -1,15 +1,9 @@
 import { createHash } from "node:crypto";
 
-import { anthropic } from "@ai-sdk/anthropic";
-import { generateText } from "ai";
-import { z } from "zod";
-
-import { fetchNewsEverything, type NewsArticleSummary } from "@/lib/ask/newsdata";
 import type { MarketIntelligenceItem, MarketIntelligenceSnapshot } from "@/lib/markets/market-intelligence";
+import { fetchNewsEverything, type NewsArticleSummary } from "@/lib/ask/newsdata";
 
 const MAX_ITEMS = 18;
-const MAX_SOURCE_ITEMS = 16;
-const MARKET_INTELLIGENCE_MODEL = "claude-sonnet-4-20250514";
 const MARKET_SOURCE_LOOKBACK_HOURS = 36;
 const MARKET_NEWS_QUERIES = [
   { query: "forex market", category: "FX", tag: "FX" },
@@ -26,13 +20,6 @@ const LOW_QUALITY_TEXT_PATTERNS = [
   /\btestnet buzz\b/i,
   /\btechnical brief\b/i,
 ] as const;
-
-const marketSummarySchema = z.object({
-  title: z.string().min(1),
-  summary: z.string().min(1),
-});
-
-type MarketSummaryPayload = z.infer<typeof marketSummarySchema>;
 
 function stableNewsId(parts: string[]): string {
   return createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 24);
@@ -84,83 +71,6 @@ function mapArticle(
   };
 }
 
-function extractJsonObject(text: string): string {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error("Market summary response did not contain JSON.");
-  }
-  return text.slice(start, end + 1);
-}
-
-function buildSourceDigest(items: readonly MarketIntelligenceItem[]): string {
-  return items
-    .slice(0, MAX_SOURCE_ITEMS)
-    .map((item, index) => {
-      const summary = item.summary ? `\nSummary: ${item.summary}` : "";
-      return `${index + 1}. [${item.category ?? "Market"}] ${item.title}
-Published: ${item.publishedAt}${summary}`;
-    })
-    .join("\n\n");
-}
-
-function formatAsOfDate(now: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "long",
-    timeStyle: "short",
-    timeZone: "Europe/London",
-  }).format(now);
-}
-
-async function summarizeMarketNews(items: readonly MarketIntelligenceItem[], now: Date): Promise<MarketSummaryPayload> {
-  const result = await generateText({
-    model: anthropic(MARKET_INTELLIGENCE_MODEL),
-    maxOutputTokens: 900,
-    system: "You are verify.trading's market intelligence engine.",
-    prompt: `Today is ${formatAsOfDate(now)} London time.
-Turn the following market-related source headlines into one concise Market Summary for traders.
-
-Rules:
-- Return only valid JSON.
-- Produce exactly one title and one summary.
-- The title should read like a market-summary headline, not a source headline.
-- The summary should be 3 to 5 sentences explaining what changed and why traders should care.
-- Prioritize FX, Gold, Oil, Crypto, inflation, central banks, and broad risk sentiment.
-- Be precise about dates. If a source says "April CPI" or "April inflation", call it April CPI/latest CPI data; do not imply April is the current calendar month.
-- Do not invent levels, percentages, conflicts, or policy claims that are not present in the source headlines/summaries.
-- Do not include links.
-
-JSON format:
-{
-  "title": "Hot US CPI Sends Dollar Higher, Euro Lower",
-  "summary": "The Dollar Index rallied after hotter inflation strengthened the case for a higher-for-longer Fed stance. EUR/USD came under pressure as traders repriced rate expectations. Gold and oil stayed sensitive to geopolitical risk while traders watched US yields."
-}
-
-Source headlines:
-${buildSourceDigest(items)}`,
-  });
-
-  return marketSummarySchema.parse(JSON.parse(extractJsonObject(result.text)));
-}
-
-function mapSummaryItems(
-  payload: MarketSummaryPayload,
-  sources: readonly MarketIntelligenceItem[],
-): MarketIntelligenceItem[] {
-  const newestPublishedAt = sources[0]?.publishedAt ?? new Date().toISOString();
-  return [
-    {
-      id: stableNewsId(["market-summary", payload.title, payload.summary]),
-      title: payload.title,
-      source: "verify.trading AI",
-      publishedAt: newestPublishedAt,
-      summary: payload.summary,
-      category: "Market Summary",
-      tag: "AI",
-    },
-  ];
-}
-
 async function fetchMarketNewsSources(now: Date): Promise<MarketIntelligenceItem[]> {
   const settled = await Promise.allSettled(
     MARKET_NEWS_QUERIES.map(async ({ query, category, tag }) => {
@@ -196,13 +106,11 @@ async function fetchMarketNewsSources(now: Date): Promise<MarketIntelligenceItem
 }
 
 export async function getMarketIntelligenceSnapshot(): Promise<MarketIntelligenceSnapshot> {
-  const now = new Date();
-  const sourceItems = await fetchMarketNewsSources(now);
-  const summary = await summarizeMarketNews(sourceItems, now);
+  const sourceItems = await fetchMarketNewsSources(new Date());
 
   return {
     updatedAt: new Date().toISOString(),
-    items: [...mapSummaryItems(summary, sourceItems), ...sourceItems],
+    items: sourceItems,
     sourceCount: sourceItems.length,
   };
 }

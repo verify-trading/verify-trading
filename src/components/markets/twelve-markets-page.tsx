@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
 import { MarketEventsSection } from "./market-events-section";
-import { isAiSummary, MarketIntelligenceSection, MarketSummaryCard } from "./market-intelligence-section";
+import { MarketIntelligenceSection } from "./market-intelligence-section";
 import { MarketPriceCard } from "./market-price-card";
 import { MarketsCommunityCtas } from "./markets-community-ctas";
 import { MarketsTabUpcoming } from "./markets-tab-upcoming";
@@ -110,7 +110,6 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
   });
 
   const cards = buildCategoryCards(activeCategory, marketsQuery.data);
-  const marketSummaryItem = intelligenceQuery.data?.items.find(isAiSummary) ?? null;
 
   const showSkeleton = isPro && marketsQuery.isPending;
   const showPaywallUi = !isPro && isMarketsPaywallUiEnabled();
@@ -190,18 +189,6 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
                             onClick={() => openAssetInAsk(card.symbol)}
                           />
                         ))}
-                      </div>
-                    )}
-
-                    {(intelligenceQuery.isPending || marketSummaryItem) && (
-                      <div className="mt-5">
-                        <MarketSummaryCard
-                          item={marketSummaryItem}
-                          sourceCount={intelligenceQuery.data?.sourceCount ?? null}
-                          updatedAt={intelligenceQuery.data?.updatedAt ?? null}
-                          onAskPrompt={openAskWithPrefill}
-                          isLoading={intelligenceQuery.isPending}
-                        />
                       </div>
                     )}
 

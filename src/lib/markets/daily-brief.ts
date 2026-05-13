@@ -9,6 +9,7 @@ export const DAILY_MARKET_BRIEF_MODEL = "claude-sonnet-4-20250514";
 
 const dailyMarketBriefSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  overview: z.string().min(1),
   gold: z.object({
     level: z.string().min(1),
     bias: z.string().min(1),
@@ -53,11 +54,22 @@ function londonDateParts(now: Date): { dateKey: string; weekday: string; hour: n
 }
 
 export function shouldRefreshDailyMarketBrief(
-  _cached: DailyMarketBrief | null | undefined,
-  _fetchedAt: string | null | undefined,
-  _now = new Date(),
+  cached: DailyMarketBrief | null | undefined,
+  fetchedAt: string | null | undefined,
+  now = new Date(),
 ): boolean {
-  return false;
+  const london = londonDateParts(now);
+  if (london.hour < 7) {
+    return false;
+  }
+  if (!cached || cached.date !== london.dateKey) {
+    return true;
+  }
+  if (!fetchedAt) {
+    return true;
+  }
+  const fetchedAtMs = new Date(fetchedAt).getTime();
+  return !Number.isFinite(fetchedAtMs);
 }
 
 function extractJsonObject(text: string): string {
@@ -76,21 +88,25 @@ function coerceBrief(payload: DailyMarketBriefModelPayload): DailyMarketBrief {
   };
 }
 
-export async function generateDailyMarketBrief(now = new Date()): Promise<DailyMarketBrief> {
+export async function generateDailyMarketBrief(now = new Date(), headlines: string[] = []): Promise<DailyMarketBrief> {
   const { dateKey } = londonDateParts(now);
+  const headlinesBlock = headlines.length > 0
+    ? `\nToday's market headlines (use as context):\n${headlines.map((h) => `- ${h}`).join("\n")}\n`
+    : "";
   const result = await generateText({
     model: anthropic(DAILY_MARKET_BRIEF_MODEL),
-    maxOutputTokens: 600,
+    maxOutputTokens: 1000,
     system: "You are verify.trading's market intelligence engine.",
-    prompt: `Generate a daily pre-session market brief for today ${dateKey}. Return only valid JSON in this exact format:
+    prompt: `Generate a daily pre-session market brief for today ${dateKey}. Base your analysis on the headlines below when available; otherwise use your general market knowledge. Return only valid JSON in this exact format:
 {
   "date": "${dateKey}",
+  "overview": "Five to six sentence macro overview of what is driving markets today. Cover: (1) which data releases, central bank commentary, or geopolitical developments are moving price action, (2) sentiment across equities, FX, and commodities, (3) what traders should watch for the rest of the session. Reference the headlines when available.",
   "gold": { "level": "4720", "bias": "Bullish", "verdict": "Watch 4680 support." },
   "oil": { "level": "72.50", "bias": "Neutral", "verdict": "Range bound session." },
   "eurusd": { "level": "1.0850", "bias": "Bearish", "verdict": "Dollar strength today." },
   "gbpusd": { "level": "1.2900", "bias": "Bearish", "verdict": "Follow EUR lead." },
-  "session_tone": "Cautious. Risk-off tone. Watch USD data at 13:30."
-}`,
+  "session_tone": "One sentence capturing the dominant session tone and what to watch."
+}${headlinesBlock}`,
   });
 
   const parsed = dailyMarketBriefSchema.parse(JSON.parse(extractJsonObject(result.text)));

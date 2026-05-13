@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { Bot, Newspaper } from "lucide-react";
+import { Newspaper } from "lucide-react";
 
 import type { DailyMarketBrief, MarketIntelligenceItem } from "@/lib/markets/market-intelligence";
 import { cn } from "@/lib/utils";
@@ -41,28 +40,6 @@ function formatBriefDate(date: string): string {
   }).format(parsed);
 }
 
-function BriefAssetRow({ label, asset }: { label: string; asset: DailyMarketBrief["gold"] }) {
-  const biasLower = asset.bias.toLowerCase();
-  const biasColor = biasLower.includes("bull")
-    ? "text-emerald-400"
-    : biasLower.includes("bear")
-      ? "text-rose-400"
-      : "text-[var(--vt-muted)]";
-
-  return (
-    <div className="py-3">
-      <div className="flex items-center justify-between gap-4">
-        <span className="text-[11px] font-black uppercase tracking-[0.1em] text-white/75">{label}</span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold tabular-nums text-white/90">{asset.level}</span>
-          <span className={cn("text-xs font-bold", biasColor)}>{asset.bias}</span>
-        </div>
-      </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-[var(--vt-muted)]">{asset.verdict}</p>
-    </div>
-  );
-}
-
 function DailyBriefCard({
   brief,
   onAskPrompt,
@@ -70,133 +47,71 @@ function DailyBriefCard({
   brief: DailyMarketBrief;
   onAskPrompt?: (prompt: string) => void;
 }) {
+  const assets = [
+    { label: "Gold", data: brief.gold },
+    { label: "Oil", data: brief.oil },
+    { label: "EUR/USD", data: brief.eurusd },
+    { label: "GBP/USD", data: brief.gbpusd },
+  ];
+
   return (
-    <section className="overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
-        <h2 className="text-sm font-bold uppercase tracking-[0.08em] text-white">Daily Market Brief</h2>
-        <span className="text-[11px] text-[var(--vt-muted)]">{formatBriefDate(brief.date)}</span>
+    <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--vt-card)] p-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Newspaper className="size-4 text-[var(--vt-green)]" aria-hidden />
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--vt-green)]">Daily Brief</span>
+        </div>
+        <span className="text-xs text-white/40" suppressHydrationWarning>
+          {formatBriefDate(brief.date)}
+        </span>
       </div>
-      <div className="divide-y divide-white/[0.05] px-5">
-        <BriefAssetRow label="Gold" asset={brief.gold} />
-        <BriefAssetRow label="Oil" asset={brief.oil} />
-        <BriefAssetRow label="EUR/USD" asset={brief.eurusd} />
-        <BriefAssetRow label="GBP/USD" asset={brief.gbpusd} />
+
+      {/* Overview */}
+      <p className="mt-3 text-sm leading-relaxed text-white/75">{brief.overview}</p>
+
+      {/* Assets - Badge style */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {assets.map(({ label, data }) => {
+          const biasLower = data.bias.toLowerCase();
+          const biasColor = biasLower.includes("bull")
+            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+            : biasLower.includes("bear")
+              ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+              : "bg-white/[0.03] text-white/50 border-white/[0.08]";
+
+          return (
+            <div
+              key={label}
+              className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 py-1.5"
+            >
+              <span className="text-xs font-medium text-white/60">{label}</span>
+              <span className="text-xs font-bold tabular-nums text-white">{data.level}</span>
+              <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold", biasColor)}>
+                {data.bias}
+              </span>
+            </div>
+          );
+        })}
       </div>
-      <div className="border-t border-white/[0.05] px-5 py-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--vt-muted)]">Session Tone</p>
-        <p className="mt-1.5 text-sm leading-relaxed text-white/85">{brief.session_tone}</p>
+
+      {/* Session Tone */}
+      <div className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-white/50">Session Tone</span>
+        <p className="mt-1.5 text-sm leading-relaxed text-white/80">{brief.session_tone}</p>
+      </div>
+
+      {/* Footer */}
+      <div className="mt-3 flex justify-end">
         <button
           type="button"
           onClick={() =>
-            onAskPrompt?.(`Daily market brief for ${formatBriefDate(brief.date)} — what should I focus on first?`)
+            onAskPrompt?.(`Based on the Daily Market Brief for ${formatBriefDate(brief.date)} — what should I focus on first?`)
           }
-          className="mt-4 inline-flex h-9 items-center rounded-full bg-[var(--vt-green)] px-4 text-sm font-bold text-[var(--vt-navy)] transition hover:brightness-110"
+          className="text-xs font-semibold text-[var(--vt-green)] transition-colors hover:text-white"
         >
-          Ask me more
+          Ask about this →
         </button>
-      </div>
-    </section>
-  );
-}
-
-export function isAiSummary(item: MarketIntelligenceItem): boolean {
-  return item.source === "verify.trading AI" || item.category === "Market Summary";
-}
-
-function SummaryText({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const shouldCollapse = text.length > 420;
-  
-  // Check if content is actually being truncated by line-clamp-4
-  const hasMoreContent = shouldCollapse && text.split('\n').length > 4;
-
-  return (
-    <div className="mt-3">
-      <p
-        className={cn(
-          "text-[15px] leading-7 text-white/76",
-          shouldCollapse && !expanded && "line-clamp-4",
-        )}
-      >
-        {text}
-      </p>
-      {hasMoreContent ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="mt-2 text-xs font-bold text-[var(--vt-blue)] transition-colors hover:text-white"
-        >
-          {expanded ? "Show less" : "Read more"}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-export function MarketSummaryCard({
-  item,
-  sourceCount,
-  updatedAt,
-  onAskPrompt,
-  isLoading = false,
-}: {
-  item: MarketIntelligenceItem | null;
-  sourceCount?: number | null;
-  updatedAt?: string | null;
-  onAskPrompt?: (prompt: string) => void;
-  isLoading?: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--vt-card)]">
-        <div className="space-y-3 p-4">
-          <div className="h-4 w-32 animate-pulse rounded bg-white/[0.08]" />
-          <div className="h-5 w-3/4 animate-pulse rounded bg-white/[0.08]" />
-          <div className="h-4 w-full animate-pulse rounded bg-white/[0.05]" />
-          <div className="h-4 w-11/12 animate-pulse rounded bg-white/[0.05]" />
-          <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.05]" />
-        </div>
-      </section>
-    );
-  }
-
-  if (!item) return null;
-
-  const updatedLabel = updatedAt ? formatRelativeTime(updatedAt) : formatRelativeTime(item.publishedAt);
-
-  return (
-    <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--vt-card)]">
-      <div className="p-4">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Bot className="size-4 text-[var(--vt-green)]" aria-hidden />
-            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--vt-green)]">AI Summary</span>
-          </div>
-          <span className="text-xs text-white/40">{updatedLabel}</span>
-        </div>
-
-        {/* Content */}
-        <div className="mt-3">
-          <h3 className="text-base font-semibold leading-snug text-white">{item.title}</h3>
-          {item.summary ? (
-            <div className="mt-2">
-              <SummaryText text={item.summary} />
-            </div>
-          ) : null}
-        </div>
-
-        {/* Footer */}
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
-          <span className="text-xs text-white/40">{sourceCount ?? 0} sources</span>
-          <button
-            type="button"
-            onClick={() => onAskPrompt?.(`${item.title} — what should I focus on first?`)}
-            className="text-xs font-semibold text-[var(--vt-blue)] transition-colors hover:text-white"
-          >
-            Ask about this →
-          </button>
-        </div>
       </div>
     </section>
   );
@@ -214,8 +129,6 @@ export function MarketIntelligenceSection({
   errorMessage = null,
 }: MarketIntelligenceSectionProps) {
   const showEmpty = !isLoading && !errorMessage && items.length === 0;
-  const summaryItem = items.find(isAiSummary) ?? null;
-  const sourceItems = summaryItem ? items.filter((item) => item.id !== summaryItem.id) : items;
 
   const updatedLabel = updatedAt
     ? formatRelativeTime(updatedAt)
@@ -225,14 +138,7 @@ export function MarketIntelligenceSection({
 
   return (
     <div className="min-w-0 space-y-4">
-      {/* {dailyBrief ? <DailyBriefCard brief={dailyBrief} onAskPrompt={onAskPrompt} /> : null} */}
-      <MarketSummaryCard
-        item={summaryItem}
-        sourceCount={sourceCount ?? sourceItems.length}
-        updatedAt={updatedAt}
-        onAskPrompt={onAskPrompt}
-        isLoading={isLoading}
-      />
+      {dailyBrief ? <DailyBriefCard brief={dailyBrief} onAskPrompt={onAskPrompt} /> : null}
 
       <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-[var(--vt-card)]">
         {/* Header */}
@@ -244,7 +150,7 @@ export function MarketIntelligenceSection({
             </p>
           </div>
           {updatedLabel && (
-            <span className="text-[11px] text-[var(--vt-muted)]">Updated {updatedLabel}</span>
+            <span className="text-[11px] text-[var(--vt-muted)]" suppressHydrationWarning>Updated {updatedLabel}</span>
           )}
         </div>
 
@@ -273,7 +179,7 @@ export function MarketIntelligenceSection({
           </p>
         ) : (
           <div className="border-t border-white/[0.06]">
-            {sourceItems.length > 0 ? (
+            {items.length > 0 ? (
               <div className="flex items-center gap-2 px-5 py-3">
                 <Newspaper className="size-4 text-white/40" aria-hidden />
                 <p className="text-[11px] font-black uppercase tracking-[0.12em] text-white/55">
@@ -283,8 +189,8 @@ export function MarketIntelligenceSection({
             ) : null}
 
             <ul>
-              {sourceItems.map((item) => {
-                const askPrompt = `${item.title} — what does this mean for my trades today?`;
+              {items.map((item) => {
+                const askPrompt = `${item.title} — what does this mean for my trades? (Source: ${item.source}, ${formatBriefDate(item.publishedAt.split("T")[0] ?? "")})`;
 
                 return (
                   <li key={item.id} className="border-b border-white/[0.05] last:border-0">
@@ -296,7 +202,7 @@ export function MarketIntelligenceSection({
                       <span className="block text-[15px] font-normal leading-snug text-white/95">
                         {item.title}
                       </span>
-                      <span className="mt-1.5 block text-[11px] font-medium text-[var(--vt-muted)]">
+                      <span className="mt-1.5 block text-[11px] font-medium text-[var(--vt-muted)]" suppressHydrationWarning>
                         {item.source} · {formatRelativeTime(item.publishedAt)}
                         {item.category ? ` · ${item.category}` : ""}
                       </span>

@@ -16,7 +16,7 @@ import {
   generateDailyMarketBrief,
   shouldRefreshDailyMarketBrief,
 } from "@/lib/markets/daily-brief";
-import type { DailyMarketBrief } from "@/lib/markets/market-intelligence";
+import type { DailyMarketBrief, MarketIntelligenceSnapshot } from "@/lib/markets/market-intelligence";
 import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
 import {
   ECONOMIC_CALENDAR_CACHE_KEY,
@@ -253,9 +253,11 @@ export async function GET(request: Request) {
     try {
       const dailyBriefCache = await readCacheRow<DailyMarketBrief>(DAILY_MARKET_BRIEF_CACHE_KEY);
       if (shouldRefreshDailyMarketBrief(dailyBriefCache?.payload ?? null, dailyBriefCache?.fetchedAt ?? null, startedAt)) {
-        const brief = await generateDailyMarketBrief(startedAt);
+        const intel = await readCacheRow<MarketIntelligenceSnapshot>(INTELLIGENCE_CACHE_KEY);
+        const headlines = (intel?.payload?.items ?? []).slice(0, 10).map((item) => `${item.title} — ${item.summary || ""}`);
+        const brief = await generateDailyMarketBrief(startedAt, headlines);
         await upsertCache(DAILY_MARKET_BRIEF_CACHE_KEY, brief);
-        recordAction(`dailyBrief:${brief.date}`);
+        recordAction(`dailyBrief:${brief.date}`, { headlines: headlines.length });
       } else {
         recordAction("dailyBrief:cached", {
           fetchedAt: dailyBriefCache?.fetchedAt ?? null,

@@ -23,6 +23,7 @@ export type DailyMarketBriefAsset = {
 export type DailyMarketBrief = {
   date: string;
   generatedAt: string;
+  overview: string;
   gold: DailyMarketBriefAsset;
   oil: DailyMarketBriefAsset;
   eurusd: DailyMarketBriefAsset;
