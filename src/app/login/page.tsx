@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Turnstile } from "@marsidev/react-turnstile";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
@@ -28,6 +29,8 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
 function LoginPageContent() {
   const { supabase } = useSupabaseAuth();
   const searchParams = useSearchParams();
@@ -42,6 +45,9 @@ function LoginPageContent() {
   const resetParam = searchParams.get("reset");
 
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
+  const captchaRequired = Boolean(TURNSTILE_SITE_KEY);
 
   const defaultError = useMemo(() => {
     if (!paramError) {
@@ -76,13 +82,24 @@ function LoginPageContent() {
       setError("root", { message: AUTH_NOT_CONFIGURED_MESSAGE });
       return;
     }
+
+    if (captchaRequired && !captchaToken) {
+      setError("root", { message: "Please complete the security check before signing in." });
+      return;
+    }
+
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: values.email.trim(),
       password: values.password,
+      options: {
+        captchaToken: captchaToken ?? undefined,
+      },
     });
 
     if (signInError) {
       setError("root", { message: signInError.message });
+      setCaptchaToken(null);
+      setCaptchaKey((key) => key + 1);
       return;
     }
 
@@ -198,7 +215,24 @@ function LoginPageContent() {
             </Link>
           </div>
         </div>
-        <Button type="submit" variant="default" size="pill" className="w-full" disabled={googleBusy || isSubmitting}>
+        {TURNSTILE_SITE_KEY ? (
+          <Turnstile
+            key={captchaKey}
+            siteKey={TURNSTILE_SITE_KEY}
+            onSuccess={setCaptchaToken}
+            onExpire={() => setCaptchaToken(null)}
+            onError={() => setCaptchaToken(null)}
+            options={{ theme: "dark", size: "flexible" }}
+            className="min-h-[65px] w-full"
+          />
+        ) : null}
+        <Button
+          type="submit"
+          variant="default"
+          size="pill"
+          className="w-full"
+          disabled={googleBusy || isSubmitting || (captchaRequired && !captchaToken)}
+        >
           {isSubmitting ? "Signing in…" : "Sign in with email"}
         </Button>
       </form>
