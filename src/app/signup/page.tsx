@@ -17,7 +17,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
-import { CaptchaWidget } from "@/components/auth/captcha-widget";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { beginOAuthFlow, setAuthRedirectCookie } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
@@ -29,7 +28,25 @@ import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
 
 const EMPTY_SIGNUP: SignupFormValues = { username: "", email: "", password: "" };
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+// Rewardful global type declaration
+declare global {
+  interface Window {
+    rewardful?: (event: string, payload?: Record<string, unknown>) => void;
+  }
+}
+
+// Track a Lead with Rewardful (safe no-op if Rewardful isn't loaded)
+function trackRewardfulLead(email: string) {
+  if (typeof window !== "undefined" && typeof window.rewardful === "function") {
+    try {
+      window.rewardful("convert", { email });
+    } catch (err) {
+      // Silently fail — never block signup over analytics
+      console.warn("Rewardful tracking failed:", err);
+    }
+  }
+}
 
 function SignupPageContent() {
   const { supabase } = useSupabaseAuth();
@@ -37,14 +54,10 @@ function SignupPageContent() {
   const nextParam = searchParams.get("next");
   const next = useMemo(() => getSafeRedirectPath(nextParam, "/ask"), [nextParam]);
   const loginHref = useMemo(() => appendSafeNextParam("/login", nextParam), [nextParam]);
-  /** Set after email sign-up when Supabase sends a confirmation link (no immediate session). */
   const [sentToEmail, setSentToEmail] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaKey, setCaptchaKey] = useState(0);
   const verificationSent = sentToEmail !== null;
-  const captchaRequired = Boolean(TURNSTILE_SITE_KEY);
 
   const {
     register,
@@ -64,19 +77,13 @@ function SignupPageContent() {
       setApiError(AUTH_NOT_CONFIGURED_MESSAGE);
       return;
     }
-
-    if (captchaRequired && !captchaToken) {
-      setApiError("Please complete the security check before creating your account.");
-      return;
-    }
-
     const origin = window.location.origin;
     const username = values.username.trim();
+    const email = values.email.trim();
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email: values.email.trim(),
+      email,
       password: values.password,
       options: {
-        captchaToken: captchaToken ?? undefined,
         emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
         data: {
           username: username.toLowerCase(),
@@ -87,10 +94,12 @@ function SignupPageContent() {
 
     if (signUpError) {
       setApiError(signUpError.message);
-      setCaptchaToken(null);
-      setCaptchaKey((key) => key + 1);
       return;
     }
+
+    // Track Lead with Rewardful — fires whether session is created immediately
+    // OR verification email was sent (both count as successful signup)
+    trackRewardfulLead(email);
 
     if (data.session) {
       toast.success("Welcome — you're signed in.");
@@ -98,9 +107,7 @@ function SignupPageContent() {
       return;
     }
 
-    setSentToEmail(values.email.trim());
-    setCaptchaToken(null);
-    setCaptchaKey((key) => key + 1);
+    setSentToEmail(email);
     reset(EMPTY_SIGNUP);
   }
 
@@ -148,8 +155,8 @@ function SignupPageContent() {
       }
     >
       {verificationSent ? (
-        <div className="flex flex-col items-center space-y-5 pt-1 text-center" aria-live="polite">
-          <div className="space-y-2.5">
+        <div className="flex flex-col items-center space-y-7 pt-1 text-center" aria-live="polite">
+          <div className="space-y-3">
             <p className="text-[15px] leading-relaxed text-white/80">
               We have dispatched a secure verification link to<br />
               <span className="font-semibold tracking-wide text-white">{sentToEmail}</span>
@@ -160,7 +167,7 @@ function SignupPageContent() {
             </div>
           </div>
           
-          <div className="w-full pt-1.5">
+          <div className="w-full pt-2">
             <button
               type="button"
               className="group flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3.5 text-[14px] font-medium text-white transition-all duration-200 hover:border-white/20 hover:bg-white/10 active:scale-[0.98]"
@@ -180,7 +187,7 @@ function SignupPageContent() {
             {apiError ? <div className={authInlineErrorBannerClass}>{apiError}</div> : null}
           </div>
 
-          <div className="space-y-3.5">
+          <div className="space-y-4">
             <GoogleOAuthButton
               onClick={signUpWithGoogle}
               disabled={isSubmitting}
@@ -190,7 +197,7 @@ function SignupPageContent() {
             <AuthDivider label="or with email" />
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5" noValidate>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div>
               <label htmlFor="signup-username" className={authLabelClass}>
                 Username
@@ -243,20 +250,7 @@ function SignupPageContent() {
                 <p className="mt-1.5 text-xs text-(--vt-muted)">Use at least 8 characters.</p>
               ) : null}
             </div>
-            <CaptchaWidget
-              siteKey={TURNSTILE_SITE_KEY ?? ""}
-              captchaKey={captchaKey}
-              onSuccess={setCaptchaToken}
-              onExpire={() => setCaptchaToken(null)}
-              onError={() => setCaptchaToken(null)}
-            />
-            <Button
-              type="submit"
-              variant="default"
-              size="pill"
-              className="w-full"
-              disabled={googleBusy || isSubmitting || (captchaRequired && !captchaToken)}
-            >
+            <Button type="submit" variant="default" size="pill" className="w-full" disabled={googleBusy || isSubmitting}>
               {isSubmitting ? "Creating…" : "Create account with email"}
             </Button>
           </form>
@@ -271,7 +265,7 @@ function SignupPageContent() {
       </p>
 
       <nav
-        className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/[0.06] pt-5"
+        className="mt-8 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-white/[0.06] pt-6"
         aria-label="Legal"
       >
         {LEGAL_LINKS.map((link) => (
