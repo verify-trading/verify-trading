@@ -10,6 +10,9 @@ export const metadata: Metadata = {
     icon: "/favicon.svg?v=4",
     apple: "/favicon.svg?v=4",
   },
+  other: {
+    "facebook-domain-verification": "ix9zqdtuj297rwy9b3pbptd4mq1ahu",
+  },
 };
 export const viewport: Viewport = {
   width: "device-width",
