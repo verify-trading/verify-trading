@@ -29,22 +29,29 @@ import { toast } from "sonner";
 
 const EMPTY_SIGNUP: SignupFormValues = { username: "", email: "", password: "" };
 
-// Rewardful global type declaration
-declare global {
-  interface Window {
-    rewardful?: (event: string, payload?: Record<string, unknown>) => void;
-  }
+// Read Rewardful referral UUID from the in-page object set by their script
+function getRewardfulReferralId(): string | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { Rewardful?: { referral?: string | null } };
+  const referral = w.Rewardful?.referral;
+  return typeof referral === "string" && referral.length > 0 ? referral : null;
 }
 
-// Track a Lead with Rewardful (safe no-op if Rewardful isn't loaded)
-function trackRewardfulLead(email: string) {
-  if (typeof window !== "undefined" && typeof window.rewardful === "function") {
-    try {
-      window.rewardful("convert", { email });
-    } catch (err) {
-      // Silently fail — never block signup over analytics
-      console.warn("Rewardful tracking failed:", err);
-    }
+// Link the new signup to a Stripe customer with the affiliate referral.
+// This is what enables Rewardful to count the signup as a Lead.
+// Silently fails — never block signup over affiliate tracking.
+async function linkAffiliateReferral() {
+  const referralId = getRewardfulReferralId();
+  if (!referralId) return;
+
+  try {
+    await fetch("/api/affiliates/link-stripe-customer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ referralId }),
+    });
+  } catch (err) {
+    console.warn("Failed to link affiliate referral:", err);
   }
 }
 
@@ -97,9 +104,9 @@ function SignupPageContent() {
       return;
     }
 
-    // Track Lead with Rewardful — fires whether session is created immediately
-    // OR verification email was sent (both count as successful signup)
-    trackRewardfulLead(email);
+ // Link this signup to a Stripe customer with the affiliate referral.
+// This creates a Lead in Rewardful when the user came from an affiliate link.
+await linkAffiliateReferral();
 
     if (data.session) {
       toast.success("Welcome — you're signed in.");
