@@ -192,7 +192,6 @@ export async function ensureStripeCustomerForUser({
 
   return customer.id;
 }
-
 export async function syncStripeSubscription(subscription: Stripe.Subscription) {
   const supabase = requireSupabaseAdminClient();
   const customerId = readStripeCustomerId(subscription.customer);
