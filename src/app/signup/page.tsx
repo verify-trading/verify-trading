@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
+import { linkAffiliateReferral } from "@/lib/affiliates/link-stripe-customer";
 import { beginOAuthFlow, setAuthRedirectCookie } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
@@ -29,38 +30,13 @@ import { toast } from "sonner";
 
 const EMPTY_SIGNUP: SignupFormValues = { username: "", email: "", password: "" };
 
-// Read Rewardful referral UUID from the in-page object set by their script
-function getRewardfulReferralId(): string | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as { Rewardful?: { referral?: string | null } };
-  const referral = w.Rewardful?.referral;
-  return typeof referral === "string" && referral.length > 0 ? referral : null;
-}
-
-// Link the new signup to a Stripe customer with the affiliate referral.
-// This is what enables Rewardful to count the signup as a Lead.
-// Silently fails — never block signup over affiliate tracking.
-async function linkAffiliateReferral() {
-  const referralId = getRewardfulReferralId();
-  if (!referralId) return;
-
-  try {
-    await fetch("/api/affiliates/link-stripe-customer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ referralId }),
-    });
-  } catch (err) {
-    console.warn("Failed to link affiliate referral:", err);
-  }
-}
-
 function SignupPageContent() {
   const { supabase } = useSupabaseAuth();
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next");
   const next = useMemo(() => getSafeRedirectPath(nextParam, "/ask"), [nextParam]);
   const loginHref = useMemo(() => appendSafeNextParam("/login", nextParam), [nextParam]);
+  /** Set after email sign-up when Supabase sends a confirmation link (no immediate session). */
   const [sentToEmail, setSentToEmail] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -104,16 +80,19 @@ function SignupPageContent() {
       return;
     }
 
- // Link this signup to a Stripe customer with the affiliate referral.
-// This creates a Lead in Rewardful when the user came from an affiliate link.
-await linkAffiliateReferral();
-
     if (data.session) {
+      // User is fully authenticated — link affiliate referral now.
+      // This creates a Stripe customer with referral metadata,
+      // which Rewardful uses to count the signup as a Lead.
+      await linkAffiliateReferral();
       toast.success("Welcome — you're signed in.");
       window.location.assign(next);
       return;
     }
 
+    // Email verification needed — Supabase has sent a verification link.
+    // Affiliate referral linking will happen after they click the link
+    // and land back on the app (handled separately for OAuth/callback flow).
     setSentToEmail(email);
     reset(EMPTY_SIGNUP);
   }
