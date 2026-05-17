@@ -145,10 +145,12 @@ export async function ensureStripeCustomerForUser({
   userId,
   email,
   displayName,
+  referralId,
 }: {
   userId: string;
   email: string | null | undefined;
   displayName: string | null | undefined;
+  referralId?: string | null;
 }): Promise<string> {
   const stripe = getStripeServerClient();
   const profile = await getBillingProfile(userId);
@@ -160,6 +162,7 @@ export async function ensureStripeCustomerForUser({
   const name = displayName?.trim() || profile.display_name?.trim() || undefined;
   const normalizedEmail = email?.trim() || undefined;
   const existingCustomerId = profile.stripe_customer_id?.trim();
+  const normalizedReferralId = referralId?.trim() || undefined;
 
   if (existingCustomerId) {
     await stripe.customers.update(existingCustomerId, {
@@ -167,6 +170,7 @@ export async function ensureStripeCustomerForUser({
       name,
       metadata: {
         supabaseUserId: userId,
+        ...(normalizedReferralId && { referral: normalizedReferralId }),
       },
     });
 
@@ -178,6 +182,7 @@ export async function ensureStripeCustomerForUser({
     name,
     metadata: {
       supabaseUserId: userId,
+      ...(normalizedReferralId && { referral: normalizedReferralId }),
     },
   });
 
