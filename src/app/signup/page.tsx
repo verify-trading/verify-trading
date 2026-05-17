@@ -29,6 +29,25 @@ import { toast } from "sonner";
 
 const EMPTY_SIGNUP: SignupFormValues = { username: "", email: "", password: "" };
 
+// Rewardful global type declaration
+declare global {
+  interface Window {
+    rewardful?: (event: string, payload?: Record<string, unknown>) => void;
+  }
+}
+
+// Track a Lead with Rewardful (safe no-op if Rewardful isn't loaded)
+function trackRewardfulLead(email: string) {
+  if (typeof window !== "undefined" && typeof window.rewardful === "function") {
+    try {
+      window.rewardful("convert", { email });
+    } catch (err) {
+      // Silently fail — never block signup over analytics
+      console.warn("Rewardful tracking failed:", err);
+    }
+  }
+}
+
 function SignupPageContent() {
   const { supabase } = useSupabaseAuth();
   const searchParams = useSearchParams();
@@ -60,8 +79,9 @@ function SignupPageContent() {
     }
     const origin = window.location.origin;
     const username = values.username.trim();
+    const email = values.email.trim();
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email: values.email.trim(),
+      email,
       password: values.password,
       options: {
         emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
@@ -77,13 +97,17 @@ function SignupPageContent() {
       return;
     }
 
+    // Track Lead with Rewardful — fires whether session is created immediately
+    // OR verification email was sent (both count as successful signup)
+    trackRewardfulLead(email);
+
     if (data.session) {
       toast.success("Welcome — you're signed in.");
       window.location.assign(next);
       return;
     }
 
-    setSentToEmail(values.email.trim());
+    setSentToEmail(email);
     reset(EMPTY_SIGNUP);
   }
 
