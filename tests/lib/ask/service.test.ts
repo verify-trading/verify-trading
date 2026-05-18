@@ -2503,6 +2503,63 @@ describe("generateAskResponse", () => {
     });
   });
 
+  it("forces broad market-trend prompts to submit after the first data-gathering step", async () => {
+    const finalCard = {
+      type: "insight" as const,
+      headline: "Market Pulse",
+      body: "The first read is enough to explain the session without another generic news sweep.",
+      verdict: "Submit the take after the initial market data.",
+    };
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify(finalCard),
+      toolResults: [],
+    }) as unknown as typeof import("ai").generateText;
+
+    await generateAskResponse(
+      {
+        message: "tell me about the trends today",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      { generateTextImpl },
+    );
+
+    const prepareStep = vi.mocked(generateTextImpl).mock.calls[0]?.[0]?.prepareStep;
+    const stepConfig = await prepareStep?.({
+      stepNumber: 1,
+      steps: [
+        {
+          toolResults: [
+            { toolName: "get_market_briefing", output: {} },
+            { toolName: "search_news", output: {} },
+          ],
+        },
+      ],
+      model: {} as never,
+      messages: [
+        {
+          role: "user",
+          content: "tell me about the trends today",
+        },
+      ],
+      experimental_context: undefined,
+    });
+
+    expect(stepConfig).toEqual({
+      messages: [
+        {
+          role: "user",
+          content: "tell me about the trends today",
+        },
+        {
+          role: "user",
+          content:
+            "Use the market and news tool results already provided. Do not call more tools for this broad market trend prompt. Submit one concise insight card now.",
+        },
+      ],
+    });
+  });
+
   it("falls back to a validated submit_ask_card when structured output is missing", async () => {
     const submitCardResult = {
       toolName: "submit_ask_card",

@@ -50,6 +50,8 @@ describe("market tools", () => {
     expect(resolveSupportedAsset("XAU")?.symbol).toBe("GCUSD");
     expect(resolveSupportedAsset("Silver")?.symbol).toBe("SIUSD");
     expect(resolveSupportedAsset("EUR/USD")?.asset).toBe("EUR/USD");
+    expect(resolveSupportedAsset("BTC/USD")?.asset).toBe("BITCOIN / USD");
+    expect(resolveSupportedAsset("ETH/USD")?.asset).toBe("ETHEREUM / USD");
     expect(resolveSupportedAsset("EU")?.symbol).toBe("EURUSD");
     expect(resolveSupportedAsset("GU")?.symbol).toBe("GBPUSD");
     expect(resolveSupportedAsset("Nasdaq")?.symbol).toBe("^IXIC");

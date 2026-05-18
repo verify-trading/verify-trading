@@ -1,4 +1,13 @@
-import { APICallError, Output, generateText, RetryError, stepCountIs, streamText, type ModelMessage } from "ai";
+import {
+  APICallError,
+  Output,
+  generateText,
+  RetryError,
+  stepCountIs,
+  streamText,
+  type ModelMessage,
+  type PrepareStepFunction,
+} from "ai";
 import { z } from "zod";
 
 import {
@@ -168,6 +177,151 @@ function stopAfterSubmitAskCardResult({
     lastStep?.toolResults?.some((toolResult) => toolResult.toolName === "submit_ask_card") ??
     false
   );
+}
+
+type AskToolSet = ReturnType<typeof createAskTools>;
+const BROAD_MARKET_TREND_DATA_TOOLS = new Set(["get_market_briefing", "search_news"]);
+const SUBMIT_ASK_CARD_TOOL_NAMES = new Set(["submit_ask_card"]);
+
+function hasToolResult(
+  steps: ReadonlyArray<{
+    toolResults?: ReadonlyArray<{ toolName?: string }>;
+  }>,
+  toolNames: ReadonlySet<string>,
+) {
+  return steps.some((step) =>
+    step.toolResults?.some(
+      (toolResult) => toolResult.toolName && toolNames.has(toolResult.toolName),
+    ),
+  );
+}
+
+function isBroadMarketTrendPrompt(message: string) {
+  const normalized = normalizeWhitespace(message).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    /\b(buy|sell|long|short|entry|stop|target|setup|trade plan|lot size|position size|broker|regulated|fca)\b/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+
+  return /\b(trends? today|market trends?|market pulse|what(?:'s| is) moving|what matters today|markets? doing today|market outlook|today(?:'s)? market)\b/.test(
+    normalized,
+  );
+}
+
+function createAskPrepareStep({
+  message,
+  sessionId,
+  messageId,
+}: {
+  message: string;
+  sessionId: string;
+  messageId: string;
+}): PrepareStepFunction<AskToolSet> {
+  const shouldLimitBroadTrendLoop = isBroadMarketTrendPrompt(message);
+
+  return ({ stepNumber, steps, messages }) => {
+    if (!shouldLimitBroadTrendLoop || stepNumber === 0) {
+      return undefined;
+    }
+
+    if (
+      hasToolResult(steps, SUBMIT_ASK_CARD_TOOL_NAMES) ||
+      !hasToolResult(steps, BROAD_MARKET_TREND_DATA_TOOLS)
+    ) {
+      return undefined;
+    }
+
+    logger.info("Ask broad market trend prompt restricted to final card submission.", {
+      sessionId,
+      messageId,
+      stepNumber,
+      priorTools: steps.flatMap((step) =>
+        step.toolResults?.map((toolResult) => toolResult.toolName ?? "unknown") ?? [],
+      ),
+    });
+
+    return {
+      messages: [
+        ...messages,
+        {
+          role: "user",
+          content:
+            "Use the market and news tool results already provided. Do not call more tools for this broad market trend prompt. Submit one concise insight card now.",
+        },
+      ],
+    };
+  };
+}
+
+function logAskToolCallStarted({
+  message,
+  sessionId,
+  messageId,
+  stepNumber,
+  toolName,
+  input,
+}: {
+  message: string;
+  sessionId: string;
+  messageId: string;
+  stepNumber: number | undefined;
+  toolName: string;
+  input: unknown;
+}) {
+  logger.info(message, {
+    sessionId,
+    messageId,
+    stepNumber,
+    toolName,
+    input,
+  });
+}
+
+function logAskToolCallFinished({
+  successMessage,
+  failureMessage,
+  sessionId,
+  messageId,
+  stepNumber,
+  toolName,
+  durationMs,
+  success,
+  error,
+}: {
+  successMessage: string;
+  failureMessage: string;
+  sessionId: string;
+  messageId: string;
+  stepNumber: number | undefined;
+  toolName: string;
+  durationMs: number;
+  success: boolean;
+  error?: unknown;
+}) {
+  const meta = {
+    sessionId,
+    messageId,
+    stepNumber,
+    toolName,
+    durationMs,
+  };
+
+  if (success) {
+    logger.info(successMessage, meta);
+    return;
+  }
+
+  logger.warn(failureMessage, {
+    ...meta,
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
 
 function buildInsightCard(headline: string, body: string, verdict: string) {
@@ -1086,6 +1240,34 @@ export async function generateAskResponse(
       maxRetries: ASK_MODEL_MAX_RETRIES,
       output: askCardOutput,
       stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS), stopAfterSubmitAskCardResult],
+      prepareStep: createAskPrepareStep({
+        message: normalizedMessage,
+        sessionId,
+        messageId,
+      }),
+      experimental_onToolCallStart({ stepNumber, toolCall }) {
+        logAskToolCallStarted({
+          message: "Ask tool call started.",
+          sessionId,
+          messageId,
+          stepNumber,
+          toolName: toolCall.toolName,
+          input: toolCall.input,
+        });
+      },
+      experimental_onToolCallFinish({ stepNumber, toolCall, durationMs, success, error }) {
+        logAskToolCallFinished({
+          successMessage: "Ask tool call finished.",
+          failureMessage: "Ask tool call failed.",
+          sessionId,
+          messageId,
+          stepNumber,
+          toolName: toolCall.toolName,
+          durationMs,
+          success,
+          error,
+        });
+      },
       onStepFinish({
         stepNumber,
         text,
@@ -1272,6 +1454,8 @@ async function streamAskResponseInternal(
   const request = askRequestSchema.parse(input);
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
+  const sessionId = request.sessionId ?? request.chatSessionId ?? crypto.randomUUID();
+  const messageId = crypto.randomUUID();
   const getActiveAnalysisRulesImpl =
     dependencies.getActiveAnalysisRulesImpl ?? getActiveAnalysisRules;
   const streamTextImpl = dependencies.streamTextImpl ?? streamText;
@@ -1297,8 +1481,36 @@ async function streamAskResponseInternal(
     maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
     maxRetries: ASK_MODEL_MAX_RETRIES,
     stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS), stopAfterSubmitAskCardResult],
+    prepareStep: createAskPrepareStep({
+      message: normalizedMessage,
+      sessionId,
+      messageId,
+    }),
     messages,
     tools: createAskTools(dependencies),
+    experimental_onToolCallStart({ stepNumber, toolCall }) {
+      logAskToolCallStarted({
+        message: "Ask stream tool call started.",
+        sessionId,
+        messageId,
+        stepNumber,
+        toolName: toolCall.toolName,
+        input: toolCall.input,
+      });
+    },
+    experimental_onToolCallFinish({ stepNumber, toolCall, durationMs, success, error }) {
+      logAskToolCallFinished({
+        successMessage: "Ask stream tool call finished.",
+        failureMessage: "Ask stream tool call failed.",
+        sessionId,
+        messageId,
+        stepNumber,
+        toolName: toolCall.toolName,
+        durationMs,
+        success,
+        error,
+      });
+    },
     onStepFinish({ toolCalls, text }) {
       toolCalls?.forEach((tc) => {
         callbacks.onToolCall?.(tc.toolName, tc.input as Record<string, unknown>);

@@ -657,30 +657,37 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     get_market_briefing: tool({
       description:
-        "Live price, levels, and series for a tradable. Use it for direct market-status questions like what is X doing or price now. Not for headline-only questions, and not as the final answer for best-trade-now or trade-ranking questions.",
+        "Live price, levels, and series for a tradable. Use it for direct market-status questions like what is X doing or price now. Not for headline-only questions, and not as the final answer for best-trade-now or trade-ranking questions. Do not call it twice for equivalent assets such as BTC/USD and Bitcoin in the same answer.",
       inputSchema: getMarketSeriesInputSchema,
-      execute: async ({ asset, timeframe }) => ({
-        ...buildBriefingCard(
-          await getMarketQuoteImpl(asset),
-          await getMarketSeriesImpl(asset, timeframe),
-        ),
-      }),
+      execute: async ({ asset, timeframe }) => {
+        const [quote, series] = await Promise.all([
+          getMarketQuoteImpl(asset),
+          getMarketSeriesImpl(asset, timeframe),
+        ]);
+
+        return {
+          ...buildBriefingCard(quote, series),
+        };
+      },
     }),
     get_market_setup: tool({
       description:
         "Live setup for explicit entry questions: buy, sell, long, short, stop, target, invalidation. Use it when the user asks for live levels, not for generic education or broad market comparisons. After using it for conversational asks like 'set up a buy trade on gold', submit a final setup card in trader language instead of just echoing the raw tool output.",
       inputSchema: getMarketSetupInputSchema,
-      execute: async ({ asset, timeframe, side }) => ({
-        ...buildMarketSetupCard(
-          await getMarketQuoteImpl(asset),
-          await getMarketSeriesImpl(asset, timeframe),
-          side,
-        ),
-      }),
+      execute: async ({ asset, timeframe, side }) => {
+        const [quote, series] = await Promise.all([
+          getMarketQuoteImpl(asset),
+          getMarketSeriesImpl(asset, timeframe),
+        ]);
+
+        return {
+          ...buildMarketSetupCard(quote, series, side),
+        };
+      },
     }),
     search_news: tool({
       description:
-        "Recent headlines with descriptions (NewsData). Use it for macro reactions, geopolitics, policy, earnings, sector themes, or deeper context after a scheduled event is known. Use get_economic_calendar for scheduled event timing and actual/forecast/previous values. Optional from date only if the user stated it. Read the descriptions for context, not just titles. Use the result to explain market impact, and submit the final card yourself instead of echoing raw headlines.",
+        "Recent headlines with descriptions (NewsData). Use it for macro reactions, geopolitics, policy, earnings, sector themes, or deeper context after a scheduled event is known. Use get_economic_calendar for scheduled event timing and actual/forecast/previous values. Optional from date only if the user stated it. Read the descriptions for context, not just titles. Use the result to explain market impact, and submit the final card yourself instead of echoing raw headlines. For broad market-trend prompts, run one focused search only and do not retry with another generic market query.",
       inputSchema: searchNewsInputSchema,
       execute: async (input) => {
         try {

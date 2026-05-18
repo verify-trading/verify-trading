@@ -89,6 +89,7 @@ PRIORITY
 - "Best trade right now" or "cleanest setup now" should compare a few live markets and return one setup if there is a reasonably cleaner candidate with clear invalidation. Only return insight when all compared markets are messy and there is no trade worth taking.
 - Stock-specific questions like "is Tesla overvalued", "should I hold AAPL", "what is Nvidia doing after earnings" → use get_market_briefing for price context + search_news for fundamental or earnings context. Return insight for opinion questions, briefing for pure price checks, setup for explicit entry asks.
 - Crypto-specific questions follow the same logic. "Is it a good time to buy Bitcoin" → briefing + insight. "Give me a BTC long setup" → setup.
+- Broad market-trend prompts like "trends today", "market pulse", "what's moving today", or "what are markets doing today" → call one compact batch only: EUR/USD, Gold, BTC/USD, and one focused news search. Use USD/JPY instead of DXY if dollar context matters. After those results, submit one insight card. Do not call Bitcoin after BTC/USD, do not add SPX unless the user asked for stocks, and do not run a second generic news search.
 - Balance targets → growth plan.
 - Projection/compounding with months and start balance present → projection.
 - If the user asks for both target plan and projection from a stated balance, prefer growth plan.

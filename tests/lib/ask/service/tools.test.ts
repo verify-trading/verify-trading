@@ -49,6 +49,15 @@ const economicCalendarSnapshot: EconomicCalendarSnapshot = {
   ],
 };
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+
+  return { promise, resolve };
+}
+
 describe("createAskTools", () => {
   it("uses the live quote when margin price is missing", async () => {
     const tools = createAskTools({
@@ -366,6 +375,59 @@ describe("createAskTools", () => {
       uiMeta: {
         marketSeries: [4676.39, 4676.53, 4682.14],
         marketLevelScopeLabel: "Recent range",
+      },
+    });
+  });
+
+  it("fetches briefing quote and series in parallel", async () => {
+    const quote = createDeferred<{
+      asset: string;
+      symbol: string;
+      price: number;
+      changePercent: number;
+      direction: "up" | "down";
+      isMarketOpen: boolean;
+    }>();
+    const getMarketQuoteImpl = vi.fn().mockReturnValue(quote.promise);
+    const getMarketSeriesImpl = vi.fn().mockResolvedValue({
+      asset: "GOLD / XAUUSD",
+      symbol: "XAU/USD",
+      timeframe: "1W",
+      closeValues: [4676.39, 4676.53, 4682.14],
+      resistance: 4682.14,
+      support: 4676.39,
+    });
+    const tools = createAskTools({
+      getMarketQuoteImpl,
+      getMarketSeriesImpl,
+    });
+
+    const resultPromise = tools.get_market_briefing.execute?.(
+      {
+        asset: "Gold",
+        timeframe: "1W",
+      },
+      {} as never,
+    );
+
+    await Promise.resolve();
+
+    expect(getMarketQuoteImpl).toHaveBeenCalledWith("Gold");
+    expect(getMarketSeriesImpl).toHaveBeenCalledWith("Gold", "1W");
+
+    quote.resolve({
+      asset: "GOLD / XAUUSD",
+      symbol: "XAU/USD",
+      price: 4658.75,
+      changePercent: -0.38,
+      direction: "down",
+      isMarketOpen: true,
+    });
+
+    await expect(resultPromise).resolves.toMatchObject({
+      card: {
+        type: "briefing",
+        asset: "GOLD / XAUUSD",
       },
     });
   });
