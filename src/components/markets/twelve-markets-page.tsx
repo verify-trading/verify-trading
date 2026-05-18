@@ -28,7 +28,7 @@ import { MarketsCommunityCtas } from "./markets-community-ctas";
 import { MarketsTabUpcoming } from "./markets-tab-upcoming";
 import { MarketsViewTabs, type MarketsTabId } from "./markets-view-tabs";
 
-const CATEGORIES: MarketsCategory[] = ["major_pairs", "commodities", "crypto"];
+const CATEGORIES: MarketsCategory[] = ["major_pairs", "commodities", "crypto", "indices"];
 
 const MARKETS_QUERY_STALE_MS = 5 * 60_000;
 
@@ -39,6 +39,12 @@ const ASK_ASSET_NAMES: Record<string, string> = {
   "XBR/USD": "Oil",
   "XPT/USD": "Platinum",
   "XPD/USD": "Palladium",
+  QQQ: "Nasdaq",
+  DIA: "Dow",
+  EWU: "FTSE",
+  EWG: "DAX",
+  EWJ: "Nikkei",
+  EWH: "Hong Kong",
 };
 
 function isMarketsPaywallUiEnabled(): boolean {
@@ -141,7 +147,7 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
                 {activeTab === "charts" ? (
                   <div>
                     {/* Category Tabs */}
-                    <div className="mb-4 flex gap-1.5">
+                    <div className="mb-4 flex flex-wrap gap-1.5">
                       {CATEGORIES.map((cat) => {
                         const config = CATEGORY_CONFIG[cat];
                         const isActive = cat === activeCategory;

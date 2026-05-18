@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -10,7 +9,6 @@ import {
   Shield,
   Calculator,
   TrendingUp,
-  Mail,
   ChevronDown,
   Upload,
   Scale,
@@ -485,45 +483,9 @@ function FAQSection() {
   );
 }
 
-/* ─── Email CTA ─── */
+/* ─── Guide CTA ─── */
 
-function EmailCTASection() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = email.trim();
-    if (!trimmed) return;
-
-    setStatus("loading");
-    setErrorMsg("");
-
-    try {
-      const res = await fetch("/api/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed, source: "landing_guide" }),
-      });
-
-      const data = (await res.json()) as { ok?: boolean; error?: string };
-
-      if (res.ok && data.ok) {
-        setStatus("success");
-        setEmail("");
-        router.push("/guide");
-      } else {
-        setStatus("error");
-        setErrorMsg(data.error ?? "Something went wrong. Please try again.");
-      }
-    } catch {
-      setStatus("error");
-      setErrorMsg("Network error. Please check your connection and try again.");
-    }
-  }
-
+function GuideCTASection() {
   return (
     <section className="border-t border-white/[0.06] bg-black/15">
       <div className="mx-auto w-full max-w-3xl px-4 py-16 text-left sm:px-6 sm:py-24">
@@ -537,45 +499,12 @@ function EmailCTASection() {
           </p>
         </div>
 
-        {status === "success" ? (
-          <div className="mt-8 flex max-w-md items-center gap-3 rounded-lg border border-[var(--vt-green)]/30 bg-[var(--vt-green)]/10 px-4 py-3 text-sm font-medium text-[var(--vt-green)]">
-            <CheckCircle2 className="size-5 shrink-0" aria-hidden />
-            You&apos;re in. Check your inbox for the guide.
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-8 flex max-w-lg flex-col gap-3 sm:flex-row sm:items-stretch">
-            <div className="relative min-w-0 flex-1">
-              <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" aria-hidden />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Work email"
-                disabled={status === "loading"}
-                className="h-11 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] pl-10 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-[var(--vt-blue)] focus:outline-none focus:ring-2 focus:ring-[var(--vt-blue)]/20 disabled:opacity-60"
-                id="landing-email-input"
-              />
-            </div>
-            <Button type="submit" variant="default" size="pill" className="gap-2 px-6 sm:h-11" disabled={status === "loading"}>
-              {status === "loading" ? (
-                <>
-                  <span className="inline-block size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Sending…
-                </>
-              ) : (
-                <>
-                  Get the guide
-                  <ArrowRight className="size-4" aria-hidden />
-                </>
-              )}
-            </Button>
-          </form>
-        )}
-
-        {status === "error" && errorMsg ? <p className="mt-3 text-sm text-[var(--vt-coral)]">{errorMsg}</p> : null}
-
-        <p className="mt-4 text-xs text-slate-500">No spam. Unsubscribe anytime.</p>
+        <Button asChild variant="default" size="pill" className="mt-8 gap-2 px-6">
+          <Link href="/guide">
+            Get the guide
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+        </Button>
       </div>
     </section>
   );
@@ -660,7 +589,7 @@ export function LandingPage({
         <FeaturesSection />
         <PricingPlansSection pricing={pricing} billingContext={billingContext} />
         <FAQSection />
-        <EmailCTASection />
+        <GuideCTASection />
         <FinalCTASection />
       </main>
       <SiteFooter />

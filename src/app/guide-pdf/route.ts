@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 export async function GET() {
-  const pdfPath = path.join(process.cwd(), "verify-trading-guide.pdf");
+  const pdfPath = path.join(process.cwd(), "public", "verify-trading-guide");
 
   try {
     const pdf = await readFile(pdfPath);

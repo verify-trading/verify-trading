@@ -144,7 +144,7 @@ describe("MarketEventsSection", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /ISM Services PMI/i })[0]);
 
     expect(onAskPrompt).toHaveBeenCalledWith(
-      "ISM Services PMI is at 2:00 PM today. Estimate: 53.7. Previous: 54.0. What does this mean for my USD pairs and Gold today?",
+      "ISM Services PMI is at 2:00 PM on May 5. Estimate: 53.7. Previous: 54.0. What does this mean for my USD pairs and Gold?",
     );
   });
 
@@ -192,7 +192,7 @@ describe("MarketEventsSection", () => {
     expect(screen.getAllByText("Fed Speaker").length).toBeGreaterThan(0);
     expect(screen.getByText("8h 30m")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Monday, May 4" })).toBeInTheDocument();
-    expect(screen.getAllByText("8:30 PM").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/8:30 PM/).length).toBeGreaterThan(0);
     expect(screen.queryByText("France Flash PMI")).not.toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Monday, May 4" })).toBeInTheDocument();

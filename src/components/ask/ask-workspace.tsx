@@ -167,6 +167,7 @@ export function AskWorkspace({
   } | null>(null);
   const composerStripRef = useRef<HTMLDivElement | null>(null);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [isAndroidViewport, setIsAndroidViewport] = useState(false);
   const [composerStripHeight, setComposerStripHeight] = useState(0);
   const [prefillFocusSignal, setPrefillFocusSignal] = useState(0);
   const handledPrefillRef = useRef<string | null>(null);
@@ -182,6 +183,12 @@ export function AskWorkspace({
     sync();
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    setIsAndroidViewport(
+      typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent),
+    );
   }, []);
 
   // Only while Ask is mounted on mobile. Desktop should rely on the route shell's
@@ -251,6 +258,8 @@ export function AskWorkspace({
   } = useAskStore();
 
   const keyboardInsetPx = useVisualViewportKeyboardInset(isMobileLayout);
+  const composerKeyboardLiftPx =
+    isMobileLayout && isAndroidViewport ? keyboardInsetPx : 0;
 
   useLayoutEffect(() => {
     const el = composerStripRef.current;
@@ -684,22 +693,6 @@ export function AskWorkspace({
   }, [refreshSessions]);
 
   useEffect(() => {
-    const prefill = searchParams.get("prefill")?.trim();
-    if (!prefill || handledPrefillRef.current === prefill) {
-      return;
-    }
-
-    handledPrefillRef.current = prefill;
-    setDraft(prefill.slice(0, 2_000));
-    setPrefillFocusSignal((value) => value + 1);
-
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.delete("prefill");
-    const query = nextParams.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [pathname, router, searchParams, setDraft]);
-
-  useEffect(() => {
     void refreshUsageState();
   }, [refreshUsageState]);
 
@@ -730,6 +723,23 @@ export function AskWorkspace({
       openSession(urlSessionId);
     }
   }, [openSession, sessionId, urlSessionId]);
+
+  // Apply prefill after URL session sync, because opening a new session clears the draft.
+  useEffect(() => {
+    const prefill = searchParams.get("prefill")?.trim();
+    if (!prefill || handledPrefillRef.current === prefill) {
+      return;
+    }
+
+    handledPrefillRef.current = prefill;
+    setDraft(prefill.slice(0, 2_000));
+    setPrefillFocusSignal((value) => value + 1);
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("prefill");
+    const query = nextParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams, setDraft]);
 
   useEffect(() => {
     if (!sessionId || messages.length > 0 || hydratedSessionRef.current === sessionId) {
@@ -908,13 +918,21 @@ export function AskWorkspace({
             {/* Bottom chrome: optional floating limit card (sibling of composer strip, not inside input card) */}
             <div
               ref={composerStripRef}
+              data-testid="ask-composer-strip"
               className={[
                 "flex flex-col gap-2",
                 isMobileLayout
                   ? "fixed left-0 right-0 bottom-0 z-30"
                   : "shrink-0",
               ].join(" ")}
-              style={isMobileLayout ? { bottom: keyboardInsetPx } : undefined}
+              style={
+                composerKeyboardLiftPx > 0
+                  ? {
+                      transform: `translate3d(0, -${composerKeyboardLiftPx}px, 0)`,
+                      willChange: "transform",
+                    }
+                  : undefined
+              }
             >
               {isDailyLimitReached ? (
                 <div className="pointer-events-none px-2.5 pt-2 sm:px-6 sm:pt-3">

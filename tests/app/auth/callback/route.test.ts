@@ -1,34 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/supabase/admin", () => ({
-  getSupabaseAdminClient: vi.fn(),
-}));
-
-vi.mock("@/lib/observability/logger", () => ({
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(),
 }));
 
 import { GET } from "@/app/auth/callback/route";
-import { logger } from "@/lib/observability/logger";
 import {
   AUTH_REDIRECT_COOKIE_NAME,
   OAUTH_FLOW_COOKIE_NAME,
   RECENT_OAUTH_SIGNUP_COOKIE_NAME,
 } from "@/lib/auth/oauth-flow";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 describe("GET /auth/callback", () => {
   const exchangeCodeForSession = vi.fn();
   const signOut = vi.fn();
-  const deleteUser = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -43,18 +29,10 @@ describe("GET /auth/callback", () => {
       error: null,
     });
     signOut.mockResolvedValue({ error: null });
-    deleteUser.mockResolvedValue({ error: null });
     vi.mocked(createSupabaseServerClient).mockResolvedValue({
       auth: {
         exchangeCodeForSession,
         signOut,
-      },
-    } as never);
-    vi.mocked(getSupabaseAdminClient).mockReturnValue({
-      auth: {
-        admin: {
-          deleteUser,
-        },
       },
     } as never);
   });
@@ -73,7 +51,7 @@ describe("GET /auth/callback", () => {
     expect(createSupabaseServerClient).not.toHaveBeenCalled();
   });
 
-  it("blocks login-only Google sign-in for an apparent new account", async () => {
+  it("allows Google OAuth from the login page to create a first-time account", async () => {
     const response = await GET(
       new Request("http://localhost/auth/callback?code=test-code&next=%2Fmarkets", {
         headers: {
@@ -83,33 +61,8 @@ describe("GET /auth/callback", () => {
     );
 
     expect(exchangeCodeForSession).toHaveBeenCalledWith("test-code");
-    expect(signOut).toHaveBeenCalledTimes(1);
-    expect(deleteUser).toHaveBeenCalledWith("user-1");
-    expect(response.headers.get("location")).toBe(
-      "http://localhost/login?error=oauth_login_no_account",
-    );
-  });
-
-  it("still blocks login-only Google sign-in when admin cleanup is unavailable", async () => {
-    vi.mocked(getSupabaseAdminClient).mockReturnValue(null);
-
-    const response = await GET(
-      new Request("http://localhost/auth/callback?code=test-code&next=%2Fmarkets", {
-        headers: {
-          cookie: `${OAUTH_FLOW_COOKIE_NAME}=login_only`,
-        },
-      }),
-    );
-
-    expect(signOut).toHaveBeenCalledTimes(1);
-    expect(deleteUser).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      "Supabase admin client unavailable while cleaning up blocked login-only OAuth user.",
-      { userId: "user-1" },
-    );
-    expect(response.headers.get("location")).toBe(
-      "http://localhost/login?error=oauth_login_no_account",
-    );
+    expect(signOut).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe("http://localhost/markets");
   });
 
   it("allows an immediate re-login after the same browser just completed signup", async () => {
@@ -122,7 +75,6 @@ describe("GET /auth/callback", () => {
     );
 
     expect(signOut).not.toHaveBeenCalled();
-    expect(deleteUser).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe("http://localhost/markets");
     expect(response.cookies.get(OAUTH_FLOW_COOKIE_NAME)?.value).toBe("");
   });

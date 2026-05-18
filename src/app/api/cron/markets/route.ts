@@ -28,8 +28,8 @@ import { logger } from "@/lib/observability/logger";
 /**
  * Markets cron: runs every 5 minutes to fetch Twelve Data market snapshots.
  * Credit budget (55/min):
- * - Base: Quotes (18) + Market State (1) = 19 credits
- * - One selected-detail timeframe run (+18): 37 credits
+ * - Base: Quotes (24) + Market State (1) = 25 credits
+ * - One selected-detail timeframe run (+24): 49 credits
  */
 
 const ALL_SYMBOLS = Object.values(MARKET_CATEGORIES).flatMap((c) => c.symbols);
@@ -37,6 +37,14 @@ const DETAIL_TIMEFRAMES: MarketSeriesTimeframe[] = ["1D", "1W", "1M", "3M"];
 const INTELLIGENCE_CACHE_KEY = "intelligence:news";
 const INTELLIGENCE_REFRESH_MS = 60 * 60 * 1000;
 const MARKETS_CRON_RUN_CACHE_KEY = "cron:markets:last-run";
+const INDEX_CACHE_ALIASES: Record<string, string> = {
+  QQQ: "Nasdaq",
+  DIA: "Dow",
+  EWU: "FTSE",
+  EWG: "DAX",
+  EWJ: "Nikkei",
+  EWH: "Hong Kong",
+};
 
 type MarketsCronResults = {
   run: number;
@@ -64,6 +72,39 @@ function getFetchedAtRunNumber(fetchedAt: string | null | undefined): number | n
   }
   const fetchedAtMs = new Date(fetchedAt).getTime();
   return Number.isFinite(fetchedAtMs) ? getRunNumber(fetchedAtMs) : null;
+}
+
+function hasAllRequestedQuotes(quotes: Record<string, unknown> | null | undefined): boolean {
+  if (!quotes) {
+    return false;
+  }
+  return ALL_SYMBOLS.every((symbol) => Boolean(quotes[symbol]));
+}
+
+function withIndexQuoteAliases(quotes: Record<string, TwelveDataQuote>): Record<string, TwelveDataQuote> {
+  const next = { ...quotes };
+  for (const [source, alias] of Object.entries(INDEX_CACHE_ALIASES)) {
+    const quote = next[source];
+    if (quote) {
+      next[alias] = {
+        ...quote,
+        symbol: alias,
+        name: alias,
+      };
+    }
+  }
+  return next;
+}
+
+function withIndexSeriesAliases(series: Record<string, number[]>): Record<string, number[]> {
+  const next = { ...series };
+  for (const [source, alias] of Object.entries(INDEX_CACHE_ALIASES)) {
+    const values = next[source];
+    if (values) {
+      next[alias] = values;
+    }
+  }
+  return next;
 }
 
 function shouldRefreshIntelligence(fetchedAt: string | null | undefined): boolean {
@@ -153,7 +194,8 @@ export async function GET(request: Request) {
     ]);
     const quotesCacheRun = quotesCacheRow?.payload?.quotes ? getFetchedAtRunNumber(quotesCacheRow.fetchedAt) : null;
     const previousLogRun = previousRunLog?.payload?.run ?? null;
-    if (previousLogRun === run || quotesCacheRun === run) {
+    const quotesCacheComplete = hasAllRequestedQuotes(quotesCacheRow?.payload?.quotes);
+    if (quotesCacheComplete && (previousLogRun === run || quotesCacheRun === run)) {
       const skipReason = previousLogRun === run ? "run-log-current-window" : "quotes-cache-current-window";
       const action = `skipped:${skipReason}`;
       results.actions.push(action);
@@ -168,6 +210,7 @@ export async function GET(request: Request) {
         ...payload,
         previousRunLogFetchedAt: previousRunLog?.fetchedAt ?? null,
         quotesCacheFetchedAt: quotesCacheRow?.fetchedAt ?? null,
+        quotesCacheComplete,
       });
       return NextResponse.json(payload);
     }
@@ -183,9 +226,14 @@ export async function GET(request: Request) {
     // 2. Quotes
     const quotes = await fetchQuotes(ALL_SYMBOLS);
     const quotesMap = Object.fromEntries(quotes.map((q) => [q.symbol, q]));
-    await upsertCache("quotes:all", { quotes: quotesMap });
+    const mergedQuotes = withIndexQuoteAliases({
+      ...(quotesCacheRow?.payload?.quotes ?? {}),
+      ...quotesMap,
+    });
+    await upsertCache("quotes:all", { quotes: mergedQuotes });
     recordAction(`quotes:${quotes.length}/${Object.keys(quotesMap).length}`, {
       requested: ALL_SYMBOLS.length,
+      cached: Object.keys(mergedQuotes).length,
     });
 
     // 3. Selected-detail chart series (one timeframe per run to stay under Grow 55/min)
@@ -209,9 +257,10 @@ export async function GET(request: Request) {
       ...series,
     };
     if (Object.keys(series).length > 0) {
-      await upsertCache(`series:${detailTimeframe}`, { timeframe: detailTimeframe, series: mergedSeries });
+      const aliasedSeries = withIndexSeriesAliases(mergedSeries);
+      await upsertCache(`series:${detailTimeframe}`, { timeframe: detailTimeframe, series: aliasedSeries });
       if (detailTimeframe === "1D") {
-        await upsertCache("sparklines:all", { sparklines: mergedSeries });
+        await upsertCache("sparklines:all", { sparklines: aliasedSeries });
       }
     }
     recordAction(`series:${detailTimeframe}:${Object.keys(series).length}/${Object.keys(mergedSeries).length}`);

@@ -5,9 +5,9 @@
 import type { MarketSeriesTimeframe, TwelveDataQuote } from "@/lib/markets/twelve-data-adapter";
 import type { MarketIntelligenceSnapshot } from "@/lib/markets/market-intelligence";
 
-export type MarketsCategory = "major_pairs" | "commodities" | "crypto";
+export type MarketsCategory = "major_pairs" | "commodities" | "crypto" | "indices";
 
-export const CATEGORY_CONFIG: Record<MarketsCategory, { label: string; symbols: string[] }> = {
+export const CATEGORY_CONFIG: Record<MarketsCategory, { label: string; symbols: string[]; displayNames?: Record<string, string> }> = {
   major_pairs: {
     label: "Major Pairs",
     symbols: ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD", "USD/CHF"],
@@ -19,6 +19,18 @@ export const CATEGORY_CONFIG: Record<MarketsCategory, { label: string; symbols: 
   crypto: {
     label: "Crypto",
     symbols: ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "BNB/USD", "ADA/USD"],
+  },
+  indices: {
+    label: "Indices",
+    symbols: ["QQQ", "DIA", "EWU", "EWG", "EWJ", "EWH"],
+    displayNames: {
+      QQQ: "Nasdaq",
+      DIA: "Dow",
+      EWU: "FTSE",
+      EWG: "DAX",
+      EWJ: "Nikkei",
+      EWH: "Hong Kong",
+    },
   },
 };
 
@@ -56,11 +68,12 @@ export function buildCategoryCards(
   return config.symbols.map((sym) => {
     const quote = snapshot?.quotes?.[sym];
     const sparkline = snapshot?.sparklines?.[sym] ?? [];
+    const displayName = config.displayNames?.[sym] ?? sym;
 
     if (!quote) {
       return {
         symbol: sym,
-        name: sym,
+        name: displayName,
         price: 0,
         change: 0,
         percent_change: 0,
@@ -72,7 +85,7 @@ export function buildCategoryCards(
 
     return {
       symbol: sym,
-      name: quote.name ?? sym,
+      name: config.displayNames?.[sym] ?? quote.name ?? sym,
       price: quote.price,
       change: quote.change,
       percent_change: quote.percent_change,
@@ -120,10 +133,12 @@ export function formatAbsoluteChange(symbol: string, change: number): string {
     return `${sign}${absolute.toFixed(5)}`;
   }
 
-  return `${sign}US$${absolute.toLocaleString("en-US", {
+  const formatted = absolute.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  })}`;
+  });
+
+  return `${sign}US$${formatted}`;
 }
 
 import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";

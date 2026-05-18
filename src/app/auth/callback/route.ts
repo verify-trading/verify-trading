@@ -1,9 +1,8 @@
 /**
  * OAuth PKCE callback: `exchangeCodeForSession` must run on the server so session cookies are set.
  *
- * Login-only Google: when `oauth=login_only` (set only from /login), reject apparent new Google-only
- * signups after session exchange and delete the just-created auth user when admin cleanup is available
- * — see `shouldBlockLoginOnlyGoogleSignup` and `src/lib/auth/oauth-login-only.ts`.
+ * Google OAuth may create a user during sign-in. We intentionally allow that so
+ * the login page can serve both returning Google users and first-time Google users.
  *
  * Affiliate Lead tracking: if the user has a Rewardful referral cookie, attach
  * the referral UUID to their Stripe customer record so Rewardful counts it as a Lead.
@@ -19,13 +18,10 @@ import {
   RECENT_OAUTH_SIGNUP_COOKIE_NAME,
 } from "@/lib/auth/oauth-flow";
 import { getSafeRedirectPath } from "@/lib/auth/safe-redirect";
-import { shouldBlockLoginOnlyGoogleSignup } from "@/lib/auth/oauth-login-only";
 import { ensureStripeCustomerForUser } from "@/lib/billing/repository";
 import { logger } from "@/lib/observability/logger";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-const LOGIN_OAUTH_ERROR_CODE = "oauth_login_no_account";
 const REWARDFUL_REFERRAL_COOKIE_NAME = "rewardful.referral";
 const AUTH_COOKIE_OPTIONS = {
   path: "/",
@@ -79,7 +75,7 @@ function extractRewardfulReferralId(cookieHeader: string | null): string | null 
 /**
  * Link the newly-signed-up user to a Stripe customer with the affiliate referral
  * attached. This is what enables Rewardful to count the signup as a Lead.
- * Silently fails — never block the redirect over affiliate tracking.
+ * Silently fails, so OAuth redirects are not blocked by affiliate tracking.
  */
 async function linkAffiliateReferralServerSide(
   userId: string,
@@ -102,26 +98,6 @@ async function linkAffiliateReferralServerSide(
   }
 }
 
-async function deleteBlockedLoginOnlyGoogleSignup(userId: string) {
-  const supabaseAdmin = getSupabaseAdminClient();
-
-  if (!supabaseAdmin) {
-    logger.warn("Supabase admin client unavailable while cleaning up blocked login-only OAuth user.", {
-      userId,
-    });
-    return;
-  }
-
-  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-
-  if (error) {
-    logger.error("Failed to delete blocked login-only OAuth user.", {
-      userId,
-      error: error.message,
-    });
-  }
-}
-
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const cookieHeader = request.headers.get("cookie");
@@ -131,7 +107,6 @@ export async function GET(request: Request) {
   const oauthFlow = parseOAuthFlow(
     readCookie(cookieHeader, OAUTH_FLOW_COOKIE_NAME) ?? searchParams.get("oauth"),
   );
-  const recentOauthSignupUserId = readCookie(cookieHeader, RECENT_OAUTH_SIGNUP_COOKIE_NAME);
 
   if (!code) {
     const response = NextResponse.redirect(new URL("/login?error=auth_code", origin));
@@ -152,27 +127,6 @@ export async function GET(request: Request) {
     return response;
   }
 
-  if (
-    oauthFlow === "login_only" &&
-    data.user &&
-    shouldBlockLoginOnlyGoogleSignup(data.user) &&
-    recentOauthSignupUserId !== data.user.id
-  ) {
-    await supabase.auth.signOut();
-    await deleteBlockedLoginOnlyGoogleSignup(data.user.id);
-    const login = new URL("/login", origin);
-    login.searchParams.set("error", LOGIN_OAUTH_ERROR_CODE);
-    const response = NextResponse.redirect(login);
-    clearOAuthFlowCookie(response);
-    clearAuthRedirectCookie(response);
-    return response;
-  }
-
-  // Affiliate Lead tracking: if this user has a Rewardful referral cookie,
-  // create or update a Stripe customer with the referral UUID attached.
-  // Rewardful will pick it up via Stripe sync and count it as a Lead.
-  // Works for: Google OAuth signups, email-verification clickbacks, and OAuth logins
-  // where the user still has the affiliate cookie set.
   const referralId = extractRewardfulReferralId(cookieHeader);
   if (referralId && data.user?.id) {
     const userMetadata = data.user.user_metadata ?? {};

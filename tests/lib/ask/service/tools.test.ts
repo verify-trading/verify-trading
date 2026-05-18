@@ -119,6 +119,82 @@ describe("createAskTools", () => {
     });
   });
 
+  it("uses a live conversion pair when position sizing needs a third-currency conversion", async () => {
+    const getMarketQuoteImpl = vi.fn().mockResolvedValue({
+      asset: "USD/GBP",
+      symbol: "USD/GBP",
+      price: 0.8,
+      changePercent: 0.1,
+      direction: "up",
+      isMarketOpen: true,
+    });
+    const tools = createAskTools({ getMarketQuoteImpl });
+
+    const result = await tools.calculate_position_size.execute?.(
+      {
+        accountSize: 10000,
+        riskPercent: 1,
+        stopLossPips: 20,
+        pair: "EUR/USD",
+        accountCurrency: "GBP",
+      },
+      {} as never,
+    );
+
+    expect(getMarketQuoteImpl).toHaveBeenCalledWith("USD/GBP");
+    expect(result).toEqual({
+      card: {
+        type: "calc",
+        lots: "0.63",
+        risk_amount: "£100.00",
+        account: "£10,000.00",
+        risk_pct: "1%",
+        sl_pips: "20",
+        verdict: "Size down first. Protect the downside before chasing the upside.",
+      },
+    });
+  });
+
+  it("uses the inverse live conversion pair when the direct conversion pair is unavailable", async () => {
+    const getMarketQuoteImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("No direct conversion"))
+      .mockResolvedValueOnce({
+        asset: "GBP/USD",
+        symbol: "GBP/USD",
+        price: 1.25,
+        changePercent: 0.1,
+        direction: "up",
+        isMarketOpen: true,
+      });
+    const tools = createAskTools({ getMarketQuoteImpl });
+
+    const result = await tools.calculate_position_size.execute?.(
+      {
+        accountSize: 10000,
+        riskPercent: 1,
+        stopLossPips: 20,
+        pair: "EUR/USD",
+        accountCurrency: "GBP",
+      },
+      {} as never,
+    );
+
+    expect(getMarketQuoteImpl).toHaveBeenNthCalledWith(1, "USD/GBP");
+    expect(getMarketQuoteImpl).toHaveBeenNthCalledWith(2, "GBP/USD");
+    expect(result).toEqual({
+      card: {
+        type: "calc",
+        lots: "0.63",
+        risk_amount: "£100.00",
+        account: "£10,000.00",
+        risk_pct: "1%",
+        sl_pips: "20",
+        verdict: "Size down first. Protect the downside before chasing the upside.",
+      },
+    });
+  });
+
   it("returns a clean coverage card when entity verification has no match", async () => {
     const tools = createAskTools({
       lookupVerifiedEntityImpl: vi.fn().mockResolvedValue({

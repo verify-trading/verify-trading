@@ -133,6 +133,7 @@ describe("TwelveMarketsPage", () => {
     expect(screen.getByRole("button", { name: "Major Pairs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Commodities" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Crypto" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Indices" })).toBeInTheDocument();
 
     expect(global.fetch).not.toHaveBeenCalled();
   });
@@ -179,6 +180,7 @@ describe("TwelveMarketsPage", () => {
     expect(screen.getByRole("button", { name: "Major Pairs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Commodities" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Crypto" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Indices" })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/markets");
@@ -221,6 +223,12 @@ describe("TwelveMarketsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("XAU/USD")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Indices" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Nasdaq")).toBeInTheDocument();
     });
   });
 
@@ -275,8 +283,8 @@ describe("TwelveMarketsPage", () => {
     fireEvent.click(screen.getByRole("tab", { name: /economic calendar/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("ISM Services PMI in 2h 0m")).toBeInTheDocument();
       expect(screen.getAllByText("ISM Services PMI").length).toBeGreaterThan(0);
+      expect(screen.getByText("2h 0m")).toBeInTheDocument();
     });
 
     expect(global.fetch).toHaveBeenCalledWith("/api/markets/calendar");
@@ -300,6 +308,18 @@ describe("TwelveMarketsPage", () => {
       undefined,
       {
         updatedAt: "2026-05-05T10:00:00.000Z",
+        dailyBrief: {
+          date: "2026-05-05",
+          generatedAt: "2026-05-05T08:00:00.000Z",
+          overview: "Dollar strength is steering the session.",
+          gold: { level: "2380", bias: "Bullish", verdict: "Gold is firm." },
+          oil: { level: "84.20", bias: "Bullish", verdict: "Oil is firm." },
+          dxy: { level: "105.20", bias: "Bullish", verdict: "Dollar bid controls risk." },
+          usdjpy: { level: "157.20", bias: "Bullish", verdict: "Yields are driving USD/JPY." },
+          eurusd: { level: "1.0820", bias: "Bearish", verdict: "Dollar pressure is showing." },
+          gbpusd: { level: "1.2850", bias: "Bearish", verdict: "Sterling is soft." },
+          session_tone: "Dollar strength is the main focus.",
+        },
         items: [
           {
             id: "n1",
@@ -326,14 +346,53 @@ describe("TwelveMarketsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Dollar steadies before Fed decision")).toBeInTheDocument();
+      expect(screen.getByText("DXY")).toBeInTheDocument();
+      expect(screen.getByText("USD/JPY")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Dollar steadies before Fed decision/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Ask about this/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Ask about this/i }).at(-1)!);
 
     expect(mockRouterPush).toHaveBeenCalledWith(
       "/ask?prefill=Dollar%20steadies%20before%20Fed%20decision%20%E2%80%94%20what%20does%20this%20mean%20for%20my%20trades%20today%3F",
     );
     expect(global.fetch).toHaveBeenCalledWith("/api/markets/intelligence");
+  });
+
+  it("renders the current-state artwork for Journal and Mind placeholders", async () => {
+    vi.mocked(useSupabaseAuth).mockReturnValue({
+      supabase: supabaseClientForProAccountMenu() as never,
+      user: { id: "user-1" } as never,
+      session: {} as never,
+      ready: true,
+      isSignedIn: true,
+    });
+
+    mockFetchMarkets({
+      updatedAt: "2026-04-09T10:00:00.000Z",
+      quotes: {},
+      sparklines: {},
+    });
+
+    renderWithQueryClient(
+      <TwelveMarketsPage
+        initialTier="pro"
+        pricing={marketsTestPricing}
+        billingContext={freeSignedInBillingContext}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /journal/i }));
+
+    expect(screen.getByText("Trading Journal")).toBeInTheDocument();
+    expect(screen.getByTestId("journal-state-icon")).toBeInTheDocument();
+    expect(screen.queryByTestId("mind-state-orb")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /mind/i }));
+
+    expect(screen.getByText("Psychological AI")).toBeInTheDocument();
+    expect(screen.getByTestId("mind-state-orb")).toBeInTheDocument();
+    expect(screen.getByLabelText("Plasma mind orb")).toBeInTheDocument();
+    expect(screen.queryByTestId("journal-state-icon")).not.toBeInTheDocument();
   });
 });

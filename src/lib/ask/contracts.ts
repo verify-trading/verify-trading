@@ -351,8 +351,118 @@ export const fallbackInsightCard: InsightCard = {
   verdict: "Please rephrase your question.",
 };
 
+function trimToWordLimit(value: string, maxWords: number, options: { keepPunctuation?: boolean }) {
+  const words = value.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return value;
+  }
+
+  const trimmed = words.slice(0, maxWords).join(" ").replace(/[,.!?;:]+$/u, "");
+  return options.keepPunctuation === false ? trimmed : `${trimmed}.`;
+}
+
+function limitSentences(value: string, maxSentences: number) {
+  const decimalPlaceholder = "__ASK_DECIMAL_POINT__";
+  const protectedValue = value.replace(/(?<=\d)\.(?=\d)/g, decimalPlaceholder);
+  const sentences = protectedValue.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
+  if (!sentences || sentences.length <= maxSentences) {
+    return value;
+  }
+
+  return sentences
+    .slice(0, maxSentences)
+    .join(" ")
+    .replaceAll(decimalPlaceholder, ".")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function sanitizeNaturalLanguageField(
+  value: string | null,
+  limits: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean } = {},
+) {
+  if (value === null) {
+    return value;
+  }
+
+  const normalized = value
+    .replace(/[\u2010-\u2015]/g, ",")
+    .replace(/\s+-\s+/g, ", ")
+    .replace(/(?<=\p{L})-(?=\p{L})/gu, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/,{2,}/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  const sentenceLimited =
+    limits.maxSentences === undefined
+      ? normalized
+      : limitSentences(normalized, limits.maxSentences);
+
+  return limits.maxWords === undefined
+    ? sentenceLimited
+    : trimToWordLimit(sentenceLimited, limits.maxWords, {
+        keepPunctuation: limits.keepPunctuation,
+      });
+}
+
+function sanitizeCardNaturalLanguage(card: AskCard): AskCard {
+  switch (card.type) {
+    case "broker":
+      return {
+        ...card,
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3, maxWords: 45 }),
+      };
+    case "briefing":
+      return {
+        ...card,
+        event: sanitizeNaturalLanguageField(card.event, { maxSentences: 1, maxWords: 22 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3, maxWords: 45 }),
+      };
+    case "calc":
+      return {
+        ...card,
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+      };
+    case "guru":
+      return {
+        ...card,
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3, maxWords: 45 }),
+      };
+    case "insight":
+      return {
+        ...card,
+        headline: sanitizeNaturalLanguageField(card.headline, { maxWords: 4, keepPunctuation: false }),
+        body: sanitizeNaturalLanguageField(card.body, { maxSentences: 3, maxWords: 55 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+      };
+    case "plan":
+      return {
+        ...card,
+        rationale: sanitizeNaturalLanguageField(card.rationale, { maxSentences: 3, maxWords: 55 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+      };
+    case "chart":
+      return {
+        ...card,
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+      };
+    case "setup":
+      return {
+        ...card,
+        rationale: sanitizeNaturalLanguageField(card.rationale, { maxSentences: 3, maxWords: 55 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+      };
+    case "projection":
+      return {
+        ...card,
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+      };
+  }
+}
+
 export function sanitizeCard(card: AskCard): AskCard {
-  return JSON.parse(JSON.stringify(card)) as AskCard;
+  return sanitizeCardNaturalLanguage(JSON.parse(JSON.stringify(card)) as AskCard);
 }
 
 export function sanitizeUiMeta(uiMeta: AskUiMeta | undefined): AskUiMeta | undefined {

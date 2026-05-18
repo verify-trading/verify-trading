@@ -53,9 +53,6 @@ function LoginPageContent() {
     if (!paramError) {
       return null;
     }
-    if (paramError === "oauth_login_no_account") {
-      return "No account for this Google sign-in. Create an account first.";
-    }
     try {
       return decodeURIComponent(paramError);
     } catch {
@@ -118,13 +115,13 @@ function LoginPageContent() {
         setGoogleBusy(false);
         return;
       }
-      beginOAuthFlow("login_only");
+      beginOAuthFlow("signup");
       setAuthRedirectCookie(next);
       const origin = window.location.origin;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}&oauth=login_only`,
+          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}&oauth=signup`,
         },
       });
 
@@ -139,8 +136,6 @@ function LoginPageContent() {
   }
 
   const rootMessage = errors.root?.message || defaultError;
-  const showOAuthNoAccountBanner = paramError === "oauth_login_no_account" && !errors.root;
-
   return (
     <AuthShell
       title="Welcome back"
@@ -151,20 +146,7 @@ function LoginPageContent() {
           <div className={cn("mb-4", authInlineSuccessBannerClass)}>{resetSuccessMessage}</div>
         ) : null}
         {rootMessage ? (
-          showOAuthNoAccountBanner ? (
-            <div className={authInlineErrorBannerClass}>
-              No account for this Google sign-in.{" "}
-              <Link
-                href={signupHref}
-                className="font-semibold text-red-50 underline decoration-red-300/60 underline-offset-2 transition hover:text-white hover:decoration-white/80"
-              >
-                Create an account
-              </Link>{" "}
-              to continue.
-            </div>
-          ) : (
-            <div className={authInlineErrorBannerClass}>{rootMessage}</div>
-          )
+          <div className={authInlineErrorBannerClass}>{rootMessage}</div>
         ) : null}
       </div>
 
@@ -173,7 +155,7 @@ function LoginPageContent() {
           onClick={signInWithGoogle}
           disabled={isSubmitting}
           loading={googleBusy}
-          variant="continue"
+          label="Create or sign in with Google"
         />
         <AuthDivider label="or with email" />
       </div>

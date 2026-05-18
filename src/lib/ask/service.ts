@@ -41,11 +41,7 @@ import {
   parseImageDataUrl,
 } from "@/lib/ask/service/context";
 import { buildSessionMemoryMessage, deriveAskSessionMemory } from "@/lib/ask/session-memory";
-import {
-  getMarketQuote,
-  getMarketSeries,
-  inferMarketAssetsFromText,
-} from "@/lib/ask/market";
+import { inferMarketAssetsFromText } from "@/lib/ask/market";
 import { lookupVerifiedEntity } from "@/lib/ask/entities";
 import {
   createSystemMessage,
@@ -55,7 +51,6 @@ import {
   getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
 import {
-  buildBriefingCard,
   buildPipValueCard,
   buildRiskRewardCard,
   createAskTools,
@@ -245,6 +240,18 @@ function buildProtectedBriefingForMarketUpdate(
   };
 }
 
+function mergeBriefingModelExplanation(toolBriefing: AskCard, modelBriefing: AskCard) {
+  if (toolBriefing.type !== "briefing" || modelBriefing.type !== "briefing") {
+    return toolBriefing;
+  }
+
+  return {
+    ...toolBriefing,
+    event: modelBriefing.event ?? toolBriefing.event,
+    verdict: modelBriefing.verdict,
+  };
+}
+
 type AskCardSource =
   | "tool_result"
   | "submit_ask_card"
@@ -319,7 +326,10 @@ function resolveToolOwnedOverride(
   }
 
   if (modelPreferredCard.type === "briefing" && toolState.fmpBriefing?.type === "briefing") {
-    return toolState.protectedBriefingForMarketUpdate ?? toolState.fmpBriefing;
+    return mergeBriefingModelExplanation(
+      toolState.protectedBriefingForMarketUpdate ?? toolState.fmpBriefing,
+      modelPreferredCard,
+    );
   }
 
   if (modelPreferredCard.type === "setup" && toolState.marketSetupToolCard?.type === "setup") {
@@ -753,25 +763,6 @@ function resolveAcknowledgementCard(request: AskRequest): ReturnType<typeof buil
   );
 }
 
-function extractDirectBriefingTimeframe(message: string): "1D" | "1W" | "1M" | "3M" | "1Y" {
-  const normalized = message.toLowerCase();
-
-  if (/\b1d\b|\btoday\b|\bintraday\b|\bdaily\b/.test(normalized)) {
-    return "1D";
-  }
-  if (/\b1m\b|\bmonth\b|\bmonthly\b/.test(normalized)) {
-    return "1M";
-  }
-  if (/\b3m\b|\b3 month\b|\bthree month\b/.test(normalized)) {
-    return "3M";
-  }
-  if (/\b1y\b|\byear\b|\byearly\b|\bannual\b/.test(normalized)) {
-    return "1Y";
-  }
-
-  return "1W";
-}
-
 function extractDirectForexPair(message: string) {
   const match = message.match(/\b([a-z]{3})\/([a-z]{3})\b/i);
   if (!match) {
@@ -883,36 +874,6 @@ function shouldUseDirectVerificationShortcut(message: string) {
 
   return /\b(safe|legit|legitimate|regulated|fca|scam|safe to deposit|uk retail|trustworthy)\b/.test(
     normalized,
-  );
-}
-
-function shouldUseDirectMarketBriefingShortcut(message: string) {
-  const normalized = normalizeWhitespace(message).toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  const mentionsNewsOrMacro =
-    /\b(cpi|nfp|fed|fomc|ecb|boj|boe|inflation|payrolls|jobs|rate decision|headline|news|trump|iran|war|ceasefire|geopolitics|earnings|after earnings|why did|what happened)\b/.test(
-      normalized,
-    );
-  if (mentionsNewsOrMacro) {
-    return false;
-  }
-
-  const asksForSetupOrOpinion =
-    /\b(buy|sell|long|short|entry|stop|target|setup|trade plan|should i|best trade|cleanest setup|recommend|why not|vs|versus|compare|after earnings|earnings play|overvalued|hold)\b/.test(
-      normalized,
-    );
-  if (asksForSetupOrOpinion) {
-    return false;
-  }
-
-  return (
-    /\bstatus on\b/.test(normalized) ||
-    /\bprice now\b/.test(normalized) ||
-    /\bcurrent price\b/.test(normalized) ||
-    /\bwhere is\b.+\btrading now\b/.test(normalized)
   );
 }
 
@@ -1068,33 +1029,7 @@ async function resolveDirectShortcut({
     };
   }
 
-  if (!shouldUseDirectMarketBriefingShortcut(normalizedMessage)) {
-    return null;
-  }
-
-  const getMarketQuoteImpl =
-    dependencies.getMarketQuoteImpl ?? ((a: string) => getMarketQuote(a, { live: true }));
-  const getMarketSeriesImpl =
-    dependencies.getMarketSeriesImpl ?? ((a: string, tf) => getMarketSeries(a, tf, { live: true }));
-  const inferredAssets = inferMarketAssetsFromText(normalizedMessage);
-  const inferredAsset =
-    inferredAssets.length === 1 ? inferredAssets[0] : extractDirectForexPair(normalizedMessage);
-
-  if (!inferredAsset) {
-    return null;
-  }
-
-  const timeframe = extractDirectBriefingTimeframe(normalizedMessage);
-  const { card, uiMeta } = buildBriefingCard(
-    await getMarketQuoteImpl(inferredAsset),
-    await getMarketSeriesImpl(inferredAsset, timeframe),
-  );
-
-  return {
-    card,
-    source: "direct_market_briefing_shortcut",
-    uiMeta,
-  };
+  return null;
 }
 
 export async function generateAskResponse(
@@ -1150,7 +1085,7 @@ export async function generateAskResponse(
       maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
       maxRetries: ASK_MODEL_MAX_RETRIES,
       output: askCardOutput,
-      stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS)],
+      stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS), stopAfterSubmitAskCardResult],
       onStepFinish({
         stepNumber,
         text,

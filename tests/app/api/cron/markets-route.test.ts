@@ -54,7 +54,14 @@ describe("GET /api/cron/markets", () => {
       if (key === "quotes:all") {
         return {
           fetchedAt: new Date(5 * 60 * 1000).toISOString(),
-          payload: { quotes: { "EUR/USD": { symbol: "EUR/USD" } } },
+          payload: {
+            quotes: {
+              "EUR/USD": { symbol: "EUR/USD" },
+              "AUD/USD": { symbol: "AUD/USD" },
+              "XAU/USD": { symbol: "XAU/USD" },
+              "BTC/USD": { symbol: "BTC/USD" },
+            },
+          },
         } as never;
       }
       return null;
@@ -78,6 +85,39 @@ describe("GET /api/cron/markets", () => {
         skipReason: "quotes-cache-current-window",
       }),
     );
+  });
+
+  it("does not skip when the current quote cache is missing configured symbols", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(5 * 60 * 1000);
+    vi.stubEnv("CRON_SECRET", "");
+    vi.mocked(fetchMarketState).mockResolvedValue([]);
+    vi.mocked(fetchQuotes).mockResolvedValue([
+      { symbol: "EUR/USD", price: 1.1, percent_change: 0.5 },
+      { symbol: "AUD/USD", price: 0.7, percent_change: 0.2 },
+      { symbol: "XAU/USD", price: 2300, percent_change: -0.1 },
+      { symbol: "BTC/USD", price: 80000, percent_change: 1.2 },
+    ] as never);
+    vi.mocked(fetchMarketSeries).mockResolvedValue({ symbol: "EUR/USD", values: [1, 2, 3] });
+    vi.mocked(shouldRefreshEconomicCalendar).mockReturnValue(false);
+    vi.mocked(readCacheRow).mockImplementation(async (key: string) => {
+      if (key === "quotes:all") {
+        return {
+          fetchedAt: new Date(5 * 60 * 1000).toISOString(),
+          payload: { quotes: { "EUR/USD": { symbol: "EUR/USD" } } },
+        } as never;
+      }
+      return {
+        fetchedAt: new Date(5 * 60 * 1000).toISOString(),
+        payload: { updatedAt: new Date(5 * 60 * 1000).toISOString(), items: [] },
+      } as never;
+    });
+
+    const response = await GET(new Request("http://localhost/api/cron/markets"));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.actions).not.toContain("skipped:quotes-cache-current-window");
+    expect(fetchQuotes).toHaveBeenCalledWith(["EUR/USD", "AUD/USD", "XAU/USD", "BTC/USD"]);
   });
 
   it("refreshes all quotes and the selected-detail timeframe on every run", async () => {
@@ -129,6 +169,45 @@ describe("GET /api/cron/markets", () => {
         nextSeries: "1D refreshed",
       }),
     );
+  });
+
+  it("merges refreshed quotes with existing cached symbols", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(10 * 60 * 1000);
+    vi.stubEnv("CRON_SECRET", "");
+    vi.mocked(fetchMarketState).mockResolvedValue([]);
+    vi.mocked(fetchQuotes).mockResolvedValue([
+      { symbol: "EUR/USD", price: 1.1, percent_change: 0.5 },
+      { symbol: "AUD/USD", price: 0.7, percent_change: 0.2 },
+      { symbol: "XAU/USD", price: 2300, percent_change: -0.1 },
+      { symbol: "BTC/USD", price: 80000, percent_change: 1.2 },
+    ] as never);
+    vi.mocked(fetchMarketSeries).mockResolvedValue({ symbol: "EUR/USD", values: [1, 2, 3] });
+    vi.mocked(shouldRefreshEconomicCalendar).mockReturnValue(false);
+    vi.mocked(readCacheRow).mockImplementation(async (key: string) => {
+      if (key === "quotes:all") {
+        return {
+          fetchedAt: new Date(0).toISOString(),
+          payload: { quotes: { QQQ: { symbol: "QQQ", price: 700 } } },
+        } as never;
+      }
+      return {
+        fetchedAt: new Date(0).toISOString(),
+        payload: { updatedAt: new Date(0).toISOString(), items: [] },
+      } as never;
+    });
+
+    const response = await GET(new Request("http://localhost/api/cron/markets"));
+
+    expect(response.status).toBe(200);
+    const quotesWrite = vi
+      .mocked(upsertCache)
+      .mock.calls.find(([key]) => key === "quotes:all");
+    expect(quotesWrite?.[1]).toEqual({
+      quotes: expect.objectContaining({
+        QQQ: { symbol: "QQQ", price: 700 },
+        "EUR/USD": { symbol: "EUR/USD", price: 1.1, percent_change: 0.5 },
+      }),
+    });
   });
 
   it("refreshes market intelligence when the shared cache is stale", async () => {

@@ -115,24 +115,49 @@ describe("generateAskResponse", () => {
     });
   });
 
-  it("short-circuits direct market-status asks into a briefing card without calling the model", async () => {
-    const generateTextImpl = vi.fn();
-    const getMarketQuoteImpl = vi.fn().mockResolvedValue({
-      asset: "GOLD",
-      symbol: "GCUSD",
-      price: 4736.3,
-      changePercent: -0.86,
-      direction: "down",
-      isMarketOpen: null,
-    });
-    const getMarketSeriesImpl = vi.fn().mockResolvedValue({
-      asset: "GOLD",
-      symbol: "GCUSD",
-      timeframe: "1W",
-      closeValues: [4699.3, 4721.5, 4745.1, 4736.3],
-      resistance: 4745.1,
-      support: 4699.3,
-    });
+  it("routes direct market-status asks through the model so it can write the verdict", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: "",
+      toolResults: [
+        {
+          toolName: "get_market_briefing",
+          output: {
+            card: {
+              type: "briefing",
+              asset: "GOLD",
+              price: "4736.30",
+              change: "-0.86%",
+              direction: "down",
+              level1: "4745.10",
+              level2: "4699.30",
+              event: null,
+              verdict: "GOLD is leaning back toward the recent range low. Watch for follow-through if that gives way.",
+            },
+            uiMeta: {
+              marketSeries: [4699.3, 4721.5, 4745.1, 4736.3],
+              marketLevelScopeLabel: "Recent range",
+            },
+          },
+        },
+        {
+          toolName: "submit_ask_card",
+          output: {
+            card: {
+              type: "briefing",
+              asset: "GOLD",
+              price: "1.00",
+              change: "+0.10%",
+              direction: "up",
+              level1: "2.00 resistance",
+              level2: "0.50 support",
+              event: null,
+              verdict:
+                "Gold is heavy inside its recent range. If sellers break support the move can extend, but a hold there argues for patience instead of chasing.",
+            },
+          },
+        },
+      ],
+    }) as unknown as typeof import("ai").generateText;
 
     const response = await generateAskResponse(
       {
@@ -141,40 +166,58 @@ describe("generateAskResponse", () => {
         history: [],
       },
       {
-        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
-        getMarketQuoteImpl,
-        getMarketSeriesImpl,
+        generateTextImpl,
       },
     );
 
-    expect(generateTextImpl).not.toHaveBeenCalled();
-    expect(getMarketQuoteImpl).toHaveBeenCalledWith("GOLD");
-    expect(getMarketSeriesImpl).toHaveBeenCalledWith("GOLD", "1W");
+    expect(generateTextImpl).toHaveBeenCalledOnce();
     expect(response.data.type).toBe("briefing");
+    expect(response.data.type === "briefing" ? response.data.price : null).toBe("4736.30");
+    expect(response.data.type === "briefing" ? response.data.verdict : null).toBe(
+      "Gold is heavy inside its recent range. If sellers break support the move can extend, but a hold there argues for patience instead of chasing.",
+    );
     expect(response.uiMeta).toEqual({
       marketSeries: [4699.3, 4721.5, 4745.1, 4736.3],
       marketLevelScopeLabel: "Recent range",
     });
   });
 
-  it("short-circuits direct forex market-status asks without calling the model", async () => {
-    const generateTextImpl = vi.fn();
-    const getMarketQuoteImpl = vi.fn().mockResolvedValue({
-      asset: "AUD/USD",
-      symbol: "AUDUSD",
-      price: 0.7166,
-      changePercent: 0.57,
-      direction: "up",
-      isMarketOpen: null,
-    });
-    const getMarketSeriesImpl = vi.fn().mockResolvedValue({
-      asset: "AUD/USD",
-      symbol: "AUDUSD",
-      timeframe: "1W",
-      closeValues: [0.7126, 0.7148, 0.7167, 0.7166],
-      resistance: 0.7167,
-      support: 0.7126,
-    });
+  it("routes direct forex market-status asks through the model", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        type: "briefing",
+        asset: "AUD/USD",
+        price: "0.7000",
+        change: "+0.10%",
+        direction: "up",
+        level1: "0.7100 resistance",
+        level2: "0.6900 support",
+        event: null,
+        verdict: "AUD/USD needs acceptance above resistance before the move is worth chasing.",
+      }),
+      toolResults: [
+        {
+          toolName: "get_market_briefing",
+          output: {
+            card: {
+              type: "briefing",
+              asset: "AUD/USD",
+              price: "0.7166",
+              change: "+0.57%",
+              direction: "up",
+              level1: "0.7167",
+              level2: "0.7126",
+              event: null,
+              verdict: "AUD/USD is pushing toward the recent range high. Watch for continuation if that breaks.",
+            },
+            uiMeta: {
+              marketSeries: [0.7126, 0.7148, 0.7167, 0.7166],
+              marketLevelScopeLabel: "Recent range",
+            },
+          },
+        },
+      ],
+    }) as unknown as typeof import("ai").generateText;
 
     const response = await generateAskResponse(
       {
@@ -183,17 +226,16 @@ describe("generateAskResponse", () => {
         history: [],
       },
       {
-        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
-        getMarketQuoteImpl,
-        getMarketSeriesImpl,
+        generateTextImpl,
       },
     );
 
-    expect(generateTextImpl).not.toHaveBeenCalled();
-    expect(getMarketQuoteImpl).toHaveBeenCalledWith("AUD/USD");
-    expect(getMarketSeriesImpl).toHaveBeenCalledWith("AUD/USD", "1W");
+    expect(generateTextImpl).toHaveBeenCalledOnce();
     expect(response.data.type).toBe("briefing");
     expect(response.data.type === "briefing" ? response.data.price : null).toBe("0.7166");
+    expect(response.data.type === "briefing" ? response.data.verdict : null).toBe(
+      "AUD/USD needs acceptance above resistance before the move is worth chasing.",
+    );
   });
 
   it("short-circuits direct broker safety checks without calling the model", async () => {
@@ -1104,7 +1146,7 @@ describe("generateAskResponse", () => {
     });
   });
 
-  it("prefers get_market_briefing (FMP) over submit_ask_card when both return a briefing card", async () => {
+  it("keeps FMP briefing numbers but uses the model briefing verdict", async () => {
     const response = await generateAskResponse(
       {
         message: "check again",
@@ -1144,7 +1186,8 @@ describe("generateAskResponse", () => {
                   level1: "0.6450 resistance",
                   level2: "0.6330 support",
                   event: null,
-                  verdict: "Hallucinated narrative.",
+                  verdict:
+                    "AUD/USD is bid into resistance. A clean hold above the range high keeps momentum alive, but rejection there turns this back into a range trade.",
                 },
               },
             },
@@ -1158,7 +1201,9 @@ describe("generateAskResponse", () => {
       throw new Error("Expected a briefing card.");
     }
     expect(response.data.price).toBe("0.72");
-    expect(response.data.verdict).toContain("holding above support");
+    expect(response.data.verdict).toBe(
+      "AUD/USD is bid into resistance. A clean hold above the range high keeps momentum alive, but rejection there turns this back into a range trade.",
+    );
   });
 
   it("keeps the FMP briefing and merges news event for market-update prompts", async () => {
@@ -1218,7 +1263,8 @@ describe("generateAskResponse", () => {
                   level1: "0.6450 resistance",
                   level2: "0.6330 support",
                   event: null,
-                  verdict: "Hallucinated narrative.",
+                  verdict:
+                    "AUD/USD has a supportive headline behind it, but it is already near the top of the recent range. Buyers need acceptance above resistance or the move can fade.",
                 },
               },
             },
@@ -1236,11 +1282,12 @@ describe("generateAskResponse", () => {
       level1: "0.7167",
       level2: "0.7126",
       event: "AUD gains as softer US inflation keeps the dollar offered (Reuters)",
-      verdict: "AUD/USD is pushing toward the recent range high. Watch for continuation if that breaks.",
+      verdict:
+        "AUD/USD has a supportive headline behind it, but it is already near the top of the recent range. Buyers need acceptance above resistance or the move can fade.",
     });
   });
 
-  it("prefers get_market_briefing (FMP) over a valid model-generated briefing card", async () => {
+  it("keeps FMP briefing numbers when the model returns a briefing text card", async () => {
     const response = await generateAskResponse(
       {
         message: "check again",
@@ -1258,7 +1305,8 @@ describe("generateAskResponse", () => {
             level1: "0.6450 resistance",
             level2: "0.6330 support",
             event: null,
-            verdict: "Hallucinated narrative.",
+            verdict:
+              "AUD/USD is firm but stretched into resistance. Let it prove acceptance above the range before chasing the move.",
           }),
           toolResults: [
             {
@@ -1288,7 +1336,9 @@ describe("generateAskResponse", () => {
       throw new Error("Expected a briefing card.");
     }
     expect(response.data.price).toBe("0.72");
-    expect(response.data.verdict).toContain("holding above support");
+    expect(response.data.verdict).toBe(
+      "AUD/USD is firm but stretched into resistance. Let it prove acceptance above the range before chasing the move.",
+    );
   });
 
   it("configures structured output on the model path", async () => {
@@ -1310,7 +1360,7 @@ describe("generateAskResponse", () => {
     const output = vi.mocked(generateTextImpl).mock.calls[0]?.[0]?.output;
     expect(Array.isArray(stopWhen)).toBe(true);
     expect(output).toBeDefined();
-    expect(stopWhen).toHaveLength(1);
+    expect(stopWhen).toHaveLength(2);
   });
 
   it("prefers the model's final JSON card over a raw tool card", async () => {
@@ -1792,7 +1842,7 @@ describe("generateAskResponse", () => {
       type: "insight",
       headline: "Quick Take",
       body: "still not json",
-      verdict: "Ask a sharper follow-up if you want me to refine it.",
+      verdict: "Ask a sharper follow up if you want me to refine it.",
     });
   });
 
@@ -1815,7 +1865,7 @@ describe("generateAskResponse", () => {
       type: "insight",
       headline: "Quick Take",
       body: "still not json",
-      verdict: "Ask a sharper follow-up if you want me to refine it.",
+      verdict: "Ask a sharper follow up if you want me to refine it.",
     });
   });
 
@@ -2661,5 +2711,186 @@ describe("generateAskResponse", () => {
         history: [],
       }),
     ).rejects.toThrow("Image must be a base64 data URL");
+  });
+
+  it("covers representative prompt routes without live APIs or database writes", async () => {
+    const promptScenarios = [
+      {
+        name: "direct market status",
+        message: "status on gold?",
+        expectedType: "briefing",
+        expectedTools: ["get_market_briefing", "submit_ask_card"],
+      },
+      {
+        name: "broker check",
+        message: "is Pepperstone safe?",
+        expectedType: "broker",
+        expectedTools: [],
+      },
+      {
+        name: "position sizing",
+        message: "Account 10000 risk 1% stop 20 pips on EUR/USD",
+        expectedType: "calc",
+        expectedTools: [],
+      },
+      {
+        name: "live setup",
+        message: "Set up a buy trade on gold",
+        expectedType: "setup",
+        expectedTools: ["get_market_setup", "submit_ask_card"],
+      },
+      {
+        name: "macro news",
+        message: "If inflation comes in hot, what happens to gold and the dollar?",
+        expectedType: "insight",
+        expectedTools: ["search_news", "submit_ask_card"],
+      },
+      {
+        name: "psychology",
+        message: "How do I stop revenge trading after a loss?",
+        expectedType: "insight",
+        expectedTools: [],
+      },
+    ] as const;
+
+    for (const scenario of promptScenarios) {
+      const toolCalls: string[] = [];
+      const finalCard =
+        scenario.expectedType === "setup"
+          ? {
+              type: "setup" as const,
+              asset: "GOLD / XAUUSD",
+              bias: "Bullish" as const,
+              entry: "4650.00",
+              stop: "4638.00",
+              target: "4674.00",
+              rr: "2:1",
+              rationale: "Gold needs confirmation first. Buy only if price reclaims resistance and holds.",
+              confidence: "Medium" as const,
+              verdict: "Wait for confirmation instead of chasing.",
+            }
+          : scenario.expectedType === "briefing"
+            ? {
+                type: "briefing" as const,
+                asset: "GOLD",
+                price: "4736.30",
+                change: "-0.86%",
+                direction: "down" as const,
+                level1: "4745.10",
+                level2: "4699.30",
+                event: null,
+                verdict:
+                  "Gold is heavy near support. A break lower can extend the move, but a hold there keeps it range-bound.",
+              }
+          : scenario.expectedType === "calc"
+            ? {
+                type: "calc" as const,
+                lots: "0.50",
+                risk_amount: "£100.00",
+                account: "£10,000.00",
+                risk_pct: "1%",
+                sl_pips: "20",
+                verdict: "Risk stays capped at 1% if the stop is respected.",
+              }
+            : {
+                type: "insight" as const,
+                headline: "Stay Selective",
+                body: "The cleaner read is to wait for confirmation. One forced trade can undo several good decisions.",
+                verdict: "Let the setup come to you.",
+              };
+
+      const generateTextImpl = vi.fn().mockImplementation(async (options) => {
+        if (scenario.expectedTools.length > 0) {
+          options.onStepFinish?.({
+            stepNumber: 1,
+            text: "",
+            toolCalls: scenario.expectedTools.map((toolName) => ({ toolName, input: {} })),
+            toolResults: scenario.expectedTools.map((toolName) => ({
+              toolName,
+              output: toolName === "submit_ask_card" ? { card: finalCard } : {},
+            })),
+            finishReason: "tool-calls",
+            usage: undefined,
+          });
+        }
+        return {
+          text: JSON.stringify(finalCard),
+          toolResults: scenario.expectedTools.map((toolName) => ({
+            toolName,
+            output: toolName === "submit_ask_card" ? { card: finalCard } : {},
+          })),
+        };
+      }) as unknown as typeof import("ai").generateText;
+
+      const response = await generateAskResponse(
+        {
+          message: scenario.message,
+          sessionId: crypto.randomUUID(),
+          history: [],
+        },
+        {
+          generateTextImpl,
+          lookupVerifiedEntityImpl: vi.fn().mockResolvedValue({
+            found: true,
+            entity: {
+              id: "pepperstone",
+              name: "Pepperstone",
+              type: "broker",
+              status: "legitimate",
+              fcaRegistered: true,
+              fcaReference: "684312",
+              fcaWarning: false,
+              trustScore: 8.9,
+              notes: "FCA authorised. Strong execution and low spreads.",
+              source: "seed",
+              aliases: ["pepperstone"],
+              color: "green",
+            },
+            brokerCardHint: {
+              name: "Pepperstone",
+              score: "8.9",
+              status: "LEGITIMATE",
+              fca: "Yes",
+              complaints: "Low",
+              color: "green",
+            },
+          }) as never,
+          getFcaStatusImpl: vi.fn().mockResolvedValue({
+            available: true,
+            queriedName: "Pepperstone",
+            frn: "684312",
+            authorised: true,
+            warning: false,
+            statusText: "Authorised",
+            source: "FCA live lookup",
+            note: "FCA authorised. Strong execution and low spreads.",
+          }) as never,
+          getMarketQuoteImpl: vi.fn().mockResolvedValue({
+            asset: "GOLD",
+            symbol: "GCUSD",
+            price: 4736.3,
+            changePercent: -0.86,
+            direction: "down",
+            isMarketOpen: null,
+          }) as never,
+          getMarketSeriesImpl: vi.fn().mockResolvedValue({
+            asset: "GOLD",
+            symbol: "GCUSD",
+            timeframe: "1W",
+            closeValues: [4699.3, 4721.5, 4745.1, 4736.3],
+            resistance: 4745.1,
+            support: 4699.3,
+          }) as never,
+        },
+        {
+          onToolCall: ({ toolName }) => {
+            toolCalls.push(String(toolName));
+          },
+        },
+      );
+
+      expect(response.data.type, scenario.name).toBe(scenario.expectedType);
+      expect(toolCalls, scenario.name).toEqual(scenario.expectedTools);
+    }
   });
 });

@@ -16,6 +16,10 @@ export const MARKET_CATEGORIES = {
     label: "Crypto",
     symbols: ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "BNB/USD", "ADA/USD"],
   },
+  indices: {
+    label: "Indices",
+    symbols: ["QQQ", "DIA", "EWU", "EWG", "EWJ", "EWH"],
+  },
 } as const;
 
 export type MarketCategory = keyof typeof MARKET_CATEGORIES;
@@ -247,7 +251,7 @@ export async function verifyTwelveData(): Promise<{
 
   // 2. Fetch sparkline for one symbol from each category
   const sparklines: Record<string, TwelveDataSparkline> = {};
-  const sampleSymbols = ["EUR/USD", "XAU/USD", "BTC/USD"];
+  const sampleSymbols = ["EUR/USD", "XAU/USD", "BTC/USD", "QQQ"];
   for (const sym of sampleSymbols) {
     console.log(`\nFetching sparkline for ${sym}...`);
     try {

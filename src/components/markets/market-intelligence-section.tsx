@@ -1,9 +1,21 @@
 "use client";
 
-import { Newspaper } from "lucide-react";
+import { ChevronDown, Newspaper } from "lucide-react";
+import { useState } from "react";
 
 import type { DailyMarketBrief, MarketIntelligenceItem } from "@/lib/markets/market-intelligence";
 import { cn } from "@/lib/utils";
+
+type DailyBriefAssetChip = {
+  label: string;
+  data: DailyMarketBrief["gold"];
+};
+
+function hasDailyBriefAsset(
+  asset: { label: string; data?: DailyBriefAssetChip["data"] },
+): asset is DailyBriefAssetChip {
+  return Boolean(asset.data);
+}
 
 export type MarketIntelligenceSectionProps = {
   items: readonly MarketIntelligenceItem[];
@@ -47,12 +59,17 @@ function DailyBriefCard({
   brief: DailyMarketBrief;
   onAskPrompt?: (prompt: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const shouldCollapse = brief.overview.length > 300;
+
   const assets = [
     { label: "Gold", data: brief.gold },
     { label: "Oil", data: brief.oil },
+    { label: "DXY", data: brief.dxy },
+    { label: "USD/JPY", data: brief.usdjpy },
     { label: "EUR/USD", data: brief.eurusd },
     { label: "GBP/USD", data: brief.gbpusd },
-  ];
+  ].filter(hasDailyBriefAsset);
 
   return (
     <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-[var(--vt-card)] p-4">
@@ -68,28 +85,41 @@ function DailyBriefCard({
       </div>
 
       {/* Overview */}
-      <p className="mt-3 text-sm leading-relaxed text-white/75">{brief.overview}</p>
+      <div className="mt-3">
+        <p className={cn("text-sm leading-relaxed text-white/75", shouldCollapse && !expanded && "line-clamp-3")}>
+          {brief.overview}
+        </p>
+        {shouldCollapse && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="mt-1 text-xs font-semibold text-[var(--vt-green)] transition-colors hover:text-white"
+          >
+            {expanded ? "Show less" : "Read more"}
+          </button>
+        )}
+      </div>
 
-      {/* Assets - Badge style */}
-      <div className="mt-3 flex flex-wrap gap-2">
+      {/* Assets */}
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {assets.map(({ label, data }) => {
           const biasLower = data.bias.toLowerCase();
           const biasColor = biasLower.includes("bull")
-            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+            ? "bg-emerald-400"
             : biasLower.includes("bear")
-              ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-              : "bg-white/[0.03] text-white/50 border-white/[0.08]";
+              ? "bg-rose-400"
+              : "bg-white/35";
 
           return (
             <div
               key={label}
-              className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 py-1.5"
+              className="min-w-0 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3 py-2"
             >
-              <span className="text-xs font-medium text-white/60">{label}</span>
-              <span className="text-xs font-bold tabular-nums text-white">{data.level}</span>
-              <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold", biasColor)}>
-                {data.bias}
-              </span>
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <span className="truncate text-[11px] font-semibold text-white/55">{label}</span>
+                <span className={cn("size-2 shrink-0 rounded-full", biasColor)} aria-label={data.bias} />
+              </div>
+              <div className="mt-1 truncate text-sm font-bold tabular-nums text-white">{data.level}</div>
             </div>
           );
         })}
@@ -128,6 +158,7 @@ export function MarketIntelligenceSection({
   isLoading = false,
   errorMessage = null,
 }: MarketIntelligenceSectionProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const showEmpty = !isLoading && !errorMessage && items.length === 0;
 
   const updatedLabel = updatedAt
@@ -190,31 +221,50 @@ export function MarketIntelligenceSection({
 
             <ul>
               {items.map((item) => {
-                const askPrompt = `${item.title} — what does this mean for my trades? (Source: ${item.source}, ${formatBriefDate(item.publishedAt.split("T")[0] ?? "")})`;
+                const isExpanded = expandedId === item.id;
+                const askPrompt = `${item.title} — what does this mean for my trades today?`;
 
                 return (
                   <li key={item.id} className="border-b border-white/[0.05] last:border-0">
-                    <button
-                      type="button"
-                      onClick={() => onAskPrompt?.(askPrompt)}
-                      className="block w-full px-5 py-4 text-left transition-colors hover:bg-white/[0.02]"
-                    >
-                      <span className="block text-[15px] font-normal leading-snug text-white/95">
-                        {item.title}
-                      </span>
-                      <span className="mt-1.5 block text-[11px] font-medium text-[var(--vt-muted)]" suppressHydrationWarning>
-                        {item.source} · {formatRelativeTime(item.publishedAt)}
-                        {item.category ? ` · ${item.category}` : ""}
-                      </span>
-                      {item.summary ? (
-                        <span className="mt-2 line-clamp-2 block text-sm leading-relaxed text-[var(--vt-muted)]">
-                          {item.summary}
-                        </span>
-                      ) : null}
-                      <span className="mt-3 block text-xs font-bold text-[var(--vt-coral)]">
-                        Ask about this →
-                      </span>
-                    </button>
+                    <div className="px-5 py-4">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                        className="flex w-full items-start justify-between gap-3 text-left"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-[15px] font-normal leading-snug text-white/95">
+                            {item.title}
+                          </span>
+                          <span className="mt-1.5 block text-[11px] font-medium text-[var(--vt-muted)]" suppressHydrationWarning>
+                            {item.source} · {formatRelativeTime(item.publishedAt)}
+                            {item.category ? ` · ${item.category}` : ""}
+                          </span>
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 text-white/40 transition-transform duration-200",
+                            isExpanded && "rotate-180"
+                          )}
+                          aria-hidden
+                        />
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-3">
+                          {item.summary && (
+                            <p className="text-sm leading-relaxed text-white/70">{item.summary}</p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onAskPrompt?.(askPrompt)}
+                            className="mt-3 text-xs font-bold text-[var(--vt-coral)] transition-colors hover:text-white"
+                          >
+                            Ask about this →
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </li>
                 );
               })}

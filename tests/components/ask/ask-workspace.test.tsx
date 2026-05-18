@@ -10,6 +10,12 @@ import type { User } from "@supabase/supabase-js";
 
 import { ASK_USER_MESSAGE_INVALID_RESPONSE } from "@/lib/ask/ask-failure";
 
+let mockViewportTruthSnapshot: unknown = null;
+
+vi.mock("viewport-truth/react", () => ({
+  useViewportTruth: () => mockViewportTruthSnapshot,
+}));
+
 const mockAuthUser = {
   id: "00000000-0000-0000-0000-000000000001",
   email: "test@example.com",
@@ -179,6 +185,7 @@ describe("AskWorkspace", () => {
     };
     mockReplace.mockReset();
     mockSearchParams = new URLSearchParams();
+    mockViewportTruthSnapshot = null;
     mockSupabaseFrom.mockReset();
     mockSupabaseClient = null;
     mockDropzoneState = {
@@ -292,6 +299,43 @@ describe("AskWorkspace", () => {
     });
   });
 
+  it("lifts the mobile composer above the Android visual keyboard inset", async () => {
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (Linux; Android 14) Chrome/125 Mobile Safari/537.36",
+    });
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes("max-width"),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+    Object.defineProperty(document.documentElement, "clientHeight", {
+      configurable: true,
+      value: 800,
+    });
+    mockViewportTruthSnapshot = {
+      hasVisualViewport: true,
+      layoutHeight: 800,
+      height: 520,
+      offsetTop: 0,
+    };
+
+    renderWithQueryClient(<AskWorkspace />);
+
+    await waitFor(() => {
+      const liftedComposer = screen
+        .getAllByTestId("ask-composer-strip")
+        .find((element) => element.style.transform.includes("-280px"));
+      expect(liftedComposer).toHaveStyle({
+        transform: "translate3d(0, -280px, 0)",
+      });
+    });
+  });
+
   it("shows the restoring state immediately when opened with a session from the page", () => {
     renderWithQueryClient(
       <AskWorkspace initialUrlSessionId="11111111-1111-4111-8111-111111111111" />,
@@ -313,6 +357,35 @@ describe("AskWorkspace", () => {
     }
     await waitFor(() => {
       expect(composer).toHaveValue("Brief me on Gold before this session.");
+      expect(mockReplace).toHaveBeenCalledWith("/ask", { scroll: false });
+    });
+  });
+
+  it("keeps a URL prefill when clearing a previous Ask session", async () => {
+    useAskStore.setState({
+      sessionId: "11111111-1111-4111-8111-111111111111",
+      messages: [
+        {
+          id: "user-1",
+          role: "user",
+          content: "Previous question",
+          createdAt: new Date().toISOString(),
+          attachmentName: null,
+        },
+      ],
+    });
+    mockSearchParams = new URLSearchParams({
+      prefill: "Brief me on Nasdaq before this session.",
+    });
+
+    renderWithQueryClient(<AskWorkspace />);
+
+    const composer = screen.getAllByPlaceholderText("Message…").at(-1);
+    if (!composer) {
+      throw new Error("Missing Ask composer.");
+    }
+    await waitFor(() => {
+      expect(composer).toHaveValue("Brief me on Nasdaq before this session.");
       expect(mockReplace).toHaveBeenCalledWith("/ask", { scroll: false });
     });
   });

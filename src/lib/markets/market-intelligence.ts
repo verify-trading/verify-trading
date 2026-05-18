@@ -26,6 +26,8 @@ export type DailyMarketBrief = {
   overview: string;
   gold: DailyMarketBriefAsset;
   oil: DailyMarketBriefAsset;
+  dxy?: DailyMarketBriefAsset;
+  usdjpy?: DailyMarketBriefAsset;
   eurusd: DailyMarketBriefAsset;
   gbpusd: DailyMarketBriefAsset;
   session_tone: string;

@@ -20,6 +20,16 @@ const dailyMarketBriefSchema = z.object({
     bias: z.string().min(1),
     verdict: z.string().min(1),
   }),
+  dxy: z.object({
+    level: z.string().min(1),
+    bias: z.string().min(1),
+    verdict: z.string().min(1),
+  }),
+  usdjpy: z.object({
+    level: z.string().min(1),
+    bias: z.string().min(1),
+    verdict: z.string().min(1),
+  }),
   eurusd: z.object({
     level: z.string().min(1),
     bias: z.string().min(1),
@@ -65,6 +75,9 @@ export function shouldRefreshDailyMarketBrief(
   if (!cached || cached.date !== london.dateKey) {
     return true;
   }
+  if (!cached.dxy && !cached.usdjpy) {
+    return true;
+  }
   if (!fetchedAt) {
     return true;
   }
@@ -103,6 +116,8 @@ export async function generateDailyMarketBrief(now = new Date(), headlines: stri
   "overview": "Five to six sentence macro overview of what is driving markets today. Cover: (1) which data releases, central bank commentary, or geopolitical developments are moving price action, (2) sentiment across equities, FX, and commodities, (3) what traders should watch for the rest of the session. Reference the headlines when available.",
   "gold": { "level": "4720", "bias": "Bullish", "verdict": "Watch 4680 support." },
   "oil": { "level": "72.50", "bias": "Neutral", "verdict": "Range bound session." },
+  "dxy": { "level": "105.20", "bias": "Bullish", "verdict": "Dollar bid controls risk." },
+  "usdjpy": { "level": "157.20", "bias": "Bullish", "verdict": "Watch yields and intervention risk." },
   "eurusd": { "level": "1.0850", "bias": "Bearish", "verdict": "Dollar strength today." },
   "gbpusd": { "level": "1.2900", "bias": "Bearish", "verdict": "Follow EUR lead." },
   "session_tone": "One sentence capturing the dominant session tone and what to watch."

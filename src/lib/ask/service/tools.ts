@@ -580,15 +580,28 @@ async function enrichPositionSizeInput(
   const { base, quote } = normalizeForexPair(toolInput.pair);
   const accountCurrency = toolInput.accountCurrency ?? "GBP";
 
-  if (accountCurrency !== base || accountCurrency === quote) {
+  if (accountCurrency === quote) {
     return toolInput;
   }
 
-  const quoteData = await getMarketQuoteImpl(toolInput.pair);
+  const conversionPair = accountCurrency === base ? toolInput.pair : `${quote}/${accountCurrency}`;
+  const quoteData = await getMarketQuoteImpl(conversionPair).catch(async (error: unknown) => {
+    if (accountCurrency === base) {
+      throw error;
+    }
+
+    const inverseQuote = await getMarketQuoteImpl(`${accountCurrency}/${quote}`);
+    return {
+      ...inverseQuote,
+      price: 1 / inverseQuote.price,
+    };
+  });
 
   return {
     ...toolInput,
-    exchangeRate: quoteData.price,
+    ...(accountCurrency === base
+      ? { exchangeRate: quoteData.price }
+      : { quoteToAccountRate: quoteData.price }),
   };
 }
 

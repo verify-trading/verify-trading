@@ -10,7 +10,7 @@ export function MarketsCommunityCtas() {
   const telegramUrl = getTelegramCommunityUrl();
 
   return (
-    <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
+    <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
       {supportUrl ? (
         <Button
           asChild

@@ -29,12 +29,12 @@ describe("ask contracts", () => {
     expect(parsed.attachmentMeta?.fileName).toBe("gold.png");
   });
 
-  it("preserves full card text after validation", () => {
+  it("preserves concise card text after validation", () => {
     const card = sanitizeCard({
       type: "insight",
-      headline: "This headline is definitely too long for the client format",
-      body: Array.from({ length: 90 }, (_, index) => `word${index}`).join(" "),
-      verdict: Array.from({ length: 20 }, (_, index) => `verdict${index}`).join(" "),
+      headline: "Clear Risk Check",
+      body: "Wait for the setup to confirm before risking money.",
+      verdict: "Protect the account first.",
     });
 
     expect(card.type).toBe("insight");
@@ -42,9 +42,53 @@ describe("ask contracts", () => {
       throw new Error("Expected an insight card.");
     }
 
-    expect(card.headline).toBe("This headline is definitely too long for the client format");
-    expect(card.body.split(/\s+/)).toHaveLength(90);
-    expect(card.verdict.split(/\s+/)).toHaveLength(20);
+    expect(card.headline).toBe("Clear Risk Check");
+    expect(card.body).toBe("Wait for the setup to confirm before risking money.");
+    expect(card.verdict).toBe("Protect the account first.");
+  });
+
+  it("trims long natural language fields at sentence boundaries", () => {
+    const card = sanitizeCard({
+      type: "insight",
+      headline: "This headline is far too long",
+      body:
+        "First sentence gives the answer. Second sentence gives the reason. Third sentence gives the action. Fourth sentence should not appear.",
+      verdict: "First verdict sentence stays. Second verdict sentence stays. Third verdict sentence should not appear.",
+    });
+
+    expect(card.type).toBe("insight");
+    if (card.type !== "insight") {
+      throw new Error("Expected an insight card.");
+    }
+
+    expect(card.headline).toBe("This headline is far");
+    expect(card.body).toBe(
+      "First sentence gives the answer. Second sentence gives the reason. Third sentence gives the action.",
+    );
+    expect(card.verdict).toBe("First verdict sentence stays. Second verdict sentence stays.");
+  });
+
+  it("removes dash punctuation from natural language response fields", () => {
+    const card = sanitizeCard({
+      type: "briefing",
+      asset: "GOLD",
+      price: "4543.60",
+      change: "-3.02%",
+      direction: "down",
+      level1: "4561.90",
+      level2: "4540.00",
+      event: "CPI-hot - dollar bid",
+      verdict: "Gold is weak — wait for rate-cut noise to settle.",
+    });
+
+    expect(card.type).toBe("briefing");
+    if (card.type !== "briefing") {
+      throw new Error("Expected a briefing card.");
+    }
+
+    expect(card.change).toBe("-3.02%");
+    expect(card.event).toBe("CPI hot, dollar bid");
+    expect(card.verdict).toBe("Gold is weak, wait for rate cut noise to settle.");
   });
 
   it("preserves ui metadata text without truncation", () => {
