@@ -378,9 +378,21 @@ function limitSentences(value: string, maxSentences: number) {
 }
 
 function sanitizeNaturalLanguageField(
+  value: string,
+  limits?: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean },
+): string;
+function sanitizeNaturalLanguageField(
+  value: null,
+  limits?: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean },
+): null;
+function sanitizeNaturalLanguageField(
+  value: string | null,
+  limits?: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean },
+): string | null;
+function sanitizeNaturalLanguageField(
   value: string | null,
   limits: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean } = {},
-) {
+): string | null {
   if (value === null) {
     return value;
   }
