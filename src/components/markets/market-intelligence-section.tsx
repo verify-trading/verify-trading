@@ -1,6 +1,18 @@
 "use client";
 
-import { ChevronDown, Newspaper } from "lucide-react";
+import {
+  ChevronDown,
+  Newspaper,
+  TrendingUp,
+  TrendingDown,
+  ArrowRight,
+  Coins,
+  Droplet,
+  Globe,
+  Sparkles,
+  Compass,
+  Activity,
+} from "lucide-react";
 import { useState } from "react";
 
 import type { DailyMarketBrief, MarketIntelligenceItem } from "@/lib/markets/market-intelligence";
@@ -52,6 +64,55 @@ function formatBriefDate(date: string): string {
   }).format(parsed);
 }
 
+function getAssetIcon(label: string) {
+  const norm = label.toLowerCase();
+  if (norm.includes("gold")) {
+    return <Coins className="size-3.5 text-amber-400" />;
+  }
+  if (norm.includes("oil")) {
+    return <Droplet className="size-3.5 text-sky-400" />;
+  }
+  if (norm.includes("dxy")) {
+    return <Sparkles className="size-3.5 text-emerald-400" />;
+  }
+  if (norm.includes("eur")) {
+    return <Globe className="size-3.5 text-indigo-400" />;
+  }
+  if (norm.includes("gbp")) {
+    return <Compass className="size-3.5 text-purple-400" />;
+  }
+  if (norm.includes("jpy")) {
+    return <Activity className="size-3.5 text-rose-400" />;
+  }
+  return <Globe className="size-3.5 text-teal-400" />;
+}
+
+function getBiasTheme(bias: string) {
+  const norm = bias.toLowerCase();
+  if (norm.includes("bull")) {
+    return {
+      text: "Bullish",
+      colorClass: "text-emerald-400",
+      pillClass: "bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08] border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 hover:scale-[1.02] shadow-[0_0_8px_rgba(16,185,129,0.01)]",
+      icon: <TrendingUp className="size-3 text-emerald-400" />,
+    };
+  }
+  if (norm.includes("bear")) {
+    return {
+      text: "Bearish",
+      colorClass: "text-rose-400",
+      pillClass: "bg-rose-500/[0.04] hover:bg-rose-500/[0.08] border-rose-500/20 hover:border-rose-500/40 text-rose-400 hover:scale-[1.02] shadow-[0_0_8px_rgba(244,63,94,0.01)]",
+      icon: <TrendingDown className="size-3 text-rose-400" />,
+    };
+  }
+  return {
+    text: "Neutral",
+    colorClass: "text-white/50",
+    pillClass: "bg-white/[0.02] hover:bg-white/[0.04] border-white/10 hover:border-white/25 text-white/70 hover:scale-[1.02]",
+    icon: <ArrowRight className="size-3 text-white/40" />,
+  };
+}
+
 function DailyBriefCard({
   brief,
   onAskPrompt,
@@ -100,27 +161,33 @@ function DailyBriefCard({
         )}
       </div>
 
-      {/* Assets */}
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {/* Assets Pills wrapping list */}
+      <div className="mt-4 flex flex-wrap gap-2">
         {assets.map(({ label, data }) => {
-          const biasLower = data.bias.toLowerCase();
-          const biasColor = biasLower.includes("bull")
-            ? "bg-emerald-400"
-            : biasLower.includes("bear")
-              ? "bg-rose-400"
-              : "bg-white/35";
+          const theme = getBiasTheme(data.bias);
+          const assetIcon = getAssetIcon(label);
 
           return (
-            <div
+            <button
               key={label}
-              className="min-w-0 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3 py-2"
+              type="button"
+              onClick={() =>
+                onAskPrompt?.(
+                  `Tactical breakdown for ${label} today. Level is ${data.level}. Bias is ${data.bias}. Verdict: "${data.verdict}". What should I focus on first?`,
+                )
+              }
+              className={cn(
+                "group inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-all duration-200",
+                theme.pillClass,
+              )}
+              title={`${label}: ${data.bias} (${data.verdict})`}
             >
-              <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="truncate text-[11px] font-semibold text-white/55">{label}</span>
-                <span className={cn("size-2 shrink-0 rounded-full", biasColor)} aria-label={data.bias} />
-              </div>
-              <div className="mt-1 truncate text-sm font-bold tabular-nums text-white">{data.level}</div>
-            </div>
+              <span className="shrink-0">{assetIcon}</span>
+              <span className="text-white/80 font-bold uppercase text-[9px] tracking-wide">{label}</span>
+              <span className="h-2.5 w-[1px] bg-white/10 shrink-0" />
+              <span className="font-extrabold text-white text-[10px] sm:text-[11px] tabular-nums">{data.level}</span>
+              <span className="shrink-0 ml-0.5">{theme.icon}</span>
+            </button>
           );
         })}
       </div>
