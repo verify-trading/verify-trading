@@ -401,7 +401,7 @@ function mergeBriefingModelExplanation(toolBriefing: AskCard, modelBriefing: Ask
 
   return {
     ...toolBriefing,
-    event: modelBriefing.event ?? toolBriefing.event,
+    event: toolBriefing.event,
     verdict: modelBriefing.verdict,
   };
 }

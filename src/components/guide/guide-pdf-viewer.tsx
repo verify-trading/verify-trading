@@ -6,7 +6,10 @@ import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
-import { GuidePdfSkeleton } from "@/components/guide/guide-pdf-skeleton";
+import {
+  GUIDE_PDF_PAGE_ASPECT,
+  GUIDE_PDF_PAGE_MAX_WIDTH_CLASS,
+} from "@/components/guide/guide-pdf-skeleton";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -56,7 +59,7 @@ export function GuidePdfViewer() {
     >
       <Document
         file="/guide-pdf"
-        loading={<GuidePdfSkeleton />}
+        loading={<GuidePdfPagePlaceholder />}
         error={
           <p className="p-4 text-sm text-red-400" role="alert">
             Could not load the guide PDF.
@@ -69,13 +72,14 @@ export function GuidePdfViewer() {
           ? Array.from({ length: numPages }, (_, i) => (
               <div
                 key={i + 1}
-                className="flex w-full max-w-full justify-center py-2 [&_.react-pdf__Page]:max-w-full [&_canvas]:!h-auto [&_canvas]:max-w-full"
+                className={`flex w-full ${GUIDE_PDF_PAGE_MAX_WIDTH_CLASS} justify-center py-2 [&_.react-pdf__Page]:max-w-full [&_canvas]:!h-auto [&_canvas]:max-w-full`}
               >
                 <Page
                   pageNumber={i + 1}
                   width={width}
                   renderTextLayer
                   renderAnnotationLayer
+                  loading={<GuidePdfPagePlaceholder />}
                   className="shadow-[0_8px_40px_rgba(0,0,0,0.35)]"
                 />
               </div>
@@ -83,5 +87,14 @@ export function GuidePdfViewer() {
           : null}
       </Document>
     </div>
+  );
+}
+
+function GuidePdfPagePlaceholder() {
+  return (
+    <div
+      className={`my-2 w-full ${GUIDE_PDF_PAGE_MAX_WIDTH_CLASS} bg-white/[0.03] shadow-[0_8px_40px_rgba(0,0,0,0.35)]`}
+      style={{ aspectRatio: `1 / ${GUIDE_PDF_PAGE_ASPECT}` }}
+    />
   );
 }

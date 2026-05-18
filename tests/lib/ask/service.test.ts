@@ -1206,6 +1206,70 @@ describe("generateAskResponse", () => {
     );
   });
 
+  it("ignores model-injected events on tool-owned briefing cards", async () => {
+    const response = await generateAskResponse(
+      {
+        message: "what is gold doing today?",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: vi.fn().mockResolvedValue({
+          text: "",
+          toolResults: [
+            {
+              toolName: "get_market_briefing",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "GOLD",
+                  price: "4563.70",
+                  change: "+0.04%",
+                  direction: "up",
+                  level1: "4706.70",
+                  level2: "4545.00",
+                  event: null,
+                  verdict: "Gold is flat just above support.",
+                },
+                uiMeta: { marketSeries: [4545, 4563.7, 4706.7] },
+              },
+            },
+            {
+              toolName: "submit_ask_card",
+              output: {
+                card: {
+                  type: "briefing",
+                  asset: "GOLD",
+                  price: "4563.70",
+                  change: "+0.04%",
+                  direction: "up",
+                  level1: "4706.70",
+                  level2: "4545.00",
+                  event: "Initial Jobless Claims at 5:30 PM",
+                  verdict:
+                    "Gold is flat just above 4545 support. That level holds the short term structure.",
+                },
+              },
+            },
+          ],
+        }) as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(response.data).toEqual({
+      type: "briefing",
+      asset: "GOLD",
+      price: "4563.70",
+      change: "+0.04%",
+      direction: "up",
+      level1: "4706.70",
+      level2: "4545.00",
+      event: null,
+      verdict:
+        "Gold is flat just above 4545 support. That level holds the short term structure.",
+    });
+  });
+
   it("keeps the FMP briefing and merges news event for market-update prompts", async () => {
     const response = await generateAskResponse(
       {
