@@ -1,9 +1,5 @@
 "use client";
 
-import { RefreshCcw } from "lucide-react";
-import type { UseQueryResult } from "@tanstack/react-query";
-
-import { Button } from "@/components/ui/button";
 import type { MarketsAccessTier } from "@/lib/markets/markets-access-tier";
 import type { MarketsAssetPayload } from "@/lib/markets/dashboard";
 import { marketCatalog, type MarketCatalogItem, type MarketTile } from "@/lib/markets/markets-page-data";
@@ -26,7 +22,6 @@ export type MarketsChartsSectionProps = {
   selectedProxyAssumption: string | null;
   accessTier: MarketsAccessTier;
   isPro: boolean;
-  marketsQuery: Pick<UseQueryResult, "refetch" | "isFetching">;
 };
 
 export function MarketsChartsSection({
@@ -42,8 +37,6 @@ export function MarketsChartsSection({
   selectedTone,
   selectedProxyAssumption,
   accessTier,
-  isPro,
-  marketsQuery,
 }: MarketsChartsSectionProps) {
   return (
     <>
@@ -63,19 +56,6 @@ export function MarketsChartsSection({
               ) : null}
               {showSkeleton ? "Loading live data…" : selectedMarket.updatedLabel}
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="pillCompact"
-              className="gap-2 border-[color:var(--vt-border)] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => {
-                void marketsQuery.refetch();
-              }}
-              disabled={!isPro || marketsQuery.isFetching}
-            >
-              <RefreshCcw className={`size-3.5 ${marketsQuery.isFetching ? "animate-spin" : ""}`} aria-hidden />
-              Refresh
-            </Button>
           </div>
         </div>
       </header>
