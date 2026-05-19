@@ -1,6 +1,7 @@
 "use client";
 
 import { BookOpen, Brain, Sparkles, type LucideIcon } from "lucide-react";
+import Image from "next/image";
 
 import { cn } from "@/lib/utils";
 
@@ -24,33 +25,14 @@ function JournalStateIcon({ Icon }: { Icon: LucideIcon }) {
       className="relative mb-7 size-24 sm:size-28"
       aria-hidden
     >
-      <svg className="absolute inset-0 size-full overflow-visible" viewBox="0 0 120 120">
-        <defs>
-          <linearGradient id="journal-ring-gradient" x1="10%" y1="82%" x2="88%" y2="12%">
-            <stop offset="0%" stopColor="#2867ff" />
-            <stop offset="46%" stopColor="#8055ff" />
-            <stop offset="100%" stopColor="#ff5f68" />
-          </linearGradient>
-          <filter id="journal-ring-glow" x="-35%" y="-35%" width="170%" height="170%">
-            <feGaussianBlur stdDeviation="3.5" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        <circle cx="60" cy="60" r="42" fill="rgb(8,10,42)" />
-        <circle
-          cx="60"
-          cy="60"
-          r="45"
-          fill="none"
-          stroke="url(#journal-ring-gradient)"
-          strokeWidth="11"
-          filter="url(#journal-ring-glow)"
-        />
-        <circle cx="60" cy="60" r="33" fill="rgb(8,10,42)" />
-      </svg>
+      <Image
+        src="/logo.svg"
+        alt=""
+        fill
+        sizes="9rem"
+        className="object-contain"
+      />
+      <div className="absolute inset-[18%] rounded-full bg-[rgb(10,13,46)] shadow-[0_0_22px_rgba(10,13,46,0.95)]" />
       <div className="absolute inset-0 flex items-center justify-center">
         <Icon className="size-9 text-white sm:size-10" strokeWidth={2.7} />
       </div>
