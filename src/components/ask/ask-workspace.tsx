@@ -49,7 +49,7 @@ import { askToolStatusSchema, type AskToolStatus } from "@/lib/ask/stream";
 import { getAccountMenuQueryKey } from "@/lib/auth/account-menu-query";
 import { logger } from "@/lib/observability/logger";
 import { loadAskUsageState } from "@/lib/rate-limit/load-ask-usage";
-import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
 const ASK_SESSION_PAGE_SIZE = 40;
@@ -95,17 +95,21 @@ function buildInitialToolStatus(hasImage: boolean): AskToolStatus {
   };
 }
 
-function isDailyLimitError(error: unknown) {
+function isAskLimitError(error: unknown) {
   if (!error || typeof error !== "object") {
     return false;
   }
 
   const cause = (error as { cause?: unknown }).cause;
   if (cause && typeof cause === "object" && cause !== null && "code" in cause) {
-    return (cause as { code: unknown }).code === "daily_limit";
+    const code = (cause as { code: unknown }).code;
+    return code === "daily_limit" || code === "pro_fair_use_limit";
   }
 
-  return error instanceof Error && /used today|free chats|free queries/i.test(error.message);
+  return (
+    error instanceof Error &&
+    /used today|free chats|free queries|pro fair-use chats/i.test(error.message)
+  );
 }
 
 export function AskWorkspace({
@@ -173,6 +177,7 @@ export function AskWorkspace({
   const handledPrefillRef = useRef<string | null>(null);
   const [liveToolStatuses, setLiveToolStatuses] = useState<AskToolStatus[]>([]);
   const [isDailyLimitReached, setIsDailyLimitReached] = useState(false);
+  const [askUsageTier, setAskUsageTier] = useState<"free" | "pro">("free");
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") {
@@ -363,7 +368,7 @@ export function AskWorkspace({
         pendingAssistantAttachmentRef.current = undefined;
         pendingRequestRef.current = false;
         clearTransportMessages([]);
-        if (isDailyLimitError(err)) {
+        if (isAskLimitError(err)) {
           refreshUsageUi();
           setError(null);
           scrollToLatest();
@@ -417,12 +422,14 @@ export function AskWorkspace({
   const refreshUsageState = useCallback(async () => {
     if (!supabase || !user?.id) {
       setIsDailyLimitReached(false);
+      setAskUsageTier("free");
       return;
     }
 
     try {
       const usageState = await loadAskUsageState(supabase, user.id);
       setIsDailyLimitReached(usageState.isExhausted);
+      setAskUsageTier(usageState.tier);
     } catch {
       // Keep the current lock state if usage refresh fails.
     }
@@ -647,7 +654,7 @@ export function AskWorkspace({
       pendingAssistantAttachmentRef.current = undefined;
       pendingRequestRef.current = false;
       clearTransportMessages([]);
-      if (isDailyLimitError(error)) {
+      if (isAskLimitError(error)) {
         refreshUsageUi();
         setError(null);
         scrollToLatest();
@@ -942,17 +949,25 @@ export function AskWorkspace({
                         Limit reached
                       </span>
                       <span className="hidden truncate text-xs text-white/50 sm:inline">
-                        {`All ${FREE_DAILY_ASK_LIMIT} free messages used today.`}
+                        {askUsageTier === "pro"
+                          ? `All ${PRO_DAILY_ASK_LIMIT} Pro messages used today. Resets at midnight UTC.`
+                          : `All ${FREE_DAILY_ASK_LIMIT} free messages used today.`}
                       </span>
                     </div>
-                    <Button
-                      asChild
-                      variant="default"
-                      size="pillCompact"
-                      className="shrink-0 px-3 py-1.5 text-[11px] font-bold sm:px-3.5 sm:text-xs"
-                    >
-                      <Link href="/pricing">Upgrade to Pro</Link>
-                    </Button>
+                    {askUsageTier === "pro" ? (
+                      <span className="shrink-0 text-[11px] font-semibold text-white/60 sm:text-xs">
+                        Resets midnight UTC
+                      </span>
+                    ) : (
+                      <Button
+                        asChild
+                        variant="default"
+                        size="pillCompact"
+                        className="shrink-0 px-3 py-1.5 text-[11px] font-bold sm:px-3.5 sm:text-xs"
+                      >
+                        <Link href="/pricing">Upgrade to Pro</Link>
+                      </Button>
+                    )}
                   </div>
                 </div>
               ) : null}

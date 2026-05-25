@@ -6,6 +6,9 @@ export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 /** Used when the primary model fails after retries (overload / 5xx / rate limits). */
 export const DEFAULT_ANTHROPIC_FALLBACK_MODEL = "claude-haiku-4-5-20251001";
 
+/** Used for simple Ask requests that do not need Sonnet-class reasoning. */
+export const DEFAULT_ANTHROPIC_SIMPLE_MODEL = DEFAULT_ANTHROPIC_FALLBACK_MODEL;
+
 export function getAskPrimaryModelId() {
   return process.env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
 }
@@ -14,12 +17,20 @@ export function getAskFallbackModelId() {
   return process.env.ANTHROPIC_FALLBACK_MODEL ?? DEFAULT_ANTHROPIC_FALLBACK_MODEL;
 }
 
+export function getAskSimpleModelId() {
+  return process.env.ANTHROPIC_SIMPLE_MODEL ?? DEFAULT_ANTHROPIC_SIMPLE_MODEL;
+}
+
 export function getAskModel() {
   return anthropic(getAskPrimaryModelId());
 }
 
 export function getAskFallbackModel() {
   return anthropic(getAskFallbackModelId());
+}
+
+export function getAskSimpleModel() {
+  return anthropic(getAskSimpleModelId());
 }
 
 export function createSystemMessage(content: string) {

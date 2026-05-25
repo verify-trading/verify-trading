@@ -31,17 +31,22 @@ See `.env.example` for all keys. **Never commit `.env` or `.env.local`** (they a
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `ANTHROPIC_API_KEY` | Yes (for Ask) | Claude API key |
+| `ANTHROPIC_MODEL` | Optional | Sonnet-class model for harder Ask requests |
+| `ANTHROPIC_SIMPLE_MODEL` | Optional | Haiku-class model for simple Ask requests |
+| `ANTHROPIC_FALLBACK_MODEL` | Optional | Fallback model for transient primary-model failures |
 | `NEXT_PUBLIC_SUPABASE_URL` | For Auth + chat history | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | For Auth (browser + SSR) | Anon key (safe to expose) |
 | `SUPABASE_SERVICE_ROLE_KEY` | For chat history + admin tasks | Service role (server only) |
 | `STRIPE_SECRET_KEY` | For billing | Server-side Stripe API access |
 | `STRIPE_WEBHOOK_SECRET` | For billing | Verifies Stripe webhook signatures |
-| `STRIPE_PRICE_PRO_MONTHLY_PROMO` | For launch billing | Monthly recurring price ID for the £20 launch cohort |
-| `STRIPE_PROMO_COUPON_ID` | For launch billing | One-time discount that makes the first invoice £5 |
-| `STRIPE_PRICE_PRO_MONTHLY_STANDARD` | For ongoing billing | Monthly recurring price ID for the £24.99 plan |
-| `STRIPE_PRICE_PRO_ANNUAL` | For annual billing | Yearly recurring price ID for the £200 annual plan |
+| `STRIPE_PRICE_PRO_WEEKLY` | For billing | Weekly recurring price ID (£6.99/week) |
+| `STRIPE_PRICE_PRO_MONTHLY` | For billing | Monthly recurring price ID (£19.99/month) |
+| `STRIPE_PRICE_PRO_MONTHLY_STANDARD` | Optional fallback | Legacy monthly price env name during rollout |
+| `STRIPE_PRICE_PRO_ANNUAL` | For annual billing | Yearly recurring price ID (£119.99/year) |
 | `STRIPE_PORTAL_CONFIGURATION_ID` | Optional | Stripe customer portal configuration |
-| `STRIPE_PROMO_END_AT` | Optional | Promo cutoff override (default `2026-06-06T00:00:00+01:00`) |
+| `RESEND_API_KEY` | For welcome emails | Resend transactional email API key |
+| `EMAIL_FROM_SIGNUP` | For signup welcome | Default `verify.trading <ai@verify.trading>` |
+| `EMAIL_FROM_SUBSCRIPTION` | For Pro welcome | Default `verify.trading <pro@verify.trading>` |
 | `FMP_API_KEY` | For live market tools | Financial Modeling Prep |
 | `NEXT_PUBLIC_APP_NAME` | No | Product name in UI + system prompt (default `verify.trading`) |
 | `NEXT_PUBLIC_SITE_TITLE` | No | `<title>` override |
@@ -53,7 +58,7 @@ See `.env.example` for all keys. **Never commit `.env` or `.env.local`** (they a
 2. In [Vercel](https://vercel.com) → **Add New Project** → **Import** the repository.
 3. **Framework Preset:** Next.js (auto-detected). **Build Command:** `npm run build`, **Output:** default.
 4. **Environment Variables:** copy from `.env.example` and set production values. Add every `NEXT_PUBLIC_*` and server secret Vercel should inject at build/runtime (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, etc.).
-5. **Deploy.** After the first deploy, configure Supabase **Auth**: Site URL, redirect URLs (`http://localhost:3000/**`, `https://<project>.vercel.app/**`), and OAuth providers (e.g. Google). Run SQL migrations in order: `supabase/migration_1.sql`, `migration_2.sql`, `migration_3.sql`, `migration_4.sql`, `migration_5.sql`, `migration_6.sql`, `migration_7.sql`, `migration_8.sql`, `migration_9.sql`, `migration_10.sql`.
+5. **Deploy.** After the first deploy, configure Supabase **Auth**: Site URL, redirect URLs (`http://localhost:3000/**`, `https://<project>.vercel.app/**`), and OAuth providers (e.g. Google). Run SQL migrations in order through the latest `supabase/migration_*.sql` file.
 
 ### Custom domain
 

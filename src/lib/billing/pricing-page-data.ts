@@ -1,28 +1,20 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { getPublicBillingPricing } from "@/lib/billing/config";
+import {
+  getPublicBillingPricing,
+  readBillingPlanKeyFromStripeInterval,
+  type BillingPlanKey,
+} from "@/lib/billing/config";
 import { MANAGEABLE_SUBSCRIPTION_STATUSES } from "@/lib/billing/subscription-status";
 
 export type PricingPageBillingContext = {
   isSignedIn: boolean;
   hasManageableSubscription: boolean;
-  currentPlanKey: "monthly" | "annual" | null;
+  currentPlanKey: BillingPlanKey | null;
 };
 
 type PricingSubscriptionRow = {
   interval: string | null;
 };
-
-function readCurrentPlanKey(subscription: PricingSubscriptionRow | null) {
-  if (subscription?.interval === "year") {
-    return "annual";
-  }
-
-  if (subscription?.interval === "month") {
-    return "monthly";
-  }
-
-  return null;
-}
 
 export async function getPricingPageData() {
   const pricing = getPublicBillingPricing();
@@ -59,7 +51,7 @@ export async function getPricingPageData() {
     billingContext: {
       isSignedIn: true,
       hasManageableSubscription: Boolean(subscription),
-      currentPlanKey: readCurrentPlanKey(subscription),
+      currentPlanKey: readBillingPlanKeyFromStripeInterval(subscription?.interval ?? null),
     } satisfies PricingPageBillingContext,
   };
 }

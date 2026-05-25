@@ -18,7 +18,7 @@ type ProfileRow = {
 };
 
 const checkoutRequestSchema = z.object({
-  plan: z.enum(["monthly", "annual"]).default("monthly"),
+  plan: z.enum(["weekly", "monthly", "annual"]).default("monthly"),
   rewardfulReferral: z.string().optional(),
 });
 
@@ -85,13 +85,12 @@ export async function POST(request: Request) {
 
     const stripe = getStripeServerClient();
     const origin = new URL(request.url).origin;
-   const metadata = {
-  supabaseUserId: session.user.id,
-  planKey: "pro",
-  billingPlan: offer.planKey,
-  offerVariant: offer.variant,
-  ...(payload.rewardfulReferral && { rewardful_referral: payload.rewardfulReferral }),
-};
+    const metadata = {
+      supabaseUserId: session.user.id,
+      planKey: "pro",
+      billingPlan: offer.planKey,
+      ...(payload.rewardfulReferral && { rewardful_referral: payload.rewardfulReferral }),
+    };
 
     if (checkoutClaim.replacedCheckoutSessionId) {
       await stripe.checkout.sessions.expire(checkoutClaim.replacedCheckoutSessionId).catch(() => undefined);
@@ -110,7 +109,6 @@ export async function POST(request: Request) {
             quantity: 1,
           },
         ],
-        discounts: offer.checkoutCouponId ? [{ coupon: offer.checkoutCouponId }] : undefined,
         success_url: `${origin}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/billing?checkout=cancelled`,
         metadata,

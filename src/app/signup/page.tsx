@@ -85,6 +85,10 @@ function SignupPageContent() {
       // This creates a Stripe customer with referral metadata,
       // which Rewardful uses to count the signup as a Lead.
       await linkAffiliateReferral();
+      await fetch("/api/auth/signup-welcome", {
+        method: "POST",
+        keepalive: true,
+      }).catch(() => undefined);
       toast.success("Welcome — you're signed in.");
       window.location.assign(next);
       return;

@@ -17,8 +17,10 @@ import {
   RECENT_OAUTH_SIGNUP_COOKIE_MAX_AGE_SECONDS,
   RECENT_OAUTH_SIGNUP_COOKIE_NAME,
 } from "@/lib/auth/oauth-flow";
+import { readUserDisplayName } from "@/lib/auth/read-user-display-name";
 import { getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { ensureStripeCustomerForUser } from "@/lib/billing/repository";
+import { maybeSendSignupWelcomeEmail } from "@/lib/email/maybe-send-signup-welcome";
 import { logger } from "@/lib/observability/logger";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -128,17 +130,13 @@ export async function GET(request: Request) {
   }
 
   const referralId = extractRewardfulReferralId(cookieHeader);
-  if (referralId && data.user?.id) {
-    const userMetadata = data.user.user_metadata ?? {};
-    const displayName =
-      typeof userMetadata.full_name === "string" && userMetadata.full_name.length > 0
-        ? userMetadata.full_name
-        : typeof userMetadata.name === "string" && userMetadata.name.length > 0
-          ? userMetadata.name
-          : null;
+  const user = data.user;
+  const displayName = user ? readUserDisplayName(user.user_metadata) : null;
+
+  if (referralId && user?.id) {
     await linkAffiliateReferralServerSide(
-      data.user.id,
-      data.user.email ?? null,
+      user.id,
+      user.email ?? null,
       displayName,
       referralId,
     );
@@ -149,8 +147,25 @@ export async function GET(request: Request) {
   clearOAuthFlowCookie(response);
   clearAuthRedirectCookie(response);
 
-  if (oauthFlow === "signup" && data.user?.id) {
-    setRecentOauthSignupCookie(response, data.user.id);
+  if (oauthFlow === "signup" && user?.id) {
+    setRecentOauthSignupCookie(response, user.id);
+  }
+
+  if (user?.id) {
+    await maybeSendSignupWelcomeEmail({
+      userId: user.id,
+      email: user.email,
+      displayName,
+      oauthFlow,
+      createdAt: user.created_at,
+      emailConfirmedAt: user.email_confirmed_at,
+      appOrigin: origin,
+    }).catch((sendError) => {
+      logger.warn("Failed to queue signup welcome email from auth callback.", {
+        userId: user.id,
+        error: sendError instanceof Error ? sendError.message : String(sendError),
+      });
+    });
   }
 
   return response;

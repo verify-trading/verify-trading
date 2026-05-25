@@ -21,6 +21,10 @@ vi.mock("@/lib/billing/stripe-server", () => ({
   getStripeServerClient: vi.fn(),
 }));
 
+vi.mock("@/lib/email/maybe-send-subscription-welcome", () => ({
+  maybeSendSubscriptionWelcomeEmail: vi.fn(),
+}));
+
 import { headers } from "next/headers";
 
 import { POST } from "@/app/api/stripe/webhook/route";
@@ -33,6 +37,7 @@ import {
   syncStripeSubscriptionById,
 } from "@/lib/billing/repository";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
+import { maybeSendSubscriptionWelcomeEmail } from "@/lib/email/maybe-send-subscription-welcome";
 
 describe("POST /api/stripe/webhook", () => {
   const constructEvent = vi.fn();
@@ -102,6 +107,7 @@ describe("POST /api/stripe/webhook", () => {
       received: true,
     });
     expect(syncCheckoutSessionById).toHaveBeenCalledWith("cs_success");
+    expect(maybeSendSubscriptionWelcomeEmail).not.toHaveBeenCalled();
     expect(markStripeWebhookEventProcessed).toHaveBeenCalledWith(
       "evt_checkout_completed",
       "checkout.session.completed",
@@ -115,9 +121,20 @@ describe("POST /api/stripe/webhook", () => {
       data: {
         object: {
           id: "sub_created",
+          status: "active",
+          items: {
+            data: [{ price: { recurring: { interval: "month" } } }],
+          },
         },
       },
     });
+    vi.mocked(syncStripeSubscriptionById).mockResolvedValue({
+      userId: "user-1",
+      customerId: "cus_1",
+      status: "active",
+      tier: "pro",
+    });
+    vi.mocked(maybeSendSubscriptionWelcomeEmail).mockResolvedValue(undefined);
 
     const response = await POST(
       new Request("http://localhost/api/stripe/webhook", {
@@ -131,8 +148,51 @@ describe("POST /api/stripe/webhook", () => {
       received: true,
     });
     expect(syncStripeSubscriptionById).toHaveBeenCalledWith("sub_created");
+    expect(maybeSendSubscriptionWelcomeEmail).toHaveBeenCalledWith({
+      userId: "user-1",
+      stripeSubscriptionId: "sub_created",
+      interval: "month",
+      appOrigin: "http://localhost",
+    });
     expect(markStripeWebhookEventProcessed).toHaveBeenCalledWith(
       "evt_created",
+      "customer.subscription.created",
+    );
+  });
+
+  it("still marks created subscription events processed when welcome email dispatch fails", async () => {
+    constructEvent.mockReturnValue({
+      id: "evt_created_email_failed",
+      type: "customer.subscription.created",
+      data: {
+        object: {
+          id: "sub_created",
+          status: "active",
+          items: {
+            data: [{ price: { recurring: { interval: "month" } } }],
+          },
+        },
+      },
+    });
+    vi.mocked(syncStripeSubscriptionById).mockResolvedValue({
+      userId: "user-1",
+      customerId: "cus_1",
+      status: "active",
+      tier: "pro",
+    });
+    vi.mocked(maybeSendSubscriptionWelcomeEmail).mockRejectedValue(new Error("resend down"));
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/webhook", {
+        method: "POST",
+        body: "{}",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(releaseStripeWebhookEventClaim).not.toHaveBeenCalled();
+    expect(markStripeWebhookEventProcessed).toHaveBeenCalledWith(
+      "evt_created_email_failed",
       "customer.subscription.created",
     );
   });
@@ -157,6 +217,7 @@ describe("POST /api/stripe/webhook", () => {
 
     expect(response.status).toBe(200);
     expect(syncStripeSubscriptionById).toHaveBeenCalledWith("sub_456");
+    expect(maybeSendSubscriptionWelcomeEmail).not.toHaveBeenCalled();
     expect(syncStripeSubscription).not.toHaveBeenCalled();
     expect(markStripeWebhookEventProcessed).toHaveBeenCalledWith(
       "evt_updated",

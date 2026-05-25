@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 
 import {
@@ -29,9 +29,10 @@ import {
   getMarketSeriesInputSchema,
   type MarketDataOptions,
 } from "@/lib/ask/market";
-import { askCardSchema } from "@/lib/ask/contracts";
 import { formatMarketPrice } from "@/lib/ask/market-format";
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
+import { parseSubmittedAskCardJson } from "@/lib/ask/service/card-output";
+import type { AskToolPolicy } from "@/lib/ask/service/model-routing";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 import { generateProjectionCard, generateProjectionInputSchema } from "@/lib/ask/projections";
 import { generateGrowthPlanCard, generateGrowthPlanInputSchema } from "@/lib/ask/plans";
@@ -301,26 +302,6 @@ function buildEconomicCalendarToolResult(
         ? "Use forecast, previous, actual, impact, and timing to explain trade risk. Do not invent missing actual values."
         : "No matching events found in the cached calendar window.",
   };
-}
-
-function normalizeSubmittedBriefingCard(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return value;
-  }
-
-  const card = { ...(value as Record<string, unknown>) };
-  if (card.type !== "briefing" || typeof card.direction === "string") {
-    return card;
-  }
-
-  const change = typeof card.change === "string" ? card.change.trim() : "";
-  if (change.startsWith("-")) {
-    card.direction = "down";
-  } else if (change.startsWith("+")) {
-    card.direction = "up";
-  }
-
-  return card;
 }
 
 function buildBrokerCard(
@@ -786,20 +767,60 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         "Final card submission for the actual answer the user should see. After search_news: use insight, or setup if the user asked for a trade plan and you also used get_market_setup. After get_market_briefing: use briefing only for direct market-status asks, otherwise use insight or setup. After get_market_setup: use setup. After generate_growth_plan: use plan. After calcs: use calc or insight. For mixed multi-topic questions, synthesize one final insight card instead of stopping at a raw tool card. card_json = stringified card.",
       inputSchema: submitAskCardInputSchema,
       execute: async ({ card_json }) => {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(card_json);
-        } catch {
-          throw new Error("submit_ask_card: card_json must be valid JSON.");
-        }
-        const result = askCardSchema.safeParse(normalizeSubmittedBriefingCard(parsed));
-        if (!result.success) {
-          throw new Error(`submit_ask_card: ${result.error.message}`);
-        }
-        return { card: result.data };
+        return { card: parseSubmittedAskCardJson(card_json) };
       },
     }),
   };
+}
+
+export type AskToolSet = ReturnType<typeof createAskTools>;
+export type AskToolsForPolicy = ToolSet;
+
+const TOOL_NAMES_BY_POLICY: Record<AskToolPolicy, readonly (keyof AskToolSet)[]> = {
+  none: [],
+  verification: ["verify_entity", "submit_ask_card"],
+  calculator: [
+    "calculate_position_size",
+    "calculate_risk_reward",
+    "calculate_pip_value",
+    "calculate_margin_required",
+    "calculate_profit_loss",
+    "generate_projection",
+    "generate_growth_plan",
+    "submit_ask_card",
+  ],
+  full: [
+    "verify_entity",
+    "get_market_briefing",
+    "get_market_setup",
+    "search_news",
+    "get_economic_calendar",
+    "calculate_position_size",
+    "calculate_risk_reward",
+    "calculate_pip_value",
+    "calculate_margin_required",
+    "calculate_profit_loss",
+    "generate_projection",
+    "generate_growth_plan",
+    "submit_ask_card",
+  ],
+};
+
+export function createAskToolsForPolicy(
+  dependencies: AskServiceDependencies,
+  toolPolicy: AskToolPolicy,
+): AskToolsForPolicy {
+  const tools = createAskTools(dependencies);
+  if (toolPolicy === "full") {
+    return tools;
+  }
+
+  const selectedTools: ToolSet = {};
+  for (const toolName of TOOL_NAMES_BY_POLICY[toolPolicy]) {
+    selectedTools[toolName] = tools[toolName];
+  }
+
+  return selectedTools;
 }
 
 async function resolveVerificationToolResult(

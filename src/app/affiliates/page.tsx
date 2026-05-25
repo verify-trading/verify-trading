@@ -312,7 +312,7 @@ function WhyTradersChooseSection() {
       icon: Wallet,
       theme: "coral",
       title: "Affordable pricing",
-      body: "£5 first-month launch offer makes it an easy yes. Low barrier = higher conversion from your traffic.",
+      body: "Weekly and monthly Pro plans keep the first step affordable. Low barrier = higher conversion from your traffic.",
     },
     {
       icon: Sparkles,

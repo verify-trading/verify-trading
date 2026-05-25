@@ -49,6 +49,22 @@ const economicCalendarSnapshot: EconomicCalendarSnapshot = {
   ],
 };
 
+type NewsSearchToolResult = {
+  query: string;
+  note?: string;
+  articles: Array<{
+    title: string;
+    source: string;
+    description?: string | null;
+  }>;
+};
+
+type CalendarToolResult = {
+  totalMatched: number;
+  events: Array<Record<string, unknown>>;
+  nextHighImpactEvent: Record<string, unknown> | null;
+};
+
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((res) => {
@@ -719,7 +735,10 @@ describe("createAskTools", () => {
     });
     const tools = createAskTools({ fetchNewsEverythingImpl });
 
-    const result = await tools.search_news.execute?.({ query: "iran oil" }, {} as never);
+    const result = (await tools.search_news.execute?.(
+      { query: "iran oil" },
+      {} as never,
+    )) as NewsSearchToolResult;
 
     expect(fetchNewsEverythingImpl).toHaveBeenCalledWith(
       expect.objectContaining({ query: "iran oil" }),
@@ -750,7 +769,7 @@ describe("createAskTools", () => {
         getEconomicCalendarSnapshotImpl: vi.fn().mockResolvedValue(economicCalendarSnapshot),
       });
 
-      const result = await tools.get_economic_calendar.execute?.(
+      const result = (await tools.get_economic_calendar.execute?.(
         {
           scope: "today",
           impact: "high",
@@ -758,7 +777,7 @@ describe("createAskTools", () => {
           limit: 8,
         },
         {} as never,
-      );
+      )) as CalendarToolResult;
 
       expect(result).toMatchObject({
         totalMatched: 2,
@@ -797,14 +816,14 @@ describe("createAskTools", () => {
         getEconomicCalendarSnapshotImpl: vi.fn().mockResolvedValue(economicCalendarSnapshot),
       });
 
-      const result = await tools.get_economic_calendar.execute?.(
+      const result = (await tools.get_economic_calendar.execute?.(
         {
           scope: "upcoming",
           impact: "high",
           limit: 1,
         },
         {} as never,
-      );
+      )) as CalendarToolResult;
 
       expect(result?.events).toEqual([
         expect.objectContaining({
@@ -830,7 +849,7 @@ describe("createAskTools", () => {
         getEconomicCalendarSnapshotImpl: vi.fn().mockResolvedValue(economicCalendarSnapshot),
       });
 
-      const result = await tools.get_economic_calendar.execute?.(
+      const result = (await tools.get_economic_calendar.execute?.(
         {
           scope: "week",
           impact: "all",
@@ -838,7 +857,7 @@ describe("createAskTools", () => {
           limit: 5,
         },
         {} as never,
-      );
+      )) as CalendarToolResult;
 
       expect(result).toMatchObject({
         totalMatched: 1,

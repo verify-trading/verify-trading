@@ -44,8 +44,7 @@ function createBillingSubscriptionsQuery(data: unknown) {
   const limit = vi.fn().mockResolvedValue({ data, error: null });
   const secondOrder = vi.fn(() => ({ limit }));
   const firstOrder = vi.fn(() => ({ order: secondOrder }));
-  const inFilter = vi.fn(() => ({ order: firstOrder }));
-  const eq = vi.fn(() => ({ in: inFilter }));
+  const eq = vi.fn(() => ({ order: firstOrder }));
   return {
     select: vi.fn(() => ({ eq })),
   };
@@ -76,7 +75,11 @@ describe("BillingPage", () => {
       supabase: {
         from: vi.fn((table: string) => {
           if (table === "profiles") {
-            return createProfilesQuery({ display_name: "Test", tier: "pro" });
+            return createProfilesQuery({
+              display_name: "Test",
+              tier: "pro",
+              stripe_customer_id: "cus_test",
+            });
           }
 
           if (table === "billing_subscriptions") {
@@ -144,11 +147,50 @@ describe("BillingPage", () => {
     expect(mockLoadAskUsageState).toHaveBeenCalledWith(expect.anything(), "user-2");
     expect(mockBillingPageView).toHaveBeenCalledWith(
       expect.objectContaining({
+        showSubscriptionManagement: false,
         freeAskUsage: expect.objectContaining({
           used: 2,
           remaining: 8,
         }),
       }),
     );
+  });
+
+  it("shows subscription management for Pro users with a Stripe customer but no manageable subscription row", async () => {
+    mockGetSessionUser.mockResolvedValue({
+      user: {
+        id: "user-3",
+        email: "pro@example.com",
+      },
+      supabase: {
+        from: vi.fn((table: string) => {
+          if (table === "profiles") {
+            return createProfilesQuery({
+              display_name: "Test",
+              tier: "pro",
+              stripe_customer_id: "cus_legacy",
+            });
+          }
+
+          if (table === "billing_subscriptions") {
+            return createBillingSubscriptionsQuery([]);
+          }
+
+          throw new Error(`Unexpected table: ${table}`);
+        }),
+      } as never,
+    } as never);
+
+    render(await BillingPage({}));
+
+    expect(mockBillingPageView).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canOpenBillingPortal: true,
+        canManageSubscriptionActions: false,
+        showSubscriptionManagement: true,
+        currentPlanLabel: "Pro",
+      }),
+    );
+    expect(mockLoadAskUsageState).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
@@ -27,28 +27,39 @@ vi.mock("@/components/billing/billing-actions", () => ({
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
 
 const pricing = {
-  deadlineLabel: "6 June 2026",
   free: {
     badge: "Free",
     headline: "£0",
     detail: "Free plan",
   },
+  weekly: {
+    badge: "Flexible",
+    headline: "£6.99/week",
+    detail: "Weekly Pro",
+    dailyEquivalentHeadline: "99p per day",
+    ctaLabel: "Start weekly plan",
+  },
   monthly: {
     badge: "Most popular",
-    headline: "£24.99/month",
+    headline: "£19.99/month",
     detail: "Monthly Pro",
+    dailyEquivalentHeadline: "66p per day",
     ctaLabel: "Start Pro",
-    promotion: null,
   },
   annual: {
     badge: "Best value",
-    headline: "£200/year",
+    headline: "£119.99/year",
     detail: "Annual Pro",
+    dailyEquivalentHeadline: "33p per day",
     ctaLabel: "Start annual plan",
-    equivalentMonthlyHeadline: "£16.67/month equivalent",
-    savingsLabel: "Save £99.88 per year",
+    equivalentMonthlyHeadline: "£10/month equivalent",
+    savingsLabel: "Save £119.89 per year (6 months free)",
   },
 } as const;
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("PricingPlansSection", () => {
   it("shows current-plan and change-plan actions for subscribers", () => {
@@ -64,7 +75,7 @@ describe("PricingPlansSection", () => {
     );
 
     expect(screen.getByRole("button", { name: "Current plan" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Change plan in Stripe" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Change plan in Stripe" })).toHaveLength(2);
     expect(container.querySelectorAll('[data-action="checkout"]').length).toBe(0);
     expect(screen.getByText(/subscription updates sync back to the app automatically/i)).toBeInTheDocument();
   });
@@ -81,34 +92,15 @@ describe("PricingPlansSection", () => {
       />,
     );
 
-    expect(screen.getAllByRole("link", { name: "Manage subscription" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Manage subscription" })).toHaveLength(3);
     expect(container.querySelectorAll('[data-action="checkout"]').length).toBe(0);
   });
 
-  it("keeps the monthly promo deadline visible on the compact pricing page", () => {
-    render(
-      <PricingPlansSection
-        pricing={{
-          ...pricing,
-          monthly: {
-            ...pricing.monthly,
-            promotion: {
-              variant: "launch",
-              badge: "Launch offer",
-              headline: "First month £5, then £20/month",
-              detail: "Launch pricing",
-              priceHighlight: "£5",
-              priceQualifier: "first month",
-              followup: "Then £20/month",
-              ctaLabel: "Join for £5",
-              compareAtHeadline: "£24.99/month",
-            },
-          },
-        }}
-        compactHeader
-      />,
-    );
+  it("renders weekly, monthly, and annual daily-equivalent pricing copy", () => {
+    render(<PricingPlansSection pricing={pricing} compactHeader />);
 
-    expect(screen.getByText(/monthly offer ends 6 June 2026/i)).toBeInTheDocument();
+    expect(screen.getAllByText("99p per day")).toHaveLength(1);
+    expect(screen.getAllByText("66p per day")).toHaveLength(1);
+    expect(screen.getAllByText("33p per day")).toHaveLength(1);
   });
 });

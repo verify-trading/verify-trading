@@ -10,8 +10,9 @@ import type { AccountMenuProfile } from "@/lib/auth/account-menu-query";
 import { useAccountMenuQuery } from "@/lib/auth/use-account-menu-query";
 import { Button } from "@/components/ui/button";
 import { hidesAuthChrome } from "@/lib/auth/auth-paths";
-import { FREE_DAILY_ASK_LIMIT, type FreeAskUsageSummary } from "@/lib/rate-limit/usage";
+import type { AskUsageSummary } from "@/lib/rate-limit/usage";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 function initialsFromUser(email: string | undefined, profile: AccountMenuProfile | null) {
@@ -41,7 +42,8 @@ export function UserMenu() {
   const email = user?.email ?? "";
   const accountMenuQuery = useAccountMenuQuery();
   const profile = accountMenuQuery.data?.profile ?? null;
-  const usage: FreeAskUsageSummary | null = accountMenuQuery.data?.usage ?? null;
+  const usage: AskUsageSummary | null = accountMenuQuery.data?.usage ?? null;
+  const isPro = profile?.tier === "pro";
 
   /** Prefer human-readable name; handle without @ in the nav (email is in the dropdown). */
   const displayLabel = useMemo(() => {
@@ -130,33 +132,13 @@ export function UserMenu() {
             </div>
           </div>
 
-          {profile?.tier === "pro" ? (
+          {usage ? (
             <div className="border-b border-white/[0.06] px-3 py-3">
               <div className="rounded-xl border border-[color:var(--vt-border)] bg-white/[0.04] px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-white">
                   <span>Daily message usage</span>
-                  <span className="tabular-nums text-[var(--vt-green)]">Unlimited</span>
-                </div>
-                <div
-                  className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.08]"
-                  role="progressbar"
-                  aria-label="Daily message usage"
-                  aria-valuetext="Unlimited"
-                >
-                  <div className="h-full w-full rounded-full bg-[var(--vt-green)]" />
-                </div>
-                <p className="mt-2 text-[11px] text-[var(--vt-muted)]">Pro: no daily cap on Ask messages.</p>
-              </div>
-            </div>
-          ) : null}
-
-          {profile?.tier !== "pro" && usage ? (
-            <div className="border-b border-white/[0.06] px-3 py-3">
-              <div className="rounded-xl border border-[color:var(--vt-border)] bg-white/[0.04] px-3 py-2.5">
-                <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-white">
-                  <span>Daily message usage</span>
-                  <span>
-                    {usage.used}/{FREE_DAILY_ASK_LIMIT}
+                  <span className="tabular-nums">
+                    {usage.used}/{usage.limit}
                   </span>
                 </div>
                 <div
@@ -168,12 +150,21 @@ export function UserMenu() {
                   aria-valuenow={usage.used}
                 >
                   <div
-                    className="h-full rounded-full bg-[var(--vt-blue)] transition-[width]"
+                    className={cn(
+                      "h-full rounded-full transition-[width]",
+                      isPro ? "bg-[var(--vt-green)]" : "bg-[var(--vt-blue)]",
+                    )}
                     style={{ width: `${usage.progressPercent}%` }}
                   />
                 </div>
                 <p className="mt-2 text-[11px] text-[var(--vt-muted)]">
-                  {usage.remaining} free messages left today.
+                  {usage.remaining === 0
+                    ? isPro
+                      ? "You've used today's Pro messages. Resets at midnight UTC."
+                      : "You've used today's free messages. Resets at midnight UTC."
+                    : isPro
+                      ? `${usage.remaining} Pro message${usage.remaining === 1 ? "" : "s"} left today.`
+                      : `${usage.remaining} free message${usage.remaining === 1 ? "" : "s"} left today.`}
                 </p>
               </div>
             </div>

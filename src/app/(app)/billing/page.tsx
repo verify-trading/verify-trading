@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { BillingPageView } from "@/components/billing/billing-page-view";
 import { getSessionUser } from "@/lib/auth/session";
 import {
+  billingStatusGrantsProAccess,
   canManageSubscription,
-  MANAGEABLE_SUBSCRIPTION_STATUSES,
 } from "@/lib/billing/subscription-status";
 import { loadAskUsageState } from "@/lib/rate-limit/load-ask-usage";
 import type { FreeAskUsageSummary } from "@/lib/rate-limit/usage";
@@ -23,6 +23,7 @@ type BillingPageSearchParams = Promise<
 type ProfileRow = {
   display_name: string | null;
   tier: string | null;
+  stripe_customer_id: string | null;
 };
 
 type BillingSubscriptionRow = {
@@ -120,6 +121,10 @@ function getCurrentPlanLabel(
     return "Pro Annual";
   }
 
+  if (subscription?.interval === "week") {
+    return "Pro Weekly";
+  }
+
   if (subscription?.interval === "month") {
     return "Pro Monthly";
   }
@@ -145,7 +150,7 @@ export default async function BillingPage({
   const [profileResult, subscriptionResult] = await Promise.all([
     session.supabase
       .from("profiles")
-      .select("display_name, tier")
+      .select("display_name, tier, stripe_customer_id")
       .eq("id", session.user.id)
       .maybeSingle(),
     session.supabase
@@ -154,7 +159,6 @@ export default async function BillingPage({
         "status, current_period_end, cancel_at_period_end, cancel_at, currency, unit_amount, interval, interval_count",
       )
       .eq("user_id", session.user.id)
-      .in("status", [...MANAGEABLE_SUBSCRIPTION_STATUSES])
       .order("current_period_end", { ascending: false, nullsFirst: false })
       .order("updated_at", { ascending: false })
       .limit(1),
@@ -172,10 +176,17 @@ export default async function BillingPage({
   const subscription =
     ((subscriptionResult.data as BillingSubscriptionRow[] | null) ?? [])[0] ??
     null;
-  const canOpenPortal = canManageSubscription(subscription?.status);
+  const hasProTier = profile?.tier === "pro";
+  const hasStripeCustomer = Boolean(profile?.stripe_customer_id?.trim());
+  const canOpenBillingPortal = hasStripeCustomer;
+  const canManageSubscriptionActions = canManageSubscription(subscription?.status);
+  const showSubscriptionManagement =
+    hasProTier ||
+    canManageSubscriptionActions ||
+    billingStatusGrantsProAccess(subscription?.status);
 
   let freeAskUsage: FreeAskUsageSummary | null = null;
-  if (!canOpenPortal && profile?.tier !== "pro") {
+  if (!showSubscriptionManagement) {
     const usageState = await loadAskUsageState(
       session.supabase,
       session.user.id,
@@ -198,7 +209,9 @@ export default async function BillingPage({
       subscription={subscription}
       customerName={customerName}
       currentPlanLabel={currentPlanLabel}
-      canOpenPortal={canOpenPortal}
+      canOpenBillingPortal={canOpenBillingPortal}
+      canManageSubscriptionActions={canManageSubscriptionActions}
+      showSubscriptionManagement={showSubscriptionManagement}
       isCanceling={isCanceling}
       renewalDate={renewalDate}
       recurringAmount={recurringAmount}

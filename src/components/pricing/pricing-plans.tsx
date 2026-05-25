@@ -6,13 +6,12 @@ import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
-import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { cn } from "@/lib/utils";
 
-import { ProAnnualPlanCard, ProMonthlyPlanCard } from "./pro-plan-cards";
+import { ProAnnualPlanCard, ProMonthlyPlanCard, ProWeeklyPlanCard } from "./pro-plan-cards";
 
-const surface =
-  "rounded-xl border border-white/[0.08] bg-white/[0.02]";
+const surface = "rounded-xl border border-white/[0.08] bg-white/[0.02]";
 
 function SectionEyebrow({ children }: { children: React.ReactNode }) {
   return (
@@ -23,7 +22,7 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Full Free / Pro monthly / Pro annual grid. Used on `/pricing` and the landing page.
+ * Full Free / Pro weekly / Pro monthly / Pro annual grid. Used on `/pricing` and the landing page.
  * Use `compactHeader` on `/pricing` to avoid repeating copy the cards already show.
  */
 export function PricingPlansSection({
@@ -39,8 +38,6 @@ export function PricingPlansSection({
   /** Compact page only: Home link above the title; keeps spacing tight. */
   showBackHome?: boolean;
 }) {
-  const monthlyPromotion = pricing.monthly.promotion;
-
   return (
     <section
       className={cn(
@@ -66,12 +63,17 @@ export function PricingPlansSection({
             Free to start. Pro when you need more.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-400">
-            {`Free includes ${FREE_DAILY_ASK_LIMIT} Ask chats per day. Pro unlocks unlimited Ask and premium app features.`}
+            {`Free includes ${FREE_DAILY_ASK_LIMIT} Ask chats per day. Pro includes ${PRO_DAILY_ASK_LIMIT} Ask chats per day and premium app features.`}
           </p>
         </div>
       )}
 
-      <div className={cn("grid gap-4 lg:grid-cols-3", compactHeader ? "mt-5" : "mt-12")}>
+      <div
+        className={cn(
+          "grid gap-4 md:grid-cols-2 xl:grid-cols-4",
+          compactHeader ? "mt-5" : "mt-12",
+        )}
+      >
         <div className={cn(surface, "flex flex-col p-6 transition-colors hover:border-white/[0.12]")}>
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{pricing.free.badge}</span>
           <h3 className="mt-4 text-3xl font-bold tracking-tight text-white">{pricing.free.headline}</h3>
@@ -82,10 +84,10 @@ export function PricingPlansSection({
               "Broker verification",
               "Trade Analysis",
               "Risk Calculators",
-            ].map((f) => (
-              <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
+            ].map((feature) => (
+              <li key={feature} className="flex items-center gap-2 text-sm text-slate-300">
                 <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
-                {f}
+                {feature}
               </li>
             ))}
           </ul>
@@ -104,6 +106,7 @@ export function PricingPlansSection({
           </div>
         </div>
 
+        <ProWeeklyPlanCard pricing={pricing} billingContext={billingContext} />
         <ProMonthlyPlanCard pricing={pricing} billingContext={billingContext} />
         <ProAnnualPlanCard pricing={pricing} billingContext={billingContext} />
       </div>
@@ -112,12 +115,6 @@ export function PricingPlansSection({
         <p className="mt-6 text-left text-xs leading-relaxed text-slate-500">
           Use the paid plan cards to change plans in Stripe. Payment methods, invoices, and subscription updates sync
           back to the app automatically.
-        </p>
-      ) : null}
-
-      {monthlyPromotion ? (
-        <p className="mt-6 text-left text-xs leading-relaxed text-slate-500">
-          Monthly offer ends {pricing.deadlineLabel}. After that, Pro Monthly returns to the standard list price.
         </p>
       ) : null}
     </section>

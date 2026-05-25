@@ -8,7 +8,6 @@ import {
   type ModelMessage,
   type PrepareStepFunction,
 } from "ai";
-import { z } from "zod";
 
 import {
   buildAnalysisRulesPrompt,
@@ -58,12 +57,25 @@ import {
   getAskFallbackModelId,
   getAskModel,
   getAskPrimaryModelId,
+  getAskSimpleModel,
+  getAskSimpleModelId,
 } from "@/lib/ask/service/provider";
+import {
+  selectAskModelRoutingForRequest,
+  shouldEscalateSimpleModelResult,
+  type AskToolPolicy,
+} from "@/lib/ask/service/model-routing";
+import {
+  askCardOutputEnvelopeSchema,
+  buildInsightCardFromLooseCard,
+  parseAskCardCandidate,
+} from "@/lib/ask/service/card-output";
 import {
   buildPipValueCard,
   buildRiskRewardCard,
-  createAskTools,
+  createAskToolsForPolicy,
   resolveVerificationCard,
+  type AskToolsForPolicy,
 } from "@/lib/ask/service/tools";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 
@@ -104,11 +116,7 @@ function isCapacityOrTransientApiError(error: unknown): boolean {
   return false;
 }
 
-function shouldAttemptAskFallbackModel(error: unknown): boolean {
-  if (getAskPrimaryModelId() === getAskFallbackModelId()) {
-    return false;
-  }
-
+function shouldRetryAskModel(error: unknown): boolean {
   if (RetryError.isInstance(error)) {
     if (error.reason !== "maxRetriesExceeded") {
       return false;
@@ -179,7 +187,15 @@ function stopAfterSubmitAskCardResult({
   );
 }
 
-type AskToolSet = ReturnType<typeof createAskTools>;
+type AskLanguageModel = ReturnType<typeof getAskModel>;
+type AskModelAttempt = {
+  label: "simple" | "primary" | "fallback";
+  modelId: string;
+  model: AskLanguageModel;
+  toolPolicy: AskToolPolicy;
+  maxToolSteps: number;
+};
+
 const BROAD_MARKET_TREND_DATA_TOOLS = new Set(["get_market_briefing", "search_news"]);
 const SUBMIT_ASK_CARD_TOOL_NAMES = new Set(["submit_ask_card"]);
 
@@ -223,7 +239,7 @@ function createAskPrepareStep({
   message: string;
   sessionId: string;
   messageId: string;
-}): PrepareStepFunction<AskToolSet> {
+}): PrepareStepFunction<AskToolsForPolicy> {
   const shouldLimitBroadTrendLoop = isBroadMarketTrendPrompt(message);
 
   return ({ stepNumber, steps, messages }) => {
@@ -333,12 +349,6 @@ function buildInsightCard(headline: string, body: string, verdict: string) {
   };
 }
 
-const askCardOutputEnvelopeSchema = z.object({
-  card_json: z
-    .string()
-    .describe("A single JSON object string for the final response card. It must match the ask card schema exactly."),
-});
-
 const askCardOutput = Output.object({
   name: "AskCardEnvelope",
   description: "Envelope that contains the final response card as a JSON string.",
@@ -444,6 +454,19 @@ type ResolvedCardSelection = {
     overrideCardType: AskCard["type"] | null;
   };
 };
+
+type ResolvedGenerationResult = {
+  allToolResults: Array<{ toolName?: string; output?: unknown }>;
+  finalSelection: ResolvedCardSelection;
+};
+type AskGenerateTextResult = {
+  text: string;
+  toolResults?: unknown;
+  output?: unknown;
+};
+type AskModelAttemptResult =
+  | { kind: "generated"; result: AskGenerateTextResult }
+  | { kind: "response"; response: AskResponse };
 
 function collectToolCardState(
   toolResults: Array<{ toolName?: string; output?: unknown }>,
@@ -582,14 +605,7 @@ function resolveFinalCardSelection({
 
 function extractOutputCard(result: { output?: unknown }) {
   try {
-    const parsedEnvelope = askCardOutputEnvelopeSchema.safeParse(result.output);
-    if (!parsedEnvelope.success) {
-      return null;
-    }
-
-    const parsedCard = JSON.parse(parsedEnvelope.data.card_json);
-    const validatedCard = askCardSchema.safeParse(parsedCard);
-    return validatedCard.success ? validatedCard.data : null;
+    return parseAskCardCandidate(result.output);
   } catch {
     return null;
   }
@@ -725,6 +741,88 @@ function buildInsightCardFromModelText(text: string) {
     clampWords(first, 60),
     clampWords(second || (asksForInput ? "Reply with the missing detail." : "Ask a sharper follow-up if you want me to refine it."), 60),
   );
+}
+
+function resolveGeneratedAskResult({
+  result,
+  completedToolResults,
+  normalizedMessage,
+  sessionId,
+  messageId,
+}: {
+  result: AskGenerateTextResult;
+  completedToolResults: Array<{ toolName?: string; output?: unknown }>;
+  normalizedMessage: string;
+  sessionId: string;
+  messageId: string;
+}): ResolvedGenerationResult {
+  const finalToolResults = Array.isArray(result.toolResults)
+    ? (result.toolResults as Array<{ toolName?: string; output?: unknown }>)
+    : [];
+  const allToolResults = mergeToolResults(completedToolResults, finalToolResults);
+
+  logger.info("Tool results received.", {
+    sessionId,
+    count: allToolResults.length,
+    tools: allToolResults.map((t) => t.toolName),
+    outputs: allToolResults.map((t) => JSON.stringify(t.output).slice(0, 200)),
+  });
+
+  const outputCard = extractOutputCard(result);
+  const parsedText = outputCard ? null : extractJson(result.text);
+  const parsedTextCard = parsedText ? parseAskCardCandidate(parsedText) : null;
+  const looseTextCard = parsedText && !parsedTextCard ? buildInsightCardFromLooseCard(parsedText) : null;
+  const parsedCardResult =
+    parsedText && !parsedTextCard && !looseTextCard ? askCardSchema.safeParse(parsedText) : null;
+  let parsedCard: ParsedAskCardResult | null = null;
+  if (parsedTextCard) {
+    parsedCard = { success: true, data: parsedTextCard };
+  } else if (looseTextCard) {
+    parsedCard = { success: true, data: looseTextCard };
+  } else if (parsedCardResult) {
+    parsedCard = { success: false };
+  }
+  const submitCard = extractSubmitAskCard(allToolResults, askCardSchema);
+  const toolCard = extractToolCard(allToolResults, askCardSchema);
+
+  if (parsedText && parsedCardResult && !parsedCardResult.success && !submitCard && !toolCard) {
+    logger.warn("Ask model output did not match card schema.", {
+      sessionId,
+      messageId,
+      parsedType:
+        parsedText && typeof parsedText === "object" && !Array.isArray(parsedText)
+          ? (parsedText as { type?: unknown }).type ?? null
+          : null,
+      issues: parsedCardResult.error.issues.slice(0, 6).map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message,
+      })),
+    });
+  }
+
+  const wrappedTextCard =
+    !submitCard && !toolCard && !parsedCard?.success && !parsedText
+      ? buildInsightCardFromModelText(result.text)
+      : null;
+
+  const finalSelection = resolveFinalCardSelection({
+    submitCard,
+    outputCard,
+    parsedCard,
+    toolResults: allToolResults,
+    wrappedTextCard,
+    message: normalizedMessage,
+  });
+
+  logger.info("Card extraction results.", {
+    sessionId,
+    ...finalSelection.debug,
+  });
+
+  return {
+    allToolResults,
+    finalSelection,
+  };
 }
 
 function parseFlexibleNumber(raw: string): number | null {
@@ -1230,16 +1328,66 @@ export async function generateAskResponse(
     });
   }
 
-  const runGenerate = async (model: ReturnType<typeof getAskModel>) => {
+  const modelRouting = selectAskModelRoutingForRequest(request, normalizedMessage, Boolean(image));
+  const primaryAttempt: AskModelAttempt = {
+    label: "primary",
+    modelId: getAskPrimaryModelId(),
+    model: getAskModel(),
+    toolPolicy: "full",
+    maxToolSteps: ASK_MAX_TOOL_STEPS,
+  };
+  const fallbackAttempt: AskModelAttempt = {
+    label: "fallback",
+    modelId: getAskFallbackModelId(),
+    model: getAskFallbackModel(),
+    toolPolicy: "full",
+    maxToolSteps: ASK_MAX_TOOL_STEPS,
+  };
+  const selectedAttempt: AskModelAttempt =
+    modelRouting.modelClass === "simple"
+      ? {
+          label: "simple",
+          modelId: getAskSimpleModelId(),
+          model: getAskSimpleModel(),
+          toolPolicy: modelRouting.toolPolicy,
+          maxToolSteps: modelRouting.maxToolSteps,
+        }
+      : {
+          ...primaryAttempt,
+          toolPolicy: modelRouting.toolPolicy,
+          maxToolSteps: modelRouting.maxToolSteps,
+        };
+  const primaryFallbackAttempts =
+    primaryAttempt.modelId === fallbackAttempt.modelId
+      ? [primaryAttempt]
+      : [primaryAttempt, fallbackAttempt];
+  const initialAttempts: AskModelAttempt[] = [selectedAttempt];
+  if (selectedAttempt.modelId !== primaryAttempt.modelId) {
+    initialAttempts.push(...primaryFallbackAttempts);
+  } else if (selectedAttempt.modelId !== fallbackAttempt.modelId) {
+    initialAttempts.push(fallbackAttempt);
+  }
+
+  logger.info("Ask model selected.", {
+    sessionId,
+    messageId,
+    modelId: selectedAttempt.modelId,
+    modelClass: modelRouting.modelClass,
+    modelRoutingReason: modelRouting.reason,
+    toolPolicy: modelRouting.toolPolicy,
+    maxToolSteps: modelRouting.maxToolSteps,
+  });
+
+  const runGenerate = async (attempt: AskModelAttempt): Promise<AskGenerateTextResult> => {
     completedToolResults.length = 0;
 
     return generateTextImpl({
-      model,
+      model: attempt.model,
       temperature: 0.2,
       maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
       maxRetries: ASK_MODEL_MAX_RETRIES,
       output: askCardOutput,
-      stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS), stopAfterSubmitAskCardResult],
+      stopWhen: [stepCountIs(attempt.maxToolSteps), stopAfterSubmitAskCardResult],
       prepareStep: createAskPrepareStep({
         message: normalizedMessage,
         sessionId,
@@ -1304,128 +1452,121 @@ export async function generateAskResponse(
         });
       },
       messages,
-      tools: createAskTools(dependencies),
+      tools: createAskToolsForPolicy(dependencies, attempt.toolPolicy),
     });
   };
 
-  let result;
+  const runModelAttempts = async (
+    attempts: AskModelAttempt[],
+  ): Promise<AskModelAttemptResult> => {
+    for (const [index, attempt] of attempts.entries()) {
+      try {
+        return { kind: "generated", result: await runGenerate(attempt) };
+      } catch (error) {
+        const recoveredSelection = resolveFinalCardSelection({
+          submitCard: extractSubmitAskCard(completedToolResults, askCardSchema),
+          outputCard: null,
+          parsedCard: null,
+          toolResults: completedToolResults,
+          wrappedTextCard: null,
+          message: normalizedMessage,
+        });
 
-  try {
-    result = await runGenerate(getAskModel());
-  } catch (error) {
-    const recoveredSelection = resolveFinalCardSelection({
-      submitCard: extractSubmitAskCard(completedToolResults, askCardSchema),
-      outputCard: null,
-      parsedCard: null,
-      toolResults: completedToolResults,
-      wrappedTextCard: null,
-      message: normalizedMessage,
-    });
+        if (
+          recoveredSelection.source === "tool_result" ||
+          recoveredSelection.source === "submit_ask_card"
+        ) {
+          logger.warn("Ask model failed after yielding a valid tool card; returning tool result without fallback rerun.", {
+            sessionId,
+            messageId,
+            attemptedModel: attempt.modelId,
+            error: error instanceof Error ? error.message : String(error),
+            recoveredCardSource: recoveredSelection.source,
+            recoveredCardType: recoveredSelection.card.type,
+          });
 
-    if (
-      recoveredSelection.source === "tool_result" ||
-      recoveredSelection.source === "submit_ask_card"
-    ) {
-      logger.warn("Ask primary model failed after yielding a valid tool card; returning tool result without fallback rerun.", {
-        sessionId,
-        messageId,
-        primaryModel: getAskPrimaryModelId(),
-        error: error instanceof Error ? error.message : String(error),
-        recoveredCardSource: recoveredSelection.source,
-        recoveredCardType: recoveredSelection.card.type,
-      });
+          return {
+            kind: "response",
+            response: buildCompletedAskResponse({
+              card: recoveredSelection.card,
+              source: recoveredSelection.source,
+              uiMeta: extractUiMeta(recoveredSelection.card, completedToolResults),
+              sessionId,
+              messageId,
+            }),
+          };
+        }
 
-      return buildCompletedAskResponse({
-        card: recoveredSelection.card,
-        source: recoveredSelection.source,
-        uiMeta: extractUiMeta(recoveredSelection.card, completedToolResults),
-        sessionId,
-        messageId,
-      });
+        const nextAttempt = attempts[index + 1];
+        if (!nextAttempt || !shouldRetryAskModel(error)) {
+          throw error;
+        }
+
+        logger.warn("Ask model failed; retrying with next model.", {
+          sessionId,
+          messageId,
+          attemptedModel: attempt.modelId,
+          nextModel: nextAttempt.modelId,
+          nextModelRole: nextAttempt.label,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
-    if (shouldAttemptAskFallbackModel(error)) {
-      logger.warn("Ask primary model failed; retrying with fallback model.", {
-        sessionId,
-        messageId,
-        primaryModel: getAskPrimaryModelId(),
-        fallbackModel: getAskFallbackModelId(),
-        error: error instanceof Error ? error.message : String(error),
-      });
-      result = await runGenerate(getAskFallbackModel());
-    } else {
-      throw error;
-    }
+    throw new Error("Ask model attempts were empty.");
+  };
+
+  const initialGeneration = await runModelAttempts(initialAttempts);
+  if (initialGeneration.kind === "response") {
+    return initialGeneration.response;
   }
+  let result = initialGeneration.result;
 
-  const allToolResults = mergeToolResults(
+  let resolvedResult = resolveGeneratedAskResult({
+    result,
     completedToolResults,
-    result.toolResults as Array<{ toolName?: string; output?: unknown }>,
-  );
-
-  logger.info("Tool results received.", {
-    sessionId,
-    count: allToolResults.length,
-    tools: allToolResults.map((t) => t.toolName),
-    outputs: allToolResults.map((t) => JSON.stringify(t.output).slice(0, 200)),
-  });
-
-  const outputCard = extractOutputCard(result as { output?: unknown });
-  const parsedText = outputCard ? null : extractJson(result.text);
-  const parsedCardResult = parsedText ? askCardSchema.safeParse(parsedText) : null;
-  const parsedCard: ParsedAskCardResult | null = parsedCardResult?.success
-    ? { success: true, data: parsedCardResult.data }
-    : parsedCardResult
-      ? { success: false }
-      : null;
-  const submitCard = extractSubmitAskCard(allToolResults, askCardSchema);
-  const toolCard = extractToolCard(allToolResults, askCardSchema);
-
-  if (parsedText && parsedCardResult && !parsedCardResult.success) {
-    logger.warn("Ask model output did not match card schema.", {
-      sessionId,
-      messageId,
-      parsedType:
-        parsedText && typeof parsedText === "object" && !Array.isArray(parsedText)
-          ? (parsedText as { type?: unknown }).type ?? null
-          : null,
-      issues: parsedCardResult.error.issues.slice(0, 6).map((issue) => ({
-        path: issue.path.join("."),
-        message: issue.message,
-      })),
-    });
-  }
-
-  const wrappedTextCard =
-    !submitCard && !toolCard && !parsedCard?.success && !parsedText
-      ? buildInsightCardFromModelText(result.text)
-      : null;
-
-  const finalSelection = resolveFinalCardSelection({
-    submitCard,
-    outputCard,
-    parsedCard,
-    toolResults: allToolResults,
-    wrappedTextCard,
-    message: normalizedMessage,
-  });
-
-  logger.info("Card extraction results.", {
-    sessionId,
-    ...finalSelection.debug,
-  });
-
-  logger.info("Ask generation completed.", {
+    normalizedMessage,
     sessionId,
     messageId,
-    finalCardType: finalSelection.card.type,
-    cardSource: finalSelection.source,
-    toolResults: summarizeToolResults(allToolResults),
   });
 
-  return askResponseSchema.parse({
-    data: sanitizeCard(finalSelection.card),
-    uiMeta: sanitizeUiMeta(extractUiMeta(finalSelection.card, allToolResults)),
+  if (modelRouting.modelClass === "simple") {
+    const escalationReason = shouldEscalateSimpleModelResult(
+      resolvedResult.finalSelection.card,
+      resolvedResult.allToolResults,
+    );
+
+    if (escalationReason) {
+      logger.warn("Ask simple model result escalated to primary model.", {
+        sessionId,
+        messageId,
+        simpleModel: selectedAttempt.modelId,
+        primaryModel: getAskPrimaryModelId(),
+        escalationReason,
+        cardType: resolvedResult.finalSelection.card.type,
+      });
+
+      const escalatedGeneration = await runModelAttempts(primaryFallbackAttempts);
+      if (escalatedGeneration.kind === "response") {
+        return escalatedGeneration.response;
+      }
+      result = escalatedGeneration.result;
+
+      resolvedResult = resolveGeneratedAskResult({
+        result,
+        completedToolResults,
+        normalizedMessage,
+        sessionId,
+        messageId,
+      });
+    }
+  }
+
+  return buildCompletedAskResponse({
+    card: resolvedResult.finalSelection.card,
+    source: resolvedResult.finalSelection.source,
+    uiMeta: extractUiMeta(resolvedResult.finalSelection.card, resolvedResult.allToolResults),
+    toolResults: resolvedResult.allToolResults,
     sessionId,
     messageId,
   });
@@ -1459,11 +1600,13 @@ async function streamAskResponseInternal(
   const getActiveAnalysisRulesImpl =
     dependencies.getActiveAnalysisRulesImpl ?? getActiveAnalysisRules;
   const streamTextImpl = dependencies.streamTextImpl ?? streamText;
+  const modelRouting = selectAskModelRoutingForRequest(request, normalizedMessage, Boolean(image));
+  const selectedModel = modelRouting.modelClass === "simple" ? getAskSimpleModel() : getAskModel();
 
   const clarificationCard = resolveClarificationCard(request);
   if (clarificationCard) {
     return streamTextImpl({
-      model: getAskModel(),
+      model: selectedModel,
       prompt: JSON.stringify(clarificationCard),
     });
   }
@@ -1476,18 +1619,18 @@ async function streamAskResponseInternal(
   });
 
   return streamTextImpl({
-    model: getAskModel(),
+    model: selectedModel,
     temperature: 0.2,
     maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
     maxRetries: ASK_MODEL_MAX_RETRIES,
-    stopWhen: [stepCountIs(ASK_MAX_TOOL_STEPS), stopAfterSubmitAskCardResult],
+    stopWhen: [stepCountIs(modelRouting.maxToolSteps), stopAfterSubmitAskCardResult],
     prepareStep: createAskPrepareStep({
       message: normalizedMessage,
       sessionId,
       messageId,
     }),
     messages,
-    tools: createAskTools(dependencies),
+    tools: createAskToolsForPolicy(dependencies, modelRouting.toolPolicy),
     experimental_onToolCallStart({ stepNumber, toolCall }) {
       logAskToolCallStarted({
         message: "Ask stream tool call started.",

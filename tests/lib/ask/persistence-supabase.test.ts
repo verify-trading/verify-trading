@@ -4,7 +4,14 @@ vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdminClient: vi.fn(),
 }));
 
+vi.mock("@/lib/observability/logger", () => ({
+  logger: {
+    warn: vi.fn(),
+  },
+}));
+
 import { createSupabasePersistence } from "@/lib/ask/persistence/supabase";
+import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 describe("createSupabasePersistence", () => {
@@ -124,6 +131,9 @@ describe("createSupabasePersistence", () => {
     const select = vi.fn(() => ({ eq: selectEq }));
     const upsert = vi.fn().mockResolvedValue({ error: null });
     const insert = vi.fn().mockResolvedValue({ error: null });
+    const secondUpdateEq = vi.fn().mockResolvedValue({ error: null });
+    const firstUpdateEq = vi.fn(() => ({ eq: secondUpdateEq }));
+    const update = vi.fn(() => ({ eq: firstUpdateEq }));
 
     vi.mocked(getSupabaseAdminClient).mockReturnValue({
       from: vi.fn((table: string) => {
@@ -131,6 +141,7 @@ describe("createSupabasePersistence", () => {
           return {
             select,
             upsert,
+            update,
           };
         }
 
@@ -165,15 +176,82 @@ describe("createSupabasePersistence", () => {
       expect.objectContaining({
         id: "session-1",
         user_id: "user-1",
-        memory_summary: {
+        updated_at: expect.any(String),
+      }),
+      { onConflict: "id" },
+    );
+    expect(update).toHaveBeenCalledWith({
+      memory_summary: {
+        activeAsset: "GOLD / XAUUSD",
+        lastCardType: "insight",
+        recentUserGoals: ["Should I buy gold?"],
+      },
+      memory_updated_at: expect.any(String),
+      updated_at: expect.any(String),
+    });
+    expect(firstUpdateEq).toHaveBeenCalledWith("id", "session-1");
+    expect(secondUpdateEq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps saved messages when the optional memory update fails", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const selectEq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq: selectEq }));
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const secondUpdateEq = vi.fn().mockResolvedValue({
+      error: { message: "memory rejected" },
+    });
+    const firstUpdateEq = vi.fn(() => ({ eq: secondUpdateEq }));
+    const update = vi.fn(() => ({ eq: firstUpdateEq }));
+
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "chat_sessions") {
+          return {
+            select,
+            upsert,
+            update,
+          };
+        }
+
+        if (table === "chat_messages") {
+          return {
+            insert,
+          };
+        }
+
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    } as never);
+
+    const persistence = createSupabasePersistence("user-1");
+    await expect(
+      persistence.saveExchange({
+        sessionId: "session-1",
+        userMessage: "Should I buy gold?",
+        assistantCard: {
+          type: "insight",
+          headline: "Wait First",
+          body: "Let price confirm before you commit.",
+          verdict: "Wait for confirmation.",
+        },
+        sessionMemory: {
           activeAsset: "GOLD / XAUUSD",
           lastCardType: "insight",
           recentUserGoals: ["Should I buy gold?"],
         },
-        memory_updated_at: expect.any(String),
       }),
-      { onConflict: "id" },
-    );
+    ).resolves.toBeUndefined();
+
     expect(insert).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Could not update Ask session memory after saving exchange.",
+      expect.objectContaining({
+        sessionId: "session-1",
+        error: "memory rejected",
+      }),
+    );
   });
 });

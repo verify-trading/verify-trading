@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { User } from "@supabase/supabase-js";
 
 vi.mock("@/lib/auth/session", () => ({
   getSessionUser: vi.fn(),
@@ -16,6 +17,16 @@ import { POST } from "@/app/api/stripe/customer-portal/route";
 import { getSessionUser } from "@/lib/auth/session";
 import { getStripePortalConfigurationId } from "@/lib/billing/config";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
+
+function createUser(id = "user-1"): User {
+  return {
+    id,
+    app_metadata: {},
+    user_metadata: {},
+    aud: "authenticated",
+    created_at: "2026-01-01T00:00:00.000Z",
+  } as User;
+}
 
 function createProfilesQuery(data: unknown) {
   const maybeSingle = vi.fn().mockResolvedValue({ data, error: null });
@@ -42,9 +53,7 @@ describe("POST /api/stripe/customer-portal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getSessionUser).mockResolvedValue({
-      user: {
-        id: "user-1",
-      },
+      user: createUser(),
       supabase: {
         from: vi.fn((table: string) => {
           if (table === "profiles") {

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   FREE_DAILY_ASK_LIMIT,
+  PRO_DAILY_ASK_LIMIT,
   getFreeAskUsageSummary,
+  getProAskUsageSummary,
   getTodayUtcDateString,
 } from "@/lib/rate-limit/usage";
 
@@ -32,6 +34,15 @@ describe("rate-limit usage helpers", () => {
       remaining: FREE_DAILY_ASK_LIMIT,
       limit: FREE_DAILY_ASK_LIMIT,
       progressPercent: 0,
+    });
+  });
+
+  it("builds a capped pro-plan usage summary", () => {
+    expect(getProAskUsageSummary(12)).toEqual({
+      used: 12,
+      remaining: PRO_DAILY_ASK_LIMIT - 12,
+      limit: PRO_DAILY_ASK_LIMIT,
+      progressPercent: 60,
     });
   });
 });
