@@ -41,7 +41,7 @@ export function buildMarketingEmailHtml({
     "https://verify.trading",
     "https://www.verify.trading",
   );
-  const logoUrl = `${logoOrigin}/verify-trading-logo.png`;
+  const logoUrl = `${logoOrigin}/verify-trading-email-logo.png`;
   const body = paragraphs.map(buildParagraph).join("");
   const footerHtml = footer
     ? `<p style="margin:16px 0 0 0;font-size:12px;line-height:1.45;color:${EMAIL_LABEL};">${escapeHtml(footer)}</p>`

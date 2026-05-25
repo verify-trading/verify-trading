@@ -29,12 +29,15 @@ export function buildSignupWelcomeEmail({
   const askUrl = `${normalizedAppOrigin}/ask`;
   const paragraphs = [
     `Hi ${greetingName},`,
-    `Welcome to ${appName}.`,
-    "Most traders lose because they trade blind. They trust signals, brokers, screenshots and gut feeling without a second opinion.",
-    `${appName} gives you that second opinion in seconds.`,
-    "Start with the Ask tab. Drop in a trade idea, broker name, signal group or market question and get a clear answer before you risk money.",
-    "Use it before your next decision.",
-    "Welcome to the team.",
+    "You have just found a tool a lot of traders who are done making decisions blind are now using.",
+    "Traders are using verify.trading every single day: checking their brokers, scoring their trades, reading their morning brief before market open. And they are not going back to guessing.",
+    "Now you are one of them.",
+    "The Ask tab is open and waiting. Type in anything: your trade, your analysis, is your broker legit, is this trader's signal group real, what the markets are doing today.",
+    "You will get a straight answer in seconds.",
+    "This is your professional second opinion. The one every serious trader needs and most never had.",
+    "We are genuinely excited to have you here.",
+    "Start with this: open the Ask tab and type your first question. See what comes back.",
+    "Welcome to the winning team!",
   ];
 
   return {
