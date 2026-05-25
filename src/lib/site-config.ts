@@ -5,6 +5,7 @@
 
 const DEFAULT_APP_NAME = "verify.trading";
 const DEFAULT_BOOKING_CALL_URL = "https://calendly.com/verifytrading/-";
+const DEFAULT_TELEGRAM_COMMUNITY_URL = "https://www.t.me/verifytradingai";
 
 export function getAppName(): string {
   const raw = process.env.NEXT_PUBLIC_APP_NAME?.trim();
@@ -43,7 +44,7 @@ export function getTraderSupportCallUrl(): string | null {
 
 export function getTelegramCommunityUrl(): string | null {
   const raw = process.env.NEXT_PUBLIC_TELEGRAM_COMMUNITY_URL?.trim();
-  return raw || null;
+  return raw || DEFAULT_TELEGRAM_COMMUNITY_URL;
 }
 
 /** Injects {{APP_NAME}} in prompt templates. */
