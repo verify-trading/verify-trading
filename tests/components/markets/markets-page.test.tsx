@@ -130,6 +130,9 @@ describe("TwelveMarketsPage", () => {
     );
 
     expect(screen.getByText("Sign in and upgrade to Pro to unlock Markets.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Start weekly plan/i })).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: /Start Pro/i })).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: /Start annual plan/i })).toHaveAttribute("href", "/signup");
     expect(screen.getByRole("button", { name: "Major Pairs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Commodities" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Crypto" })).toBeInTheDocument();
