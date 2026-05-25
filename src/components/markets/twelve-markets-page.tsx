@@ -246,7 +246,7 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
         <div className="pointer-events-auto absolute inset-0 z-10 flex min-h-0 flex-col overflow-y-auto">
           <div className="absolute inset-0 bg-(--vt-navy)/72 backdrop-blur-[2px]" aria-hidden />
           <div className="relative flex flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-6 lg:px-6">
-            <div className="w-full max-w-sm rounded-2xl border border-[rgba(255,255,255,0.12)] bg-[rgba(8,11,42,0.72)] px-3 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:max-w-lg sm:px-5 sm:py-5 lg:max-w-2xl lg:px-6 lg:py-6">
+            <div className="w-full max-w-sm rounded-2xl border border-[rgba(255,255,255,0.12)] bg-[rgba(8,11,42,0.72)] px-3 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:max-w-lg sm:px-5 sm:py-5 lg:max-w-6xl lg:px-8 lg:py-8 xl:max-w-7xl">
               <ProPlansPricingPanel
                 density="compact"
                 pricing={pricing}
