@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createSystemMessage,
   getAskModel,
+  getAskSimpleModel,
 } from "@/lib/ask/service/provider";
 
 describe("ask provider helpers", () => {
@@ -19,5 +20,9 @@ describe("ask provider helpers", () => {
 
   it("creates the anthropic model instance", () => {
     expect(getAskModel()).toBeTruthy();
+  });
+
+  it("creates the simple anthropic model instance", () => {
+    expect(getAskSimpleModel()).toBeTruthy();
   });
 });

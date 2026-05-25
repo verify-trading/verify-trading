@@ -78,13 +78,11 @@ describe("POST /api/stripe/checkout", () => {
 
     vi.mocked(getCheckoutBillingOffer).mockReturnValue({
       planKey: "monthly",
-      variant: "standard",
       badge: "Pro",
-      headline: "£24.99/month",
+      headline: "£19.99/month",
       detail: "Unlimited access.",
       ctaLabel: "Start Pro",
       checkoutPriceId: "price_standard",
-      checkoutCouponId: null,
     });
     vi.mocked(ensureStripeCustomerForUser).mockResolvedValue("cus_123");
     vi.mocked(getBillingCheckoutSession).mockResolvedValue(null);
@@ -174,16 +172,14 @@ describe("POST /api/stripe/checkout", () => {
     );
   });
 
-  it("does not apply a coupon to the annual checkout flow", async () => {
+  it("creates annual checkout without coupon discounts", async () => {
     vi.mocked(getCheckoutBillingOffer).mockReturnValue({
       planKey: "annual",
-      variant: "standard",
       badge: "Best value",
-      headline: "£200/year",
+      headline: "£119.99/year",
       detail: "Annual Pro",
       ctaLabel: "Start annual plan",
       checkoutPriceId: "price_annual",
-      checkoutCouponId: null,
     });
     vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
       checkoutToken: "token-annual",
@@ -213,12 +209,12 @@ describe("POST /api/stripe/checkout", () => {
             quantity: 1,
           },
         ],
-        discounts: undefined,
       }),
       {
         idempotencyKey: "billing-checkout:token-annual",
       },
     );
+    expect(createCheckoutSession.mock.calls[0]?.[0]).not.toHaveProperty("discounts");
   });
 
   it("expires a stale session if checkout ownership changes mid-request and returns the current session", async () => {

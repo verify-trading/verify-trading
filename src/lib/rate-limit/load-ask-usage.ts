@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  getAskUsageSummary,
   getFreeAskUsageSummary,
   getTodayUtcDateString,
-  type FreeAskUsageSummary,
+  PRO_DAILY_ASK_LIMIT,
+  type AskUsageSummary,
 } from "@/lib/rate-limit/usage";
 
 type ProfileTierRow = {
@@ -16,7 +18,7 @@ type UsageRow = {
 
 export type AskUsageState = {
   tier: "free" | "pro";
-  usage: FreeAskUsageSummary | null;
+  usage: AskUsageSummary | null;
   isExhausted: boolean;
 };
 
@@ -39,14 +41,6 @@ export async function loadAskUsageState(
     tier = (profileResult.data as ProfileTierRow | null)?.tier === "pro" ? "pro" : "free";
   }
 
-  if (tier === "pro") {
-    return {
-      tier,
-      usage: null,
-      isExhausted: false,
-    };
-  }
-
   const usageResult = await supabase
     .from("usage_limits")
     .select("query_count")
@@ -54,7 +48,11 @@ export async function loadAskUsageState(
     .eq("usage_date", getTodayUtcDateString())
     .maybeSingle();
 
-  const usage = getFreeAskUsageSummary((usageResult.data as UsageRow | null)?.query_count);
+  const queryCount = (usageResult.data as UsageRow | null)?.query_count;
+  const usage =
+    tier === "pro"
+      ? getAskUsageSummary(queryCount, PRO_DAILY_ASK_LIMIT)
+      : getFreeAskUsageSummary(queryCount);
 
   return {
     tier,

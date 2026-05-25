@@ -11,7 +11,9 @@ import {
   syncStripeSubscription,
   syncStripeSubscriptionById,
 } from "@/lib/billing/repository";
+import { billingStatusGrantsProAccess } from "@/lib/billing/subscription-status";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
+import { maybeSendSubscriptionWelcomeEmail } from "@/lib/email/maybe-send-subscription-welcome";
 
 export const runtime = "nodejs";
 
@@ -61,7 +63,22 @@ export async function POST(request: Request) {
         break;
       }
 
-      case "customer.subscription.created":
+      case "customer.subscription.created": {
+        const subscription = event.data.object as Stripe.Subscription;
+        const syncResult = await syncStripeSubscriptionById(subscription.id);
+        if (billingStatusGrantsProAccess(syncResult.status)) {
+          const interval = subscription.items.data[0]?.price?.recurring?.interval ?? null;
+          const origin = new URL(request.url).origin;
+          await maybeSendSubscriptionWelcomeEmail({
+            userId: syncResult.userId,
+            stripeSubscriptionId: subscription.id,
+            interval,
+            appOrigin: origin,
+          }).catch(() => undefined);
+        }
+        break;
+      }
+
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
         await syncStripeSubscriptionById(subscription.id);

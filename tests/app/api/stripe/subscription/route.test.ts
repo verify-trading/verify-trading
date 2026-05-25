@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { User } from "@supabase/supabase-js";
 
 vi.mock("@/lib/auth/session", () => ({
   getSessionUser: vi.fn(),
@@ -16,6 +17,16 @@ import { POST } from "@/app/api/stripe/subscription/route";
 import { getSessionUser } from "@/lib/auth/session";
 import { syncStripeSubscription } from "@/lib/billing/repository";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
+
+function createUser(id = "user-1"): User {
+  return {
+    id,
+    app_metadata: {},
+    user_metadata: {},
+    aud: "authenticated",
+    created_at: "2026-01-01T00:00:00.000Z",
+  } as User;
+}
 
 function createBillingSubscriptionsQuery(data: unknown) {
   const limit = vi.fn().mockResolvedValue({ data, error: null });
@@ -35,9 +46,7 @@ describe("POST /api/stripe/subscription", () => {
     vi.clearAllMocks();
 
     vi.mocked(getSessionUser).mockResolvedValue({
-      user: {
-        id: "user-1",
-      },
+      user: createUser(),
       supabase: {
         from: vi.fn((table: string) => {
           if (table === "billing_subscriptions") {
@@ -68,6 +77,8 @@ describe("POST /api/stripe/subscription", () => {
     } as never);
 
     vi.mocked(syncStripeSubscription).mockResolvedValue({
+      userId: "user-1",
+      customerId: "cus_123",
       status: "active",
       tier: "pro",
     });

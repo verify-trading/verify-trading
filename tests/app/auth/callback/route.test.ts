@@ -4,12 +4,17 @@ vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(),
 }));
 
+vi.mock("@/lib/email/maybe-send-signup-welcome", () => ({
+  maybeSendSignupWelcomeEmail: vi.fn(),
+}));
+
 import { GET } from "@/app/auth/callback/route";
 import {
   AUTH_REDIRECT_COOKIE_NAME,
   OAUTH_FLOW_COOKIE_NAME,
   RECENT_OAUTH_SIGNUP_COOKIE_NAME,
 } from "@/lib/auth/oauth-flow";
+import { maybeSendSignupWelcomeEmail } from "@/lib/email/maybe-send-signup-welcome";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 describe("GET /auth/callback", () => {
@@ -18,6 +23,7 @@ describe("GET /auth/callback", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(maybeSendSignupWelcomeEmail).mockResolvedValue(undefined);
     exchangeCodeForSession.mockResolvedValue({
       data: {
         user: {
@@ -91,6 +97,60 @@ describe("GET /auth/callback", () => {
     expect(signOut).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe("http://localhost/ask");
     expect(response.cookies.get(RECENT_OAUTH_SIGNUP_COOKIE_NAME)?.value).toBe("user-1");
+    expect(maybeSendSignupWelcomeEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        oauthFlow: "signup",
+        appOrigin: "http://localhost",
+      }),
+    );
+  });
+
+  it("still redirects when signup welcome email dispatch fails", async () => {
+    vi.mocked(maybeSendSignupWelcomeEmail).mockRejectedValue(new Error("resend down"));
+
+    const response = await GET(
+      new Request("http://localhost/auth/callback?code=test-code&next=%2Fask", {
+        headers: {
+          cookie: `${OAUTH_FLOW_COOKIE_NAME}=signup`,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/ask");
+  });
+
+  it("attempts signup welcome email for returning users but leaves eligibility to the helper", async () => {
+    exchangeCodeForSession.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-old",
+          email: "old@example.com",
+          created_at: "2025-01-01T00:00:00.000Z",
+          email_confirmed_at: "2025-01-02T00:00:00.000Z",
+          identities: [{ provider: "google" }],
+        },
+      },
+      error: null,
+    });
+
+    const response = await GET(
+      new Request("http://localhost/auth/callback?code=test-code&next=%2Fask", {
+        headers: {
+          cookie: `${OAUTH_FLOW_COOKIE_NAME}=login_only`,
+        },
+      }),
+    );
+
+    expect(response.headers.get("location")).toBe("http://localhost/ask");
+    expect(maybeSendSignupWelcomeEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-old",
+        email: "old@example.com",
+        oauthFlow: "login_only",
+      }),
+    );
   });
 
   it("uses auth redirect cookie when next is missing from the callback URL", async () => {

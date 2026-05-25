@@ -9,6 +9,7 @@ import { useAccountMenuQuery } from "@/lib/auth/use-account-menu-query";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { deriveMarketsAccessTier } from "@/lib/markets/derive-markets-access-tier";
+import { PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import type { MarketsAccessTier } from "@/lib/markets/markets-access-tier";
 import {
   buildCategoryCards,
@@ -251,7 +252,7 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
                 pricing={pricing}
                 billingContext={billingContext}
                 headline={paywallHeadline(accessTier)}
-                subtext="Upgrade to Pro for live market data, full Markets access, and unlimited Ask chats."
+                subtext={`Upgrade to Pro for live market data, full Markets access, and ${PRO_DAILY_ASK_LIMIT} Ask chats per day.`}
               />
             </div>
           </div>

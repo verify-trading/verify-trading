@@ -12,6 +12,7 @@ import { fallbackInsightCard } from "@/lib/ask/contracts";
 import { logger } from "@/lib/observability/logger";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
 import { generateAskResponse, streamAskResponse } from "@/lib/ask/service";
+import { DEFAULT_ANTHROPIC_MODEL } from "@/lib/ask/service/provider";
 
 describe("generateAskResponse", () => {
   beforeEach(() => {
@@ -832,6 +833,8 @@ describe("generateAskResponse", () => {
 
     expect(generateTextImpl).toHaveBeenCalledOnce();
     const call = vi.mocked(generateTextImpl).mock.calls[0]?.[0];
+    const model = call?.model as { modelId?: string } | undefined;
+    expect(model?.modelId).toBe(DEFAULT_ANTHROPIC_MODEL);
     expect(call?.messages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1495,7 +1498,7 @@ describe("generateAskResponse", () => {
   it("adds market series ui metadata when a briefing tool response includes close values", async () => {
     const response = await generateAskResponse(
       {
-        message: "What is Gold doing today?",
+        message: "What is the gold market doing today?",
         sessionId: crypto.randomUUID(),
         history: [],
       },
@@ -2288,7 +2291,7 @@ describe("generateAskResponse", () => {
 
     await generateAskResponse(
       {
-        message: "What is Gold doing?",
+        message: "What is Gold doing today?",
         sessionId: crypto.randomUUID(),
         history: [],
       },
@@ -2446,7 +2449,7 @@ describe("generateAskResponse", () => {
 
     const response = await generateAskResponse(
       {
-        message: "What is Gold doing?",
+        message: "What is the gold market doing today?",
         sessionId: crypto.randomUUID(),
         history: [],
       },
@@ -2598,7 +2601,7 @@ describe("generateAskResponse", () => {
             { toolName: "search_news", output: {} },
           ],
         },
-      ],
+      ] as never,
       model: {} as never,
       messages: [
         {

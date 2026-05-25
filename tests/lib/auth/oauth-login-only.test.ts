@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { shouldBlockLoginOnlyGoogleSignup } from "@/lib/auth/oauth-login-only";
 
+type TestIdentity = NonNullable<User["identities"]>[number];
+
 function makeUser(partial: Partial<User> & { created_at: string }): User {
   return partial as User;
 }
@@ -13,7 +15,7 @@ describe("shouldBlockLoginOnlyGoogleSignup", () => {
   it("returns true for brand-new Google-only user", () => {
     const user = makeUser({
       created_at: "2026-01-15T11:59:30.000Z",
-      identities: [{ provider: "google" } as User["identities"][number]],
+      identities: [{ provider: "google" } as TestIdentity],
     });
     expect(shouldBlockLoginOnlyGoogleSignup(user, now)).toBe(true);
   });
@@ -21,7 +23,7 @@ describe("shouldBlockLoginOnlyGoogleSignup", () => {
   it("returns false for older Google-only user", () => {
     const user = makeUser({
       created_at: "2025-01-01T00:00:00.000Z",
-      identities: [{ provider: "google" } as User["identities"][number]],
+      identities: [{ provider: "google" } as TestIdentity],
     });
     expect(shouldBlockLoginOnlyGoogleSignup(user, now)).toBe(false);
   });
@@ -30,8 +32,8 @@ describe("shouldBlockLoginOnlyGoogleSignup", () => {
     const user = makeUser({
       created_at: "2026-01-15T11:59:30.000Z",
       identities: [
-        { provider: "email" } as User["identities"][number],
-        { provider: "google" } as User["identities"][number],
+        { provider: "email" } as TestIdentity,
+        { provider: "google" } as TestIdentity,
       ],
     });
     expect(shouldBlockLoginOnlyGoogleSignup(user, now)).toBe(false);
@@ -40,7 +42,7 @@ describe("shouldBlockLoginOnlyGoogleSignup", () => {
   it("returns false for email-only new user", () => {
     const user = makeUser({
       created_at: "2026-01-15T11:59:30.000Z",
-      identities: [{ provider: "email" } as User["identities"][number]],
+      identities: [{ provider: "email" } as TestIdentity],
     });
     expect(shouldBlockLoginOnlyGoogleSignup(user, now)).toBe(false);
   });

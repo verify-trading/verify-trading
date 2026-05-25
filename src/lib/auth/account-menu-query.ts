@@ -2,7 +2,7 @@ import type { QueryClient, UseQueryOptions } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadAskUsageState } from "@/lib/rate-limit/load-ask-usage";
-import type { FreeAskUsageSummary } from "@/lib/rate-limit/usage";
+import type { AskUsageSummary } from "@/lib/rate-limit/usage";
 
 export type AccountMenuProfile = {
   display_name: string | null;
@@ -14,7 +14,7 @@ export type AccountMenuProfile = {
 
 export type AccountMenuState = {
   profile: AccountMenuProfile | null;
-  usage: FreeAskUsageSummary | null;
+  usage: AskUsageSummary | null;
 };
 
 export function getAccountMenuQueryKey(userId: string) {
@@ -74,6 +74,6 @@ export async function loadAccountMenuState(
 
   return {
     profile: profileRow,
-    usage: usageState.tier === "free" ? usageState.usage : null,
+    usage: usageState.usage,
   };
 }

@@ -37,16 +37,29 @@ describe("Home page", () => {
   it("passes subscription-aware billing context into the landing page", async () => {
     mockGetPricingPageData.mockResolvedValue({
       pricing: {
-        deadlineLabel: "6 June 2026",
         free: { badge: "Free", headline: "£0", detail: "Free" },
-        monthly: { badge: "Most popular", headline: "£24.99/month", detail: "Monthly", ctaLabel: "Start Pro", promotion: null },
+        weekly: {
+          badge: "Flexible",
+          headline: "£6.99/week",
+          detail: "Weekly",
+          dailyEquivalentHeadline: "99p per day",
+          ctaLabel: "Start weekly plan",
+        },
+        monthly: {
+          badge: "Most popular",
+          headline: "£19.99/month",
+          detail: "Monthly",
+          dailyEquivalentHeadline: "66p per day",
+          ctaLabel: "Start Pro",
+        },
         annual: {
           badge: "Best value",
-          headline: "£200/year",
+          headline: "£119.99/year",
           detail: "Annual",
+          dailyEquivalentHeadline: "33p per day",
           ctaLabel: "Start annual plan",
-          equivalentMonthlyHeadline: "£16.67/month equivalent",
-          savingsLabel: "Save £99.88 per year",
+          equivalentMonthlyHeadline: "£10/month equivalent",
+          savingsLabel: "Save £119.89 per year (6 months free)",
         },
       },
       billingContext: {

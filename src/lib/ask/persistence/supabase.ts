@@ -26,6 +26,7 @@ import {
   type AskPersistence,
   type PersistAskExchangeInput,
 } from "@/lib/ask/persistence/types";
+import { logger } from "@/lib/observability/logger";
 
 function sanitizeFileName(fileName: string) {
   const cleaned = fileName
@@ -358,12 +359,6 @@ export function createSupabasePersistence(userId: string): AskPersistence {
           id: input.sessionId,
           title: sessionTitle,
           user_id: userId,
-          ...(input.sessionMemory !== undefined
-            ? {
-                memory_summary: input.sessionMemory,
-                memory_updated_at: now,
-              }
-            : {}),
           updated_at: now,
         },
         {
@@ -396,6 +391,25 @@ export function createSupabasePersistence(userId: string): AskPersistence {
 
       if (messageError) {
         throw new Error("Could not store Ask messages.");
+      }
+
+      if (input.sessionMemory !== undefined) {
+        const { error: memoryError } = await client
+          .from("chat_sessions")
+          .update({
+            memory_summary: input.sessionMemory,
+            memory_updated_at: now,
+            updated_at: now,
+          })
+          .eq("id", input.sessionId)
+          .eq("user_id", userId);
+
+        if (memoryError) {
+          logger.warn("Could not update Ask session memory after saving exchange.", {
+            sessionId: input.sessionId,
+            error: memoryError.message ?? "unknown",
+          });
+        }
       }
     },
   };

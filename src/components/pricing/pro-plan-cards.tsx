@@ -78,71 +78,77 @@ export function renderPaidPlanAction({
   );
 }
 
-export function ProMonthlyPlanCard({
-  pricing,
+function PaidPlanCardShell({
+  badge,
+  badgeClassName,
+  headline,
+  dailyEquivalentHeadline,
+  detail,
+  features,
   billingContext,
+  checkoutPlan,
+  isCurrentPlan,
+  ctaLabel,
+  variant,
   className,
   density = "default",
+  highlighted = false,
 }: {
-  pricing: PublicBillingPricing;
+  badge: string;
+  badgeClassName?: string;
+  headline: string;
+  dailyEquivalentHeadline: string;
+  detail: string;
+  features: readonly string[];
   billingContext: PricingPageBillingContext | null | undefined;
+  checkoutPlan: BillingPlanKey;
+  isCurrentPlan: boolean;
+  ctaLabel: string;
+  variant: "default" | "outline";
   className?: string;
-  /** `compact` — tighter padding/type for overlays (e.g. Markets paywall). */
   density?: "default" | "compact";
+  highlighted?: boolean;
 }) {
-  const monthlyPromotion = pricing.monthly.promotion;
-  const currentPlanKey = billingContext?.currentPlanKey ?? null;
-  const isOnMonthlyPlan = currentPlanKey === "monthly";
   const compact = density === "compact";
 
   return (
     <div
       className={cn(
         surface,
-        "flex flex-col border-[var(--vt-coral)]/40 bg-gradient-to-b from-[rgba(242,109,109,0.06)] to-transparent ring-1 ring-[var(--vt-coral)]/25",
+        "flex flex-col transition-colors hover:border-white/[0.12]",
+        highlighted &&
+          "border-[var(--vt-coral)]/40 bg-gradient-to-b from-[rgba(242,109,109,0.06)] to-transparent ring-1 ring-[var(--vt-coral)]/25",
         compact ? "p-4 sm:p-5" : "p-6",
         className,
       )}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--vt-coral)]">
-          {monthlyPromotion ? monthlyPromotion.badge : "Most popular"}
-        </span>
-        {monthlyPromotion ? (
-          <span className="rounded bg-[var(--vt-coral)]/90 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
-            Offer
-          </span>
-        ) : null}
-      </div>
-
-      <div className={cn("flex flex-wrap items-baseline gap-2", compact ? "mt-3" : "mt-4")}>
-        <h3 className={cn("font-bold tracking-tight text-white", compact ? "text-2xl sm:text-3xl" : "text-3xl")}>
-          {monthlyPromotion ? monthlyPromotion.priceHighlight : pricing.monthly.headline}
-        </h3>
-        {monthlyPromotion ? (
-          <span className={cn("font-medium text-[var(--vt-coral)]", compact ? "text-xs sm:text-sm" : "text-sm")}>
-            {monthlyPromotion.priceQualifier}
-          </span>
-        ) : null}
-      </div>
-      {monthlyPromotion ? (
-        <p className={cn("text-slate-500 line-through", compact ? "mt-0.5 text-xs sm:text-sm" : "mt-1 text-sm")}>
-          {pricing.monthly.headline}
-        </p>
-      ) : null}
+      <span
+        className={cn(
+          "text-xs font-semibold uppercase tracking-wider",
+          badgeClassName ?? "text-slate-500",
+        )}
+      >
+        {badge}
+      </span>
+      <h3 className={cn("font-bold tracking-tight text-white", compact ? "mt-3 text-2xl sm:text-3xl" : "mt-4 text-3xl")}>
+        {headline}
+      </h3>
+      <p className={cn("font-medium text-[var(--vt-blue)]", compact ? "mt-1 text-xs sm:text-sm" : "mt-1.5 text-sm")}>
+        {dailyEquivalentHeadline}
+      </p>
       <p
         className={cn(
           "leading-relaxed text-slate-400",
           compact ? "mt-2 text-xs sm:text-sm" : "mt-3 text-sm",
         )}
       >
-        {monthlyPromotion ? monthlyPromotion.detail : pricing.monthly.detail}
+        {detail}
       </p>
 
       <ul className={cn("flex-1", compact ? "mt-4 space-y-1.5" : "mt-6 space-y-2")}>
-        {PRO_PLAN_FEATURES.map((f) => (
+        {features.map((feature) => (
           <li
-            key={f}
+            key={feature}
             className={cn(
               "flex items-center gap-2 text-slate-200",
               compact ? "text-xs sm:text-sm" : "text-sm",
@@ -152,25 +158,89 @@ export function ProMonthlyPlanCard({
               className={cn("shrink-0 text-[var(--vt-green)]", compact ? "size-3.5" : "size-4")}
               aria-hidden
             />
-            {f}
+            {feature}
           </li>
         ))}
       </ul>
       <div className={compact ? "mt-4" : "mt-6"}>
         {renderPaidPlanAction({
           billingContext,
-          checkoutPlan: "monthly",
-          isCurrentPlan: isOnMonthlyPlan,
-          variant: "default",
+          checkoutPlan,
+          isCurrentPlan,
+          variant,
           defaultLabel: (
             <span className="inline-flex items-center gap-2">
-              {monthlyPromotion ? monthlyPromotion.ctaLabel : "Start Pro"}
+              {ctaLabel}
               <ArrowRight className={cn(compact ? "size-3.5" : "size-4")} aria-hidden />
             </span>
           ),
         })}
       </div>
     </div>
+  );
+}
+
+export function ProWeeklyPlanCard({
+  pricing,
+  billingContext,
+  className,
+  density = "default",
+}: {
+  pricing: PublicBillingPricing;
+  billingContext: PricingPageBillingContext | null | undefined;
+  className?: string;
+  density?: "default" | "compact";
+}) {
+  const currentPlanKey = billingContext?.currentPlanKey ?? null;
+
+  return (
+    <PaidPlanCardShell
+      badge={pricing.weekly.badge}
+      headline={pricing.weekly.headline}
+      dailyEquivalentHeadline={pricing.weekly.dailyEquivalentHeadline}
+      detail={pricing.weekly.detail}
+      features={PRO_PLAN_FEATURES}
+      billingContext={billingContext}
+      checkoutPlan="weekly"
+      isCurrentPlan={currentPlanKey === "weekly"}
+      ctaLabel={pricing.weekly.ctaLabel}
+      variant="outline"
+      className={className}
+      density={density}
+    />
+  );
+}
+
+export function ProMonthlyPlanCard({
+  pricing,
+  billingContext,
+  className,
+  density = "default",
+}: {
+  pricing: PublicBillingPricing;
+  billingContext: PricingPageBillingContext | null | undefined;
+  className?: string;
+  density?: "default" | "compact";
+}) {
+  const currentPlanKey = billingContext?.currentPlanKey ?? null;
+
+  return (
+    <PaidPlanCardShell
+      badge={pricing.monthly.badge}
+      badgeClassName="text-[var(--vt-coral)]"
+      headline={pricing.monthly.headline}
+      dailyEquivalentHeadline={pricing.monthly.dailyEquivalentHeadline}
+      detail={pricing.monthly.detail}
+      features={PRO_PLAN_FEATURES}
+      billingContext={billingContext}
+      checkoutPlan="monthly"
+      isCurrentPlan={currentPlanKey === "monthly"}
+      ctaLabel={pricing.monthly.ctaLabel}
+      variant="default"
+      className={className}
+      density={density}
+      highlighted
+    />
   );
 }
 
@@ -186,7 +256,6 @@ export function ProAnnualPlanCard({
   density?: "default" | "compact";
 }) {
   const currentPlanKey = billingContext?.currentPlanKey ?? null;
-  const isOnAnnualPlan = currentPlanKey === "annual";
   const compact = density === "compact";
 
   return (
@@ -202,6 +271,9 @@ export function ProAnnualPlanCard({
       <h3 className={cn("font-bold tracking-tight text-white", compact ? "mt-3 text-2xl sm:text-3xl" : "mt-4 text-3xl")}>
         {pricing.annual.headline}
       </h3>
+      <p className={cn("font-medium text-[var(--vt-blue)]", compact ? "mt-1 text-xs sm:text-sm" : "mt-1.5 text-sm")}>
+        {pricing.annual.dailyEquivalentHeadline}
+      </p>
       <p className={cn("font-medium text-[var(--vt-green)]", compact ? "mt-1.5 text-xs sm:text-sm" : "mt-2 text-sm")}>
         {pricing.annual.savingsLabel}
       </p>
@@ -218,9 +290,9 @@ export function ProAnnualPlanCard({
       </p>
 
       <ul className={cn("flex-1", compact ? "mt-4 space-y-1.5" : "mt-6 space-y-2")}>
-        {ANNUAL_PLAN_FEATURES.map((f) => (
+        {ANNUAL_PLAN_FEATURES.map((feature) => (
           <li
-            key={f}
+            key={feature}
             className={cn(
               "flex items-center gap-2 text-slate-300",
               compact ? "text-xs sm:text-sm" : "text-sm",
@@ -230,7 +302,7 @@ export function ProAnnualPlanCard({
               className={cn("shrink-0 text-[var(--vt-green)]", compact ? "size-3.5" : "size-4")}
               aria-hidden
             />
-            {f}
+            {feature}
           </li>
         ))}
       </ul>
@@ -238,11 +310,11 @@ export function ProAnnualPlanCard({
         {renderPaidPlanAction({
           billingContext,
           checkoutPlan: "annual",
-          isCurrentPlan: isOnAnnualPlan,
+          isCurrentPlan: currentPlanKey === "annual",
           variant: "outline",
           defaultLabel: (
             <span className="inline-flex items-center gap-2">
-              Start annual plan
+              {pricing.annual.ctaLabel}
               <ArrowRight className={cn(compact ? "size-3.5" : "size-4")} aria-hidden />
             </span>
           ),

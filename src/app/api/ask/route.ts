@@ -11,11 +11,12 @@ import { classifyAskRouteError } from "@/lib/ask/ask-failure";
 import { getSessionUser } from "@/lib/auth/session";
 import { jsonInvalidRequest, jsonUnauthorized } from "@/lib/http/json-response";
 import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
-import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { generateAskResponse } from "@/lib/ask/service";
 import type { AskStreamData, AskToolStatus } from "@/lib/ask/stream";
 import { AskValidationError } from "@/lib/ask/validation-error";
 import { buildUpdatedSessionMemory } from "@/lib/ask/session-memory";
+import type { AskSessionMemory } from "@/lib/ask/contracts";
 
 type AskRouteMessage = UIMessage<unknown, AskStreamData>;
 
@@ -195,22 +196,30 @@ function buildAskStreamResponse({
           },
         });
 
+        let sessionMemory: AskSessionMemory | null | undefined;
         try {
-          const sessionMemory = buildUpdatedSessionMemory({
+          sessionMemory = buildUpdatedSessionMemory({
             history: requestInput.history,
             userMessage: parsedRequest.message,
             assistantCard: response.data,
             previousMemory: requestInput.sessionMemory,
             lastUpdatedAt: new Date().toISOString(),
           });
+        } catch (error) {
+          logger.warn("Could not build Ask session memory.", {
+            sessionId: response.sessionId,
+            error: error instanceof Error ? error.message : "unknown",
+          });
+        }
 
+        try {
           await persistence.saveExchange({
             sessionId: response.sessionId,
             userMessage: parsedRequest.message,
             assistantCard: response.data,
             assistantUiMeta: response.uiMeta,
             attachmentMeta: parsedRequest.attachmentMeta ?? null,
-            sessionMemory,
+            ...(sessionMemory !== undefined ? { sessionMemory } : {}),
             userImageDataUrl: parsedRequest.image ?? null,
           });
         } catch (error) {
@@ -274,6 +283,18 @@ function buildAskStreamResponse({
   });
 }
 
+function getRateLimitMessage(reason: string) {
+  if (reason === "daily_limit") {
+    return `You have used today’s ${FREE_DAILY_ASK_LIMIT} free chats.`;
+  }
+
+  if (reason === "pro_fair_use_limit") {
+    return `You have reached today’s ${PRO_DAILY_ASK_LIMIT} Pro fair-use chats.`;
+  }
+
+  return "Could not verify your usage limit.";
+}
+
 export async function POST(request: Request) {
   let body: unknown;
 
@@ -296,10 +317,7 @@ export async function POST(request: Request) {
         {
           error: "rate_limited",
           code: reserve.reason,
-          message:
-            reserve.reason === "daily_limit"
-              ? `You have used today’s ${FREE_DAILY_ASK_LIMIT} free chats.`
-              : "Could not verify your usage limit.",
+          message: getRateLimitMessage(reserve.reason),
           remaining: reserve.remaining ?? 0,
         },
         { status: 429 },

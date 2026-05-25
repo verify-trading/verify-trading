@@ -22,7 +22,7 @@ import { getAskPersistence } from "@/lib/ask/persistence";
 import { getSessionUser } from "@/lib/auth/session";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
 import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
-import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { generateAskResponse } from "@/lib/ask/service";
 
 async function readResponseJson(response: Response) {
@@ -87,7 +87,7 @@ describe("POST /api/ask", () => {
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     const body = await response.text();
     expect(body).toContain('"type":"text-delta"');
-    expect(body).toContain("Try Again");
+    expect(body).toContain("Need More Detail");
     expect(body).toContain('"type":"data-ui-meta"');
     expect(loadHistory).toHaveBeenCalledTimes(1);
     expect(saveExchange).toHaveBeenCalledTimes(1);
@@ -354,6 +354,32 @@ describe("POST /api/ask", () => {
     const json = await readResponseJson(response);
     expect(json.error).toBe("rate_limited");
     expect(json.message).toBe(`You have used today’s ${FREE_DAILY_ASK_LIMIT} free chats.`);
+    expect(json.remaining).toBe(0);
+  });
+
+  it("returns 429 when the Pro fair-use limit is reached", async () => {
+    vi.mocked(reserveAskQuery).mockResolvedValue({
+      ok: false,
+      reason: "pro_fair_use_limit",
+      remaining: 0,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        body: JSON.stringify({
+          message: "Another ask",
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    const json = await readResponseJson(response);
+    expect(json.error).toBe("rate_limited");
+    expect(json.message).toBe(`You have reached today’s ${PRO_DAILY_ASK_LIMIT} Pro fair-use chats.`);
     expect(json.remaining).toBe(0);
   });
 

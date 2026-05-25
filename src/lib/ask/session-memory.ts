@@ -49,13 +49,15 @@ function mergeRecentUserGoals(
   const merged = [...latestGoals];
 
   for (const goal of previousGoals ?? []) {
+    if (merged.length >= 3) {
+      break;
+    }
+
     if (!goal || merged.includes(goal)) {
       continue;
     }
+
     merged.push(goal);
-    if (merged.length === 3) {
-      break;
-    }
   }
 
   return merged.length > 0 ? merged : undefined;

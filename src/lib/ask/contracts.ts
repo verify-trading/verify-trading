@@ -346,9 +346,9 @@ export type ProjectionCard = z.infer<typeof projectionCardSchema>;
 
 export const fallbackInsightCard: InsightCard = {
   type: "insight",
-  headline: "Try Again",
-  body: "Something went wrong with that query.",
-  verdict: "Please rephrase your question.",
+  headline: "Need More Detail",
+  body: "I need a little more context to answer this properly.",
+  verdict: "Send the asset, setup, broker, or calculation you want checked.",
 };
 
 function trimToWordLimit(value: string, maxWords: number, options: { keepPunctuation?: boolean }) {
