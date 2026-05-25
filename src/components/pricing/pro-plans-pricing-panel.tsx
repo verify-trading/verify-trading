@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Lock } from "lucide-react";
 
 import type { PublicBillingPricing } from "@/lib/billing/config";
@@ -8,10 +7,10 @@ import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data"
 
 import { cn } from "@/lib/utils";
 
-import { ProAnnualPlanCard, ProMonthlyPlanCard } from "./pro-plan-cards";
+import { ProAnnualPlanCard, ProMonthlyPlanCard, ProWeeklyPlanCard } from "./pro-plan-cards";
 
 /**
- * Reusable Pro monthly + annual cards with a short header — e.g. Markets paywall overlay.
+ * Reusable Pro plan cards with a short header — e.g. Markets paywall overlay.
  * Uses the same plan cards as the landing / pricing page.
  */
 export function ProPlansPricingPanel({
@@ -63,13 +62,13 @@ export function ProPlansPricingPanel({
       <div
         className={cn(
           "grid",
-          compact ? "gap-2 sm:gap-3 lg:grid-cols-2" : "gap-3 md:grid-cols-2",
+          compact ? "gap-2 sm:gap-3 lg:grid-cols-3" : "gap-3 md:grid-cols-3",
         )}
       >
+        <ProWeeklyPlanCard pricing={pricing} billingContext={billingContext} density={density} />
         <ProMonthlyPlanCard pricing={pricing} billingContext={billingContext} density={density} />
         <ProAnnualPlanCard pricing={pricing} billingContext={billingContext} density={density} />
       </div>
-    
     </div>
   );
 }
