@@ -14,8 +14,42 @@ import {
 import { billingStatusGrantsProAccess } from "@/lib/billing/subscription-status";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
 import { maybeSendSubscriptionWelcomeEmail } from "@/lib/email/maybe-send-subscription-welcome";
+import { tagPaidMemberInKit } from "@/lib/marketing/kit";
+import { logger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
+
+function readStripeCustomerId(customer: string | Stripe.Customer | Stripe.DeletedCustomer | null): string | null {
+  if (!customer) {
+    return null;
+  }
+
+  return typeof customer === "string" ? customer : customer.id;
+}
+
+function isDeletedStripeCustomer(customer: Stripe.Customer | Stripe.DeletedCustomer): customer is Stripe.DeletedCustomer {
+  return "deleted" in customer && customer.deleted === true;
+}
+
+async function tagPaidMemberFromSubscription(
+  stripe: Stripe,
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  const customerId = readStripeCustomerId(subscription.customer);
+  if (!customerId) {
+    return;
+  }
+
+  const customer = await stripe.customers.retrieve(customerId);
+  if (isDeletedStripeCustomer(customer) || !customer.email) {
+    return;
+  }
+
+  await tagPaidMemberInKit({
+    email: customer.email,
+    displayName: customer.name,
+  });
+}
 
 export async function POST(request: Request) {
   const signature = (await headers()).get("stripe-signature");
@@ -69,6 +103,13 @@ export async function POST(request: Request) {
         if (billingStatusGrantsProAccess(syncResult.status)) {
           const interval = subscription.items.data[0]?.price?.recurring?.interval ?? null;
           const origin = new URL(request.url).origin;
+          await tagPaidMemberFromSubscription(stripe, subscription).catch((kitError) => {
+            logger.warn("Failed to tag paid member in Kit.", {
+              userId: syncResult.userId,
+              stripeSubscriptionId: subscription.id,
+              error: kitError instanceof Error ? kitError.message : String(kitError),
+            });
+          });
           await maybeSendSubscriptionWelcomeEmail({
             userId: syncResult.userId,
             stripeSubscriptionId: subscription.id,
