@@ -8,6 +8,11 @@ import type { VariantProps } from "class-variance-authority";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import type { BillingPlanKey } from "@/lib/billing/config";
+import {
+  trackMetaInitiateCheckout,
+  trackMetaPurchase,
+} from "@/lib/marketing/meta-pixel";
 
 type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>["variant"]>;
 type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
@@ -35,6 +40,9 @@ type BillingActionButtonProps = {
 type BillingCheckoutSyncProps = {
   checkoutState: string | null;
   checkoutSessionId: string | null;
+  checkoutPlan?: BillingPlanKey | null;
+  checkoutValue?: number | null;
+  checkoutCurrency?: string | null;
 };
 
 const actionConfig = {
@@ -78,7 +86,9 @@ function variantForAction(action: BillingActionButtonProps["action"]): ButtonVar
       return "default";
   }
 }
-
+function waitForTrackingRequest() {
+  return new Promise((resolve) => window.setTimeout(resolve, 350));
+}
 export function BillingActionButton({
   action,
   children,
@@ -123,6 +133,11 @@ export function BillingActionButton({
       });
       const responsePayload = (await response.json().catch(() => null)) as
         | {
+            checkout?: {
+              plan?: BillingPlanKey;
+              currency?: string;
+              value?: number;
+            };
             message?: string;
             url?: string;
           }
@@ -135,6 +150,14 @@ export function BillingActionButton({
       }
 
       if (actionConfig[action].redirectOnSuccess) {
+        if (action === "checkout") {
+          trackMetaInitiateCheckout({
+            plan: responsePayload?.checkout?.plan,
+            value: responsePayload?.checkout?.value,
+            currency: responsePayload?.checkout?.currency,
+          });
+          await waitForTrackingRequest();
+        }
         window.location.assign(responsePayload!.url!);
         return;
       }
@@ -222,6 +245,9 @@ export function BillingActionButton({
 export function BillingCheckoutSync({
   checkoutState,
   checkoutSessionId,
+  checkoutPlan,
+  checkoutValue,
+  checkoutCurrency,
 }: BillingCheckoutSyncProps) {
   const router = useRouter();
   const hasSynced = useRef(false);
@@ -249,6 +275,21 @@ export function BillingCheckoutSync({
         if (!response.ok) {
           toast.error(payload?.message ?? "Stripe checkout completed, but the local billing sync failed.");
         } else {
+          const storageKey = `meta_purchase:${checkoutSessionId}`;
+          const alreadyTracked =
+            typeof window !== "undefined" && window.sessionStorage.getItem(storageKey) === "1";
+
+          if (!alreadyTracked) {
+            trackMetaPurchase({
+              plan: checkoutPlan,
+              value: checkoutValue,
+              currency: checkoutCurrency,
+              checkoutSessionId,
+            });
+            if (typeof window !== "undefined") {
+              window.sessionStorage.setItem(storageKey, "1");
+            }
+          }
           toast.success("Subscription activated.");
         }
       } catch {
@@ -258,7 +299,7 @@ export function BillingCheckoutSync({
         router.refresh();
       }
     })();
-  }, [checkoutSessionId, checkoutState, router]);
+  }, [checkoutCurrency, checkoutPlan, checkoutSessionId, checkoutState, checkoutValue, router]);
 
   useEffect(() => {
     if (checkoutState === "cancelled") {

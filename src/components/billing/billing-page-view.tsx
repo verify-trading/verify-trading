@@ -5,6 +5,7 @@ import {
   BillingActionButton,
   BillingCheckoutSync,
 } from "@/components/billing/billing-actions";
+import { getBillingPlanAmountGbp, readBillingPlanKeyFromStripeInterval } from "@/lib/billing/config";
 import { getBillingStatusLabel } from "@/lib/billing/subscription-status";
 import {
   FREE_DAILY_ASK_LIMIT,
@@ -70,6 +71,13 @@ export function BillingPageView({
   checkoutSessionId,
 }: BillingPageViewProps) {
   const periodEndLabel = isCanceling ? "Ends on" : "Renews on";
+  const checkoutPlan = readBillingPlanKeyFromStripeInterval(subscription?.interval);
+  const checkoutValue =
+    subscription?.unit_amount && subscription.unit_amount > 0
+      ? subscription.unit_amount / 100
+      : checkoutPlan
+        ? getBillingPlanAmountGbp(checkoutPlan)
+        : null;
   const billingDetails = [
     { label: "Status", value: getBillingStatusLabel(subscription?.status), tabular: false },
     { label: "Recurring", value: recurringAmount ?? "—", tabular: true },
@@ -78,7 +86,13 @@ export function BillingPageView({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(242,109,109,0.12),transparent_50%),var(--vt-navy)] text-white">
-      <BillingCheckoutSync checkoutState={checkoutState} checkoutSessionId={checkoutSessionId} />
+      <BillingCheckoutSync
+        checkoutState={checkoutState}
+        checkoutSessionId={checkoutSessionId}
+        checkoutPlan={checkoutPlan}
+        checkoutValue={checkoutValue}
+        checkoutCurrency={subscription?.currency?.toUpperCase() ?? "GBP"}
+      />
 
       <div className="mx-auto max-w-5xl px-4 pb-[max(7rem,calc(env(safe-area-inset-bottom,0px)+2rem))] pt-8 sm:px-6">
         <div className="mx-auto w-full max-w-2xl">
