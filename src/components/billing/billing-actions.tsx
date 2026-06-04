@@ -86,7 +86,9 @@ function variantForAction(action: BillingActionButtonProps["action"]): ButtonVar
       return "default";
   }
 }
-
+function waitForTrackingRequest() {
+  return new Promise((resolve) => window.setTimeout(resolve, 350));
+}
 export function BillingActionButton({
   action,
   children,
@@ -154,6 +156,7 @@ export function BillingActionButton({
             value: responsePayload?.checkout?.value,
             currency: responsePayload?.checkout?.currency,
           });
+          await waitForTrackingRequest();
         }
         window.location.assign(responsePayload!.url!);
         return;
