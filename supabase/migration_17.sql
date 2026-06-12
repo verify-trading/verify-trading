@@ -1,15 +1,14 @@
--- Knowledge base for the Ask RAG layer.
+-- Knowledge base for the Ask RAG layer (text-search only, no embeddings).
 --
 -- One row per retrievable document: verified entities (brokers / prop firms /
 -- gurus), analysis rules, and free-form playbook / policy content. Rows are
 -- synced from their source tables by the backfill script
--- (scripts/backfill-knowledge.ts) and re-embedded on admin saves.
+-- (scripts/data/backfill-knowledge.mjs).
 --
--- Embeddings default to 1536 dimensions (OpenAI text-embedding-3-small).
--- If you switch embedding models, change vector(1536) below and re-run the
--- backfill before relying on vector search.
+-- Retrieval is hybrid full-text + trigram. If semantic search is needed later,
+-- add an embedding vector column + HNSW index in a follow-up migration and
+-- extend match_knowledge with a vector leg; the table layout does not change.
 
-create extension if not exists vector;
 create extension if not exists pg_trgm;
 
 create table if not exists public.knowledge_documents (
@@ -27,8 +26,6 @@ create table if not exists public.knowledge_documents (
   -- Pointer back to the source row so syncs are idempotent.
   source_table text,
   source_id text,
-  embedding vector(1536),
-  embedded_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (source_table, source_id)
@@ -54,12 +51,11 @@ create index if not exists knowledge_documents_tsv_idx
 create index if not exists knowledge_documents_trgm_idx
   on public.knowledge_documents using gin (searchable_text gin_trgm_ops);
 
+create index if not exists knowledge_documents_title_trgm_idx
+  on public.knowledge_documents using gin (title gin_trgm_ops);
+
 create index if not exists knowledge_documents_aliases_idx
   on public.knowledge_documents using gin (aliases);
-
--- HNSW works well at this corpus size and needs no training step.
-create index if not exists knowledge_documents_embedding_idx
-  on public.knowledge_documents using hnsw (embedding vector_cosine_ops);
 
 -- Service-role only (same posture as verified_entities / analysis_rules).
 alter table public.knowledge_documents enable row level security;
@@ -79,10 +75,9 @@ create trigger knowledge_documents_set_updated_at
   before update on public.knowledge_documents
   for each row execute function public.set_knowledge_documents_updated_at();
 
--- Hybrid retrieval: vector similarity + full-text rank fused with
+-- Hybrid retrieval: full-text rank + trigram title similarity, fused with
 -- reciprocal rank fusion (RRF). Either signal alone can surface a document.
 create or replace function public.match_knowledge(
-  query_embedding vector(1536),
   query_text text,
   match_kinds text[] default null,
   match_count int default 8,
@@ -99,16 +94,7 @@ returns table (
 language sql
 stable
 as $$
-  with vector_hits as (
-    select kd.id,
-           row_number() over (order by kd.embedding <=> query_embedding) as rank
-    from public.knowledge_documents kd
-    where kd.embedding is not null
-      and (match_kinds is null or kd.kind = any (match_kinds))
-    order by kd.embedding <=> query_embedding
-    limit greatest(match_count * 4, 20)
-  ),
-  text_hits as (
+  with text_hits as (
     select kd.id,
            row_number() over (
              order by ts_rank(kd.content_tsv, websearch_to_tsquery('english', query_text)) desc
@@ -119,11 +105,25 @@ as $$
       and (match_kinds is null or kd.kind = any (match_kinds))
     limit greatest(match_count * 4, 20)
   ),
+  trgm_hits as (
+    select kd.id,
+           row_number() over (
+             order by greatest(
+               similarity(kd.title, query_text),
+               similarity(kd.searchable_text, query_text)
+             ) desc
+           ) as rank
+    from public.knowledge_documents kd
+    where query_text <> ''
+      and (kd.title % query_text or kd.searchable_text % query_text)
+      and (match_kinds is null or kd.kind = any (match_kinds))
+    limit greatest(match_count * 4, 20)
+  ),
   fused as (
-    select coalesce(v.id, t.id) as id,
-           coalesce(1.0 / (rrf_k + v.rank), 0) + coalesce(1.0 / (rrf_k + t.rank), 0) as score
-    from vector_hits v
-    full outer join text_hits t on t.id = v.id
+    select coalesce(t.id, g.id) as id,
+           coalesce(1.0 / (rrf_k + t.rank), 0) + coalesce(1.0 / (rrf_k + g.rank), 0) as score
+    from text_hits t
+    full outer join trgm_hits g on g.id = t.id
   )
   select kd.id, kd.kind, kd.title, kd.content, kd.tags, f.score
   from fused f

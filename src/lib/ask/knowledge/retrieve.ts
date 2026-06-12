@@ -1,4 +1,3 @@
-import { embedText, isEmbeddingConfigured } from "@/lib/ask/knowledge/embedding";
 import type {
   EntityCandidate,
   KnowledgeChunk,
@@ -52,22 +51,7 @@ async function matchKnowledgeChunks(
   message: string,
   matchCount: number,
 ): Promise<KnowledgeChunk[]> {
-  if (!isEmbeddingConfigured()) {
-    return [];
-  }
-
-  let embedding: number[];
-  try {
-    embedding = await embedText(message);
-  } catch (error) {
-    logger.warn("Knowledge query embedding failed.", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-
   const { data, error } = await client.rpc("match_knowledge", {
-    query_embedding: JSON.stringify(embedding),
     query_text: message,
     match_count: matchCount,
   });

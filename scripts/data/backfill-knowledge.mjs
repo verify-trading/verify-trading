@@ -1,18 +1,12 @@
 // Backfills public.knowledge_documents from verified_entities + analysis_rules.
 //
 // Usage:
-//   node scripts/data/backfill-knowledge.mjs                 # upsert + embed
-//   node scripts/data/backfill-knowledge.mjs --skip-embeddings
+//   node scripts/data/backfill-knowledge.mjs
 //
 // Env:
 //   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY      (required)
-//   EMBEDDINGS_API_KEY (or OPENAI_API_KEY)                   (required unless --skip-embeddings)
-//   EMBEDDINGS_MODEL    default text-embedding-3-small (1536 dims, matches migration_17)
-//   EMBEDDINGS_BASE_URL default https://api.openai.com/v1
 
 import { createClient } from "@supabase/supabase-js";
-
-const EMBEDDING_BATCH_SIZE = 64;
 
 function normalizeAliasText(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
@@ -100,37 +94,7 @@ function ruleToDocument(row) {
   };
 }
 
-async function embedBatch(texts) {
-  const apiKey = process.env.EMBEDDINGS_API_KEY ?? process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Set EMBEDDINGS_API_KEY (or pass --skip-embeddings).");
-  }
-
-  const baseUrl = process.env.EMBEDDINGS_BASE_URL ?? "https://api.openai.com/v1";
-  const model = process.env.EMBEDDINGS_MODEL ?? "text-embedding-3-small";
-
-  const response = await fetch(`${baseUrl}/embeddings`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ model, input: texts }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Embeddings request failed with status ${response.status}.`);
-  }
-
-  const payload = await response.json();
-  return payload.data
-    .toSorted((left, right) => left.index - right.index)
-    .map((row) => row.embedding);
-}
-
 async function main() {
-  const skipEmbeddings = process.argv.includes("--skip-embeddings");
-
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceRoleKey) {
@@ -162,20 +126,6 @@ async function main() {
     `Backfilling ${documents.length} knowledge documents (${entities.data?.length ?? 0} entities, ${rules.data?.length ?? 0} rules).`,
   );
 
-  if (!skipEmbeddings) {
-    for (let start = 0; start < documents.length; start += EMBEDDING_BATCH_SIZE) {
-      const batch = documents.slice(start, start + EMBEDDING_BATCH_SIZE);
-      const embeddings = await embedBatch(
-        batch.map((doc) => `${doc.title}\n${doc.content}`),
-      );
-      batch.forEach((doc, index) => {
-        doc.embedding = JSON.stringify(embeddings[index]);
-        doc.embedded_at = new Date().toISOString();
-      });
-      console.log(`Embedded ${Math.min(start + EMBEDDING_BATCH_SIZE, documents.length)}/${documents.length}.`);
-    }
-  }
-
   const { error } = await client
     .from("knowledge_documents")
     .upsert(documents, { onConflict: "source_table,source_id" });
@@ -184,7 +134,7 @@ async function main() {
     throw new Error(`Upsert failed: ${error.message}`);
   }
 
-  console.log(`Done. ${documents.length} documents upserted${skipEmbeddings ? " (without embeddings)" : ""}.`);
+  console.log(`Done. ${documents.length} documents upserted.`);
 }
 
 main().catch((error) => {
