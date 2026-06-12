@@ -21,12 +21,8 @@ import {
   retrieveAskKnowledge,
 } from "@/lib/ask/knowledge/retrieve";
 import { logger } from "@/lib/observability/logger";
-import {
-  askImageResponseGuide,
-  askResponseGuide,
-  defaultAskImagePrompt,
-  verifyTradingSystemPrompt,
-} from "@/lib/ask/prompt";
+import { cascadeAskSystemPrompt } from "@/lib/ask/cascade-prompt";
+import { askImageResponseGuide, defaultAskImagePrompt } from "@/lib/ask/prompt";
 import {
   extractSubmitAskCard,
   extractToolCard,
@@ -134,9 +130,8 @@ function buildCascadeMessages({
     : { role: "user", content: normalizedMessage };
 
   return [
-    // Cached static prefix (max 2 cache breakpoints, well under Anthropic's 4).
-    createSystemMessage(expandPromptTemplate(verifyTradingSystemPrompt)),
-    createSystemMessage(askResponseGuide),
+    // Single cached static block — one stable cache breakpoint.
+    createSystemMessage(expandPromptTemplate(cascadeAskSystemPrompt)),
     // Volatile context stays uncached so it never invalidates the prefix.
     ...(sessionMemoryMessage ? [plainSystemMessage(sessionMemoryMessage)] : []),
     ...(image ? [plainSystemMessage(askImageResponseGuide)] : []),

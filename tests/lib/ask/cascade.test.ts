@@ -189,7 +189,7 @@ describe("generateAskCascadeResponse", () => {
       (message) =>
         message.role === "system" &&
         typeof message.content === "string" &&
-        message.content.includes("RETRIEVED CONTEXT"),
+        message.content.startsWith("RETRIEVED CONTEXT"),
     );
     expect(knowledgeMessage).toBeDefined();
     expect(String(knowledgeMessage?.content)).toContain("FTMO");
@@ -242,7 +242,7 @@ describe("generateAskCascadeResponse", () => {
     expect(response.data).toEqual(insightCard);
   });
 
-  it("limits the static cached prefix to two system breakpoints", async () => {
+  it("limits the static cached prefix to one system breakpoint", async () => {
     const generateTextImpl = vi
       .fn()
       .mockResolvedValue(textResult([submitResult(insightCard)])) as never;
@@ -268,7 +268,7 @@ describe("generateAskCascadeResponse", () => {
     const cachedSystemMessages = messages.filter(
       (message) => message.role === "system" && message.providerOptions,
     );
-    expect(cachedSystemMessages).toHaveLength(2);
+    expect(cachedSystemMessages).toHaveLength(1);
   });
 });
 
