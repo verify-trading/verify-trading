@@ -8,7 +8,7 @@ vi.mock("@/lib/observability/logger", () => ({
 }));
 
 import { fallbackInsightCard } from "@/lib/ask/contracts";
-import { generateAskResponse, streamAskResponse } from "@/lib/ask/service";
+import { generateAskResponse } from "@/lib/ask/service";
 import {
   DEFAULT_ANTHROPIC_MODEL,
   DEFAULT_ANTHROPIC_SIMPLE_MODEL,
@@ -192,19 +192,4 @@ describe("Ask service model selection", () => {
     expect(response.data).toEqual(primaryInsightCard);
   });
 
-  it("routes streaming asks through the same simple model path", async () => {
-    const streamTextImpl = vi.fn().mockReturnValue({ stream: "mock" });
-
-    await streamAskResponse(
-      {
-        message: "what is leverage?",
-        sessionId: crypto.randomUUID(),
-        history: [],
-      },
-      {},
-      { streamTextImpl },
-    );
-
-    expect(getCallModelId(streamTextImpl)).toBe(DEFAULT_ANTHROPIC_SIMPLE_MODEL);
-  });
 });

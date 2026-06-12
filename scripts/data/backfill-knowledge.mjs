@@ -1,0 +1,193 @@
+// Backfills public.knowledge_documents from verified_entities + analysis_rules.
+//
+// Usage:
+//   node scripts/data/backfill-knowledge.mjs                 # upsert + embed
+//   node scripts/data/backfill-knowledge.mjs --skip-embeddings
+//
+// Env:
+//   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY      (required)
+//   EMBEDDINGS_API_KEY (or OPENAI_API_KEY)                   (required unless --skip-embeddings)
+//   EMBEDDINGS_MODEL    default text-embedding-3-small (1536 dims, matches migration_17)
+//   EMBEDDINGS_BASE_URL default https://api.openai.com/v1
+
+import { createClient } from "@supabase/supabase-js";
+
+const EMBEDDING_BATCH_SIZE = 64;
+
+function normalizeAliasText(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+
+function collapseAliasText(value) {
+  return normalizeAliasText(value).replace(/\s+/g, "");
+}
+
+function expandEntityAliases(name, existingAliases = []) {
+  const base = normalizeAliasText(name);
+  const aliases = new Set([base, collapseAliasText(name)]);
+  const spacedDigits = base.replace(/([a-z])(\d)/g, "$1 $2").replace(/(\d)([a-z])/g, "$1 $2");
+  aliases.add(spacedDigits);
+  aliases.add(collapseAliasText(spacedDigits));
+
+  if (base.startsWith("the ")) {
+    aliases.add(base.slice(4));
+    aliases.add(collapseAliasText(base.slice(4)));
+  }
+
+  if (base.endsWith(" group")) {
+    aliases.add(base.replace(/ group$/, ""));
+  }
+
+  for (const alias of existingAliases) {
+    const normalized = normalizeAliasText(alias);
+    if (normalized) {
+      aliases.add(normalized);
+      aliases.add(collapseAliasText(alias));
+    }
+  }
+
+  return [...aliases].filter(Boolean);
+}
+
+const ENTITY_TYPE_LABELS = {
+  broker: "broker",
+  guru: "trading guru",
+  propfirm: "prop firm",
+};
+
+function entityToDocument(row) {
+  const aliases = expandEntityAliases(row.name, row.aliases ?? []);
+  const lines = [
+    `${row.name} is a ${ENTITY_TYPE_LABELS[row.entity_type] ?? "entity"} with status "${row.status}" and trust score ${Number(row.trust_score).toFixed(1)}/10.`,
+    row.entity_type === "broker"
+      ? `FCA registered: ${row.fca_registered ? `yes${row.fca_reference ? ` (FRN ${row.fca_reference})` : ""}` : "no"}.${row.fca_warning ? " The FCA has published a warning about this firm." : ""}`
+      : null,
+    row.notes,
+  ];
+
+  return {
+    kind: "entity",
+    title: row.name,
+    content: lines.filter(Boolean).join("\n"),
+    tags: {
+      entity_type: row.entity_type,
+      status: row.status,
+      fca_registered: Boolean(row.fca_registered),
+      fca_warning: Boolean(row.fca_warning),
+      trust_score: Number(row.trust_score),
+    },
+    aliases,
+    searchable_text: [normalizeAliasText(row.name), ...aliases].join(" "),
+    source_table: "verified_entities",
+    source_id: row.slug,
+  };
+}
+
+function ruleToDocument(row) {
+  return {
+    kind: "rule",
+    title: `Rule ${row.rule_number}: ${row.rule_name}`,
+    content: row.content,
+    tags: {
+      category: row.category,
+      priority: Number(row.priority),
+      rule_number: Number(row.rule_number),
+    },
+    aliases: [],
+    searchable_text: normalizeAliasText(`${row.category} ${row.rule_name}`),
+    source_table: "analysis_rules",
+    source_id: String(row.rule_number),
+  };
+}
+
+async function embedBatch(texts) {
+  const apiKey = process.env.EMBEDDINGS_API_KEY ?? process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Set EMBEDDINGS_API_KEY (or pass --skip-embeddings).");
+  }
+
+  const baseUrl = process.env.EMBEDDINGS_BASE_URL ?? "https://api.openai.com/v1";
+  const model = process.env.EMBEDDINGS_MODEL ?? "text-embedding-3-small";
+
+  const response = await fetch(`${baseUrl}/embeddings`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ model, input: texts }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Embeddings request failed with status ${response.status}.`);
+  }
+
+  const payload = await response.json();
+  return payload.data
+    .toSorted((left, right) => left.index - right.index)
+    .map((row) => row.embedding);
+}
+
+async function main() {
+  const skipEmbeddings = process.argv.includes("--skip-embeddings");
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  }
+
+  const client = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+
+  const [entities, rules] = await Promise.all([
+    client.from("verified_entities").select("*"),
+    client.from("analysis_rules").select("*").eq("active", true),
+  ]);
+
+  if (entities.error) {
+    throw new Error(`Could not load verified_entities: ${entities.error.message}`);
+  }
+  if (rules.error) {
+    throw new Error(`Could not load analysis_rules: ${rules.error.message}`);
+  }
+
+  const documents = [
+    ...(entities.data ?? []).map(entityToDocument),
+    ...(rules.data ?? []).map(ruleToDocument),
+  ];
+
+  console.log(
+    `Backfilling ${documents.length} knowledge documents (${entities.data?.length ?? 0} entities, ${rules.data?.length ?? 0} rules).`,
+  );
+
+  if (!skipEmbeddings) {
+    for (let start = 0; start < documents.length; start += EMBEDDING_BATCH_SIZE) {
+      const batch = documents.slice(start, start + EMBEDDING_BATCH_SIZE);
+      const embeddings = await embedBatch(
+        batch.map((doc) => `${doc.title}\n${doc.content}`),
+      );
+      batch.forEach((doc, index) => {
+        doc.embedding = JSON.stringify(embeddings[index]);
+        doc.embedded_at = new Date().toISOString();
+      });
+      console.log(`Embedded ${Math.min(start + EMBEDDING_BATCH_SIZE, documents.length)}/${documents.length}.`);
+    }
+  }
+
+  const { error } = await client
+    .from("knowledge_documents")
+    .upsert(documents, { onConflict: "source_table,source_id" });
+
+  if (error) {
+    throw new Error(`Upsert failed: ${error.message}`);
+  }
+
+  console.log(`Done. ${documents.length} documents upserted${skipEmbeddings ? " (without embeddings)" : ""}.`);
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});

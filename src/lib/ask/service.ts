@@ -4,7 +4,6 @@ import {
   generateText,
   RetryError,
   stepCountIs,
-  streamText,
   type ModelMessage,
   type PrepareStepFunction,
 } from "ai";
@@ -517,6 +516,14 @@ function resolveToolOwnedOverride(
     return toolState.deterministicCalcToolCard;
   }
 
+  if (modelPreferredCard.type === "projection" && toolState.toolCard?.type === "projection") {
+    return toolState.toolCard;
+  }
+
+  if (modelPreferredCard.type === "plan" && toolState.toolCard?.type === "plan") {
+    return toolState.toolCard;
+  }
+
   if (modelPreferredCard.type === "insight" && toolState.protectedBriefingForMarketUpdate) {
     return toolState.protectedBriefingForMarketUpdate;
   }
@@ -727,10 +734,10 @@ function buildInsightCardFromModelText(text: string) {
     return null;
   }
 
-  const sentences = normalized
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
+  const sentences = normalized.split(/(?<=[.!?])\s+/).flatMap((sentence) => {
+    const trimmed = sentence.trim();
+    return trimmed ? [trimmed] : [];
+  });
 
   const first = sentences[0] ?? normalized;
   const second = sentences[1] ?? "";
@@ -873,6 +880,7 @@ function extractProjectionShortcutCard(message: string) {
   const monthsMatch = normalized.match(/(\d{1,3})\s*(?:-| )?\s*(?:month|months|mo)\b/);
   const startMatch =
     message.match(/([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)\s*start\b/i) ??
+    message.match(/([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)\s*(?:account|balance)\b/i) ??
     message.match(/\bstart(?:ing)?(?:\s+balance)?(?:\s+with)?\s*[:=]?\s*([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)/i);
   const monthlyAddMatch =
     message.match(/\b(?:monthly\s+(?:add|deposit|top(?: |-)?up)|top(?: |-)?up)\s*[:=]?\s*([£$€]?\s*\d[\d,.]*(?:\.\d+)?\s*[kKmM]?)/i) ??
@@ -883,6 +891,7 @@ function extractProjectionShortcutCard(message: string) {
   );
   const drawdownPercentMatch = message.match(/\b(\d+(?:\.\d+)?)\s*%\s*drawdowns?\b/i);
   const drawdownEveryMonthsMatch = message.match(/\bevery\s+(\d{1,3})\s*(?:-| )?\s*(?:month|months|mo)\b/i);
+  const disablesDrawdowns = /\b(?:no|without|zero|0)\s+drawdowns?\b/i.test(message);
 
   const months = monthsMatch ? Number.parseInt(monthsMatch[1], 10) : Number.NaN;
   const startBalance = startMatch ? parseFlexibleNumber(startMatch[1]) : null;
@@ -890,12 +899,16 @@ function extractProjectionShortcutCard(message: string) {
   const monthlyReturnPercent = monthlyReturnMatch
     ? Number.parseFloat(monthlyReturnMatch[1])
     : null;
-  const drawdownPercent = drawdownPercentMatch
-    ? Number.parseFloat(drawdownPercentMatch[1])
-    : null;
-  const drawdownEveryMonths = drawdownEveryMonthsMatch
-    ? Number.parseInt(drawdownEveryMonthsMatch[1], 10)
-    : null;
+  const drawdownPercent = disablesDrawdowns
+    ? 0
+    : drawdownPercentMatch
+      ? Number.parseFloat(drawdownPercentMatch[1])
+      : null;
+  const drawdownEveryMonths = disablesDrawdowns
+    ? 0
+    : drawdownEveryMonthsMatch
+      ? Number.parseInt(drawdownEveryMonthsMatch[1], 10)
+      : null;
   const currencySymbol =
     (startMatch ? extractCurrencySymbol(startMatch[1]) : undefined) ??
     inferCurrencySymbolFromText(message);
@@ -1459,7 +1472,11 @@ export async function generateAskResponse(
   const runModelAttempts = async (
     attempts: AskModelAttempt[],
   ): Promise<AskModelAttemptResult> => {
-    for (const [index, attempt] of attempts.entries()) {
+    const runAttempt = async (index: number): Promise<AskModelAttemptResult> => {
+      const attempt = attempts[index];
+      if (!attempt) {
+        throw new Error("Ask model attempts were empty.");
+      }
       try {
         return { kind: "generated", result: await runGenerate(attempt) };
       } catch (error) {
@@ -1511,9 +1528,10 @@ export async function generateAskResponse(
           error: error instanceof Error ? error.message : String(error),
         });
       }
-    }
+      return runAttempt(index + 1);
+    };
 
-    throw new Error("Ask model attempts were empty.");
+    return runAttempt(0);
   };
 
   const initialGeneration = await runModelAttempts(initialAttempts);
@@ -1572,95 +1590,3 @@ export async function generateAskResponse(
   });
 }
 
-export type AskStreamCallbacks = {
-  onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
-  onTextDelta?: (text: string) => void;
-  onDone?: (response: AskResponse) => void;
-  onError?: (error: unknown) => void;
-};
-
-export function streamAskResponse(
-  input: AskRequest,
-  callbacks: AskStreamCallbacks = {},
-  dependencies: AskServiceDependencies = {},
-) {
-  return streamAskResponseInternal(input, callbacks, dependencies);
-}
-
-async function streamAskResponseInternal(
-  input: AskRequest,
-  callbacks: AskStreamCallbacks = {},
-  dependencies: AskServiceDependencies = {},
-) {
-  const request = askRequestSchema.parse(input);
-  const image = parseImageDataUrl(request.image);
-  const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
-  const sessionId = request.sessionId ?? request.chatSessionId ?? crypto.randomUUID();
-  const messageId = crypto.randomUUID();
-  const getActiveAnalysisRulesImpl =
-    dependencies.getActiveAnalysisRulesImpl ?? getActiveAnalysisRules;
-  const streamTextImpl = dependencies.streamTextImpl ?? streamText;
-  const modelRouting = selectAskModelRoutingForRequest(request, normalizedMessage, Boolean(image));
-  const selectedModel = modelRouting.modelClass === "simple" ? getAskSimpleModel() : getAskModel();
-
-  const clarificationCard = resolveClarificationCard(request);
-  if (clarificationCard) {
-    return streamTextImpl({
-      model: selectedModel,
-      prompt: JSON.stringify(clarificationCard),
-    });
-  }
-
-  const messages = await buildAskModelMessages({
-    request,
-    image,
-    normalizedMessage,
-    getActiveAnalysisRulesImpl,
-  });
-
-  return streamTextImpl({
-    model: selectedModel,
-    temperature: 0.2,
-    maxOutputTokens: ASK_MODEL_MAX_OUTPUT_TOKENS,
-    maxRetries: ASK_MODEL_MAX_RETRIES,
-    stopWhen: [stepCountIs(modelRouting.maxToolSteps), stopAfterSubmitAskCardResult],
-    prepareStep: createAskPrepareStep({
-      message: normalizedMessage,
-      sessionId,
-      messageId,
-    }),
-    messages,
-    tools: createAskToolsForPolicy(dependencies, modelRouting.toolPolicy),
-    experimental_onToolCallStart({ stepNumber, toolCall }) {
-      logAskToolCallStarted({
-        message: "Ask stream tool call started.",
-        sessionId,
-        messageId,
-        stepNumber,
-        toolName: toolCall.toolName,
-        input: toolCall.input,
-      });
-    },
-    experimental_onToolCallFinish({ stepNumber, toolCall, durationMs, success, error }) {
-      logAskToolCallFinished({
-        successMessage: "Ask stream tool call finished.",
-        failureMessage: "Ask stream tool call failed.",
-        sessionId,
-        messageId,
-        stepNumber,
-        toolName: toolCall.toolName,
-        durationMs,
-        success,
-        error,
-      });
-    },
-    onStepFinish({ toolCalls, text }) {
-      toolCalls?.forEach((tc) => {
-        callbacks.onToolCall?.(tc.toolName, tc.input as Record<string, unknown>);
-      });
-      if (text) {
-        callbacks.onTextDelta?.(text);
-      }
-    },
-  });
-}
