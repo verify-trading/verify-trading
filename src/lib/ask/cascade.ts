@@ -50,6 +50,9 @@ const CASCADE_MODEL_MAX_RETRIES = 2;
 const TIER1_MAX_STEPS = 5;
 const TIER2_MAX_STEPS = 7;
 
+/** Recent turns kept verbatim; older context is carried by session memory. */
+const MAX_HISTORY_TURNS = 12;
+
 /** Tool evidence forwarded from tier 1 to tier 2 is truncated per result. */
 const MAX_FORWARDED_EVIDENCE_CHARS = 1200;
 
@@ -137,7 +140,7 @@ function buildCascadeMessages({
     ...(image ? [plainSystemMessage(askImageResponseGuide)] : []),
     ...(analysisRulesMessage ? [plainSystemMessage(analysisRulesMessage)] : []),
     ...(knowledgeContextBlock ? [plainSystemMessage(knowledgeContextBlock)] : []),
-    ...(request.history ?? []).map((message) => ({
+    ...(request.history ?? []).slice(-MAX_HISTORY_TURNS).map((message) => ({
       role: message.role,
       content: message.content,
     })),

@@ -106,16 +106,22 @@ as $$
     limit greatest(match_count * 4, 20)
   ),
   trgm_hits as (
+    -- word_similarity (not similarity): a short title/alias must match the best
+    -- substring of a long conversational query, e.g. "Pepperstone" inside
+    -- "is pepperstone safe to deposit with as a uk trader".
     select kd.id,
            row_number() over (
              order by greatest(
-               similarity(kd.title, query_text),
-               similarity(kd.searchable_text, query_text)
+               word_similarity(kd.title, query_text),
+               word_similarity(kd.searchable_text, query_text)
              ) desc
            ) as rank
     from public.knowledge_documents kd
     where query_text <> ''
-      and (kd.title % query_text or kd.searchable_text % query_text)
+      and greatest(
+        word_similarity(kd.title, query_text),
+        word_similarity(kd.searchable_text, query_text)
+      ) >= 0.3
       and (match_kinds is null or kd.kind = any (match_kinds))
     limit greatest(match_count * 4, 20)
   ),
@@ -155,21 +161,30 @@ as $$
     select lower(regexp_replace(query, '[^a-z0-9 ]', '', 'gi')) as q
   ),
   exact_hits as (
+    -- lower(kd.title): n.q is already lowercased, titles are not, so the
+    -- "whole title appears in the query" check must compare like cases.
     select kd.id, kd.title, kd.tags, kd.source_id,
            'exact'::text as match_type,
            1.0::double precision as similarity
     from public.knowledge_documents kd, normalized n
     where kd.kind = 'entity'
-      and (n.q = any (kd.aliases) or position(' ' || kd.title || ' ' in ' ' || n.q || ' ') > 0)
+      and (n.q = any (kd.aliases) or position(' ' || lower(kd.title) || ' ' in ' ' || n.q || ' ') > 0)
   ),
   fuzzy_hits as (
+    -- word_similarity so a firm name embedded in a longer question still
+    -- resolves (similarity() drops sharply as the query gets longer).
     select kd.id, kd.title, kd.tags, kd.source_id,
            'fuzzy'::text as match_type,
-           similarity(kd.searchable_text, n.q)::double precision as similarity
+           greatest(
+             word_similarity(kd.title, n.q),
+             word_similarity(kd.searchable_text, n.q)
+           )::double precision as similarity
     from public.knowledge_documents kd, normalized n
     where kd.kind = 'entity'
-      and kd.searchable_text % n.q
-      and similarity(kd.searchable_text, n.q) >= min_similarity
+      and greatest(
+        word_similarity(kd.title, n.q),
+        word_similarity(kd.searchable_text, n.q)
+      ) >= min_similarity
       and kd.id not in (select e.id from exact_hits e)
   )
   select * from (
@@ -180,3 +195,8 @@ as $$
   order by similarity desc
   limit match_count;
 $$;
+
+-- Retrieval runs only from the server (service role). Keep these off the
+-- public PostgREST surface; the table's RLS already returns nothing to anon.
+revoke execute on function public.match_knowledge(text, text[], int, int) from anon, authenticated;
+revoke execute on function public.resolve_entity_candidates(text, int, double precision) from anon, authenticated;
