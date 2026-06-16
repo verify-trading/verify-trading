@@ -28,10 +28,12 @@ type BillingSubscriptionRow = {
 type BillingPageViewProps = {
   customerName: string;
   currentPlanLabel: string;
-  canOpenBillingPortal: boolean;
-  canManageSubscriptionActions: boolean;
-  showSubscriptionManagement: boolean;
-  isCanceling: boolean;
+  state: {
+    canOpenBillingPortal: boolean;
+    canManageSubscriptionActions: boolean;
+    showSubscriptionManagement: boolean;
+    isCanceling: boolean;
+  };
   renewalDate: string | null;
   recurringAmount: string | null;
   subscription: BillingSubscriptionRow | null;
@@ -59,10 +61,7 @@ function subscriptionStatusPillClass(status: string | null | undefined) {
 export function BillingPageView({
   customerName,
   currentPlanLabel,
-  canOpenBillingPortal,
-  canManageSubscriptionActions,
-  showSubscriptionManagement,
-  isCanceling,
+  state,
   renewalDate,
   recurringAmount,
   subscription,
@@ -70,6 +69,12 @@ export function BillingPageView({
   checkoutState,
   checkoutSessionId,
 }: BillingPageViewProps) {
+  const {
+    canOpenBillingPortal,
+    canManageSubscriptionActions,
+    showSubscriptionManagement,
+    isCanceling,
+  } = state;
   const periodEndLabel = isCanceling ? "Ends on" : "Renews on";
   const checkoutPlan = readBillingPlanKeyFromStripeInterval(subscription?.interval);
   const checkoutValue =
@@ -139,19 +144,12 @@ export function BillingPageView({
                       {freeAskUsage.used}/{FREE_DAILY_ASK_LIMIT}
                     </span>
                   </div>
-                  <div
+                  <progress
                     className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.08]"
-                    role="progressbar"
                     aria-label="Daily Ask usage"
-                    aria-valuemin={0}
-                    aria-valuemax={freeAskUsage.limit}
-                    aria-valuenow={freeAskUsage.used}
-                  >
-                    <div
-                      className="h-full rounded-full bg-[var(--vt-blue)] transition-[width]"
-                      style={{ width: `${freeAskUsage.progressPercent}%` }}
-                    />
-                  </div>
+                    max={freeAskUsage.limit}
+                    value={freeAskUsage.used}
+                  />
                   <p className="mt-3 text-sm text-[var(--vt-muted)]">
                     {freeAskUsage.remaining === 0
                       ? `You’ve used today’s free messages. Resets at midnight UTC, or upgrade for ${PRO_DAILY_ASK_LIMIT} Ask messages per day.`

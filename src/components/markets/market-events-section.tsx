@@ -38,6 +38,8 @@ const LONG_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   timeZone: "UTC",
 });
+const DAY_NAME_FORMATTER = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
+const DAY_NUMBER_FORMATTER = new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "UTC" });
 
 function countryOptionLabel(country: EconomicCalendarCountry): string {
   return `${ECONOMIC_CALENDAR_COUNTRY_LABELS[country]} (${country})`;
@@ -68,14 +70,12 @@ function getDateKey(timeUtc: string, timeZone: string): string {
   const date = new Date(timeUtc);
   if (!Number.isFinite(date.getTime())) return timeUtc.slice(0, 10);
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
+    const [m, d, y] = date.toLocaleDateString("en-US", {
       timeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-    }).formatToParts(date);
-    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
-    const y = part("year"), m = part("month"), d = part("day");
+    }).split("/");
     return y && m && d ? `${y}-${m}-${d}` : date.toISOString().slice(0, 10);
   } catch {
     return date.toISOString().slice(0, 10);
@@ -113,16 +113,16 @@ function formatEventTimeLabel(timeUtc: string, timeZone: string, fallback: strin
     tomorrow.setDate(tomorrow.getDate() + 1);
     const isTomorrow = date.toDateString() === tomorrow.toDateString();
 
-    const time = new Intl.DateTimeFormat("en-US", {
+    const time = date.toLocaleTimeString("en-US", {
       timeZone,
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-    }).format(date);
+    });
 
     if (isToday) return `${time} today`;
     if (isTomorrow) return `${time} tomorrow`;
-    return `${time} on ${new Intl.DateTimeFormat("en-US", { timeZone, month: "short", day: "numeric" }).format(date)}`;
+    return `${time} on ${date.toLocaleDateString("en-US", { timeZone, month: "short", day: "numeric" })}`;
   } catch {
     return fallback;
   }
@@ -144,13 +144,23 @@ function findNextHighImpactEvent(
   items: NonNullable<EconomicCalendarSnapshot["items"]>,
   now: Date,
 ) {
-  return items
-    .filter((item) => item.impact === "high")
-    .filter((item) => {
-      const eventMs = new Date(item.timeUtc).getTime();
-      return Number.isFinite(eventMs) && eventMs >= now.getTime();
-    })
-    .sort((a, b) => a.timeUtc.localeCompare(b.timeUtc))[0] ?? null;
+  let nextEvent: NonNullable<EconomicCalendarSnapshot["items"]>[number] | null = null;
+  const nowMs = now.getTime();
+
+  for (const item of items) {
+    if (item.impact !== "high") {
+      continue;
+    }
+    const eventMs = new Date(item.timeUtc).getTime();
+    if (!Number.isFinite(eventMs) || eventMs < nowMs) {
+      continue;
+    }
+    if (!nextEvent || item.timeUtc.localeCompare(nextEvent.timeUtc) < 0) {
+      nextEvent = item;
+    }
+  }
+
+  return nextEvent;
 }
 
 function impactDotStyle(impact: string): { backgroundColor: string } {
@@ -172,7 +182,14 @@ function impactColor(impact: string): string {
 }
 
 function orderedImpacts(impacts: readonly SelectedImpact[]): SelectedImpact[] {
-  return IMPACT_FILTER_OPTIONS.map((o) => o.value).filter((v) => impacts.includes(v));
+  const selectedImpacts = new Set(impacts);
+  const ordered: SelectedImpact[] = [];
+  for (const option of IMPACT_FILTER_OPTIONS) {
+    if (selectedImpacts.has(option.value)) {
+      ordered.push(option.value);
+    }
+  }
+  return ordered;
 }
 
 function impactMatchesFilter(filter: ImpactFilter, impact: string): boolean {
@@ -268,9 +285,9 @@ function WeekDayStrip({
     const highCount = dayItems.filter((item) => item.impact === "high").length;
     const medCount = dayItems.filter((item) => item.impact === "medium").length;
 
-    const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(date);
+    const dayName = DAY_NAME_FORMATTER.format(date);
     const fullDateLabel = formatDateLabel(dateKey, LONG_DATE_FORMATTER);
-    const dayNum = new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "UTC" }).format(date);
+    const dayNum = DAY_NUMBER_FORMATTER.format(date);
 
     return {
       dateKey,
@@ -327,7 +344,7 @@ function WeekDayStrip({
                 <span className={isSelected ? "text-white/80" : "text-amber-400"}>{medCount}M</span>
               )}
               {totalCount === 0 && (
-                <span className={isSelected ? "text-white/50" : "text-white/25"}>—</span>
+                <span className={isSelected ? "text-white/50" : "text-white/25"}>-</span>
               )}
             </div>
           </button>
@@ -614,8 +631,8 @@ export function MarketEventsSection({
       }
     }
     return Array.from(groups.values())
-      .sort((a, b) => a.key.localeCompare(b.key))
-      .map((g) => ({ ...g, items: [...g.items].sort((a, b) => a.timeUtc.localeCompare(b.timeUtc)) }));
+      .toSorted((a, b) => a.key.localeCompare(b.key))
+      .map((g) => ({ ...g, items: g.items.toSorted((a, b) => a.timeUtc.localeCompare(b.timeUtc)) }));
   }, [filteredItems, resolvedTimeZone]);
 
   return (

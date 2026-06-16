@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { getAppName } from "@/lib/site-config";
 
 type LogoSize = "default" | "compact" | "large" | "avatar";
@@ -54,9 +56,12 @@ export function Logo({
     <div
       className={`flex items-center ${stacked ? "flex-col gap-3" : "gap-3"}`}
     >
-      <img
+      <Image
         src="/logo.svg"
         alt="verify.trading"
+        width={128}
+        height={128}
+        priority={size !== "avatar"}
         className={`${imgSize} shrink-0 ${
           size === "avatar"
             ? "drop-shadow-[0_4px_14px_rgba(76,110,245,0.28)]"

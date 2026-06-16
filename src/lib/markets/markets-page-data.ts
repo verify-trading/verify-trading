@@ -94,7 +94,7 @@ export const marketCatalog: MarketCatalogItem[] = [
   },
 ];
 
-export const lockedMockTiles: Record<MarketsDashboardAssetId, Omit<MarketTile, "errorMessage">> = {
+const lockedMockTiles: Record<MarketsDashboardAssetId, Omit<MarketTile, "errorMessage">> = {
   gold: {
     id: "gold",
     title: "Gold Futures",
@@ -306,7 +306,7 @@ export function buildSparklinePath(values: number[], width = 480, height = 168) 
     .join(" ");
 }
 
-export function toneFromNumber(value: number) {
+function toneFromNumber(value: number) {
   return value < 0 ? "down" : "up";
 }
 
@@ -341,7 +341,7 @@ function formatUpdatedLabel(updatedAt: string) {
   return `Updated ${diffMinutes} minutes ago`;
 }
 
-export function readProxyAssumption(asset: MarketsAssetPayload | undefined) {
+function readProxyAssumption(asset: MarketsAssetPayload | undefined) {
   return asset?.quote?.proxyAssumption ?? asset?.series?.proxyAssumption ?? null;
 }
 
@@ -446,7 +446,7 @@ export function buildTile(
   };
 }
 
-export async function fetchMarketsSnapshot(timeframe: MarketsTimeframe) {
+async function fetchMarketsSnapshot(timeframe: MarketsTimeframe) {
   const response = await fetch(`/api/markets?timeframe=${timeframe}`);
   if (!response.ok) {
     throw new Error(`Markets request failed with ${response.status}.`);
@@ -455,7 +455,7 @@ export async function fetchMarketsSnapshot(timeframe: MarketsTimeframe) {
   return (await response.json()) as MarketsSnapshot;
 }
 
-export async function fetchMarketsIntelligence(): Promise<MarketIntelligenceSnapshot> {
+async function fetchMarketsIntelligence(): Promise<MarketIntelligenceSnapshot> {
   const response = await fetch("/api/markets/intelligence");
   if (!response.ok) {
     throw new Error(`Market intelligence request failed with ${response.status}.`);
@@ -463,7 +463,7 @@ export async function fetchMarketsIntelligence(): Promise<MarketIntelligenceSnap
   return (await response.json()) as MarketIntelligenceSnapshot;
 }
 
-export async function fetchEconomicCalendar(): Promise<EconomicCalendarSnapshot> {
+async function fetchEconomicCalendar(): Promise<EconomicCalendarSnapshot> {
   const response = await fetch("/api/markets/calendar");
   if (!response.ok) {
     throw new Error(`Economic calendar request failed with ${response.status}.`);

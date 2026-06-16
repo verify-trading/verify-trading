@@ -2,6 +2,8 @@ import type { HTMLAttributes } from "react";
 
 import type { AskToolStatus } from "@/lib/ask/stream";
 
+const EMPTY_STATUSES: AskToolStatus[] = [];
+
 /** Claude Code–style burst / asterisk glyph (slow spin, no extra chrome). */
 function AskWorkingGlyph({ className = "" }: { className?: string }) {
   return (
@@ -107,9 +109,8 @@ function SkeletonUserMessageRow({ className = "" }: { className?: string }) {
 
 export function AskEmptyRestoringSkeleton() {
   return (
-    <div
+    <output
       className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden px-3 py-6 sm:px-4 sm:py-8"
-      role="status"
       aria-busy="true"
       data-testid="ask-empty-restoring"
     >
@@ -120,14 +121,14 @@ export function AskEmptyRestoringSkeleton() {
         <SkeletonAssistantMessageRow className="opacity-80" bodyLines={2} />
         <SkeletonUserMessageRow className="opacity-65" />
       </div>
-    </div>
+    </output>
   );
 }
 
 /* ─── Thread: assistant streaming — avatar + line shimmer only (no card skeleton) ─── */
 
 export function AskAssistantLoadingSkeleton({
-  statuses = [],
+  statuses = EMPTY_STATUSES,
 }: {
   statuses?: AskToolStatus[];
 }) {
@@ -139,9 +140,8 @@ export function AskAssistantLoadingSkeleton({
   };
 
   return (
-    <div
+    <output
       className="mx-1 mb-2 flex items-center gap-3 rounded-xl px-4 py-3 sm:mb-3 sm:px-6"
-      role="status"
       aria-busy="true"
       aria-label="Assistant is responding"
       data-testid="ask-assistant-loading"
@@ -153,34 +153,33 @@ export function AskAssistantLoadingSkeleton({
       <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-(--vt-blue)">
         {headline.label}
       </p>
-    </div>
+    </output>
   );
 }
 
 export function AskThreadLoadOlderSkeleton() {
   return (
-    <div
+    <output
       className="mx-auto flex max-w-xs flex-col items-center gap-2 px-4"
-      role="status"
       aria-busy="true"
       aria-label="Loading older messages"
     >
       <span className="sr-only">Loading older messages</span>
       <SkeletonLine width="w-40" className="h-2" />
       <SkeletonLine width="w-32" className="h-2 opacity-70" />
-    </div>
+    </output>
   );
 }
 
 export function AskThreadRestoringSkeleton() {
   return (
-    <div role="status" aria-busy="true" data-testid="ask-thread-restoring">
+    <output aria-busy="true" data-testid="ask-thread-restoring">
       <span className="sr-only">Restoring session…</span>
       <SkeletonAssistantMessageRow bodyLines={3} />
       <SkeletonUserMessageRow />
       <SkeletonAssistantMessageRow className="opacity-80" bodyLines={2} />
       <SkeletonUserMessageRow className="opacity-65" />
-    </div>
+    </output>
   );
 }
 
@@ -188,9 +187,8 @@ export function AskThreadRestoringSkeleton() {
 
 export function AskSessionListSkeleton() {
   return (
-    <div
-      className="space-y-3 px-2 py-2"
-      role="status"
+    <output
+      className="block space-y-3 p-2"
       aria-busy="true"
       aria-label="Loading sessions"
       data-testid="ask-sessions-loading"
@@ -203,21 +201,20 @@ export function AskSessionListSkeleton() {
           <Skeleton className="h-9 w-full rounded-lg opacity-80" />
         </div>
       ))}
-    </div>
+    </output>
   );
 }
 
 export function AskSessionLoadMoreSkeleton() {
   return (
-    <div
+    <output
       className="flex flex-col items-center gap-2 px-2 py-3"
-      role="status"
       aria-busy="true"
       aria-label="Loading more sessions"
     >
       <span className="sr-only">Loading more sessions</span>
       <SkeletonLine width="w-36" className="h-2" />
       <SkeletonLine width="w-28" className="h-2 opacity-60" />
-    </div>
+    </output>
   );
 }

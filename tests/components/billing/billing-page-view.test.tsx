@@ -25,10 +25,12 @@ describe("BillingPageView", () => {
       <BillingPageView
         customerName="Test"
         currentPlanLabel="Pro Annual"
-        canOpenBillingPortal
-        canManageSubscriptionActions
-        showSubscriptionManagement
-        isCanceling
+        state={{
+          canOpenBillingPortal: true,
+          canManageSubscriptionActions: true,
+          showSubscriptionManagement: true,
+          isCanceling: true,
+        }}
         renewalDate="13 Apr 2027"
         recurringAmount="£200.00/year"
         subscription={{
@@ -56,10 +58,12 @@ describe("BillingPageView", () => {
       <BillingPageView
         customerName="Test"
         currentPlanLabel="Free"
-        canOpenBillingPortal={false}
-        canManageSubscriptionActions={false}
-        showSubscriptionManagement={false}
-        isCanceling={false}
+        state={{
+          canOpenBillingPortal: false,
+          canManageSubscriptionActions: false,
+          showSubscriptionManagement: false,
+          isCanceling: false,
+        }}
         renewalDate={null}
         recurringAmount={null}
         subscription={null}
@@ -85,10 +89,12 @@ describe("BillingPageView", () => {
       <BillingPageView
         customerName="Test"
         currentPlanLabel="Pro"
-        canOpenBillingPortal
-        canManageSubscriptionActions={false}
-        showSubscriptionManagement
-        isCanceling={false}
+        state={{
+          canOpenBillingPortal: true,
+          canManageSubscriptionActions: false,
+          showSubscriptionManagement: true,
+          isCanceling: false,
+        }}
         renewalDate="13 Apr 2027"
         recurringAmount="£20.00/month"
         subscription={{

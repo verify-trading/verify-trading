@@ -4,10 +4,10 @@ import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import {
   createContext,
   startTransition,
-  useContext,
+  use,
   useEffect,
   useMemo,
-  useState,
+  useReducer,
   type ReactNode,
 } from "react";
 
@@ -23,20 +23,35 @@ export type SupabaseAuthContextValue = {
 
 const SupabaseAuthContext = createContext<SupabaseAuthContextValue | null>(null);
 
+type AuthState = {
+  user: User | null;
+  session: Session | null;
+  ready: boolean;
+};
+
+function authReducer(_state: AuthState, session: Session | null): AuthState {
+  return {
+    session,
+    user: session?.user ?? null,
+    ready: true,
+  };
+}
+
 /**
  * Single browser client + auth listener (Next.js App Router + @supabase/ssr).
  * Prefer {@link useSupabaseAuth} over creating extra clients in components.
  */
 export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
-
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [ready, setReady] = useState(false);
+  const [state, dispatch] = useReducer(authReducer, {
+    user: null,
+    session: null,
+    ready: false,
+  });
 
   useEffect(() => {
     if (!supabase) {
-      startTransition(() => setReady(true));
+      startTransition(() => dispatch(null));
       return;
     }
 
@@ -44,11 +59,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
 
     void supabase.auth.getSession().then(({ data: { session: s } }) => {
       if (!cancelled) {
-        startTransition(() => {
-          setSession(s);
-          setUser(s?.user ?? null);
-          setReady(true);
-        });
+        startTransition(() => dispatch(s));
       }
     });
 
@@ -56,11 +67,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, s) => {
       if (!cancelled) {
-        startTransition(() => {
-          setSession(s);
-          setUser(s?.user ?? null);
-          setReady(true);
-        });
+        startTransition(() => dispatch(s));
       }
     });
 
@@ -73,19 +80,19 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<SupabaseAuthContextValue>(
     () => ({
       supabase,
-      user,
-      session,
-      ready,
-      isSignedIn: Boolean(user),
+      user: state.user,
+      session: state.session,
+      ready: state.ready,
+      isSignedIn: Boolean(state.user),
     }),
-    [supabase, user, session, ready],
+    [supabase, state.ready, state.session, state.user],
   );
 
   return <SupabaseAuthContext.Provider value={value}>{children}</SupabaseAuthContext.Provider>;
 }
 
 export function useSupabaseAuth(): SupabaseAuthContextValue {
-  const ctx = useContext(SupabaseAuthContext);
+  const ctx = use(SupabaseAuthContext);
   if (!ctx) {
     throw new Error("useSupabaseAuth must be used within SupabaseAuthProvider");
   }

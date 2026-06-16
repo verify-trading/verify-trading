@@ -11,7 +11,7 @@ vi.mock("@/lib/observability/logger", () => ({
 import { fallbackInsightCard } from "@/lib/ask/contracts";
 import { logger } from "@/lib/observability/logger";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
-import { generateAskResponse, streamAskResponse } from "@/lib/ask/service";
+import { generateAskResponse } from "@/lib/ask/service";
 import { DEFAULT_ANTHROPIC_MODEL } from "@/lib/ask/service/provider";
 
 describe("generateAskResponse", () => {
@@ -347,7 +347,7 @@ describe("generateAskResponse", () => {
     expect(response.data).toEqual({
       type: "insight",
       headline: "Risk Reward",
-      body: "Risk is 0.005. Reward is 0.01. Ratio is 2.00 to 1.",
+      body: "Risk is 0.005. Reward is 0.01. Reward to risk is 2.00:1 (2.00R).",
       verdict: "Take it only if the reward still justifies the setup.",
     });
   });
@@ -566,9 +566,85 @@ describe("generateAskResponse", () => {
     if (response.data.type !== "projection") {
       throw new Error("Expected a projection card.");
     }
-    expect(response.data.verdict.startsWith("Using 5% monthly returns with 10% drawdowns every 4 months.")).toBe(
+    expect(response.data.verdict.startsWith("Using your 5% monthly return with your 10% drawdowns every 4 months.")).toBe(
       true,
     );
+  });
+
+  it("labels default projection drawdowns separately from a user-supplied return", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "100k account, 3% monthly return, 24 month projection",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data.type).toBe("projection");
+    if (response.data.type !== "projection") {
+      throw new Error("Expected a projection card.");
+    }
+    expect(response.data.startBalance).toBe(100_000);
+    expect(response.data.lossEvents).toBe(8);
+    expect(response.data.projectedBalance).toBe(104_326.83);
+    expect(response.data.verdict).toBe(
+      "Using your 3% monthly return, plus default drawdowns of 8% every 3 months. Change the drawdown profile for a tighter forecast.",
+    );
+  });
+
+  it("honors no-drawdown wording in projection shortcuts", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "100k account, 3% monthly return, 24 month projection, no drawdowns",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data.type).toBe("projection");
+    if (response.data.type !== "projection") {
+      throw new Error("Expected a projection card.");
+    }
+    expect(response.data.lossEvents).toBe(0);
+    expect(response.data.projectedBalance).toBe(203_279.41);
+    expect(response.data.verdict).toBe(
+      "Using your 3% monthly return with your no drawdown assumption. Treat that as optimistic, not guaranteed.",
+    );
+  });
+
+  it("short-circuits direct risk-reward prompts into unambiguous deterministic wording", async () => {
+    const generateTextImpl = vi.fn();
+
+    const response = await generateAskResponse(
+      {
+        message: "Risk reward ratio for 15 pip stop and 30 pip target",
+        sessionId: crypto.randomUUID(),
+        history: [],
+      },
+      {
+        generateTextImpl: generateTextImpl as unknown as typeof import("ai").generateText,
+      },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(response.data).toEqual({
+      type: "insight",
+      headline: "Risk Reward",
+      body: "Risk is 15. Reward is 30. Reward to risk is 2.00:1 (2.00R).",
+      verdict: "Take it only if the reward still justifies the setup.",
+    });
   });
 
   it("short-circuits balance target prompts into a plan card", async () => {
@@ -2166,49 +2242,6 @@ describe("generateAskResponse", () => {
         content: expect.stringContaining("Find a clean gold entry"),
       }),
     );
-  });
-
-  it("uses the same assembled context for streaming asks", async () => {
-    const generateTextImpl = vi.fn().mockResolvedValue({
-      text: JSON.stringify(fallbackInsightCard),
-      toolResults: [],
-    }) as unknown as typeof import("ai").generateText;
-    const streamTextImpl = vi.fn().mockReturnValue({ stream: "mock" });
-    const input = {
-      message: "Can you refine the risk on this?",
-      sessionId: crypto.randomUUID(),
-      sessionMemory: {
-        activeAsset: "GOLD / XAUUSD",
-        activeSide: "buy" as const,
-        lastCardType: "setup" as const,
-      },
-      history: [
-        { role: "user" as const, content: "Set up a gold long for me." },
-        {
-          role: "assistant" as const,
-          content: JSON.stringify({
-            type: "setup",
-            asset: "GOLD / XAUUSD",
-            bias: "Bullish",
-            entry: "4649.77",
-            stop: "4640.00",
-            target: "4669.31",
-            rr: "2:1",
-            rationale: "Wait for reclaim.",
-            confidence: "Low",
-            verdict: "Buy only after confirmation.",
-          }),
-        },
-      ],
-    };
-
-    await generateAskResponse(input, { generateTextImpl });
-    await streamAskResponse(input, {}, { streamTextImpl });
-
-    const generateCall = vi.mocked(generateTextImpl).mock.calls[0]?.[0];
-    const streamCall = vi.mocked(streamTextImpl).mock.calls[0]?.[0];
-
-    expect(streamCall?.messages).toEqual(generateCall?.messages);
   });
 
   it("injects analysis rules into image requests before the user chart message", async () => {

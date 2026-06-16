@@ -52,7 +52,7 @@ export async function prefetchAccountMenuForSession(
   await queryClient.prefetchQuery({ queryKey, queryFn });
 }
 
-export async function loadAccountMenuState(
+async function loadAccountMenuState(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<AccountMenuState> {

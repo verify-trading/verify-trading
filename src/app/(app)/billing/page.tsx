@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { BillingPageView } from "@/components/billing/billing-page-view";
+import { CheckoutAutoStart } from "@/components/billing/checkout-auto-start";
 import { getSessionUser } from "@/lib/auth/session";
+import type { BillingPlanKey } from "@/lib/billing/config";
 import {
   billingStatusGrantsProAccess,
   canManageSubscription,
@@ -37,6 +39,14 @@ type BillingSubscriptionRow = {
   interval_count: number | null;
 };
 
+const BILLING_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+});
+const GBP_BILLING_FORMATTER = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+});
+
 function readSearchParam(
   params: Record<string, string | string[] | undefined>,
   key: string,
@@ -58,9 +68,7 @@ function formatBillingDate(value: string | null): string | null {
     return null;
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-  }).format(date);
+  return BILLING_DATE_FORMATTER.format(date);
 }
 
 function formatRecurringAmount(
@@ -74,10 +82,11 @@ function formatRecurringAmount(
     return null;
   }
 
-  const amount = new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: subscription.currency.toUpperCase(),
-  }).format(subscription.unit_amount / 100);
+  const normalizedCurrency = subscription.currency.toUpperCase();
+  const amount =
+    normalizedCurrency === "GBP"
+      ? GBP_BILLING_FORMATTER.format(subscription.unit_amount / 100)
+      : `${normalizedCurrency} ${(subscription.unit_amount / 100).toFixed(2)}`;
 
   if ((subscription.interval_count ?? 1) > 1) {
     return `${amount} every ${subscription.interval_count} ${subscription.interval}s`;
@@ -146,6 +155,9 @@ export default async function BillingPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const checkoutState = readSearchParam(resolvedSearchParams, "checkout");
   const checkoutSessionId = readSearchParam(resolvedSearchParams, "session_id");
+  if (checkoutState === "cancelled") {
+    redirect("/billing");
+  }
 
   const [profileResult, subscriptionResult] = await Promise.all([
     session.supabase
@@ -204,20 +216,34 @@ export default async function BillingPage({
     "there";
   const currentPlanLabel = getCurrentPlanLabel(profile, subscription);
 
+  // Resume checkout for a plan picked while signed out (?plan=<plan>), unless the
+  // user already manages a subscription.
+  const planParam = readSearchParam(resolvedSearchParams, "plan");
+  const resumeCheckoutPlan: BillingPlanKey | null =
+    !showSubscriptionManagement &&
+    (planParam === "weekly" || planParam === "monthly" || planParam === "annual")
+      ? planParam
+      : null;
+
   return (
-    <BillingPageView
+    <>
+      {resumeCheckoutPlan ? <CheckoutAutoStart plan={resumeCheckoutPlan} /> : null}
+      <BillingPageView
       subscription={subscription}
       customerName={customerName}
       currentPlanLabel={currentPlanLabel}
-      canOpenBillingPortal={canOpenBillingPortal}
-      canManageSubscriptionActions={canManageSubscriptionActions}
-      showSubscriptionManagement={showSubscriptionManagement}
-      isCanceling={isCanceling}
+      state={{
+        canOpenBillingPortal,
+        canManageSubscriptionActions,
+        showSubscriptionManagement,
+        isCanceling,
+      }}
       renewalDate={renewalDate}
       recurringAmount={recurringAmount}
       freeAskUsage={freeAskUsage}
       checkoutState={checkoutState}
       checkoutSessionId={checkoutSessionId}
-    />
+      />
+    </>
   );
 }

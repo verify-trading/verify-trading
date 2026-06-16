@@ -11,10 +11,23 @@ describe("generateProjectionCard", () => {
     }));
 
     expect(parsed.lossEvents).toBe(6);
-    expect(parsed.verdict).toContain("Base case uses");
-    expect(parsed.verdict).toContain("3% monthly returns");
-    expect(parsed.verdict).toContain("8% drawdowns every 3 months");
-    expect(parsed.verdict).toContain("real return and drawdown profile");
+    expect(parsed.verdict).toBe(
+      "Using default 3% monthly return, plus default drawdowns of 8% every 3 months. Change the drawdown profile for a tighter forecast.",
+    );
+  });
+
+  it("separates user return from default drawdown assumptions", () => {
+    const card = generateProjectionCard({
+      months: 24,
+      startBalance: 100_000,
+      monthlyReturnPercent: 3,
+    });
+
+    expect(card.lossEvents).toBe(8);
+    expect(card.projectedBalance).toBe(104_326.83);
+    expect(card.verdict).toBe(
+      "Using your 3% monthly return, plus default drawdowns of 8% every 3 months. Change the drawdown profile for a tighter forecast.",
+    );
   });
 
   it("generates a deterministic equity curve", () => {
@@ -58,7 +71,23 @@ describe("generateProjectionCard", () => {
     });
 
     expect(card.lossEvents).toBe(2);
-    expect(card.verdict).toBe("Using 5% monthly returns with 10% drawdowns every 4 months.");
+    expect(card.verdict).toBe("Using your 5% monthly return with your 10% drawdowns every 4 months.");
+  });
+
+  it("honors an explicit no-drawdown assumption", () => {
+    const card = generateProjectionCard({
+      months: 24,
+      startBalance: 100_000,
+      monthlyReturnPercent: 3,
+      drawdownEveryMonths: 0,
+      drawdownPercent: 0,
+    });
+
+    expect(card.lossEvents).toBe(0);
+    expect(card.projectedBalance).toBe(203_279.41);
+    expect(card.verdict).toBe(
+      "Using your 3% monthly return with your no drawdown assumption. Treat that as optimistic, not guaranteed.",
+    );
   });
 
   it("includes currencySymbol on the card when the input provides one", () => {

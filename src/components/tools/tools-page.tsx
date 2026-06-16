@@ -161,12 +161,12 @@ function LotSizeCalc() {
   const [pv, setPv] = useState(10);
 
   const riskAmt = calculateRiskAmount(account, risk);
-  const result = useMemo(() => {
+  const result = (() => {
     if (sl <= 0 || pv <= 0) return null;
     try {
       return calculatePositionSize({ accountSize: account, riskPercent: risk, stopLossPips: sl, pipValuePerLot: pv, accountCurrency: "USD" });
     } catch { return null; }
-  }, [account, risk, sl, pv]);
+  })();
 
   return (
     <>

@@ -16,7 +16,20 @@ export type MarketsDashboardAssetId = (typeof MARKETS_DASHBOARD_ASSETS)[number][
 
 export type MarketsTimeframe = MarketSeries["timeframe"];
 
-export const MARKETS_TIMEFRAMES: readonly MarketsTimeframe[] = ["1D", "1W", "1M", "3M", "1Y"];
+const MARKETS_TIMEFRAMES: readonly MarketsTimeframe[] = ["1D", "1W", "1M", "3M", "1Y"];
+
+const WHOLE_NUMBER_FORMATTER = new Intl.NumberFormat("en-GB", {
+  maximumFractionDigits: 0,
+  minimumFractionDigits: 0,
+});
+const TWO_DECIMAL_FORMATTER = new Intl.NumberFormat("en-GB", {
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 2,
+});
+const FX_FORMATTER = new Intl.NumberFormat("en-GB", {
+  maximumFractionDigits: 5,
+  minimumFractionDigits: 4,
+});
 
 export type MarketsAssetPayload = {
   id: MarketsDashboardAssetId;
@@ -40,24 +53,15 @@ export function formatAssetPrice(assetId: MarketsDashboardAssetId, price: number
   switch (assetId) {
     case "gold":
     case "bitcoin":
-      return new Intl.NumberFormat("en-GB", {
-        maximumFractionDigits: 0,
-        minimumFractionDigits: 0,
-      }).format(price);
+      return WHOLE_NUMBER_FORMATTER.format(price);
     case "ethereum":
     case "oil":
     case "dow":
     case "nasdaq":
-      return new Intl.NumberFormat("en-GB", {
-        maximumFractionDigits: 2,
-        minimumFractionDigits: 2,
-      }).format(price);
+      return TWO_DECIMAL_FORMATTER.format(price);
     case "eurusd":
     case "gbpusd":
-      return new Intl.NumberFormat("en-GB", {
-        maximumFractionDigits: 5,
-        minimumFractionDigits: 4,
-      }).format(price);
+      return FX_FORMATTER.format(price);
     default:
       return String(price);
   }

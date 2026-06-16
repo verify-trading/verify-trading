@@ -4,7 +4,7 @@ import { lookupVerifiedEntity } from "@/lib/ask/entities";
 import { fetchWithRetry } from "@/lib/http/fetch-with-retry";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
-export const getFcaStatusInputSchema = z.object({
+const getFcaStatusInputSchema = z.object({
   name: z.string().min(1),
   frn: z.string().trim().min(1).optional(),
 });
@@ -172,7 +172,7 @@ function parseFirmDetailsPayload(payload: unknown, queriedName: string, fallback
     toBoolean(object.warningListed) ??
     toBoolean(object.warning_listed) ??
     (note ? /caution|warning|compromise|administration|dissolved|clone/i.test(note) : null) ??
-    (statusText ? /warning|unauthorised|unauthorized|clone|revoked|cancelled|cancelled/i.test(statusText) : null);
+    (statusText ? /warning|unauthorised|unauthorized|clone|revoked|cancelled/i.test(statusText) : null);
 
   if (!frn && authorised === null && warning === null && !statusText && !note) {
     return null;

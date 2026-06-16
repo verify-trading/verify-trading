@@ -125,6 +125,38 @@ export function extractSubmitAskCard(
   return null;
 }
 
+/** Pulls the follow-up questions the model passed to its submit_ask_card call. */
+function extractFollowups(toolResults: ToolResultRecord[]): string[] {
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const result = toolResults[index];
+    if (result.toolName !== "submit_ask_card") {
+      continue;
+    }
+
+    const followups = asObject(result.output)?.followups;
+    if (Array.isArray(followups)) {
+      return followups
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter((item) => item.length > 0)
+        .slice(0, 3);
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Attaches the model's follow-ups to uiMeta so they ride with the message
+ * (streamed, persisted, and rehydrated on refresh through the ui_meta channel).
+ */
+export function withFollowups(
+  uiMeta: AskUiMeta | undefined,
+  toolResults: ToolResultRecord[],
+): AskUiMeta | undefined {
+  const followups = extractFollowups(toolResults);
+  return followups.length > 0 ? { ...(uiMeta ?? {}), followups } : uiMeta;
+}
+
 export function extractToolCard(toolResults: ToolResultRecord[], askCardSchema: {
   safeParse: (value: unknown) => { success: boolean; data?: AskCard };
 }) {

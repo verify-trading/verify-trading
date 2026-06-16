@@ -32,7 +32,7 @@ const memorySessionMemory = new Map<string, AskSessionMemory | null>();
 export function createMemoryPersistence(): AskPersistence {
   const persistence: AskPersistence = {
     async listSessions(limit = 40, cursor = null) {
-      const sortedSessions = [...memorySessionList.values()].sort((left, right) =>
+      const sortedSessions = [...memorySessionList.values()].toSorted((left, right) =>
         right.updatedAt === left.updatedAt
           ? right.id.localeCompare(left.id)
           : right.updatedAt.localeCompare(left.updatedAt),

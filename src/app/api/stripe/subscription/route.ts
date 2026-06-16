@@ -15,7 +15,52 @@ type BillingSubscriptionRow = {
   stripe_subscription_id: string;
   status: string | null;
   cancel_at_period_end: boolean | null;
+  current_period_end?: string | null;
+  interval?: string | null;
 };
+
+type ProfileTierRow = {
+  tier: string | null;
+};
+
+export async function GET() {
+  try {
+    const session = await getSessionUser();
+    if (!session) {
+      return jsonUnauthorized("Sign in to load your subscription.");
+    }
+
+    const [profileResult, subscriptionResult] = await Promise.all([
+      session.supabase.from("profiles").select("tier").eq("id", session.user.id).maybeSingle(),
+      session.supabase
+        .from("billing_subscriptions")
+        .select("status, cancel_at_period_end, current_period_end, interval")
+        .eq("user_id", session.user.id)
+        .order("current_period_end", { ascending: false, nullsFirst: false })
+        .order("updated_at", { ascending: false })
+        .limit(1),
+    ]);
+
+    if (profileResult.error) throw new Error(profileResult.error.message);
+    if (subscriptionResult.error) throw new Error(subscriptionResult.error.message);
+
+    const profile = (profileResult.data as ProfileTierRow | null) ?? null;
+    const subscription = ((subscriptionResult.data as BillingSubscriptionRow[] | null) ?? [])[0] ?? null;
+
+    return NextResponse.json({
+      tier: profile?.tier === "pro" ? "pro" : "free",
+      subscription: subscription ? {
+        status: subscription.status,
+        cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+        currentPeriodEnd: subscription.current_period_end ?? null,
+        interval: subscription.interval ?? null,
+      } : null,
+    });
+  } catch (error) {
+    console.error("[api/stripe/subscription]", error);
+    return jsonApiError(500, "stripe_subscription_load_failed", "Could not load the Stripe subscription.");
+  }
+}
 
 export async function POST(request: Request) {
   try {

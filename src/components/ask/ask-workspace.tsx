@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useDropzone } from "react-dropzone";
 
 import {
@@ -32,6 +32,7 @@ import { AskThread } from "@/components/ask/ask-thread";
 import {
   mapPersistedMessageToStoreMessage,
   useAskStore,
+  type AskMessage,
 } from "@/components/ask/store";
 import { useVisualViewportKeyboardInset } from "@/components/ask/use-visual-viewport-keyboard-inset";
 import {
@@ -53,6 +54,7 @@ import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usag
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
 const ASK_SESSION_PAGE_SIZE = 40;
+const InitialAskSessionContext = createContext<string | null>(null);
 
 function parseUrlSessionId(value: string | null) {
   if (!value) {
@@ -64,6 +66,38 @@ function parseUrlSessionId(value: string | null) {
   )
     ? value
     : null;
+}
+
+function getSearchValue(params: ReturnType<typeof useSearchParams>, key: string): string | null {
+  return params.get(key);
+}
+
+function subscribeToMobileLayout(onStoreChange: () => void) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return () => {};
+  }
+  const query = window.matchMedia("(max-width: 1023px)");
+  query.addEventListener("change", onStoreChange);
+  return () => query.removeEventListener("change", onStoreChange);
+}
+
+function getMobileLayoutSnapshot() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 1023px)").matches
+  );
+}
+
+function mapPersistedMessages(messages: Parameters<typeof mapPersistedMessageToStoreMessage>[0][]) {
+  const mappedMessages: AskMessage[] = [];
+  for (const message of messages) {
+    const mappedMessage = mapPersistedMessageToStoreMessage(message);
+    if (isDefined(mappedMessage)) {
+      mappedMessages.push(mappedMessage);
+    }
+  }
+  return mappedMessages;
 }
 
 function inferSessionTitle(message: string) {
@@ -112,18 +146,19 @@ function isAskLimitError(error: unknown) {
   );
 }
 
-export function AskWorkspace({
-  initialUrlSessionId = null,
-}: {
-  initialUrlSessionId?: string | null;
-}) {
-  const router = useRouter();
+function useAskWorkspaceView() {
+  const { replace } = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { supabase, user } = useSupabaseAuth();
-  const urlSessionId =
-    parseUrlSessionId(searchParams.get("session")) ?? parseUrlSessionId(initialUrlSessionId);
+  const initialUrlSessionId = use(InitialAskSessionContext);
+  const urlSessionId = useMemo(
+    () =>
+      parseUrlSessionId(getSearchValue(searchParams, "session")) ??
+      parseUrlSessionId(initialUrlSessionId),
+    [initialUrlSessionId, searchParams],
+  );
   const [activeImagePreview, setActiveImagePreview] = useState<{
     src: string;
     alt: string;
@@ -132,8 +167,16 @@ export function AskWorkspace({
   const [sessionsCursor, setSessionsCursor] = useState<string | null>(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
-  /** Mobile: start collapsed so chat gets the viewport; desktop expands after mount. */
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (
+      typeof window.matchMedia === "function" &&
+      !window.matchMedia("(min-width: 1024px)").matches
+    ) {
+      setSidebarCollapsed(true);
+    }
+  }, []);
 
   const collapseSidebarIfMobile = useCallback(() => {
     if (
@@ -141,15 +184,6 @@ export function AskWorkspace({
       window.matchMedia("(max-width: 1023px)").matches
     ) {
       setSidebarCollapsed(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(min-width: 1024px)").matches
-    ) {
-      setSidebarCollapsed(false);
     }
   }, []);
 
@@ -170,31 +204,20 @@ export function AskWorkspace({
     scrollTop: number;
   } | null>(null);
   const composerStripRef = useRef<HTMLDivElement | null>(null);
-  const [isMobileLayout, setIsMobileLayout] = useState(false);
-  const [isAndroidViewport, setIsAndroidViewport] = useState(false);
+  const isMobileLayout = useSyncExternalStore(
+    subscribeToMobileLayout,
+    getMobileLayoutSnapshot,
+    () => false,
+  );
+  const [isAndroidViewport] = useState(
+    () => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent),
+  );
   const [composerStripHeight, setComposerStripHeight] = useState(0);
   const [prefillFocusSignal, setPrefillFocusSignal] = useState(0);
   const handledPrefillRef = useRef<string | null>(null);
   const [liveToolStatuses, setLiveToolStatuses] = useState<AskToolStatus[]>([]);
   const [isDailyLimitReached, setIsDailyLimitReached] = useState(false);
   const [askUsageTier, setAskUsageTier] = useState<"free" | "pro">("free");
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") {
-      return;
-    }
-    const mq = window.matchMedia("(max-width: 1023px)");
-    const sync = () => setIsMobileLayout(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
-  useEffect(() => {
-    setIsAndroidViewport(
-      typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent),
-    );
-  }, []);
 
   // Only while Ask is mounted on mobile. Desktop should rely on the route shell's
   // height constraints instead of globally locking document scroll.
@@ -223,7 +246,7 @@ export function AskWorkspace({
     };
 
     const vv = window.visualViewport;
-    vv?.addEventListener("scroll", fixWindowScroll);
+    vv?.addEventListener("scroll", fixWindowScroll, { passive: true });
     window.addEventListener("scroll", fixWindowScroll, { passive: true });
 
     return () => {
@@ -477,8 +500,8 @@ export function AskWorkspace({
     }
 
     const nextUrl = params.size > 0 ? `${pathname}?${params.toString()}` : pathname;
-    router.replace(nextUrl, { scroll: false });
-  }, [pathname, router, searchParams]);
+    replace(nextUrl, { scroll: false });
+  }, [pathname, replace, searchParams]);
 
   const activateSession = useCallback((nextSessionId: string | null) => {
     pendingSessionTitleRef.current = null;
@@ -590,7 +613,7 @@ export function AskWorkspace({
     try {
       const page = await fetchHistoryPage(sessionId, historyCursor);
       prependHistoryPage(
-        page.messages.map(mapPersistedMessageToStoreMessage).filter(isDefined),
+        mapPersistedMessages(page.messages),
         page.nextCursor,
       );
     } catch {
@@ -733,7 +756,7 @@ export function AskWorkspace({
 
   // Apply prefill after URL session sync, because opening a new session clears the draft.
   useEffect(() => {
-    const prefill = searchParams.get("prefill")?.trim();
+    const prefill = getSearchValue(searchParams, "prefill")?.trim();
     if (!prefill || handledPrefillRef.current === prefill) {
       return;
     }
@@ -745,8 +768,8 @@ export function AskWorkspace({
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete("prefill");
     const query = nextParams.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [pathname, router, searchParams, setDraft]);
+    replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, replace, searchParams, setDraft]);
 
   useEffect(() => {
     if (!sessionId || messages.length > 0 || hydratedSessionRef.current === sessionId) {
@@ -782,7 +805,7 @@ export function AskWorkspace({
         }
 
         hydrateThread(
-          page.messages.map(mapPersistedMessageToStoreMessage).filter(isDefined),
+          mapPersistedMessages(page.messages),
           page.nextCursor,
         );
         hydratedSessionRef.current = activeSessionId;
@@ -840,9 +863,12 @@ export function AskWorkspace({
           <AskSessionSidebar
             sessions={sessions}
             activeSessionId={sessionId}
-            isLoading={isLoadingSessions}
-            isLoadingMore={isLoadingMoreSessions}
-            hasMore={Boolean(sessionsCursor)}
+            state={{
+              loading: isLoadingSessions,
+              loadingMore: isLoadingMoreSessions,
+              hasMore: Boolean(sessionsCursor),
+              collapsed: sidebarCollapsed,
+            }}
             onNewSession={() => {
               activateSession(null);
               collapseSidebarIfMobile();
@@ -853,7 +879,6 @@ export function AskWorkspace({
               collapseSidebarIfMobile();
             }}
             onRequestDeleteSession={setDeleteConfirm}
-            isCollapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
           />
 
@@ -916,6 +941,7 @@ export function AskWorkspace({
                   onLoadOlder={() => void loadOlderMessages()}
                   onOpenImage={openImagePreview}
                   onAttachmentLoad={() => scrollToLatestIfPinned("auto")}
+                  onFollowupClick={(question) => void submit(question)}
                   viewportRef={threadViewportRef}
                   bottomRef={threadBottomRef}
                 />
@@ -1061,5 +1087,19 @@ export function AskWorkspace({
         ) : null}
       </Modal>
     </div>
+  );
+}
+
+function AskWorkspaceContent() {
+  return useAskWorkspaceView();
+}
+
+export function AskWorkspace({ initialUrlSessionId = null }: { initialUrlSessionId?: string | null }) {
+  return (
+    <Suspense fallback={null}>
+      <InitialAskSessionContext value={initialUrlSessionId}>
+        <AskWorkspaceContent />
+      </InitialAskSessionContext>
+    </Suspense>
   );
 }

@@ -239,17 +239,23 @@ export async function GET(request: Request) {
     // 3. Selected-detail chart series (one timeframe per run to stay under Grow 55/min)
     const seriesCache = await readCacheRow<{ series?: Record<string, number[]> }>(`series:${detailTimeframe}`);
     const existingSeries = seriesCache?.payload.series ?? {};
-    const series: Record<string, number[]> = {};
-    for (const sym of ALL_SYMBOLS) {
+    const seriesResults = await Promise.all(ALL_SYMBOLS.map(async (sym) => {
       try {
         const data = await fetchMarketSeries(sym, detailTimeframe);
-        series[sym] = data.values;
+        return { sym, values: data.values };
       } catch (error) {
         recordError("series-symbol", error, "Temporary symbol series failure.", {
           symbol: sym,
           timeframe: detailTimeframe,
         });
         // Keep the existing cached series for this symbol instead of replacing it with a failed fetch.
+        return null;
+      }
+    }));
+    const series: Record<string, number[]> = {};
+    for (const result of seriesResults) {
+      if (result) {
+        series[result.sym] = result.values;
       }
     }
     const mergedSeries = {
@@ -304,7 +310,7 @@ export async function GET(request: Request) {
       if (shouldRefreshDailyMarketBrief(dailyBriefCache?.payload ?? null, dailyBriefCache?.fetchedAt ?? null, startedAt)) {
         const intel = await readCacheRow<MarketIntelligenceSnapshot>(INTELLIGENCE_CACHE_KEY);
         const headlines = (intel?.payload?.items ?? []).slice(0, 10).map((item) => `${item.title} — ${item.summary || ""}`);
-        const brief = await generateDailyMarketBrief(startedAt, headlines);
+        const brief = await generateDailyMarketBrief(startedAt, headlines, mergedQuotes);
         await upsertCache(DAILY_MARKET_BRIEF_CACHE_KEY, brief);
         recordAction(`dailyBrief:${brief.date}`, { headlines: headlines.length });
       } else {

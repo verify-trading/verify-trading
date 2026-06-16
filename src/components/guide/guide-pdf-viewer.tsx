@@ -16,6 +16,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
 /** Min width so text stays readable; max avoids huge canvases on ultra-wide screens. */
 const PAGE_WIDTH_MIN = 280;
 const PAGE_WIDTH_MAX = 1000;
+const GUIDE_PDF_LOADING = <GuidePdfPagePlaceholder />;
+const GUIDE_PDF_ERROR = (
+  <p className="p-4 text-sm text-red-400" role="alert">
+    Could not load the guide PDF.
+  </p>
+);
 
 export function GuidePdfViewer() {
   const measureRef = useRef<HTMLDivElement>(null);
@@ -59,12 +65,8 @@ export function GuidePdfViewer() {
     >
       <Document
         file="/guide-pdf"
-        loading={<GuidePdfPagePlaceholder />}
-        error={
-          <p className="p-4 text-sm text-red-400" role="alert">
-            Could not load the guide PDF.
-          </p>
-        }
+        loading={GUIDE_PDF_LOADING}
+        error={GUIDE_PDF_ERROR}
         onLoadSuccess={onLoadSuccess}
         className="flex w-full min-w-0 flex-col items-center"
       >
@@ -79,7 +81,7 @@ export function GuidePdfViewer() {
                   width={width}
                   renderTextLayer
                   renderAnnotationLayer
-                  loading={<GuidePdfPagePlaceholder />}
+                  loading={GUIDE_PDF_LOADING}
                   className="shadow-[0_8px_40px_rgba(0,0,0,0.35)]"
                 />
               </div>

@@ -26,31 +26,17 @@ describe("GET /api/markets (Twelve Data)", () => {
     expect(readCacheRow).not.toHaveBeenCalled();
   });
 
-  it("returns 403 for authenticated free users", async () => {
+  it("returns the snapshot for authenticated free users (charts teaser)", async () => {
     vi.mocked(getSessionUser).mockResolvedValue({
       user: { id: "user-free", app_metadata: {}, user_metadata: {}, aud: "", created_at: "" },
-      supabase: {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { tier: "free" },
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      } as never,
+      supabase: {} as never,
     });
+    vi.mocked(readCacheRow).mockResolvedValue({ payload: { quotes: {}, sparklines: {} }, fetchedAt: null });
 
     const response = await GET();
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({
-      error: "pro_required",
-      message: "Upgrade to Pro to unlock Markets.",
-    });
-    expect(readCacheRow).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(readCacheRow).toHaveBeenCalled();
   });
 
   it("returns cached market snapshot for pro users", async () => {

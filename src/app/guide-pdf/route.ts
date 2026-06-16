@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-export async function GET() {
-  const pdfPath = path.join(process.cwd(), "public", "verify-trading-guide");
+const guidePdfPromise = readFile(path.join(process.cwd(), "public", "verify-trading-guide"));
 
+export async function GET() {
   try {
-    const pdf = await readFile(pdfPath);
+    const pdf = await guidePdfPromise;
     return new Response(pdf, {
       headers: {
         "Content-Type": "application/pdf",

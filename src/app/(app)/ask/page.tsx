@@ -5,9 +5,8 @@ import { requireSession } from "@/lib/auth/session";
 
 function AskSuspenseFallback() {
   return (
-    <div
+    <output
       className="flex h-full min-h-0 flex-1 flex-col items-center justify-center overflow-hidden py-24"
-      role="status"
       aria-busy="true"
       aria-live="polite"
     >
@@ -16,7 +15,7 @@ function AskSuspenseFallback() {
         className="size-8 shrink-0 animate-spin rounded-full border-2 border-white/15 border-t-(--vt-blue)"
         aria-hidden
       />
-    </div>
+    </output>
   );
 }
 

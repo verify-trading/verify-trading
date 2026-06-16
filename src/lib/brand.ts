@@ -1,4 +1,4 @@
-export const brandColors = {
+const brandColors = {
   navy: "#0A0D2E",
   coral: "#F26D6D",
   blue: "#4C6EF5",
@@ -10,7 +10,7 @@ export const brandColors = {
   border: "rgba(76, 110, 245, 0.18)",
 } as const;
 
-export const fontStack =
+const fontStack =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif";
 
 export const brandGradient =

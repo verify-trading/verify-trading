@@ -47,29 +47,24 @@ export async function fetchWithRetry(
 ) {
   const attempts = Math.max(1, options.attempts ?? 3);
   const baseDelayMs = Math.max(0, options.baseDelayMs ?? 250);
-  let lastError: unknown;
 
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+  async function runAttempt(attempt: number): Promise<Response> {
     try {
       const response = await fetch(input, init);
       if (!shouldRetryStatus(response.status) || attempt === attempts) {
         return response;
       }
 
-      lastError = new Error(`Request failed with status ${response.status}.`);
       await wait(getRetryDelayMs(response, attempt, baseDelayMs));
-      continue;
+      return runAttempt(attempt + 1);
     } catch (error) {
-      lastError = error;
       if (attempt === attempts) {
         throw error;
       }
+      await wait(baseDelayMs * attempt);
+      return runAttempt(attempt + 1);
     }
-
-    await wait(baseDelayMs * attempt);
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Request failed after retries.");
+  return runAttempt(1);
 }

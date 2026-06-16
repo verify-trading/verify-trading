@@ -38,6 +38,8 @@ describe("POST /api/ask", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Route plumbing is pipeline-agnostic; pin the mocked legacy pipeline.
+    process.env.ASK_PIPELINE = "legacy";
     vi.mocked(getSessionUser).mockResolvedValue({
       user: { id: "00000000-0000-0000-0000-000000000001" } as never,
       supabase: {} as never,

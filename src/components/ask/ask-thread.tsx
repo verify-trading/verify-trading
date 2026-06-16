@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+
+import { ArrowUpRight } from "lucide-react";
 
 import { AskResponseCard } from "@/components/ask/cards";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,11 @@ import type { AskMessage } from "@/components/ask/store";
 import type { AskToolStatus } from "@/lib/ask/stream";
 import { getAppName } from "@/lib/site-config";
 import { Logo } from "@/components/site/logo";
+
+const TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  hour: "numeric",
+  minute: "2-digit",
+});
 
 function ChatAttachmentPreview({
   src,
@@ -80,10 +86,7 @@ function TimestampLabel({ createdAt }: { createdAt: string }) {
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return null;
 
-  const label = new Intl.DateTimeFormat("en-GB", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  const label = TIME_FORMATTER.format(date);
 
   return (
     <span className="select-none text-[11px] tabular-nums text-white/25 sm:text-xs sm:text-white/20">
@@ -154,14 +157,49 @@ function UserBubble({
   );
 }
 
+function FollowupChips({
+  followups,
+  onSelect,
+}: {
+  followups?: string[];
+  onSelect: (question: string) => void;
+}) {
+  if (!followups || followups.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 max-w-[20rem] border-t border-white/[0.06] pt-2 sm:max-w-md">
+      {followups.map((question) => (
+        <button
+          key={question}
+          type="button"
+          onClick={() => onSelect(question)}
+          className="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-white/55 transition-colors hover:bg-white/[0.05] hover:text-white"
+        >
+          <ArrowUpRight
+            className="size-3.5 shrink-0 text-white/30 transition-colors group-hover:text-[var(--vt-blue)]"
+            aria-hidden
+          />
+          <span className="min-w-0">{question}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function AssistantBubble({
   message,
   onOpenImage,
   onAttachmentLoad,
+  onFollowupClick,
+  showFollowups,
 }: {
   message: Extract<AskMessage, { role: "assistant" }>;
   onOpenImage: (src: string, alt: string) => void;
   onAttachmentLoad: () => void;
+  onFollowupClick: (question: string) => void;
+  showFollowups: boolean;
 }) {
   return (
     <div className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.015] sm:px-6">
@@ -189,6 +227,9 @@ function AssistantBubble({
             />
           ) : null}
           <AskResponseCard card={message.card} uiMeta={message.uiMeta} />
+          {showFollowups ? (
+            <FollowupChips followups={message.uiMeta?.followups} onSelect={onFollowupClick} />
+          ) : null}
         </div>
       </div>
     </div>
@@ -205,6 +246,7 @@ export function AskThread({
   onLoadOlder,
   onOpenImage,
   onAttachmentLoad,
+  onFollowupClick,
   viewportRef,
   bottomRef,
 }: {
@@ -217,6 +259,7 @@ export function AskThread({
   onLoadOlder: () => void;
   onOpenImage: (src: string, alt: string) => void;
   onAttachmentLoad: () => void;
+  onFollowupClick: (question: string) => void;
   viewportRef: React.RefObject<HTMLDivElement | null>;
   bottomRef: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -246,7 +289,7 @@ export function AskThread({
         </div>
 
         {/* Messages */}
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <div key={message.id}>
             {message.role === "user" ? (
               <UserBubble
@@ -259,6 +302,8 @@ export function AskThread({
                 message={message}
                 onOpenImage={onOpenImage}
                 onAttachmentLoad={onAttachmentLoad}
+                onFollowupClick={onFollowupClick}
+                showFollowups={index === messages.length - 1 && !isSubmitting}
               />
             )}
           </div>

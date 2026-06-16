@@ -63,7 +63,7 @@ const GENERIC_MARKET_TERM_PATTERN = /\b(market|chart|forex|crypto|stock|index)\b
 const ANALYTICAL_STRUCTURE_PATTERN =
   /\b(analy[sz]e|review|critique|compare|versus|vs|strategy|portfolio|backtest|scenario|thesis|correlation|hedge|macro|fundamental|multi[- ]?timeframe)\b/;
 const BROKER_VERIFICATION_PATTERN =
-  /\b(broker|prop firm|funded account|regulated|fca|scam|safe to deposit|legit|legitimate|trustworthy)\b/;
+  /\b(brokers?|prop[ -]?firms?|pop firms?|funded accounts?|gurus?|influencers?|regulated|fca|scam|safe to deposit|legit|legitimate|trustworthy|payout)\b/;
 
 const DEFAULT_SIMPLE_MAX_TOOL_STEPS = 3;
 const DEFAULT_PRIMARY_MAX_TOOL_STEPS = 7;
@@ -83,7 +83,7 @@ function extractDirectForexPair(message: string) {
   );
 }
 
-export function hasActiveTradingContext(request: AskRequest) {
+function hasActiveTradingContext(request: AskRequest) {
   const memory = deriveAskSessionMemory(request.history, request.sessionMemory ?? null);
   return Boolean(
     memory?.activeAsset ||
@@ -257,7 +257,7 @@ export function selectAskModelRoutingDecision({
   }
 
   if (countWords(normalized) <= 18) {
-    return simpleDecision("short_straightforward_prompt", "none");
+    return simpleDecision("short_straightforward_prompt", "calculator");
   }
 
   return primaryDecision("default_primary");

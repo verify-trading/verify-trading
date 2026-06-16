@@ -6,7 +6,8 @@ import { toast } from "sonner";
 
 import type { VariantProps } from "class-variance-authority";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Modal } from "@/components/ui/modal";
 import type { BillingPlanKey } from "@/lib/billing/config";
 import {
@@ -44,6 +45,20 @@ type BillingCheckoutSyncProps = {
   checkoutValue?: number | null;
   checkoutCurrency?: string | null;
 };
+
+async function syncCheckoutSession(checkoutSessionId: string) {
+  const response = await fetch("/api/stripe/sync-checkout", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      checkoutSessionId,
+    }),
+  });
+  const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+  return { ok: response.ok, message: payload?.message };
+}
 
 const actionConfig = {
   checkout: {
@@ -100,7 +115,7 @@ export function BillingActionButton({
   buttonSize,
   className,
 }: BillingActionButtonProps) {
-  const router = useRouter();
+  const { refresh } = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const variant = buttonVariant ?? variantForAction(action);
@@ -165,7 +180,7 @@ export function BillingActionButton({
       if (successMessage) {
         toast.success(responsePayload?.message ?? successMessage);
       }
-      router.refresh();
+      refresh();
       setIsPending(false);
       setConfirmOpen(false);
     } catch {
@@ -249,7 +264,7 @@ export function BillingCheckoutSync({
   checkoutValue,
   checkoutCurrency,
 }: BillingCheckoutSyncProps) {
-  const router = useRouter();
+  const { refresh, replace } = useRouter();
   const hasSynced = useRef(false);
 
   useEffect(() => {
@@ -261,19 +276,10 @@ export function BillingCheckoutSync({
 
     void (async () => {
       try {
-        const response = await fetch("/api/stripe/sync-checkout", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            checkoutSessionId,
-          }),
-        });
-        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        const result = await syncCheckoutSession(checkoutSessionId);
 
-        if (!response.ok) {
-          toast.error(payload?.message ?? "Stripe checkout completed, but the local billing sync failed.");
+        if (!result.ok) {
+          toast.error(result.message ?? "Stripe checkout completed, but the local billing sync failed.");
         } else {
           const storageKey = `meta_purchase:${checkoutSessionId}`;
           const alreadyTracked =
@@ -295,17 +301,17 @@ export function BillingCheckoutSync({
       } catch {
         toast.error("Stripe checkout completed, but the local billing sync failed.");
       } finally {
-        router.replace("/billing");
-        router.refresh();
+        replace("/billing");
+        refresh();
       }
     })();
-  }, [checkoutCurrency, checkoutPlan, checkoutSessionId, checkoutState, checkoutValue, router]);
+  }, [checkoutCurrency, checkoutPlan, checkoutSessionId, checkoutState, checkoutValue, refresh, replace]);
 
   useEffect(() => {
     if (checkoutState === "cancelled") {
-      router.replace("/billing");
+      replace("/billing");
     }
-  }, [checkoutState, router]);
+  }, [checkoutState, replace]);
 
   return null;
 }

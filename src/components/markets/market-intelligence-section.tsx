@@ -11,6 +11,14 @@ type DailyBriefAssetChip = {
   data: DailyMarketBrief["gold"];
 };
 
+const RELATIVE_FALLBACK_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const BRIEF_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
 function hasDailyBriefAsset(
   asset: { label: string; data?: DailyBriefAssetChip["data"] },
 ): asset is DailyBriefAssetChip {
@@ -38,18 +46,13 @@ function formatRelativeTime(iso: string): string {
   if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
   if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
   if (day < 7) return `${day}d ago`;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(d);
+  return RELATIVE_FALLBACK_DATE_FORMATTER.format(d);
 }
 
 function formatBriefDate(date: string): string {
   const parsed = new Date(`${date}T12:00:00.000Z`);
   if (!Number.isFinite(parsed.getTime())) return date;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(parsed);
+  return BRIEF_DATE_FORMATTER.format(parsed);
 }
 
 function DailyBriefCard({

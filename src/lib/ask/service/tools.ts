@@ -22,7 +22,11 @@ import {
   normalizeForexPair,
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
-import { lookupVerifiedEntity, type LookupVerifiedEntityResult } from "@/lib/ask/entities";
+import {
+  listVerifiedEntities,
+  lookupVerifiedEntity,
+  type LookupVerifiedEntityResult,
+} from "@/lib/ask/entities";
 import {
   getMarketQuote,
   getMarketSeries,
@@ -45,6 +49,19 @@ const verifyEntityInputSchema = z.object({
   name: z.string().min(1).describe("Broker, prop firm, guru, or brand name to verify."),
 });
 
+const listVerifiedEntitiesInputSchema = z.object({
+  type: z
+    .enum(["broker", "propfirm", "guru"])
+    .describe("Which kind of reviewed entity to list."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(15)
+    .optional()
+    .describe("How many to return, highest trust first (default 8)."),
+});
+
 /** Anthropic requires a plain object JSON Schema; z.discriminatedUnion breaks tool registration. */
 const submitAskCardInputSchema = z.object({
   card_json: z
@@ -52,6 +69,13 @@ const submitAskCardInputSchema = z.object({
     .min(1)
     .describe(
       'One UI card as a JSON string. Include "type": broker | briefing | calc | guru | insight | plan | chart | setup | projection and all required fields for that type.',
+    ),
+  followups: z
+    .array(z.string())
+    .max(3)
+    .optional()
+    .describe(
+      "2-3 short next questions the user is likely to tap, written in the user's own voice (first person), specific to this answer, each under 8 words. Omit only when no natural next question exists.",
     ),
 });
 
@@ -230,13 +254,20 @@ function serializeCalendarEvent(item: EconomicEventItem, now: Date) {
 }
 
 function findNextHighImpactEvent(items: EconomicEventItem[], now: Date) {
-  return items
-    .filter((item) => item.impact === "high")
-    .filter((item) => {
-      const eventMs = new Date(item.timeUtc).getTime();
-      return Number.isFinite(eventMs) && eventMs >= now.getTime();
-    })
-    .sort((a, b) => a.timeUtc.localeCompare(b.timeUtc))[0] ?? null;
+  const nowMs = now.getTime();
+  let nextEvent: EconomicEventItem | null = null;
+  let nextMs = Number.POSITIVE_INFINITY;
+  for (const item of items) {
+    if (item.impact !== "high") {
+      continue;
+    }
+    const eventMs = new Date(item.timeUtc).getTime();
+    if (Number.isFinite(eventMs) && eventMs >= nowMs && eventMs < nextMs) {
+      nextEvent = item;
+      nextMs = eventMs;
+    }
+  }
+  return nextEvent;
 }
 
 function buildEconomicCalendarToolResult(
@@ -263,7 +294,7 @@ function buildEconomicCalendarToolResult(
   const country = input.country?.trim().toUpperCase();
   const scope = input.scope ?? "upcoming";
   const limit = Math.min(input.limit ?? 8, MAX_CALENDAR_TOOL_EVENTS);
-  const sorted = [...snapshot.items].sort((a, b) => a.timeUtc.localeCompare(b.timeUtc));
+  const sorted = snapshot.items.toSorted((a, b) => a.timeUtc.localeCompare(b.timeUtc));
   const nextHighImpactEvent = findNextHighImpactEvent(sorted, now);
   const events = sorted.filter((item) => {
     if (!eventMatchesScope(item, scope, now)) {
@@ -317,18 +348,27 @@ function buildBrokerCard(
   let status = hint.status;
   let fca = hint.fca;
 
+  // For a firm we already class as avoid, a live FCA name-search usually hits a
+  // same-name or clone entity, so don't let it upgrade FCA standing or surface
+  // its note.
+  const dbDistrusted = entity.status === "avoid" || entity.band === "Avoid";
+
   if (fcaStatus.authorised === false) {
     fca = "No";
     if (status === "LEGITIMATE") {
       status = "WARNING";
     }
-  } else if (fcaStatus.authorised === true) {
+  } else if (fcaStatus.authorised === true && !dbDistrusted) {
     fca = "Yes";
   }
 
   if (fcaStatus.warning === true) {
     status = "WARNING";
   }
+
+  // Founder note wins, then the live FCA text, then our reviewed note.
+  const fcaText = dbDistrusted ? null : fcaStatus.note ?? fcaStatus.statusText;
+  const verdict = hint.founderNote || fcaText || entity.notes;
 
   return {
     type: "broker",
@@ -337,7 +377,7 @@ function buildBrokerCard(
     status,
     fca,
     complaints: hint.complaints,
-    verdict: fcaStatus.note ?? fcaStatus.statusText ?? entity.notes,
+    verdict,
     color: hint.color,
   };
 }
@@ -403,11 +443,10 @@ function buildUrlCoverageInsightCard(displayName: string): AskCard {
 }
 
 function extractHostnameLabel(hostname: string) {
-  const labels = hostname
-    .toLowerCase()
-    .split(".")
-    .map((label) => label.trim())
-    .filter(Boolean);
+  const labels = hostname.toLowerCase().split(".").flatMap((label) => {
+    const trimmed = label.trim();
+    return trimmed ? [trimmed] : [];
+  });
 
   if (labels.length === 0) {
     return null;
@@ -488,7 +527,7 @@ function formatChange(value: number) {
   return `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(2)}%`;
 }
 
-export function buildBriefingCard(
+function buildBriefingCard(
   quote: Awaited<ReturnType<typeof getMarketQuote>>,
   series: Awaited<ReturnType<typeof getMarketSeries>>,
 ): { card: BriefingCard; uiMeta: AskUiMeta } {
@@ -605,7 +644,7 @@ function buildMarginCard(result: ReturnType<typeof calculateMarginRequirement>):
 export function buildRiskRewardCard(result: ReturnType<typeof calculateRiskReward>): AskCard {
   return buildInsightCard(
     "Risk Reward",
-    `Risk is ${result.riskDistance}. Reward is ${result.rewardDistance}. Ratio is ${result.ratio.toFixed(2)} to 1.`,
+    `Risk is ${result.riskDistance}. Reward is ${result.rewardDistance}. Reward-to-risk is ${result.ratio.toFixed(2)}:1 (${result.ratio.toFixed(2)}R).`,
     "Take it only if the reward still justifies the setup.",
   );
 }
@@ -632,9 +671,17 @@ export function createAskTools(dependencies: AskServiceDependencies) {
   return {
     verify_entity: tool({
       description:
-        "Verify a broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks. It uses reviewed entity data first and then live FCA confirmation when an FRN is available. If this is only one part of a broader trading question, use the result as evidence and still synthesize the final card yourself.",
+        "Verify a SINGLE named broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks on a specific firm. It returns reviewed entity data plus live FCA confirmation as EVIDENCE — it is not your reply. After calling it you must still call submit_ask_card with the final card (echo the exact score and status) and 2-3 followups. Never end your turn on the raw verify_entity result.",
       inputSchema: verifyEntityInputSchema,
       execute: async ({ name }) => resolveVerificationToolResult(name, dependencies),
+    }),
+    list_verified_entities: tool({
+      description:
+        "List the top reviewed brokers, prop firms, or trading gurus from our database, ranked by trust score. Use this whenever the user asks for the top / best / safest / recommended ones, or 'which … are good', or to list them, and has NOT named a specific firm. For a single named firm use verify_entity instead. Summarize the returned list in your own words: lead with the highest-trust names, give each a quick reason, and flag any marked avoid.",
+      inputSchema: listVerifiedEntitiesInputSchema,
+      execute: async ({ type, limit }) => ({
+        entities: await listVerifiedEntities(type, limit ?? 8),
+      }),
     }),
     get_market_briefing: tool({
       description:
@@ -766,8 +813,8 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       description:
         "Final card submission for the actual answer the user should see. After search_news: use insight, or setup if the user asked for a trade plan and you also used get_market_setup. After get_market_briefing: use briefing only for direct market-status asks, otherwise use insight or setup. After get_market_setup: use setup. After generate_growth_plan: use plan. After calcs: use calc or insight. For mixed multi-topic questions, synthesize one final insight card instead of stopping at a raw tool card. card_json = stringified card.",
       inputSchema: submitAskCardInputSchema,
-      execute: async ({ card_json }) => {
-        return { card: parseSubmittedAskCardJson(card_json) };
+      execute: async ({ card_json, followups }) => {
+        return { card: parseSubmittedAskCardJson(card_json), followups };
       },
     }),
   };
@@ -778,7 +825,7 @@ export type AskToolsForPolicy = ToolSet;
 
 const TOOL_NAMES_BY_POLICY: Record<AskToolPolicy, readonly (keyof AskToolSet)[]> = {
   none: [],
-  verification: ["verify_entity", "submit_ask_card"],
+  verification: ["verify_entity", "list_verified_entities", "submit_ask_card"],
   calculator: [
     "calculate_position_size",
     "calculate_risk_reward",
@@ -791,6 +838,7 @@ const TOOL_NAMES_BY_POLICY: Record<AskToolPolicy, readonly (keyof AskToolSet)[]>
   ],
   full: [
     "verify_entity",
+    "list_verified_entities",
     "get_market_briefing",
     "get_market_setup",
     "search_news",

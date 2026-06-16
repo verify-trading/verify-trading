@@ -14,9 +14,8 @@ export function CookieConsentBanner({ onAcceptAll, onEssentialOnly }: CookieCons
   const app = getAppName();
 
   return (
-    <div
+    <section
       className="pointer-events-none fixed inset-x-0 bottom-0 z-[200] flex justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
-      role="region"
       aria-label="Cookie consent"
     >
       <div
@@ -40,6 +39,6 @@ export function CookieConsentBanner({ onAcceptAll, onEssentialOnly }: CookieCons
           </Button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
