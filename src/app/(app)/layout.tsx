@@ -1,7 +1,6 @@
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 
 import { SiteNav } from "@/components/site/site-nav";
-import { OnboardingCallBanner } from "@/components/site/onboarding-call-banner";
 import { prefetchAccountMenuForSession } from "@/lib/auth/account-menu-query";
 import { getSessionUser } from "@/lib/auth/session";
 import { getQueryClient } from "@/lib/react-query/get-query-client";
@@ -28,7 +27,6 @@ export default async function AppShellLayout({
     <HydrationBoundary state={dehydrate(queryClient)}>
       <div className="flex h-dvh flex-col overflow-hidden bg-[var(--vt-navy)] text-white">
         <SiteNav />
-        <OnboardingCallBanner />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
     </HydrationBoundary>

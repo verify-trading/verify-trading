@@ -4,8 +4,6 @@
  */
 
 const DEFAULT_APP_NAME = "verify.trading";
-const DEFAULT_BOOKING_CALL_URL = "https://calendly.com/verifytrading/-";
-const DEFAULT_TELEGRAM_COMMUNITY_URL = "https://www.t.me/verifytradingai";
 
 export function getAppName(): string {
   const raw = process.env.NEXT_PUBLIC_APP_NAME?.trim();
@@ -26,25 +24,6 @@ export function getSiteDescription(): string {
     return d;
   }
   return "Broker checks, market briefings, position sizing, charts, and projections — structured answers for retail traders.";
-}
-
-export function getOnboardingCallUrl(): string | null {
-  const raw = process.env.NEXT_PUBLIC_ONBOARDING_CALL_URL?.trim();
-  return raw || DEFAULT_BOOKING_CALL_URL;
-}
-
-/** Prefer `NEXT_PUBLIC_TRADER_SUPPORT_CALL_URL`; falls back to onboarding booking URL. */
-export function getTraderSupportCallUrl(): string | null {
-  const dedicated = process.env.NEXT_PUBLIC_TRADER_SUPPORT_CALL_URL?.trim();
-  if (dedicated) {
-    return dedicated;
-  }
-  return getOnboardingCallUrl();
-}
-
-export function getTelegramCommunityUrl(): string | null {
-  const raw = process.env.NEXT_PUBLIC_TELEGRAM_COMMUNITY_URL?.trim();
-  return raw || DEFAULT_TELEGRAM_COMMUNITY_URL;
 }
 
 /** Injects {{APP_NAME}} in prompt templates. */

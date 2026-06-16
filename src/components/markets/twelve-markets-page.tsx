@@ -24,7 +24,6 @@ import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { MarketEventsSection } from "./market-events-section";
 import { MarketIntelligenceSection } from "./market-intelligence-section";
 import { MarketPriceCard } from "./market-price-card";
-import { MarketsCommunityCtas } from "./markets-community-ctas";
 import { MarketsTabUpcoming } from "./markets-tab-upcoming";
 import { MarketsViewTabs, type MarketsTabId } from "./markets-view-tabs";
 
@@ -260,8 +259,6 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
                 ) : null}
               </div>
             </MarketsViewTabs>
-
-            <MarketsCommunityCtas />
           </section>
         </main>
       </div>
