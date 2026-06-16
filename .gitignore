@@ -33,3 +33,19 @@ out
 *.njsproj
 *.sln
 *.sw?
+
+# AI agent / assistant tooling (local-only, not shared)
+.cursor/
+.cursorrules
+.cursorignore
+.agents/
+.claude/
+.aider*
+.windsurf/
+.continue/
+.roo/
+.codeium/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.mcp.json
