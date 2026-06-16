@@ -6,6 +6,7 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/billing/config", () => ({
   getCheckoutBillingOffer: vi.fn(),
+  getBillingPlanAmountGbp: vi.fn(() => 1900),
 }));
 
 vi.mock("@/lib/billing/repository", () => ({
@@ -128,6 +129,7 @@ describe("POST /api/stripe/checkout", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       url: "https://checkout.stripe.test/existing",
+      checkout: { plan: "monthly", currency: "GBP", value: 1900 },
     });
     expect(createCheckoutSession).not.toHaveBeenCalled();
     expect(ensureStripeCustomerForUser).not.toHaveBeenCalled();
@@ -311,6 +313,7 @@ describe("POST /api/stripe/checkout", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       url: "https://checkout.stripe.test/current",
+      checkout: { plan: "monthly", currency: "GBP", value: 1900 },
     });
     expect(expireCheckoutSession).toHaveBeenCalledWith("cs_123");
   });
