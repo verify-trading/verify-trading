@@ -3,6 +3,7 @@ import { isEmailConfigured } from "@/lib/email/config";
 import { logEmailError } from "@/lib/email/log-email-error";
 import { sendSignupWelcomeEmail } from "@/lib/email/send-signup-welcome";
 import { isEligibleForSignupWelcomeEmail } from "@/lib/email/signup-eligibility";
+import { subscribeSignupToKit } from "@/lib/marketing/kit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type MaybeSendSignupWelcomeEmailInput = {
@@ -61,6 +62,14 @@ export async function maybeSendSignupWelcomeEmail({
   }
 
   const profile = data as ProfileWelcomeRow | null;
+  await subscribeSignupToKit({
+    email: normalizedEmail,
+    displayName: displayName ?? profile?.display_name ?? null,
+    referrer: appOrigin,
+  }).catch((kitError) => {
+    logEmailError("Failed to subscribe signup to Kit.", { userId }, kitError);
+  });
+
   if (profile?.signup_welcome_email_sent_at) {
     return;
   }

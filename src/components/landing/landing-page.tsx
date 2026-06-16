@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -25,6 +25,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+import { trackMetaViewContent } from "@/lib/marketing/meta-pixel";
 import { getAppName } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
@@ -582,6 +583,10 @@ export function LandingPage({
   pricing: PublicBillingPricing;
   billingContext: PricingPageBillingContext | null;
 }) {
+  useEffect(() => {
+    trackMetaViewContent();
+  }, []);
+
   return (
     <div className="min-h-screen bg-[var(--vt-navy)] text-white">
       <SiteNav />

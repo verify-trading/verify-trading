@@ -51,6 +51,12 @@ const GBP_WITH_PENCE_FORMATTER = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 2,
 });
 
+const PLAN_PRICE_GBP: Record<BillingPlanKey, number> = {
+  weekly: WEEKLY_PRICE_GBP,
+  monthly: MONTHLY_PRICE_GBP,
+  annual: ANNUAL_PRICE_GBP,
+};
+
 function readOptionalEnv(name: string): string | null {
   const value = process.env[name]?.trim();
   return value ? value : null;
@@ -165,6 +171,10 @@ export function getCheckoutBillingOffer(planKey: BillingPlanKey): CheckoutBillin
     ctaLabel: pricing.monthly.ctaLabel,
     checkoutPriceId: readStripePriceProMonthly(),
   };
+}
+
+export function getBillingPlanAmountGbp(planKey: BillingPlanKey): number {
+  return PLAN_PRICE_GBP[planKey];
 }
 
 export function getStripeSecretKey(): string {

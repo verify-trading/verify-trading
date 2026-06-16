@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth/session";
 import { jsonApiError, jsonInvalidRequest, jsonUnauthorized } from "@/lib/http/json-response";
-import { getCheckoutBillingOffer } from "@/lib/billing/config";
+import { getBillingPlanAmountGbp, getCheckoutBillingOffer } from "@/lib/billing/config";
 import {
   claimBillingCheckoutSession,
   ensureStripeCustomerForUser,
@@ -86,8 +86,14 @@ export async function POST(request: Request) {
     });
 
     if (checkoutClaim.checkoutUrl && payload.source === "web") {
+      const reusedOffer = getCheckoutBillingOffer(payload.plan);
       return NextResponse.json({
         url: checkoutClaim.checkoutUrl,
+        checkout: {
+          plan: reusedOffer.planKey,
+          currency: "GBP",
+          value: getBillingPlanAmountGbp(reusedOffer.planKey),
+        },
       });
     }
 
@@ -160,8 +166,14 @@ export async function POST(request: Request) {
       await stripe.checkout.sessions.expire(checkoutSession.id).catch(() => undefined);
       const currentCheckout = await getBillingCheckoutSession(session.user.id);
       if (currentCheckout?.checkoutUrl) {
+        const currentPlan = currentCheckout.plan ?? offer.planKey;
         return NextResponse.json({
           url: currentCheckout.checkoutUrl,
+          checkout: {
+            plan: currentPlan,
+            currency: "GBP",
+            value: getBillingPlanAmountGbp(currentPlan),
+          },
         });
       }
 
@@ -170,6 +182,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       url: checkoutSession.url,
+      checkout: {
+        plan: offer.planKey,
+        currency: "GBP",
+        value: getBillingPlanAmountGbp(offer.planKey),
+      },
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
