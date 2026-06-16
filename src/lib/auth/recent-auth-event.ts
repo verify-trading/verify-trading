@@ -1,5 +1,5 @@
 /** Window after account creation or email confirmation where signup welcome may send. */
-export const RECENT_AUTH_EVENT_WINDOW_MS = 10 * 60 * 1000;
+const RECENT_AUTH_EVENT_WINDOW_MS = 10 * 60 * 1000;
 
 export function isRecentAuthTimestamp(
   isoTimestamp: string | null | undefined,

@@ -6,8 +6,8 @@ export const OAUTH_FLOW_COOKIE_NAME = "vt_oauth_flow";
 /** Short-lived post-login path if `next` is missing from `/auth/callback` query (some OAuth flows strip it). */
 export const AUTH_REDIRECT_COOKIE_NAME = "vt_auth_redirect";
 export const RECENT_OAUTH_SIGNUP_COOKIE_NAME = "vt_recent_oauth_signup";
-export const OAUTH_FLOW_COOKIE_MAX_AGE_SECONDS = 10 * 60;
-export const AUTH_REDIRECT_COOKIE_MAX_AGE_SECONDS = 10 * 60;
+const OAUTH_FLOW_COOKIE_MAX_AGE_SECONDS = 10 * 60;
+const AUTH_REDIRECT_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 export const RECENT_OAUTH_SIGNUP_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 
 /**
@@ -54,17 +54,17 @@ export function readCookie(cookieHeader: string | null, name: string): string | 
       continue;
     }
 
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex === -1) {
+    const [rawKey, ...rawValue] = trimmed.split("=");
+    if (!rawKey || rawValue.length === 0) {
       continue;
     }
 
-    const key = trimmed.slice(0, separatorIndex).trim();
+    const key = rawKey.trim();
     if (key !== name) {
       continue;
     }
 
-    const value = trimmed.slice(separatorIndex + 1);
+    const value = rawValue.join("=");
     try {
       return decodeURIComponent(value);
     } catch {

@@ -114,31 +114,39 @@ describe("TwelveMarketsPage", () => {
     vi.stubEnv("NEXT_PUBLIC_MARKETS_PAYWALL_UI_ENABLED", "true");
   });
 
-  it("renders the paywall for non-pro users without fetching live data", async () => {
+  it("shows the charts teaser to free users and locks the Pro tabs", async () => {
     vi.mocked(useSupabaseAuth).mockReturnValue({
       supabase: null,
-      user: null,
-      session: null,
+      user: { id: "user-free" } as never,
+      session: {} as never,
       ready: true,
-      isSignedIn: false,
+      isSignedIn: true,
     });
 
-    global.fetch = vi.fn() as unknown as typeof fetch;
+    mockFetchMarkets({
+      updatedAt: "2026-04-09T10:00:00.000Z",
+      quotes: {},
+      sparklines: {},
+    });
 
     renderWithQueryClient(
-      <TwelveMarketsPage pricing={marketsTestPricing} billingContext={signedOutBillingContext} />,
+      <TwelveMarketsPage
+        initialTier="free"
+        pricing={marketsTestPricing}
+        billingContext={freeSignedInBillingContext}
+      />,
     );
 
-    expect(screen.getByText("Sign in and upgrade to Pro to unlock Markets.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Start weekly plan/i })).toHaveAttribute("href", "/signup");
-    expect(screen.getByRole("link", { name: /Start Pro/i })).toHaveAttribute("href", "/signup");
-    expect(screen.getByRole("link", { name: /Start annual plan/i })).toHaveAttribute("href", "/signup");
+    // Charts is the free teaser: its category controls render and its data is fetched.
     expect(screen.getByRole("button", { name: "Major Pairs" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Commodities" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Crypto" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Indices" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith("/api/markets");
+    });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    // A Pro tab shows the upgrade panel and never fetches the Pro-only data.
+    fireEvent.click(screen.getByRole("tab", { name: /intelligence/i }));
+    expect(screen.getByText("Market Intelligence is a Pro feature.")).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalledWith("/api/markets/intelligence");
   });
 
   it("renders category tabs and fetches live data for pro users", async () => {
@@ -395,7 +403,6 @@ describe("TwelveMarketsPage", () => {
 
     expect(screen.getByText("Psychological AI")).toBeInTheDocument();
     expect(screen.getByTestId("mind-state-orb")).toBeInTheDocument();
-    expect(screen.getByLabelText("Plasma mind orb")).toBeInTheDocument();
     expect(screen.queryByTestId("journal-state-icon")).not.toBeInTheDocument();
   });
 });

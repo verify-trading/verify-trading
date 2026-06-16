@@ -38,6 +38,18 @@ export type CheckoutBillingOffer = {
 const WEEKLY_PRICE_GBP = 6.99;
 const MONTHLY_PRICE_GBP = 19.99;
 const ANNUAL_PRICE_GBP = 119.99;
+const GBP_FORMATTER = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+const GBP_WITH_PENCE_FORMATTER = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 function readOptionalEnv(name: string): string | null {
   const value = process.env[name]?.trim();
@@ -53,12 +65,7 @@ function readRequiredEnv(name: string): string {
 }
 
 function formatGbp(amount: number): string {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  return (Number.isInteger(amount) ? GBP_FORMATTER : GBP_WITH_PENCE_FORMATTER).format(amount);
 }
 
 function formatWeeklyHeadline(amount: number): string {

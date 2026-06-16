@@ -47,17 +47,19 @@ function mergeRecentUserGoals(
   previousGoals: string[] | undefined,
 ): string[] | undefined {
   const merged = [...latestGoals];
+  const seenGoals = new Set(merged);
 
   for (const goal of previousGoals ?? []) {
     if (merged.length >= 3) {
       break;
     }
 
-    if (!goal || merged.includes(goal)) {
+    if (!goal || seenGoals.has(goal)) {
       continue;
     }
 
     merged.push(goal);
+    seenGoals.add(goal);
   }
 
   return merged.length > 0 ? merged : undefined;
@@ -73,6 +75,7 @@ export function deriveAskSessionMemory(
     ? JSON.parse(JSON.stringify(previousMemory))
     : {};
   const recentUserGoals: string[] = [];
+  const recentUserGoalSet = new Set<string>();
   let latestUserMessage: string | null = null;
   let latestTurnRole: AskConversationMessage["role"] | null = null;
 
@@ -90,8 +93,9 @@ export function deriveAskSessionMemory(
       latestUserMessage ??= clampWords(content, 24);
 
       const goal = clampWords(content, 20);
-      if (goal && !recentUserGoals.includes(goal) && recentUserGoals.length < 3) {
+      if (goal && !recentUserGoalSet.has(goal) && recentUserGoals.length < 3) {
         recentUserGoals.push(goal);
+        recentUserGoalSet.add(goal);
       }
       continue;
     }

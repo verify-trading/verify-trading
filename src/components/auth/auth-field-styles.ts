@@ -1,8 +1,8 @@
 /** Shared classes: min height for touch, 16px+ text on small screens to avoid iOS input zoom */
-export const authFieldClass =
+const authFieldClass =
   "min-h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition-all duration-300 placeholder:text-white/40 focus:border-[var(--vt-blue)] focus:bg-white/10 focus:ring-4 focus:ring-[var(--vt-blue)]/20 sm:min-h-11 sm:text-sm hover:border-white/20 hover:bg-white/10 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]";
 
-export const authFieldErrorClass =
+const authFieldErrorClass =
   "border-red-400/60 bg-red-400/10 focus:border-red-400 group-hover:border-red-400/80 focus:ring-red-500/30 aria-invalid:border-red-400/60";
 
 /** Border + focus ring when the field has a validation error */
@@ -25,7 +25,7 @@ export const authInlineSuccessBannerFlexClass =
   "flex gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3.5 text-sm leading-relaxed text-emerald-50/95";
 
 /** Neutral info (e.g. signup “check your email”) */
-export const authInlineInfoBannerClass =
+const authInlineInfoBannerClass =
   "rounded-2xl border border-(--vt-blue)/35 bg-(--vt-blue)/10 px-4 py-3.5 text-sm leading-relaxed text-white/90";
 
 export const authSecondaryLinkClass =

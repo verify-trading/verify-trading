@@ -109,7 +109,7 @@ export function OnboardingCallBanner() {
     <div className="border-b border-[color:var(--vt-border)] bg-white/[0.03]">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-1.5 sm:gap-3 sm:px-4 sm:py-2">
         <p className="min-w-0 flex-1 text-xs leading-snug text-white/90 sm:text-sm">
-          Book your free onboarding call — 10 minutes with an expert trader
+          Book your free onboarding call: 10 minutes with an expert trader
         </p>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">

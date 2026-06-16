@@ -7,17 +7,36 @@ type ProfileTierRow = {
   tier: string | null;
 };
 
-/**
- * Shared Markets API access: signed-in Pro users only (same as `/api/markets`).
- */
-export async function requireMarketsProSession(): Promise<
-  | { ok: true; userId: string }
-  | { ok: false; response: NextResponse }
-> {
-  const session = await getSessionUser();
+type MarketsAccess = { ok: true; userId: string } | { ok: false; response: NextResponse };
 
+async function getMarketsSession() {
+  const session = await getSessionUser();
   if (!session) {
-    return { ok: false, response: jsonUnauthorized("Sign in to view Markets.") };
+    return { session: null, response: jsonUnauthorized("Sign in to view Markets.") } as const;
+  }
+  return { session, response: null } as const;
+}
+
+/**
+ * Markets teaser access: any signed-in user. Used by the price snapshot route,
+ * which is the free charts teaser. Pro-only data (intelligence, calendar) uses
+ * requireMarketsProSession instead.
+ */
+export async function requireMarketsSession(): Promise<MarketsAccess> {
+  const { session, response } = await getMarketsSession();
+  if (!session) {
+    return { ok: false, response };
+  }
+  return { ok: true, userId: session.user.id };
+}
+
+/**
+ * Shared Markets API access: signed-in Pro users only.
+ */
+export async function requireMarketsProSession(): Promise<MarketsAccess> {
+  const { session, response } = await getMarketsSession();
+  if (!session) {
+    return { ok: false, response };
   }
 
   const profileResult = await session.supabase

@@ -11,3 +11,21 @@ export function jsonInvalidRequest(message: string) {
 export function jsonApiError(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
 }
+
+export function jsonApiFailure(failure: {
+  status: number;
+  error: string;
+  message: string;
+  code?: string;
+  remaining?: number;
+}) {
+  return NextResponse.json(
+    {
+      error: failure.error,
+      message: failure.message,
+      ...(failure.code ? { code: failure.code } : {}),
+      ...(failure.remaining !== undefined ? { remaining: failure.remaining } : {}),
+    },
+    { status: failure.status },
+  );
+}

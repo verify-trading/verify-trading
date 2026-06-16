@@ -1,4 +1,4 @@
-export const COOKIE_CONSENT_STORAGE_KEY = "vt:cookie-consent" as const;
+const COOKIE_CONSENT_STORAGE_KEY = "vt:cookie-consent" as const;
 
 /** Bump when categories or purposes change so users see the banner again. */
 export const COOKIE_CONSENT_POLICY_VERSION = 1 as const;
@@ -11,7 +11,7 @@ export type StoredCookieConsent = {
   at: string;
 };
 
-export const COOKIE_CONSENT_CHANGE_EVENT = "vt:cookie-consent-change" as const;
+const COOKIE_CONSENT_CHANGE_EVENT = "vt:cookie-consent-change" as const;
 
 export type CookieConsentChangeDetail = { choice: CookieConsentChoice };
 

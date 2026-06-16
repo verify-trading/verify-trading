@@ -9,6 +9,20 @@ import type {
 import { fetchFmpJson } from "./fmp-json";
 
 const CALENDAR_REVALIDATE_SECONDS = 2_700;
+const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const TIME_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  timeZone: "UTC",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZoneName: "short",
+});
 
 function utcYmd(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -24,24 +38,11 @@ function endOfUtcDay(d: Date): Date {
 }
 
 function formatDayLabel(d: Date): string {
-  const formatted = new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(d);
-  return `Today — ${formatted}`;
+  return `Today - ${DAY_LABEL_FORMATTER.format(d)}`;
 }
 
 function formatTimeLabel(d: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: "UTC",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZoneName: "short",
-  }).format(d);
+  return TIME_LABEL_FORMATTER.format(d);
 }
 
 function pickString(row: Record<string, unknown>, keys: string[]): string {

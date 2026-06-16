@@ -46,6 +46,7 @@ import {
   extractToolCard,
   extractUiMeta,
   parseImageDataUrl,
+  withFollowups,
 } from "@/lib/ask/service/context";
 import { buildSessionMemoryMessage, deriveAskSessionMemory } from "@/lib/ask/session-memory";
 import { inferMarketAssetsFromText } from "@/lib/ask/market";
@@ -380,9 +381,11 @@ function buildCompletedAskResponse({
     toolResults: summarizeToolResults(toolResults),
   });
 
+  const mergedUiMeta = withFollowups(uiMeta, toolResults);
+
   return askResponseSchema.parse({
     data: sanitizeCard(card),
-    ...(uiMeta ? { uiMeta: sanitizeUiMeta(uiMeta) } : {}),
+    ...(mergedUiMeta ? { uiMeta: sanitizeUiMeta(mergedUiMeta) } : {}),
     sessionId,
     messageId,
   });
@@ -410,7 +413,6 @@ function mergeBriefingModelExplanation(toolBriefing: AskCard, modelBriefing: Ask
 
   return {
     ...toolBriefing,
-    event: toolBriefing.event,
     verdict: modelBriefing.verdict,
   };
 }

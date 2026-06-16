@@ -106,9 +106,12 @@ export async function prepareAskRoute(request: Request, logScope = "Ask"): Promi
   };
 }
 
-/** Set ASK_PIPELINE=cascade to use the retrieval + Haiku-first cascade pipeline. */
+/**
+ * The retrieval + Haiku-first cascade pipeline is the default. Set
+ * ASK_PIPELINE=legacy to fall back to the older single-model pipeline.
+ */
 function isCascadePipelineEnabled() {
-  return process.env.ASK_PIPELINE === "cascade";
+  return process.env.ASK_PIPELINE !== "legacy";
 }
 
 export async function completeAskExchange(

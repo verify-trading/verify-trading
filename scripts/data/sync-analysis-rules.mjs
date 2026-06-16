@@ -49,7 +49,11 @@ async function main() {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
   }
 
-  const filePath = path.join(process.cwd(), "analysis_rules_seed.csv");
+  // Defaults to the legacy seed; pass the ITVE v3 file as argv[2] to load it.
+  //   node scripts/data/sync-analysis-rules.mjs ITVE_v3_rules.csv
+  const filePath = process.argv[2]
+    ? path.resolve(process.argv[2])
+    : path.join(process.cwd(), "analysis_rules_seed.csv");
   const raw = await readFile(filePath, "utf8");
   const [headerLine, ...lines] = raw.split(/\r?\n/).filter(Boolean);
   const headers = parseCsvLine(headerLine);
@@ -58,13 +62,17 @@ async function main() {
     const values = parseCsvLine(line);
     const row = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
 
+    // ITVE v3 names the weight column priority_weight and uses TRUE/FALSE.
+    const priority = row.priority_weight ?? row.priority ?? "";
+    const active = String(row.active ?? "").trim().toLowerCase();
+
     return {
       rule_number: Number.parseInt(row.rule_number, 10),
       category: row.category.trim(),
       rule_name: row.rule_name.trim(),
       content: row.content.trim(),
-      priority: Number.parseInt(row.priority, 10),
-      active: row.active === "true",
+      priority: Number.parseInt(priority, 10),
+      active: active === "true" || active === "1" || active === "yes",
     };
   });
 

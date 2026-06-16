@@ -9,9 +9,8 @@ function ShimmerBlock({ className = "" }: { className?: string }) {
 
 export function GuidePdfSkeleton() {
   return (
-    <div
+    <output
       className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-start overflow-auto overflow-x-hidden bg-[#111] px-4 py-4 sm:px-6 sm:py-6"
-      role="status"
       aria-label="Loading guide"
     >
       <div
@@ -34,6 +33,6 @@ export function GuidePdfSkeleton() {
           </div>
         </div>
       </div>
-    </div>
+    </output>
   );
 }

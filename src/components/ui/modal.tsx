@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffectEvent } from "react";
 import { useEffect, useId } from "react";
 
 const sizeClass = {
@@ -41,6 +42,7 @@ export function Modal({
   const bodyId = useId();
   const labelledBy = title ? titleId : undefined;
   const describedBy = children ? bodyId : undefined;
+  const closeFromEffect = useEffectEvent(onClose);
 
   useEffect(() => {
     if (!open || !closeOnEscape || preventClose) {
@@ -49,13 +51,13 @@ export function Modal({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        closeFromEffect();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, closeOnEscape, preventClose, onClose]);
+  }, [open, closeOnEscape, preventClose]);
 
   if (!open) {
     return null;
@@ -64,21 +66,34 @@ export function Modal({
   const canDismiss = !preventClose && closeOnBackdrop;
 
   return (
-    <div
-      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center overflow-y-auto bg-[rgba(5,8,27,0.88)] px-4 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:p-6`}
-      role="dialog"
+    <dialog
+      open
+      className={`fixed inset-0 ${zIndexClass} m-0 flex h-dvh max-h-none w-dvw max-w-none items-center justify-center overflow-y-auto border-0 bg-[rgba(5,8,27,0.88)] px-4 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] text-inherit backdrop-blur-sm sm:p-6`}
       aria-modal="true"
       aria-label={ariaLabel}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      onClick={canDismiss ? onClose : undefined}
+      onCancel={(event) => {
+        if (!closeOnEscape || preventClose) {
+          event.preventDefault();
+          return;
+        }
+        onClose();
+      }}
     >
+      {canDismiss ? (
+        <button
+          type="button"
+          className="absolute inset-0 cursor-default"
+          aria-label="Close modal"
+          onClick={onClose}
+        />
+      ) : null}
       <div
         className={[
-          "max-h-[min(90dvh,560px)] w-full overflow-y-auto rounded-2xl border border-white/[0.08] bg-[var(--vt-card)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:p-6",
+          "relative max-h-[min(90dvh,560px)] w-full overflow-y-auto rounded-2xl border border-white/[0.08] bg-[var(--vt-card)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:p-6",
           sizeClass[size],
         ].join(" ")}
-        onClick={(event) => event.stopPropagation()}
       >
         {title ? (
           <h2 id={titleId} className="text-lg font-semibold tracking-tight text-white">
@@ -90,6 +105,6 @@ export function Modal({
         </div>
         {footer ? <div className="mt-6">{footer}</div> : null}
       </div>
-    </div>
+    </dialog>
   );
 }

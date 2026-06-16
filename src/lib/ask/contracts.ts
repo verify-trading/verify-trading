@@ -47,7 +47,7 @@ const textFieldSchema = z
   .pipe(z.string().min(1));
 const nullableTextFieldSchema = z.union([textFieldSchema, z.null()]);
 
-export const brokerCardSchema = z.object({
+const brokerCardSchema = z.object({
   type: z.literal("broker"),
   name: textFieldSchema,
   score: textFieldSchema,
@@ -58,7 +58,7 @@ export const brokerCardSchema = z.object({
   color: cardColorSchema,
 });
 
-export const briefingCardSchema = z.object({
+const briefingCardSchema = z.object({
   type: z.literal("briefing"),
   asset: textFieldSchema,
   price: textFieldSchema,
@@ -70,7 +70,7 @@ export const briefingCardSchema = z.object({
   verdict: textFieldSchema,
 });
 
-export const calcCardSchema = z.object({
+const calcCardSchema = z.object({
   type: z.literal("calc"),
   lots: textFieldSchema,
   risk_amount: textFieldSchema,
@@ -80,7 +80,7 @@ export const calcCardSchema = z.object({
   verdict: textFieldSchema,
 });
 
-export const guruCardSchema = z.object({
+const guruCardSchema = z.object({
   type: z.literal("guru"),
   name: textFieldSchema,
   score: textFieldSchema,
@@ -90,14 +90,14 @@ export const guruCardSchema = z.object({
   color: cardColorSchema,
 });
 
-export const insightCardSchema = z.object({
+const insightCardSchema = z.object({
   type: z.literal("insight"),
   headline: textFieldSchema,
   body: textFieldSchema,
   verdict: textFieldSchema,
 });
 
-export const planCardSchema = z.object({
+const planCardSchema = z.object({
   type: z.literal("plan"),
   startBalance: z.number().nonnegative(),
   monthlyAdd: z.number().nonnegative(),
@@ -113,7 +113,7 @@ export const planCardSchema = z.object({
   verdict: textFieldSchema,
 });
 
-export const chartCardSchema = z.object({
+const chartCardSchema = z.object({
   type: z.literal("chart"),
   pattern: textFieldSchema,
   bias: chartBiasSchema,
@@ -125,7 +125,7 @@ export const chartCardSchema = z.object({
   verdict: textFieldSchema,
 });
 
-export const setupCardSchema = z.object({
+const setupCardSchema = z.object({
   type: z.literal("setup"),
   asset: textFieldSchema,
   bias: chartBiasSchema,
@@ -139,7 +139,7 @@ export const setupCardSchema = z.object({
 });
 
 
-export const projectionCardSchema = z.object({
+const projectionCardSchema = z.object({
   type: z.literal("projection"),
   months: z.number().int().positive(),
   startBalance: z.number().nonnegative(),
@@ -265,7 +265,7 @@ export const askRequestSchema = z
     });
   });
 
-export const askAttachmentMetaSchema = z
+const askAttachmentMetaSchema = z
   .object({
     fileName: z.string().trim().min(1).nullable().optional(),
     mimeType: z.string().trim().min(1).nullable().optional(),
@@ -283,6 +283,9 @@ export const askUiMetaSchema = z
     projectionMarkers: z.array(z.number().int().nonnegative()).optional(),
     verificationKind: z.enum(["broker", "propfirm"]).optional(),
     verificationSourceLabel: z.string().trim().min(1).optional(),
+    // Tappable next-question suggestions under the answer (in the user's voice).
+    // Lives in uiMeta so it persists with the message and survives a refresh.
+    followups: z.array(z.string().trim().min(1).max(120)).max(3).optional(),
   })
   .optional();
 
@@ -298,7 +301,7 @@ export const askResponseSchema = z.object({
   messageId: z.string().uuid(),
 });
 
-export const askHistoryPageMessageSchema = z.object({
+const askHistoryPageMessageSchema = z.object({
   id: z.string().min(1),
   role: z.enum(["user", "assistant"]),
   content: z.string().trim(),
@@ -313,7 +316,7 @@ export const askHistoryPageSchema = z.object({
   nextCursor: z.string().trim().min(1).nullable(),
 });
 
-export const askSessionListItemSchema = z.object({
+const askSessionListItemSchema = z.object({
   id: z.string().uuid(),
   title: z.string().trim().min(1),
   updatedAt: z.string().trim().min(1),

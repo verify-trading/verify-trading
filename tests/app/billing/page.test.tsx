@@ -24,9 +24,9 @@ vi.mock("@/lib/rate-limit/load-ask-usage", () => ({
 }));
 
 vi.mock("@/components/billing/billing-page-view", () => ({
-  BillingPageView: (props: { isCanceling: boolean }) => {
+  BillingPageView: (props: { state: { isCanceling: boolean } }) => {
     mockBillingPageView(props);
-    return <div>{props.isCanceling ? "Canceling subscription" : "Active subscription"}</div>;
+    return <div>{props.state.isCanceling ? "Canceling subscription" : "Active subscription"}</div>;
   },
 }));
 
@@ -109,7 +109,9 @@ describe("BillingPage", () => {
     expect(screen.getByText("Canceling subscription")).toBeInTheDocument();
     expect(mockBillingPageView).toHaveBeenCalledWith(
       expect.objectContaining({
-        isCanceling: true,
+        state: expect.objectContaining({
+          isCanceling: true,
+        }),
       }),
     );
     expect(mockLoadAskUsageState).not.toHaveBeenCalled();
@@ -147,7 +149,9 @@ describe("BillingPage", () => {
     expect(mockLoadAskUsageState).toHaveBeenCalledWith(expect.anything(), "user-2");
     expect(mockBillingPageView).toHaveBeenCalledWith(
       expect.objectContaining({
-        showSubscriptionManagement: false,
+        state: expect.objectContaining({
+          showSubscriptionManagement: false,
+        }),
         freeAskUsage: expect.objectContaining({
           used: 2,
           remaining: 8,
@@ -185,9 +189,11 @@ describe("BillingPage", () => {
 
     expect(mockBillingPageView).toHaveBeenCalledWith(
       expect.objectContaining({
-        canOpenBillingPortal: true,
-        canManageSubscriptionActions: false,
-        showSubscriptionManagement: true,
+        state: expect.objectContaining({
+          canOpenBillingPortal: true,
+          canManageSubscriptionActions: false,
+          showSubscriptionManagement: true,
+        }),
         currentPlanLabel: "Pro",
       }),
     );

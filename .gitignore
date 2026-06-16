@@ -17,6 +17,12 @@ out
 !.env.example
 .npm-cache
 
+# Local data import files (loaded into Supabase via scripts/data/*.mjs, not committed)
+/BTS_MASTER_FOR_DEV_FIXED.csv
+/ITVE_v3_rules.csv
+/verified_entities_seed-1.csv
+/analysis_rules_seed.csv
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

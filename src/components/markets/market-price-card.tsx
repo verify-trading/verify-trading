@@ -31,6 +31,7 @@ export function MarketPriceCard({
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "relative flex min-h-[120px] min-w-0 flex-col overflow-hidden rounded-xl border px-3.5 pb-2.5 pt-3.5 text-left transition-all",

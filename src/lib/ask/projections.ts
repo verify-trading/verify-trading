@@ -8,7 +8,7 @@ export const generateProjectionInputSchema = z.object({
   monthlyAdd: z.number().nonnegative().optional().describe("Monthly deposit or top-up."),
   currencySymbol: z.string().min(1).max(4).optional().describe("Display currency symbol such as $, £, or €."),
   monthlyReturnPercent: z.number().positive().optional().describe("Expected monthly percentage return."),
-  drawdownEveryMonths: z.number().int().positive().optional().describe("How often a drawdown event happens in months."),
+  drawdownEveryMonths: z.number().int().nonnegative().optional().describe("How often a drawdown event happens in months. Use 0 for no drawdowns."),
   drawdownPercent: z.number().nonnegative().optional().describe("Percentage hit applied on each drawdown event."),
 });
 
@@ -32,14 +32,6 @@ function roundMoney(value: number) {
   return Number(value.toFixed(2));
 }
 
-export function calculateCompoundBalance(
-  startBalance: number,
-  monthlyReturnPercent: number,
-  months: number,
-) {
-  return roundMoney(startBalance * Math.pow(1 + monthlyReturnPercent / 100, months));
-}
-
 function resolveProjectionInput(input: GenerateProjectionInput): ResolvedProjectionInput {
   return {
     months: input.months,
@@ -55,22 +47,23 @@ function buildProjectionVerdict(input: GenerateProjectionInput, resolved: Resolv
   const usesDefaultReturn = input.monthlyReturnPercent == null;
   const usesDefaultDrawdownEveryMonths = input.drawdownEveryMonths == null;
   const usesDefaultDrawdownPercent = input.drawdownPercent == null;
-  const usesBaseCase =
-    usesDefaultReturn || usesDefaultDrawdownEveryMonths || usesDefaultDrawdownPercent;
+  const returnLabel = usesDefaultReturn
+    ? `default ${resolved.monthlyReturnPercent}% monthly return`
+    : `your ${resolved.monthlyReturnPercent}% monthly return`;
 
   if (resolved.drawdownEveryMonths > 0 && resolved.drawdownPercent > 0) {
-    if (usesBaseCase) {
-      return `Base case uses ${resolved.monthlyReturnPercent}% monthly returns with ${resolved.drawdownPercent}% drawdowns every ${resolved.drawdownEveryMonths} months. Use your real return and drawdown profile for a tighter forecast.`;
+    if (usesDefaultDrawdownEveryMonths || usesDefaultDrawdownPercent) {
+      return `Using ${returnLabel}, plus default drawdowns of ${resolved.drawdownPercent}% every ${resolved.drawdownEveryMonths} months. Change the drawdown profile for a tighter forecast.`;
     }
 
-    return `Using ${resolved.monthlyReturnPercent}% monthly returns with ${resolved.drawdownPercent}% drawdowns every ${resolved.drawdownEveryMonths} months.`;
+    return `Using ${returnLabel} with your ${resolved.drawdownPercent}% drawdowns every ${resolved.drawdownEveryMonths} months.`;
   }
 
-  if (usesBaseCase) {
-    return `Base case uses ${resolved.monthlyReturnPercent}% monthly returns with no drawdown model. Treat that as optimistic, not guaranteed.`;
+  if (input.drawdownEveryMonths === 0 || input.drawdownPercent === 0) {
+    return `Using ${returnLabel} with your no drawdown assumption. Treat that as optimistic, not guaranteed.`;
   }
 
-  return `Using ${resolved.monthlyReturnPercent}% monthly returns with no drawdown model.`;
+  return `Using ${returnLabel} with no drawdown model. Treat that as optimistic, not guaranteed.`;
 }
 
 export function generateProjectionCard(input: GenerateProjectionInput): ProjectionCard {

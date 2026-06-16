@@ -335,12 +335,17 @@ export function createSupabasePersistence(userId: string): AskPersistence {
       }
 
       const now = new Date().toISOString();
-      const attachmentMeta = await uploadAttachment(userId, input);
-      const { data: existingSession, error: existingSessionError } = await client
-        .from("chat_sessions")
-        .select("title, user_id")
-        .eq("id", input.sessionId)
-        .maybeSingle();
+      const [
+        attachmentMeta,
+        { data: existingSession, error: existingSessionError },
+      ] = await Promise.all([
+        uploadAttachment(userId, input),
+        client
+          .from("chat_sessions")
+          .select("title, user_id")
+          .eq("id", input.sessionId)
+          .maybeSingle(),
+      ]);
 
       if (existingSessionError) {
         throw new Error("Could not load the Ask session.");

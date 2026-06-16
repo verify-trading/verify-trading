@@ -14,7 +14,7 @@ const USER_MESSAGES: Record<AskFailureCode, string> = {
   unknown: "Could not get an answer right now. Please try again.",
 };
 
-export function getUserMessageForAskFailureCode(code: AskFailureCode): string {
+function getUserMessageForAskFailureCode(code: AskFailureCode): string {
   return USER_MESSAGES[code];
 }
 

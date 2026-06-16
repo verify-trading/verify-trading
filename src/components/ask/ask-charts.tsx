@@ -99,7 +99,11 @@ export function InteractiveProjectionCurve({
   }
 
   return (
-    <div data-testid="projection-curve" className="h-[min(200px,42vw)] w-full min-h-[120px] sm:h-[180px]">
+    <div
+      data-testid="projection-curve"
+      className="h-[170px] w-full rounded-2xl bg-[var(--vt-card-alt)] p-1 sm:h-[180px]"
+      aria-label="Projected balance curve by month."
+    >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 6, left: 4, bottom: 4 }}>
           <defs>
@@ -123,7 +127,7 @@ export function InteractiveProjectionCurve({
             tickLine={false}
             axisLine={false}
             width={48}
-            tickFormatter={(v) => {
+            tickFormatter={(v: number) => {
               if (Math.abs(v) >= 1_000_000) return `${symbol}${(v / 1_000_000).toFixed(1)}`;
               if (Math.abs(v) >= 1000) return `${symbol}${(v / 1000).toFixed(0)}k`;
               return `${symbol}${Math.round(v)}`;
@@ -187,7 +191,7 @@ export function InteractiveMarketMiniChart({
         data-testid="market-mini-chart"
         className="rounded-2xl bg-[var(--vt-card-alt)] px-2 py-6 text-center text-xs text-white/40"
       >
-        —
+        -
       </div>
     );
   }
@@ -195,9 +199,8 @@ export function InteractiveMarketMiniChart({
   return (
     <div
       data-testid="market-mini-chart"
-      className="group/chart h-[92px] w-full cursor-crosshair rounded-2xl bg-[var(--vt-card-alt)] px-1 py-1 sm:h-[100px]"
-      role="img"
-      aria-label="Price series — hover or drag to inspect points along the line."
+      className="group/chart h-[92px] w-full cursor-crosshair rounded-2xl bg-[var(--vt-card-alt)] p-1 sm:h-[100px]"
+      aria-label="Price series, hover or drag to inspect points along the line."
     >
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 6, right: 4, left: 0, bottom: 2 }}>

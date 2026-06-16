@@ -129,10 +129,14 @@ export async function fetchMarketSeries(symbol: string, timeframe: MarketSeriesT
     outputsize: config.outputsize,
   });
   const data = (await fetchJson(url)) as { values?: Array<{ close: string }> };
-  const values = (data.values ?? [])
-    .map((v) => parseFloat(v.close))
-    .filter(Number.isFinite)
-    .reverse(); // oldest first
+  const values = [];
+  for (const point of data.values ?? []) {
+    const close = parseFloat(point.close);
+    if (Number.isFinite(close)) {
+      values.push(close);
+    }
+  }
+  values.reverse(); // oldest first
 
   return { symbol, values };
 }
@@ -232,37 +236,38 @@ export async function verifyTwelveData(): Promise<{
   console.log("\n🔍 Verifying Twelve Data API...\n");
 
   // 1. Fetch quotes for all categories
-  const quotes: Record<string, TwelveDataQuote[]> = {};
-  for (const [cat, { label, symbols }] of Object.entries(MARKET_CATEGORIES)) {
+  const quoteEntries = await Promise.all(Object.entries(MARKET_CATEGORIES).map(async ([cat, { label, symbols }]) => {
     console.log(`Fetching ${label} (${symbols.length} symbols)...`);
     try {
       const data = await fetchQuotes(symbols);
-      quotes[cat] = data;
       console.log(`  ✅ ${data.length} quotes received`);
       data.forEach((q) => {
         const dir = q.percent_change >= 0 ? "▲" : "▼";
         console.log(`     ${q.symbol}: ${q.price.toFixed(5)} ${dir} ${q.percent_change.toFixed(2)}%`);
       });
+      return [cat, data] as const;
     } catch (e) {
       console.log(`  ❌ Failed: ${e instanceof Error ? e.message : String(e)}`);
-      quotes[cat] = [];
+      return [cat, []] as const;
     }
-  }
+  }));
+  const quotes = Object.fromEntries(quoteEntries);
 
   // 2. Fetch sparkline for one symbol from each category
-  const sparklines: Record<string, TwelveDataSparkline> = {};
   const sampleSymbols = ["EUR/USD", "XAU/USD", "BTC/USD", "QQQ"];
-  for (const sym of sampleSymbols) {
+  const sparklineEntries = await Promise.all(sampleSymbols.map(async (sym) => {
     console.log(`\nFetching sparkline for ${sym}...`);
     try {
       const data = await fetchSparkline(sym);
-      sparklines[sym] = data;
       console.log(`  ✅ ${data.values.length} data points`);
       console.log(`     Range: ${data.values[0]?.toFixed(5)} → ${data.values[data.values.length - 1]?.toFixed(5)}`);
+      return [sym, data] as const;
     } catch (e) {
       console.log(`  ❌ Failed: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
     }
-  }
+  }));
+  const sparklines = Object.fromEntries(sparklineEntries.filter((entry) => entry !== null));
 
   // 3. Check credit usage
   console.log("\nChecking API credit usage...");

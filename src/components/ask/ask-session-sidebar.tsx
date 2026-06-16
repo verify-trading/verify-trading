@@ -10,16 +10,18 @@ import {
 import { Button } from "@/components/ui/button";
 import type { AskSessionListItem } from "@/lib/ask/contracts";
 
+const SESSION_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 function formatSessionTime(updatedAt: string) {
   const date = new Date(updatedAt);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  return SESSION_TIME_FORMATTER.format(date);
 }
 
 function groupLabel(updatedAt: string) {
@@ -42,26 +44,25 @@ function groupLabel(updatedAt: string) {
 export function AskSessionSidebar({
   sessions,
   activeSessionId,
-  isLoading,
-  isLoadingMore,
-  hasMore,
+  state,
   onNewSession,
   onLoadMore,
   onSelectSession,
   onRequestDeleteSession,
-  isCollapsed,
   onToggleCollapse,
 }: {
   sessions: AskSessionListItem[];
   activeSessionId: string | null;
-  isLoading: boolean;
-  isLoadingMore: boolean;
-  hasMore: boolean;
+  state: {
+    loading: boolean;
+    loadingMore: boolean;
+    hasMore: boolean;
+    collapsed: boolean;
+  };
   onNewSession: () => void;
   onLoadMore: () => void;
   onSelectSession: (sessionId: string) => void;
   onRequestDeleteSession: (session: { id: string; title: string }) => void;
-  isCollapsed: boolean;
   onToggleCollapse: () => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,7 +87,7 @@ export function AskSessionSidebar({
 
   const maybeLoadMore = useCallback(() => {
     const viewport = viewportRef.current;
-    if (!viewport || isLoading || isLoadingMore || !hasMore) {
+    if (!viewport || state.loading || state.loadingMore || !state.hasMore) {
       return;
     }
 
@@ -94,14 +95,14 @@ export function AskSessionSidebar({
     if (remaining <= 48) {
       onLoadMore();
     }
-  }, [hasMore, isLoading, isLoadingMore, onLoadMore]);
+  }, [onLoadMore, state.hasMore, state.loading, state.loadingMore]);
 
   useEffect(() => {
     maybeLoadMore();
   }, [filteredSessions.length, maybeLoadMore]);
 
   useEffect(() => {
-    if (isCollapsed) {
+    if (state.collapsed) {
       return;
     }
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -113,13 +114,13 @@ export function AskSessionSidebar({
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [isCollapsed]);
+  }, [state.collapsed]);
 
   const asideClassName = [
     "flex shrink-0 flex-col overflow-hidden py-0",
     "transition-[width] duration-300 ease-out motion-reduce:transition-none",
-    isCollapsed ? "lg:w-14" : "lg:w-80 xl:w-96",
-    isCollapsed
+    state.collapsed ? "lg:w-14" : "lg:w-80 xl:w-96",
+    state.collapsed
       ? "max-lg:relative max-lg:w-full max-lg:border-b max-lg:border-white/[0.04]"
       : [
           "max-lg:fixed max-lg:inset-x-0 max-lg:top-[calc(env(safe-area-inset-top)+3.5rem)] max-lg:bottom-0 z-40 max-lg:w-full max-lg:max-h-none max-lg:border-0",
@@ -129,7 +130,7 @@ export function AskSessionSidebar({
 
   return (
     <>
-      {!isCollapsed ? (
+      {!state.collapsed ? (
         <Button
           type="button"
           variant="ghost"
@@ -146,17 +147,17 @@ export function AskSessionSidebar({
         Inner min-width matches expanded aside per breakpoint so the clip animation stays aligned.
       */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-[20rem] xl:min-w-[24rem] lg:flex-row">
-        <div className="flex h-12 shrink-0 flex-row items-center justify-between gap-2 border-white/[0.06] bg-white/[0.02] px-3 py-0 max-lg:border-b lg:h-auto lg:w-14 lg:bg-transparent lg:px-0 lg:py-3 lg:flex-col lg:justify-start lg:gap-3 lg:border-b-0 lg:border-r">
+          <div className="flex h-12 shrink-0 flex-row items-center justify-between gap-2 border-white/[0.06] bg-white/[0.02] px-3 py-0 max-lg:border-b lg:h-auto lg:w-14 lg:bg-transparent lg:px-0 lg:py-3 lg:flex-col lg:justify-start lg:gap-3 lg:border-b-0 lg:border-r">
           <Button
             type="button"
             variant="ghost"
             size="icon"
             onClick={onToggleCollapse}
             className="size-10 rounded-xl text-[var(--vt-muted)] hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
-            aria-label={isCollapsed ? "Open sidebar" : "Close sidebar"}
-            aria-expanded={!isCollapsed}
+            aria-label={state.collapsed ? "Open sidebar" : "Close sidebar"}
+            aria-expanded={!state.collapsed}
           >
-            {isCollapsed ? (
+            {state.collapsed ? (
               <PanelLeft className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
             ) : (
               <PanelLeftClose className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
@@ -177,7 +178,7 @@ export function AskSessionSidebar({
         <div
           className={[
             "flex min-h-0 min-w-0 flex-1 flex-col",
-            isCollapsed ? "max-lg:hidden" : "",
+            state.collapsed ? "max-lg:hidden" : "",
           ].join(" ")}
         >
           <div className="relative mx-3 mb-3 mt-3">
@@ -191,6 +192,7 @@ export function AskSessionSidebar({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search sessions…"
+              aria-label="Search sessions"
               className="block w-full rounded-lg border border-white/[0.06] bg-white/[0.03] py-1.5 pl-8 pr-3 text-xs text-white outline-none transition placeholder:text-white/25 focus:border-[rgba(76,110,245,0.3)] focus:bg-white/[0.05]"
             />
           </div>
@@ -200,21 +202,24 @@ export function AskSessionSidebar({
             onScroll={maybeLoadMore}
             className="ask-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-3 lg:pb-3"
           >
-            {isLoading ? (
+            {state.loading ? (
               <AskSessionListSkeleton />
             ) : filteredSessions.length === 0 ? (
               <div className="px-2 py-4 text-center text-xs font-medium text-white/30">
                 {searchQuery ? "No matches" : "No sessions yet"}
               </div>
             ) : (
-              groupOrder
-                .filter((label) => grouped[label]?.length)
-                .map((label) => (
+              groupOrder.flatMap((label) => {
+                const groupSessions = grouped[label];
+                if (!groupSessions?.length) {
+                  return [];
+                }
+                return [
                   <div key={label} className="mb-3">
                     <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/25">
                       {label}
                     </div>
-                    {grouped[label]!.map((session) => {
+                    {groupSessions.map((session) => {
                       const isActive = session.id === activeSessionId;
                       return (
                         <div
@@ -255,10 +260,11 @@ export function AskSessionSidebar({
                         </div>
                       );
                     })}
-                  </div>
-                ))
+                  </div>,
+                ];
+              })
             )}
-            {isLoadingMore ? <AskSessionLoadMoreSkeleton /> : null}
+            {state.loadingMore ? <AskSessionLoadMoreSkeleton /> : null}
           </div>
         </div>
       </div>

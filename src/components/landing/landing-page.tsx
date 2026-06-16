@@ -136,24 +136,26 @@ function ProductVideoModal({
 }) {
   return (
     <Modal open={open} onClose={onClose} size="2xl" aria-label={`${appName} walkthrough video`}>
-      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black">
+      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-950">
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/85 backdrop-blur transition hover:bg-black/75 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+          className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full border border-white/15 bg-slate-950/55 text-white/85 backdrop-blur transition hover:bg-slate-950/75 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
           aria-label="Close video"
         >
           <X className="size-4" aria-hidden />
         </button>
         <video
           key={open ? "open" : "closed"}
-          className="aspect-video w-full bg-black object-cover"
+          className="aspect-video w-full bg-slate-950 object-cover"
           src="/main-video.mp4"
           autoPlay
           controls
           playsInline
           aria-label={`${appName} walkthrough video`}
-        />
+        >
+          <track kind="captions" />
+        </video>
       </div>
     </Modal>
   );
@@ -175,7 +177,7 @@ function HeroSection() {
               <AppWordmarkInline />
             </span>
             <span className="block">One Check.</span>
-            <span className="block bg-gradient-to-r from-[var(--vt-blue)] via-[#8b5cf6] to-[var(--vt-coral)] bg-clip-text text-transparent">
+            <span className="block text-[var(--vt-coral)]">
               Better Decisions.
             </span>
             <span className="block">Fewer Losses.</span>
@@ -307,7 +309,7 @@ function FeaturesSection() {
         </h2>
         <p className="mt-4 text-base leading-relaxed text-slate-400">
           {appName} reduces guesswork: artificial intelligence built with verified inputs, structured routing, and
-          deterministic maths—the only AI that thinks like a trader.
+          deterministic maths, the only AI that thinks like a trader.
         </p>
       </div>
 
@@ -492,7 +494,7 @@ function GuideCTASection() {
         <div className="max-w-2xl">
           <SectionEyebrow>Guide</SectionEyebrow>
           <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
-            Before You Trade — Read This
+            Before You Trade: Read This
           </h2>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-400">
             A step-by-step guide to verifying trades, avoiding risk, and using every feature in seconds.

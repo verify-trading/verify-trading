@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import type { AskUsageSummary } from "@/lib/rate-limit/usage";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 function initialsFromUser(email: string | undefined, profile: AccountMenuProfile | null) {
@@ -36,7 +35,7 @@ function initialsFromUser(email: string | undefined, profile: AccountMenuProfile
 }
 
 export function UserMenu() {
-  const router = useRouter();
+  const { push, refresh } = useRouter();
   const pathname = usePathname();
   const { supabase, user, ready, isSignedIn } = useSupabaseAuth();
   const email = user?.email ?? "";
@@ -68,8 +67,8 @@ export function UserMenu() {
       return;
     }
     toast.success("Signed out.");
-    router.push("/");
-    router.refresh();
+    push("/");
+    refresh();
   }
 
   if (!ready) {
@@ -115,7 +114,7 @@ export function UserMenu() {
           sideOffset={8}
           align="end"
         >
-          <div className="border-b border-white/[0.06] px-3 py-3">
+          <div className="border-b border-white/[0.06] p-3">
             <div className="flex items-start gap-2">
               <UserRound className="mt-0.5 size-4 shrink-0 text-[var(--vt-muted)]" strokeWidth={2} aria-hidden />
               <div className="min-w-0 flex-1">
@@ -133,7 +132,7 @@ export function UserMenu() {
           </div>
 
           {usage ? (
-            <div className="border-b border-white/[0.06] px-3 py-3">
+            <div className="border-b border-white/[0.06] p-3">
               <div className="rounded-xl border border-[color:var(--vt-border)] bg-white/[0.04] px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-white">
                   <span>Daily message usage</span>
@@ -141,22 +140,12 @@ export function UserMenu() {
                     {usage.used}/{usage.limit}
                   </span>
                 </div>
-                <div
-                  className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.08]"
-                  role="progressbar"
+                <progress
+                  className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/[0.08] accent-[var(--vt-blue)]"
                   aria-label="Daily message usage"
-                  aria-valuemin={0}
-                  aria-valuemax={usage.limit}
-                  aria-valuenow={usage.used}
-                >
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-[width]",
-                      isPro ? "bg-[var(--vt-green)]" : "bg-[var(--vt-blue)]",
-                    )}
-                    style={{ width: `${usage.progressPercent}%` }}
-                  />
-                </div>
+                  max={usage.limit}
+                  value={usage.used}
+                />
                 <p className="mt-2 text-[11px] text-[var(--vt-muted)]">
                   {usage.remaining === 0
                     ? isPro

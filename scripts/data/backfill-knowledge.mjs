@@ -6,7 +6,10 @@
 // Env:
 //   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY      (required)
 
+import nextEnv from "@next/env";
 import { createClient } from "@supabase/supabase-js";
+
+const { loadEnvConfig } = nextEnv;
 
 function normalizeAliasText(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
@@ -51,12 +54,27 @@ const ENTITY_TYPE_LABELS = {
 
 function entityToDocument(row) {
   const aliases = expandEntityAliases(row.name, row.aliases ?? []);
+  const isBroker = row.entity_type === "broker";
+  // BTS broker rows store inputs and compute the score on read, so trust_score
+  // is often null — only state a hard score when one is actually stored.
+  const hasScore = row.trust_score !== null && row.trust_score !== undefined;
   const lines = [
-    `${row.name} is a ${ENTITY_TYPE_LABELS[row.entity_type] ?? "entity"} with status "${row.status}" and trust score ${Number(row.trust_score).toFixed(1)}/10.`,
-    row.entity_type === "broker"
-      ? `FCA registered: ${row.fca_registered ? `yes${row.fca_reference ? ` (FRN ${row.fca_reference})` : ""}` : "no"}.${row.fca_warning ? " The FCA has published a warning about this firm." : ""}`
+    `${row.name} is a ${ENTITY_TYPE_LABELS[row.entity_type] ?? "entity"} with status "${row.status}"${
+      hasScore ? ` and trust score ${Number(row.trust_score).toFixed(1)}/10` : ""
+    }.`,
+    isBroker && row.final_tier
+      ? `BTS tier: ${row.final_tier}${row.founder_verified ? " (founder-verified, locked)" : ""}.${
+          row.leverage ? ` Advertised max retail leverage ${row.leverage}.` : ""
+        }`
       : null,
-    row.notes,
+    isBroker && row.regulators_listed
+      ? `Regulators listed (unverified research; the live register is the source of truth): ${row.regulators_listed}.`
+      : null,
+    isBroker
+      ? `FCA registered: ${row.fca_registered ? `yes${row.fca_reference ? ` (FRN ${row.fca_reference})` : ""}` : "not confirmed"}.${row.fca_warning ? " The FCA has published a warning about this firm." : ""}`
+      : null,
+    row.founder_notes ? `Founder note: ${row.founder_notes}` : null,
+    row.notes && row.notes !== row.founder_notes ? row.notes : null,
   ];
 
   return {
@@ -68,7 +86,9 @@ function entityToDocument(row) {
       status: row.status,
       fca_registered: Boolean(row.fca_registered),
       fca_warning: Boolean(row.fca_warning),
-      trust_score: Number(row.trust_score),
+      final_tier: row.final_tier ?? null,
+      founder_verified: Boolean(row.founder_verified),
+      ...(hasScore ? { trust_score: Number(row.trust_score) } : {}),
     },
     aliases,
     searchable_text: [normalizeAliasText(row.name), ...aliases].join(" "),
@@ -95,6 +115,8 @@ function ruleToDocument(row) {
 }
 
 async function main() {
+  loadEnvConfig(process.cwd());
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceRoleKey) {

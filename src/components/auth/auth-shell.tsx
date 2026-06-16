@@ -5,9 +5,8 @@ import { SiteNav } from "@/components/site/site-nav";
 /** Centered spinner for auth Suspense / session checks (matches Ask route fallback). */
 export function AuthShellSpinner() {
   return (
-    <div
+    <output
       className="flex min-h-44 flex-col items-center justify-center py-8"
-      role="status"
       aria-busy="true"
       aria-live="polite"
     >
@@ -16,7 +15,7 @@ export function AuthShellSpinner() {
         className="size-8 shrink-0 animate-spin rounded-full border-2 border-white/15 border-t-(--vt-blue)"
         aria-hidden
       />
-    </div>
+    </output>
   );
 }
 
@@ -40,7 +39,7 @@ export function AuthShell({
         coupled with a faint, static dark-blue radial spotlight behind the form.
       */}
       <div className="fixed inset-0 z-0 pointer-events-none flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-[var(--vt-blue)] opacity-5 blur-[140px] rounded-full w-[800px] h-[800px]" />
+        <div className="absolute inset-0 size-[800px] rounded-full bg-[var(--vt-blue)] opacity-5 blur-[140px]" />
         <div 
           className="absolute inset-0 opacity-[0.06]" 
           style={{ 

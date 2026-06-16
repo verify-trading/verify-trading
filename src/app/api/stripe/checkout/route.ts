@@ -20,7 +20,22 @@ type ProfileRow = {
 const checkoutRequestSchema = z.object({
   plan: z.enum(["weekly", "monthly", "annual"]).default("monthly"),
   rewardfulReferral: z.string().optional(),
+  source: z.enum(["web", "mobile"]).default("web"),
 });
+
+function checkoutReturnUrls(origin: string, source: "web" | "mobile") {
+  if (source === "mobile") {
+    return {
+      successUrl: "verifytrading://billing/checkout?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+      cancelUrl: "verifytrading://billing/checkout?checkout=cancelled",
+    };
+  }
+
+  return {
+    successUrl: `${origin}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${origin}/billing?checkout=cancelled`,
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -70,7 +85,7 @@ export async function POST(request: Request) {
       plan: payload.plan,
     });
 
-    if (checkoutClaim.checkoutUrl) {
+    if (checkoutClaim.checkoutUrl && payload.source === "web") {
       return NextResponse.json({
         url: checkoutClaim.checkoutUrl,
       });
@@ -85,6 +100,7 @@ export async function POST(request: Request) {
 
     const stripe = getStripeServerClient();
     const origin = new URL(request.url).origin;
+    const returnUrls = checkoutReturnUrls(origin, payload.source);
     const metadata = {
       supabaseUserId: session.user.id,
       planKey: "pro",
@@ -92,8 +108,12 @@ export async function POST(request: Request) {
       ...(payload.rewardfulReferral && { rewardful_referral: payload.rewardfulReferral }),
     };
 
-    if (checkoutClaim.replacedCheckoutSessionId) {
-      await stripe.checkout.sessions.expire(checkoutClaim.replacedCheckoutSessionId).catch(() => undefined);
+    const staleCheckoutSessionId =
+      checkoutClaim.replacedCheckoutSessionId ??
+      (payload.source === "mobile" ? checkoutClaim.stripeCheckoutSessionId : null);
+
+    if (staleCheckoutSessionId) {
+      await stripe.checkout.sessions.expire(staleCheckoutSessionId).catch(() => undefined);
     }
 
     const checkoutSession = await stripe.checkout.sessions.create(
@@ -109,8 +129,8 @@ export async function POST(request: Request) {
             quantity: 1,
           },
         ],
-        success_url: `${origin}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/billing?checkout=cancelled`,
+        success_url: returnUrls.successUrl,
+        cancel_url: returnUrls.cancelUrl,
         metadata,
         subscription_data: {
           metadata,

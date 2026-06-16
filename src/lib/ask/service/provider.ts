@@ -4,7 +4,7 @@ import { anthropic } from "@ai-sdk/anthropic";
 export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
 /** Used when the primary model fails after retries (overload / 5xx / rate limits). */
-export const DEFAULT_ANTHROPIC_FALLBACK_MODEL = "claude-haiku-4-5-20251001";
+const DEFAULT_ANTHROPIC_FALLBACK_MODEL = "claude-haiku-4-5-20251001";
 
 /** Used for simple Ask requests that do not need Sonnet-class reasoning. */
 export const DEFAULT_ANTHROPIC_SIMPLE_MODEL = DEFAULT_ANTHROPIC_FALLBACK_MODEL;

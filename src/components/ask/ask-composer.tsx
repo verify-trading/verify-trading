@@ -141,6 +141,7 @@ export function AskComposer({
             ref={textareaRef}
             value={draft}
             disabled={disabled}
+            aria-label="Ask message"
             onChange={(event) => onDraftChange(event.target.value)}
             onFocus={() => {
               requestAnimationFrame(() => {

@@ -2,8 +2,8 @@
 
 import {
   createContext,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
@@ -38,24 +38,20 @@ const CookieConsentContext = createContext<CookieConsentContextValue | null>(nul
  */
 export const COOKIE_CONSENT_BANNER_ENABLED = false;
 
-export function CookieConsentProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<Status>("loading");
-  const [choice, setChoice] = useState<CookieConsentChoice | null>(null);
+function initialCookieConsentState(): { status: Status; choice: CookieConsentChoice | null } {
+  const stored = readConsentFromStorage();
+  if (stored) {
+    return { status: "resolved", choice: stored.choice };
+  }
+  if (!COOKIE_CONSENT_BANNER_ENABLED) {
+    return { status: "resolved", choice: null };
+  }
+  return { status: "pending", choice: null };
+}
 
-  useEffect(() => {
-    const stored = readConsentFromStorage();
-    if (stored) {
-      setChoice(stored.choice);
-      setStatus("resolved");
-      return;
-    }
-    if (!COOKIE_CONSENT_BANNER_ENABLED) {
-      setChoice(null);
-      setStatus("resolved");
-      return;
-    }
-    setStatus("pending");
-  }, []);
+export function CookieConsentProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState(initialCookieConsentState);
+  const { status, choice } = state;
 
   useEffect(() => {
     if (status === "pending") {
@@ -71,15 +67,13 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
   const acceptAll = useCallback(() => {
     writeConsentToStorage("all");
     dispatchConsentChange("all");
-    setChoice("all");
-    setStatus("resolved");
+    setState({ choice: "all", status: "resolved" });
   }, []);
 
   const acceptEssentialOnly = useCallback(() => {
     writeConsentToStorage("essential");
     dispatchConsentChange("essential");
-    setChoice("essential");
-    setStatus("resolved");
+    setState({ choice: "essential", status: "resolved" });
   }, []);
 
   const value = useMemo<CookieConsentContextValue>(
@@ -104,8 +98,8 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useCookieConsent(): CookieConsentContextValue {
-  const ctx = useContext(CookieConsentContext);
+function useCookieConsent(): CookieConsentContextValue {
+  const ctx = use(CookieConsentContext);
   if (!ctx) {
     throw new Error("useCookieConsent must be used within CookieConsentProvider");
   }

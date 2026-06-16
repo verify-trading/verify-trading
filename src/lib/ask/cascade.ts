@@ -22,12 +22,14 @@ import {
 } from "@/lib/ask/knowledge/retrieve";
 import { logger } from "@/lib/observability/logger";
 import { cascadeAskSystemPrompt } from "@/lib/ask/cascade-prompt";
+import { itveVerificationFramework } from "@/lib/ask/itve-prompt";
 import { askImageResponseGuide, defaultAskImagePrompt } from "@/lib/ask/prompt";
 import {
   extractSubmitAskCard,
   extractToolCard,
   extractUiMeta,
   parseImageDataUrl,
+  withFollowups,
 } from "@/lib/ask/service/context";
 import {
   createSystemMessage,
@@ -138,7 +140,17 @@ function buildCascadeMessages({
     // Volatile context stays uncached so it never invalidates the prefix.
     ...(sessionMemoryMessage ? [plainSystemMessage(sessionMemoryMessage)] : []),
     ...(image ? [plainSystemMessage(askImageResponseGuide)] : []),
-    ...(analysisRulesMessage ? [plainSystemMessage(analysisRulesMessage)] : []),
+    // Chart present => trade-verification mode: the ITVE engine framework with
+    // the analysis rules (Engine 5's reference data) appended in the same block.
+    ...(image
+      ? [
+          plainSystemMessage(
+            analysisRulesMessage
+              ? `${itveVerificationFramework}\n\n${analysisRulesMessage}`
+              : itveVerificationFramework,
+          ),
+        ]
+      : []),
     ...(knowledgeContextBlock ? [plainSystemMessage(knowledgeContextBlock)] : []),
     ...(request.history ?? []).slice(-MAX_HISTORY_TURNS).map((message) => ({
       role: message.role,
@@ -343,7 +355,7 @@ function requiresEscalationGuard(card: AskCard | null) {
 }
 
 /**
- * Cascade Ask pipeline (env flag ASK_PIPELINE=cascade):
+ * Cascade Ask pipeline (default; ASK_PIPELINE=legacy opts out):
  * retrieve → Haiku with full tools + escalate() → Sonnet only when escalated
  * (reusing tier-1 tool evidence) → tool-owned numeric merge.
  */
@@ -413,7 +425,7 @@ export async function generateAskCascadeResponse(
       toolNames: toolResults.map((toolResult) => toolResult.toolName ?? "unknown"),
     });
 
-    const uiMeta = extractUiMeta(merged, toolResults);
+    const uiMeta = withFollowups(extractUiMeta(merged, toolResults), toolResults);
 
     return askResponseSchema.parse({
       data: sanitizeCard(merged),
@@ -449,15 +461,21 @@ export async function generateAskCascadeResponse(
 
     if (tier1 && !tier1.escalated) {
       const card = resolveTierCard(tier1);
-      if (card && !requiresEscalationGuard(card)) {
+      // A raw verify_entity card (broker/guru from a tool result, with no
+      // submit_ask_card) can't answer follow-on product questions like "how long
+      // is the challenge" and carries no follow-ups. Force Sonnet to synthesize.
+      const unsynthesizedEntityCard =
+        !tier1.card && (card?.type === "broker" || card?.type === "guru");
+      if (card && !requiresEscalationGuard(card) && !unsynthesizedEntityCard) {
         return finalize(card, tier1.card ? "submit_ask_card" : "tool_result", tier1.toolResults, "haiku");
       }
 
       if (card) {
-        logger.info("Ask cascade guard escalated a trade-action card to tier 2.", {
+        logger.info("Ask cascade guard escalated an unsynthesized or trade-action card to tier 2.", {
           sessionId,
           messageId,
           cardType: card.type,
+          unsynthesizedEntityCard,
         });
       }
     } else if (tier1?.escalated) {

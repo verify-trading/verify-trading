@@ -12,13 +12,12 @@ const TABS: {
   id: MarketsTabId;
   label: string;
   icon: typeof LineChart;
-  locked?: boolean;
 }[] = [
   { id: "charts", label: "Markets", icon: LineChart },
   { id: "intelligence", label: "Intelligence", icon: Newspaper },
   { id: "calendar", label: "Economic Calendar", icon: Calendar },
-  { id: "journal", label: "Journal", icon: BookOpen, locked: true },
-  { id: "mind", label: "Mind", icon: Brain, locked: true },
+  { id: "journal", label: "Journal", icon: BookOpen },
+  { id: "mind", label: "Mind", icon: Brain },
 ];
 
 function tabPanelId(tab: MarketsTabId): string {
@@ -32,10 +31,16 @@ function tabButtonId(tab: MarketsTabId): string {
 export type MarketsViewTabsProps = {
   activeTab: MarketsTabId;
   onTabChange: (tab: MarketsTabId) => void;
+  lockedTabs?: MarketsTabId[];
   children: ReactNode;
 };
 
-export function MarketsViewTabs({ activeTab, onTabChange, children }: MarketsViewTabsProps) {
+export function MarketsViewTabs({
+  activeTab,
+  onTabChange,
+  lockedTabs = [],
+  children,
+}: MarketsViewTabsProps) {
   return (
     <div className="mb-8">
       <div
@@ -46,6 +51,7 @@ export function MarketsViewTabs({ activeTab, onTabChange, children }: MarketsVie
         {TABS.map((t) => {
           const Icon = t.icon;
           const isActive = t.id === activeTab;
+          const isLocked = lockedTabs.includes(t.id);
           return (
             <Button
               key={t.id}
@@ -66,7 +72,7 @@ export function MarketsViewTabs({ activeTab, onTabChange, children }: MarketsVie
             >
               <Icon size={16} className={isActive ? "text-[var(--vt-coral)]" : "text-[var(--vt-muted)]"} aria-hidden />
               {t.label}
-              {t.locked ? <Lock size={13} className="text-[var(--vt-muted)]" aria-hidden /> : null}
+              {isLocked ? <Lock size={13} className="text-[var(--vt-muted)]" aria-hidden /> : null}
             </Button>
           );
         })}

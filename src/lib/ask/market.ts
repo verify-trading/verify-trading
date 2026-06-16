@@ -99,8 +99,10 @@ export function inferMarketAssetsFromText(text: string): string[] {
   const tokenized = text
     .toLowerCase()
     .split(/[^a-z0-9/]+/)
-    .map((token) => collapseAssetText(token))
-    .filter(Boolean);
+    .flatMap((token) => {
+      const collapsedToken = collapseAssetText(token);
+      return collapsedToken ? [collapsedToken] : [];
+    });
 
   const matches = Object.entries(supportedAssets)
     .filter(([key]) => {
@@ -114,10 +116,6 @@ export function inferMarketAssetsFromText(text: string): string[] {
 
   return [...new Set(matches.map((match) => match[1].asset))];
 }
-
-export const getMarketQuoteInputSchema = z.object({
-  asset: z.string().min(1).describe("Market name or symbol such as Gold, Ethereum, EUR/USD, Nasdaq, AAPL, or TSLA."),
-});
 
 export const getMarketSeriesInputSchema = z.object({
   asset: z.string().min(1).describe("Market name or symbol such as Gold, Ethereum, EUR/USD, Nasdaq, AAPL, or TSLA."),
@@ -319,8 +317,8 @@ function parseTimeSeriesCloseValues(values: unknown[]): number[] {
   const allHaveTs = rows.every((row) => row.ts !== null);
 
   if (allHaveTs) {
-    return [...rows]
-      .sort((a, b) => (a.ts as number) - (b.ts as number))
+    return rows
+      .toSorted((a, b) => (a.ts as number) - (b.ts as number))
       .map((row) => row.close);
   }
 
@@ -442,22 +440,28 @@ async function searchMarketInstrument(
     ).values(),
   );
 
-  const bestMatch = uniqueCandidates
-    .map((entry) => {
-      const candidate = entry as Record<string, unknown>;
-      if (typeof candidate.symbol !== "string" || candidate.symbol.trim().length === 0) {
-        return null;
-      }
-
-      return {
-        symbol: candidate.symbol.trim(),
-        instrumentName:
-          typeof candidate.name === "string" ? candidate.name.trim() : undefined,
-        exchange: typeof candidate.exchange === "string" ? candidate.exchange.trim() : undefined,
-      };
-    })
-    .filter((value): value is NonNullable<typeof value> => value !== null)
-    .sort((left, right) => scoreInstrumentMatch(asset, right) - scoreInstrumentMatch(asset, left))[0];
+  let bestMatch: {
+    symbol: string;
+    instrumentName?: string;
+    exchange?: string;
+  } | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const entry of uniqueCandidates) {
+    const candidate = entry as Record<string, unknown>;
+    if (typeof candidate.symbol !== "string" || candidate.symbol.trim().length === 0) {
+      continue;
+    }
+    const match = {
+      symbol: candidate.symbol.trim(),
+      instrumentName: typeof candidate.name === "string" ? candidate.name.trim() : undefined,
+      exchange: typeof candidate.exchange === "string" ? candidate.exchange.trim() : undefined,
+    };
+    const score = scoreInstrumentMatch(asset, match);
+    if (score > bestScore) {
+      bestMatch = match;
+      bestScore = score;
+    }
+  }
 
   if (!bestMatch) {
     return null;

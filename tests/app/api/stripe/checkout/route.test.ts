@@ -217,6 +217,68 @@ describe("POST /api/stripe/checkout", () => {
     expect(createCheckoutSession.mock.calls[0]?.[0]).not.toHaveProperty("discounts");
   });
 
+  it("creates mobile checkout with app return URLs", async () => {
+    vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
+      checkoutToken: "token-mobile",
+      stripeCheckoutSessionId: null,
+      checkoutUrl: null,
+      expiresAt: new Date().toISOString(),
+      reused: false,
+      replacedCheckoutSessionId: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "monthly", source: "mobile" }),
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success_url: "verifytrading://billing/checkout?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+        cancel_url: "verifytrading://billing/checkout?checkout=cancelled",
+      }),
+      {
+        idempotencyKey: "billing-checkout:token-mobile",
+      },
+    );
+  });
+
+  it("replaces a reused web checkout when mobile needs app return URLs", async () => {
+    vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
+      checkoutToken: "token-reused-mobile",
+      stripeCheckoutSessionId: "cs_web",
+      checkoutUrl: "https://checkout.stripe.test/web-return",
+      expiresAt: new Date().toISOString(),
+      reused: true,
+      replacedCheckoutSessionId: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "monthly", source: "mobile" }),
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(expireCheckoutSession).toHaveBeenCalledWith("cs_web");
+    expect(storeBillingCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkoutToken: "token-reused-mobile",
+        stripeCheckoutSessionId: "cs_123",
+      }),
+    );
+  });
+
   it("expires a stale session if checkout ownership changes mid-request and returns the current session", async () => {
     vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
       checkoutToken: "token-3",

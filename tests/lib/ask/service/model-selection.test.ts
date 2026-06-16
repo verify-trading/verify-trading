@@ -45,7 +45,7 @@ describe("Ask service model selection", () => {
       name: "pure broker checks",
       message: "is completely unknown broker regulated?",
       modelId: DEFAULT_ANTHROPIC_SIMPLE_MODEL,
-      tools: ["submit_ask_card", "verify_entity"],
+      tools: ["submit_ask_card", "verify_entity", "list_verified_entities"],
       exactTools: true,
     },
     {

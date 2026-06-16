@@ -1,3 +1,4 @@
+import { computeBrokerTrustScore, type BtsBand } from "@/lib/ask/bts";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type VerifiedEntityType = "broker" | "guru" | "propfirm";
@@ -15,6 +16,17 @@ export interface VerifiedEntity {
   notes: string;
   source: string;
   aliases: string[];
+  // BTS inputs and computed score, present only on brokers from the BTS master.
+  finalTier?: string | null;
+  founderVerified?: boolean;
+  founderNotes?: string | null;
+  leverage?: string | null;
+  regulatorsListed?: string | null;
+  verificationMethod?: string | null;
+  /** Computed trust band, e.g. "Strongly Trusted". Null for legacy rows. */
+  band?: BtsBand | null;
+  /** True when the row still awaits live/register verification. */
+  provisional?: boolean;
 }
 
 export interface LookupVerifiedEntityResult {
@@ -27,6 +39,9 @@ export interface LookupVerifiedEntityResult {
     fca: "Yes" | "No";
     complaints: "Low" | "Medium" | "High";
     color: "green" | "red";
+    provisional: boolean;
+    band: BtsBand | null;
+    founderNote: string | null;
   };
   guruCardHint?: {
     name: string;
@@ -38,6 +53,11 @@ export interface LookupVerifiedEntityResult {
 }
 
 let verifiedEntitiesCache: Promise<VerifiedEntity[]> | undefined;
+
+/** Display score: "Provisional" until verified, otherwise the trust score to 1dp. */
+function formatTrustScore(provisional: boolean | undefined, trustScore: number) {
+  return provisional ? "Provisional" : trustScore.toFixed(1);
+}
 
 function normalizeEntityText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
@@ -119,28 +139,59 @@ async function loadVerifiedEntitiesFromSupabase(): Promise<VerifiedEntity[]> {
   }
 
   const { data, error } = await client.from("verified_entities").select(
-    "slug, name, entity_type, status, fca_registered, fca_reference, fca_warning, trust_score, notes, source, aliases",
+    "slug, name, entity_type, status, fca_registered, fca_reference, fca_warning, trust_score, notes, source, aliases, regulators_listed, leverage, final_tier, final_status, founder_verified, founder_notes, verification_method",
   );
 
   if (error || !data) {
     return [];
   }
 
-  return data.map((row) => ({
-    id: row.slug as string,
-    name: row.name as string,
-    type: row.entity_type as VerifiedEntityType,
-    status: row.status as VerifiedEntityStatus,
-    fcaRegistered: Boolean(row.fca_registered),
-    fcaReference: (row.fca_reference as string | null) ?? null,
-    fcaWarning: Boolean(row.fca_warning),
-    trustScore: Number(row.trust_score),
-    notes: row.notes as string,
-    source: row.source as string,
-    aliases: Array.isArray(row.aliases)
-      ? row.aliases.map((alias) => String(alias))
-      : createAliases(String(row.name)),
-  }));
+  return data.map((row) => {
+    const finalTier = (row.final_tier as string | null) ?? null;
+    const founderVerified = Boolean(row.founder_verified);
+    const founderNotes = (row.founder_notes as string | null) ?? null;
+    const leverage = (row.leverage as string | null) ?? null;
+    const regulatorsListed = (row.regulators_listed as string | null) ?? null;
+    const verificationMethod = (row.verification_method as string | null) ?? null;
+
+    // BTS rows (with a tier) compute their score on read from stored inputs;
+    // legacy rows (gurus / prop firms / pre-BTS brokers) keep their stored score.
+    const stored = row.trust_score === null ? null : Number(row.trust_score);
+    const computed = finalTier
+      ? computeBrokerTrustScore({
+          finalTier,
+          finalStatus: (row.final_status as string | null) ?? null,
+          founderVerified,
+          leverage,
+          regulatorsListed,
+          verificationMethod,
+        })
+      : null;
+
+    return {
+      id: row.slug as string,
+      name: row.name as string,
+      type: row.entity_type as VerifiedEntityType,
+      status: row.status as VerifiedEntityStatus,
+      fcaRegistered: Boolean(row.fca_registered),
+      fcaReference: (row.fca_reference as string | null) ?? null,
+      fcaWarning: Boolean(row.fca_warning),
+      trustScore: computed ? computed.score : (stored ?? 0),
+      notes: (row.notes as string | null) ?? "",
+      source: (row.source as string | null) ?? "",
+      aliases: Array.isArray(row.aliases)
+        ? row.aliases.map((alias) => String(alias))
+        : createAliases(String(row.name)),
+      finalTier,
+      founderVerified,
+      founderNotes,
+      leverage,
+      regulatorsListed,
+      verificationMethod,
+      band: computed ? computed.band : null,
+      provisional: computed ? computed.provisional : false,
+    };
+  });
 }
 
 /** Clears the in-memory entity list cache (e.g. after tests or long-running reload hooks). */
@@ -148,7 +199,7 @@ export function clearVerifiedEntitiesCache() {
   verifiedEntitiesCache = undefined;
 }
 
-export async function getVerifiedEntities() {
+async function getVerifiedEntities() {
   if (!verifiedEntitiesCache) {
     verifiedEntitiesCache = loadVerifiedEntitiesFromSupabase();
   }
@@ -156,33 +207,64 @@ export async function getVerifiedEntities() {
   return verifiedEntitiesCache;
 }
 
+export interface VerifiedEntityListItem {
+  name: string;
+  type: VerifiedEntityType;
+  score: string;
+  status: VerifiedEntityStatus;
+  band: BtsBand | null;
+  founderNote: string | null;
+  fcaRegistered: boolean;
+}
+
+/** Top reviewed entities of a type, highest trust first, for "best/top/list" queries. */
+export async function listVerifiedEntities(
+  type: VerifiedEntityType,
+  limit = 8,
+): Promise<VerifiedEntityListItem[]> {
+  const entities = await getVerifiedEntities();
+  return entities
+    .filter((entity) => entity.type === type)
+    .sort((a, b) => b.trustScore - a.trustScore)
+    .slice(0, Math.max(1, Math.min(limit, 15)))
+    .map((entity) => ({
+      name: entity.name,
+      type: entity.type,
+      score: formatTrustScore(entity.provisional, entity.trustScore),
+      status: entity.status,
+      band: entity.band ?? null,
+      founderNote: entity.founderNotes ?? null,
+      fcaRegistered: entity.fcaRegistered,
+    }));
+}
+
 export async function lookupVerifiedEntity(query: string): Promise<LookupVerifiedEntityResult> {
   const entities = await getVerifiedEntities();
   const normalizedQuery = normalizeEntityText(query);
   const collapsedQuery = collapseEntityText(query);
 
-  const scoredMatches = entities
-    .map((entity) => {
-      let score = 0;
+  let match: VerifiedEntity | null = null;
+  let bestScore = 0;
+  for (const entity of entities) {
+    let score = 0;
 
-      for (const alias of entity.aliases) {
-        if (normalizedQuery === alias || collapsedQuery === alias) {
-          score = Math.max(score, 400);
-        } else if (normalizedQuery.includes(alias) || collapsedQuery.includes(alias)) {
-          score = Math.max(score, alias.length >= 4 ? 250 : 0);
-        }
+    for (const alias of entity.aliases) {
+      if (normalizedQuery === alias || collapsedQuery === alias) {
+        score = Math.max(score, 400);
+      } else if (normalizedQuery.includes(alias) || collapsedQuery.includes(alias)) {
+        score = Math.max(score, alias.length >= 4 ? 250 : 0);
       }
+    }
 
-      if (normalizedQuery === normalizeEntityText(entity.name)) {
-        score = Math.max(score, 500);
-      }
+    if (normalizedQuery === normalizeEntityText(entity.name)) {
+      score = Math.max(score, 500);
+    }
 
-      return { entity, score };
-    })
-    .filter((candidate) => candidate.score > 0)
-    .sort((left, right) => right.score - left.score);
-
-  const match = scoredMatches[0]?.entity;
+    if (score > bestScore) {
+      match = entity;
+      bestScore = score;
+    }
+  }
   if (!match) {
     return {
       found: false,
@@ -194,15 +276,19 @@ export async function lookupVerifiedEntity(query: string): Promise<LookupVerifie
     entity: match,
     brokerCardHint: {
       name: match.name,
-      score: match.trustScore.toFixed(1),
+      // Unverified rows show "Provisional", never a hard score.
+      score: formatTrustScore(match.provisional, match.trustScore),
       status: mapStatus(match.status),
       fca: match.fcaRegistered ? "Yes" : "No",
       complaints: deriveComplaints(match.status, match.notes, match.fcaWarning),
       color: mapColor(match.status),
+      provisional: match.provisional ?? false,
+      band: match.band ?? null,
+      founderNote: match.founderNotes ?? null,
     },
     guruCardHint: {
       name: match.name,
-      score: match.trustScore.toFixed(1),
+      score: formatTrustScore(match.provisional, match.trustScore),
       status: mapStatus(match.status),
       verified: deriveGuruVerified(match.status, match.notes, match.trustScore),
       color: mapColor(match.status),

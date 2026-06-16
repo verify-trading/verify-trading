@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { jsonApiError } from "@/lib/http/json-response";
 import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
 import type { MarketSeriesTimeframe } from "@/lib/markets/twelve-data-adapter";
-import { MARKETS_PRIVATE_CACHE_HEADERS, requireMarketsProSession } from "@/lib/markets/markets-api-auth";
+import { MARKETS_PRIVATE_CACHE_HEADERS, requireMarketsSession } from "@/lib/markets/markets-api-auth";
 
 export type TwelveMarketsSnapshot = {
   updatedAt: string | null;
@@ -25,15 +25,17 @@ export type TwelveMarketsSnapshot = {
 };
 
 export async function GET() {
-  const access = await requireMarketsProSession();
+  // Charts/price snapshot is the free teaser: any signed-in user. The Pro-only
+  // data (intelligence, calendar) stays gated in its own routes.
+  const access = await requireMarketsSession();
   if (!access.ok) {
     return access.response;
   }
 
   try {
-    const quotesData = await readCacheRow<{ quotes: TwelveMarketsSnapshot["quotes"] }>("quotes:all");
-    const sparklinesData = await readCacheRow<{ sparklines: Record<string, number[]> }>("sparklines:all");
-    const [series1D, series1W, series1M, series3M] = await Promise.all([
+    const [quotesData, sparklinesData, series1D, series1W, series1M, series3M] = await Promise.all([
+      readCacheRow<{ quotes: TwelveMarketsSnapshot["quotes"] }>("quotes:all"),
+      readCacheRow<{ sparklines: Record<string, number[]> }>("sparklines:all"),
       readCacheRow<{ series: Record<string, number[]> }>("series:1D"),
       readCacheRow<{ series: Record<string, number[]> }>("series:1W"),
       readCacheRow<{ series: Record<string, number[]> }>("series:1M"),

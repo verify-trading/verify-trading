@@ -14,7 +14,15 @@ import { cn } from "@/lib/utils";
 
 const surface = "rounded-xl border border-white/[0.08] bg-white/[0.02]";
 
-export function renderPaidPlanAction({
+/**
+ * Signed-out plan CTA: sign up, then resume checkout for the chosen plan on the
+ * billing page (works through email confirmation and OAuth, which preserve `next`).
+ */
+function signedOutCheckoutHref(plan: BillingPlanKey): string {
+  return `/signup?next=${encodeURIComponent(`/billing?plan=${plan}`)}`;
+}
+
+function PaidPlanAction({
   billingContext,
   checkoutPlan,
   isCurrentPlan,
@@ -30,7 +38,7 @@ export function renderPaidPlanAction({
   if (!billingContext?.isSignedIn) {
     return (
       <Button asChild variant={variant} size="pill" className="w-full">
-        <Link href="/signup">{defaultLabel}</Link>
+        <Link href={signedOutCheckoutHref(checkoutPlan)}>{defaultLabel}</Link>
       </Button>
     );
   }
@@ -163,18 +171,18 @@ function PaidPlanCardShell({
         ))}
       </ul>
       <div className={compact ? "mt-4" : "mt-6"}>
-        {renderPaidPlanAction({
-          billingContext,
-          checkoutPlan,
-          isCurrentPlan,
-          variant,
-          defaultLabel: (
+        <PaidPlanAction
+          billingContext={billingContext}
+          checkoutPlan={checkoutPlan}
+          isCurrentPlan={isCurrentPlan}
+          variant={variant}
+          defaultLabel={
             <span className="inline-flex items-center gap-2">
               {ctaLabel}
               <ArrowRight className={cn(compact ? "size-3.5" : "size-4")} aria-hidden />
             </span>
-          ),
-        })}
+          }
+        />
       </div>
     </div>
   );
@@ -307,18 +315,18 @@ export function ProAnnualPlanCard({
         ))}
       </ul>
       <div className={compact ? "mt-4" : "mt-6"}>
-        {renderPaidPlanAction({
-          billingContext,
-          checkoutPlan: "annual",
-          isCurrentPlan: currentPlanKey === "annual",
-          variant: "outline",
-          defaultLabel: (
+        <PaidPlanAction
+          billingContext={billingContext}
+          checkoutPlan="annual"
+          isCurrentPlan={currentPlanKey === "annual"}
+          variant="outline"
+          defaultLabel={
             <span className="inline-flex items-center gap-2">
               {pricing.annual.ctaLabel}
               <ArrowRight className={cn(compact ? "size-3.5" : "size-4")} aria-hidden />
             </span>
-          ),
-        })}
+          }
+        />
       </div>
     </div>
   );

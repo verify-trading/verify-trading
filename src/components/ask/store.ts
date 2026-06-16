@@ -305,20 +305,22 @@ export const useAskStore = create<AskStoreState>()(
           },
         ],
       })),
-    historyWindow: () =>
-      get()
-        .messages
-        .slice(-ASK_CLIENT_CONTEXT_WINDOW_SIZE)
-        .filter((message) =>
-          message.role === "assistant" || message.content.trim().length > 0,
-        )
-        .map((message) =>
-          message.role === "user"
-            ? { role: "user", content: trimContextText(message.content) }
-            : {
-                role: "assistant",
-                content: serializeAssistantCardForContext(message.card),
-              },
-        ),
+    historyWindow: () => {
+      const history = [];
+      for (const message of get().messages.slice(-ASK_CLIENT_CONTEXT_WINDOW_SIZE)) {
+        if (message.role === "user") {
+          const content = message.content.trim();
+          if (content) {
+            history.push({ role: "user" as const, content: trimContextText(content) });
+          }
+          continue;
+        }
+        history.push({
+          role: "assistant" as const,
+          content: serializeAssistantCardForContext(message.card),
+        });
+      }
+      return history;
+    },
   }),
 );

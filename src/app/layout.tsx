@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Image from "next/image";
 import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -71,9 +72,10 @@ export default function RootLayout({
               `}
             </Script>
             <noscript>
-              <img
+              <Image
                 height="1"
                 width="1"
+                unoptimized
                 style={{ display: "none" }}
                 src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`}
                 alt=""

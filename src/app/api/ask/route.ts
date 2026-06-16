@@ -1,22 +1,17 @@
 import type { UIMessage } from "ai";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
-import { askRequestSchema } from "@/lib/ask/contracts";
-import { defaultAskImagePrompt } from "@/lib/ask/prompt";
 import { logger } from "@/lib/observability/logger";
-import { getAskPersistence, type AskPersistence } from "@/lib/ask/persistence";
 import { classifyAskRouteError } from "@/lib/ask/ask-failure";
-import { getSessionUser } from "@/lib/auth/session";
-import { jsonInvalidRequest, jsonUnauthorized } from "@/lib/http/json-response";
-import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
-import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
-import { generateAskResponse } from "@/lib/ask/service";
+import { jsonApiFailure } from "@/lib/http/json-response";
 import type { AskStreamData, AskToolStatus } from "@/lib/ask/stream";
-import { AskValidationError } from "@/lib/ask/validation-error";
-import { buildUpdatedSessionMemory } from "@/lib/ask/session-memory";
-import type { AskSessionMemory } from "@/lib/ask/contracts";
+import {
+  askRouteFailure,
+  completeAskExchange,
+  prepareAskRoute,
+  type PreparedAskRoute,
+} from "@/lib/ask/route-runtime";
 
 type AskRouteMessage = UIMessage<unknown, AskStreamData>;
 
@@ -165,11 +160,7 @@ function buildAskStreamResponse({
   parsedRequest,
   requestInput,
   persistence,
-}: {
-  parsedRequest: ReturnType<typeof askRequestSchema.parse>;
-  requestInput: Parameters<typeof generateAskResponse>[0];
-  persistence: AskPersistence;
-}) {
+}: PreparedAskRoute) {
   return createUIMessageStreamResponse({
     stream: createUIMessageStream<AskRouteMessage>({
       execute: async ({ writer }) => {
@@ -186,7 +177,7 @@ function buildAskStreamResponse({
           transient: true,
         });
 
-        const response = await generateAskResponse(requestInput, {}, {
+        const response = await completeAskExchange({ parsedRequest, requestInput, persistence }, {
           onToolCall: ({ toolName, input }) => {
             writer.write({
               type: "data-tool-status",
@@ -195,39 +186,6 @@ function buildAskStreamResponse({
             });
           },
         });
-
-        let sessionMemory: AskSessionMemory | null | undefined;
-        try {
-          sessionMemory = buildUpdatedSessionMemory({
-            history: requestInput.history,
-            userMessage: parsedRequest.message,
-            assistantCard: response.data,
-            previousMemory: requestInput.sessionMemory,
-            lastUpdatedAt: new Date().toISOString(),
-          });
-        } catch (error) {
-          logger.warn("Could not build Ask session memory.", {
-            sessionId: response.sessionId,
-            error: error instanceof Error ? error.message : "unknown",
-          });
-        }
-
-        try {
-          await persistence.saveExchange({
-            sessionId: response.sessionId,
-            userMessage: parsedRequest.message,
-            assistantCard: response.data,
-            assistantUiMeta: response.uiMeta,
-            attachmentMeta: parsedRequest.attachmentMeta ?? null,
-            ...(sessionMemory !== undefined ? { sessionMemory } : {}),
-            userImageDataUrl: parsedRequest.image ?? null,
-          });
-        } catch (error) {
-          logger.warn("Could not persist Ask exchange.", {
-            sessionId: response.sessionId,
-            error: error instanceof Error ? error.message : "unknown",
-          });
-        }
 
         writer.write({
           type: "data-tool-status",
@@ -283,122 +241,11 @@ function buildAskStreamResponse({
   });
 }
 
-function getRateLimitMessage(reason: string) {
-  if (reason === "daily_limit") {
-    return `You have used today’s ${FREE_DAILY_ASK_LIMIT} free chats.`;
-  }
-
-  if (reason === "pro_fair_use_limit") {
-    return `You have reached today’s ${PRO_DAILY_ASK_LIMIT} Pro fair-use chats.`;
-  }
-
-  return "Could not verify your usage limit.";
-}
-
 export async function POST(request: Request) {
-  let body: unknown;
-
   try {
-    body = await request.json();
-  } catch {
-    return jsonInvalidRequest("The Ask request body is invalid.");
-  }
-
-  try {
-    const session = await getSessionUser();
-    if (!session) {
-      return jsonUnauthorized("Sign in to use Ask.");
-    }
-
-    const parsedRequest = askRequestSchema.parse(body);
-    const reserve = await reserveAskQuery(session.supabase);
-    if (!reserve.ok) {
-      return NextResponse.json(
-        {
-          error: "rate_limited",
-          code: reserve.reason,
-          message: getRateLimitMessage(reserve.reason),
-          remaining: reserve.remaining ?? 0,
-        },
-        { status: 429 },
-      );
-    }
-
-    const sessionId =
-      parsedRequest.sessionId ??
-      parsedRequest.chatSessionId ??
-      crypto.randomUUID();
-    const persistence = getAskPersistence({ userId: session.user.id });
-    let history = parsedRequest.history;
-    let sessionMemory = parsedRequest.sessionMemory ?? null;
-
-    const [persistedHistoryResult, sessionMemoryResult] = await Promise.allSettled([
-      persistence.loadHistory(sessionId),
-      persistence.loadSessionMemory(sessionId),
-    ]);
-
-    if (persistedHistoryResult.status === "fulfilled") {
-      if (persistedHistoryResult.value.length > 0) {
-        history = persistedHistoryResult.value;
-      }
-    } else {
-      logger.warn("Could not load Ask history before generation.", {
-        sessionId,
-        error:
-          persistedHistoryResult.reason instanceof Error
-            ? persistedHistoryResult.reason.message
-            : "unknown",
-      });
-    }
-
-    if (sessionMemoryResult.status === "fulfilled") {
-      sessionMemory = sessionMemoryResult.value;
-    } else {
-      logger.warn("Could not load Ask session memory before generation.", {
-        sessionId,
-        error:
-          sessionMemoryResult.reason instanceof Error
-            ? sessionMemoryResult.reason.message
-            : "unknown",
-      });
-    }
-
-    const requestInput = {
-      ...parsedRequest,
-      message: parsedRequest.message || (parsedRequest.image ? defaultAskImagePrompt : ""),
-      sessionId,
-      sessionMemory,
-      history,
-    };
-
-    return buildAskStreamResponse({
-      parsedRequest,
-      requestInput,
-      persistence,
-    });
+    const prepared = await prepareAskRoute(request);
+    return prepared.ok ? buildAskStreamResponse(prepared.value) : jsonApiFailure(prepared.failure);
   } catch (error) {
-    if (error instanceof ZodError) {
-      return jsonInvalidRequest("The Ask request body is invalid.");
-    }
-
-    if (error instanceof AskValidationError) {
-      return jsonInvalidRequest(error.message);
-    }
-
-    const { code, message } = classifyAskRouteError(error);
-
-    logger.error("Ask response generation failed.", {
-      error: error instanceof Error ? error.message : "unknown",
-      code,
-    });
-
-    return NextResponse.json(
-      {
-        error: "ask_failed",
-        code,
-        message,
-      },
-      { status: 502 },
-    );
+    return jsonApiFailure(askRouteFailure(error, "Ask response generation failed."));
   }
 }

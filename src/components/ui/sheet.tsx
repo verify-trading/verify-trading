@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useEffectEvent, useId, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -33,13 +33,8 @@ export function Sheet({
   id?: string;
 }) {
   const titleId = useId();
-  const [mounted, setMounted] = useState(false);
-
-  // Client-only: portal targets document.body; skip SSR to avoid hydration mismatch.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount gate so createPortal only runs on client
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(subscribeToClient, getClientSnapshot, getServerSnapshot);
+  const closeSheet = useEffectEvent(() => onOpenChange(false));
 
   useEffect(() => {
     if (!open) {
@@ -58,12 +53,12 @@ export function Sheet({
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onOpenChange(false);
+        closeSheet();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onOpenChange]);
+  }, [open]);
 
   if (!mounted || !open) {
     return null;
@@ -95,13 +90,11 @@ export function Sheet({
         className="absolute inset-0 h-full w-full rounded-none border-0 bg-[rgba(5,8,27,0.72)] p-0 backdrop-blur-[2px] hover:bg-[rgba(5,8,27,0.78)] motion-safe:transition-opacity"
         onClick={() => onOpenChange(false)}
       />
-      <div
+      <dialog
+        open
         id={id}
         className={`relative ${panelPosition}`}
-        role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
-        onClick={(event) => event.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.06] px-4 pb-3">
           {title ? (
@@ -125,9 +118,21 @@ export function Sheet({
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">{children}</div>
-      </div>
+      </dialog>
     </div>
   );
 
   return createPortal(overlay, document.body);
+}
+
+function subscribeToClient() {
+  return () => {};
+}
+
+function getClientSnapshot() {
+  return true;
+}
+
+function getServerSnapshot() {
+  return false;
 }

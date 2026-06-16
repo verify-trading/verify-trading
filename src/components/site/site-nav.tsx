@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useState, useSyncExternalStore } from "react";
 import { BookOpen, LineChart, Menu, MessageSquare } from "lucide-react";
 
 import { UserMenu } from "@/components/auth/user-menu";
@@ -20,7 +20,19 @@ const navItems = [
 ] as const;
 
 /** Mobile header height for fixed overlays (single row + safe area). */
-export const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
+const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
+
+function subscribeToClient() {
+  return () => {};
+}
+
+function getClientSnapshot() {
+  return true;
+}
+
+function getServerSnapshot() {
+  return false;
+}
 
 function siteNavLinkClass(active: boolean) {
   return [
@@ -34,13 +46,9 @@ function siteNavLinkClass(active: boolean) {
 export function SiteNav() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hasMounted, setHasMounted] = useState(false);
+  const hasMounted = useSyncExternalStore(subscribeToClient, getClientSnapshot, getServerSnapshot);
   const { ready, isSignedIn } = useSupabaseAuth();
   const hideAuthChrome = hidesAuthChrome(pathname);
-
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
 
   useEffect(() => {
     startTransition(() => {

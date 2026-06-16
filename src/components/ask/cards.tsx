@@ -37,6 +37,32 @@ function CardFrame({
   );
 }
 
+// Renders the score as an "X / 10" bar, or just the label when the score is
+// non-numeric (e.g. "Provisional"), which would otherwise parse to a NaN width.
+function TrustScoreBar({ score, accent }: { score: string; accent: string }) {
+  const numericScore = Number.parseFloat(score);
+  const isNumeric = Number.isFinite(numericScore);
+
+  return (
+    <>
+      <div className="mt-3 flex items-center justify-between text-sm text-[var(--vt-muted)]">
+        <span>Trust Score</span>
+        <span className="font-black" style={{ color: accent }}>
+          {isNumeric ? `${score} / 10` : score}
+        </span>
+      </div>
+      {isNumeric ? (
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${Math.max(0, Math.min(100, numericScore * 10))}%`, backgroundColor: accent }}
+          />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function BrokerCard({
   card,
   uiMeta,
@@ -45,7 +71,6 @@ function BrokerCard({
   uiMeta?: AskUiMeta;
 }) {
   const accent = card.color === "green" ? "var(--vt-green)" : "var(--vt-coral)";
-  const scoreWidth = `${Math.max(0, Math.min(100, Number.parseFloat(card.score) * 10))}%`;
   const isPropFirm = uiMeta?.verificationKind === "propfirm";
   const eyebrow = isPropFirm ? "Firm Check" : "Broker Check";
   const primaryLabel = isPropFirm ? "Type" : "FCA";
@@ -70,21 +95,10 @@ function BrokerCard({
               {uiMeta.verificationSourceLabel}
             </div>
           ) : null}
-          <div className="mt-3 flex items-center justify-between text-sm text-[var(--vt-muted)]">
-            <span>Trust Score</span>
-            <span className="font-black" style={{ color: accent }}>
-              {card.score} / 10
-            </span>
-          </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8">
-            <div
-              className="h-full rounded-full"
-              style={{ width: scoreWidth, backgroundColor: accent }}
-            />
-          </div>
+          <TrustScoreBar score={card.score} accent={accent} />
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center">
+          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3 text-center">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               {primaryLabel}
             </div>
@@ -92,7 +106,7 @@ function BrokerCard({
               {primaryValue}
             </div>
           </div>
-          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center">
+          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3 text-center">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               Complaints
             </div>
@@ -155,13 +169,13 @@ function BriefingCard({
           <InteractiveMarketMiniChart points={uiMeta.marketSeries} up={isUp} asset={card.asset} />
         ) : null}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               {level1Label}
             </div>
             <div className="mt-1 break-words text-sm font-bold text-[var(--vt-coral)]">{card.level1}</div>
           </div>
-          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+          <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               {level2Label}
             </div>
@@ -197,7 +211,7 @@ function CalcCard({ card }: { card: Extract<AskCard, { type: "calc" }> }) {
           ].map(([label, value]) => (
             <div
               key={label}
-              className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3 text-center"
+              className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3 text-center"
             >
               <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
                 {label}
@@ -216,7 +230,6 @@ function CalcCard({ card }: { card: Extract<AskCard, { type: "calc" }> }) {
 
 function GuruCard({ card }: { card: Extract<AskCard, { type: "guru" }> }) {
   const accent = card.color === "green" ? "var(--vt-green)" : "var(--vt-coral)";
-  const scoreWidth = `${Math.max(0, Math.min(100, Number.parseFloat(card.score) * 10))}%`;
 
   return (
     <CardFrame
@@ -227,20 +240,9 @@ function GuruCard({ card }: { card: Extract<AskCard, { type: "guru" }> }) {
       <div className="space-y-4">
         <div>
           <div className="text-lg font-black text-white sm:text-xl">{card.name}</div>
-          <div className="mt-3 flex items-center justify-between text-sm text-[var(--vt-muted)]">
-            <span>Trust Score</span>
-            <span className="font-black" style={{ color: accent }}>
-              {card.score} / 10
-            </span>
-          </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8">
-            <div
-              className="h-full rounded-full"
-              style={{ width: scoreWidth, backgroundColor: accent }}
-            />
-          </div>
+          <TrustScoreBar score={card.score} accent={accent} />
         </div>
-        <div className="rounded-2xl bg-[var(--vt-card-alt)] px-3 py-3">
+        <div className="rounded-2xl bg-[var(--vt-card-alt)] p-3">
           <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
             Verified
           </div>
