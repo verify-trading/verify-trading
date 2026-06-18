@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
 import type { AskAttachment } from "@/components/ask/store";
 import { Button } from "@/components/ui/button";
 
-const ASK_TEXTAREA_MIN_PX = 40;
+const ASK_TEXTAREA_MIN_PX = 36;
 const ASK_TEXTAREA_MAX_PX = 200;
 
 export function AskComposer({
@@ -16,7 +16,7 @@ export function AskComposer({
   disabled = false,
   isSubmitting,
   isDragActive,
-  placeholder = "Message…",
+  placeholder = "Ask anything…",
   inputProps,
   onDraftChange,
   onSubmit,
@@ -122,7 +122,7 @@ export function AskComposer({
         </div>
       ) : null}
 
-      <div className="flex items-end gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <Button
           type="button"
           variant="ghost"
@@ -131,12 +131,12 @@ export function AskComposer({
           onClick={onOpenPicker}
           title="Add image"
           aria-label="Add image"
-          className="mb-0.5 shrink-0 rounded-full text-[var(--vt-muted)] hover:bg-white/10 hover:text-white disabled:opacity-30 sm:size-9"
+          className="shrink-0 rounded-full text-[var(--vt-muted)] hover:bg-white/10 hover:text-white disabled:opacity-30 sm:size-9 [&_svg]:!size-[22px]"
         >
-          <ImageIcon className="size-[18px] opacity-90" strokeWidth={1.75} aria-hidden />
+          <ImageIcon className="opacity-90" strokeWidth={1.75} aria-hidden />
         </Button>
 
-        <div className="min-w-0 flex-1 py-0.5">
+        <div className="min-w-0 flex-1">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -160,7 +160,7 @@ export function AskComposer({
             placeholder={placeholder}
             rows={1}
             style={{ maxHeight: ASK_TEXTAREA_MAX_PX }}
-            className="block min-h-[40px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-[16px] leading-[1.45] text-white outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:text-white/45 touch-manipulation sm:text-sm sm:leading-6"
+            className="block min-h-[36px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-[16px] leading-[1.45] text-white outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:text-white/45 touch-manipulation sm:text-base sm:leading-6"
           />
         </div>
 
@@ -170,7 +170,7 @@ export function AskComposer({
           size="icon"
           disabled={disabled || isSubmitting || (!draft.trim() && !attachment)}
           onClick={onSubmit}
-          className="disabled:shadow-none"
+          className="mb-0 disabled:shadow-none"
           aria-label={disabled ? "Ask locked" : isSubmitting ? "Sending" : "Send message"}
         >
           {isSubmitting ? (

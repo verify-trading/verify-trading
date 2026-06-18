@@ -1019,7 +1019,7 @@ function useAskWorkspaceView() {
                 disabled={isComposerLocked}
                 isSubmitting={isSubmitting}
                 isDragActive={isDragActive}
-                placeholder={isComposerLocked ? "Upgrade to Pro to continue" : "Message…"}
+                placeholder={isComposerLocked ? "Upgrade to Pro to continue" : "Ask anything…"}
                 inputProps={getInputProps()}
                 focusSignal={prefillFocusSignal}
                 onDraftChange={setDraft}

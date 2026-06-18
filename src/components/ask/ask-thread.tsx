@@ -169,7 +169,7 @@ function FollowupChips({
   }
 
   return (
-    <div className="mt-3 max-w-[20rem] border-t border-white/[0.06] pt-2 sm:max-w-md">
+    <div className="mt-3 max-w-[20rem] sm:max-w-md">
       {followups.map((question) => (
         <button
           key={question}

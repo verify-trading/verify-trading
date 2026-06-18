@@ -14,63 +14,15 @@ import path from "node:path";
 import nextEnv from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
+import { backfillKnowledge } from "./backfill-knowledge.mjs";
+import {
+  collapseEntityText,
+  createAliases,
+  numOrNull,
+  parseCsvLine,
+} from "./_shared.mjs";
+
 const { loadEnvConfig } = nextEnv;
-
-function parseCsvLine(line) {
-  const values = [];
-  let current = "";
-  let inQuotes = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-    if (character === '"') {
-      if (inQuotes && line[index + 1] === '"') {
-        current += '"';
-        index += 1;
-        continue;
-      }
-      inQuotes = !inQuotes;
-      continue;
-    }
-    if (character === "," && !inQuotes) {
-      values.push(current);
-      current = "";
-      continue;
-    }
-    current += character;
-  }
-  values.push(current);
-  return values.map((value) => value.trim());
-}
-
-function normalizeEntityText(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
-}
-function collapseEntityText(value) {
-  return normalizeEntityText(value).replace(/\s+/g, "");
-}
-function createAliases(name) {
-  const base = normalizeEntityText(name);
-  const aliases = new Set([base, collapseEntityText(name)]);
-  const spacedDigits = base.replace(/([a-z])(\d)/g, "$1 $2").replace(/(\d)([a-z])/g, "$1 $2");
-  aliases.add(spacedDigits);
-  aliases.add(collapseEntityText(spacedDigits));
-  if (base.startsWith("the ")) {
-    aliases.add(base.slice(4));
-    aliases.add(collapseEntityText(base.slice(4)));
-  }
-  if (base.endsWith(" group")) {
-    aliases.add(base.replace(/ group$/, ""));
-  }
-  return [...aliases].filter(Boolean);
-}
-
-/** "4.4" -> 4.4; "~21,000" -> 21000; blank/N/A -> null. */
-function numOrNull(raw) {
-  const digits = String(raw ?? "").replace(/[^0-9.]/g, "");
-  if (!digits) return null;
-  const value = Number(digits);
-  return Number.isFinite(value) ? value : null;
-}
 
 function isClosed(firmStatus) {
   return /closed|defunct|shut down|wound down/i.test(firmStatus ?? "");
@@ -173,6 +125,9 @@ async function main() {
 
   const closed = rows.filter((row) => isClosed(row.firm_status)).length;
   console.log(`Upserted ${upserted} prop firms (${closed} closed/defunct).`);
+
+  // Keep the retrieval index in sync — never leave it stale after a load.
+  await backfillKnowledge(supabase);
 }
 
 main().catch((error) => {

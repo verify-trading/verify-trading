@@ -16,6 +16,8 @@
  * Caution reaches the table, the read path still shows Unverified.
  */
 
+import publishableStatuses from "@/lib/ask/guru-publishable-statuses.json";
+
 export type GuruTier = "Verified" | "Unverified" | "Caution";
 
 export interface GuruResolveInputs {
@@ -36,13 +38,12 @@ export interface GuruResolution {
   publishable: boolean;
 }
 
-/** Rows research-complete enough to publish once the founder has reviewed them. */
-const PUBLISHABLE_STATUSES = new Set([
-  "researched",
-  "researched (fca-confirmed)",
-  "founder-reported",
-  "founder-confirmed (conduct)",
-]);
+/**
+ * Rows research-complete enough to publish once the founder has reviewed them.
+ * The list is shared with the data scripts via a JSON file so the read gate and
+ * the corpus gate (scripts/data/_shared.mjs) can never drift apart.
+ */
+const PUBLISHABLE_STATUSES = new Set(publishableStatuses);
 
 /** Only an explicit confirmed record earns Verified; claims/disputes do not. */
 const CONFIRMED_TRACK_RECORD = /^yes \(confirmed\)/i;
