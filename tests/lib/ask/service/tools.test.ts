@@ -220,11 +220,12 @@ describe("createAskTools", () => {
     });
   });
 
-  it("returns a clean coverage card when entity verification has no match", async () => {
+  it("returns structured coverage evidence (no card) when there is no match", async () => {
     const tools = createAskTools({
       lookupVerifiedEntityImpl: vi.fn().mockResolvedValue({
         found: false,
       }),
+      getFcaStatusImpl: vi.fn().mockResolvedValue({ available: false }),
     });
 
     const result = await tools.verify_entity.execute?.(
@@ -234,12 +235,13 @@ describe("createAskTools", () => {
       {} as never,
     );
 
+    // The tool hands the model facts, not a pre-written card: the queried name
+    // plus any close candidates (none here). The model phrases the reply.
     expect(result).toEqual({
-      card: {
-        type: "insight",
-        headline: "No Record Yet",
-        body: "I haven't got a reviewed record on that one yet.",
-        verdict: "What's the exact broker, firm, or brand name? I'll check it.",
+      coverage: {
+        queriedName: "Unknown Alpha Broker",
+        fromUrl: false,
+        candidates: [],
       },
     });
   });
@@ -265,7 +267,7 @@ describe("createAskTools", () => {
     expect(getFcaStatusImpl).not.toHaveBeenCalled();
   });
 
-  it("returns a URL-specific coverage card when a domain has no reviewed match", async () => {
+  it("returns coverage evidence flagged fromUrl when a domain has no reviewed match", async () => {
     const tools = createAskTools({
       lookupVerifiedEntityImpl: vi.fn().mockResolvedValue({
         found: false,
@@ -281,11 +283,10 @@ describe("createAskTools", () => {
     );
 
     expect(result).toEqual({
-      card: {
-        type: "insight",
-        headline: "Need The Name",
-        body: "I can't open links, so I read that one as Tiger Funded, but I haven't got a record on it yet.",
-        verdict: "Drop the exact firm or brand name and I'll run it.",
+      coverage: {
+        queriedName: "Tiger Funded",
+        fromUrl: true,
+        candidates: [],
       },
     });
   });

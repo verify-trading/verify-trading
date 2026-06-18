@@ -26,6 +26,8 @@ export interface VerifiedEntity {
   notes: string;
   source: string;
   aliases: string[];
+  /** aliases with spaces stripped, precomputed once for the lookup hot path. */
+  collapsedAliases: string[];
   // BTS inputs and computed score, present only on brokers from the BTS master.
   finalTier?: string | null;
   founderVerified?: boolean;
@@ -94,6 +96,7 @@ export interface LookupVerifiedEntityResult {
 }
 
 let verifiedEntitiesCache: Promise<VerifiedEntity[]> | undefined;
+let tokenIndexCache: Promise<Map<string, VerifiedEntity[]>> | undefined;
 
 /** Display score: "Provisional" until verified, otherwise the trust score to 1dp. */
 function formatTrustScore(provisional: boolean | undefined, trustScore: number) {
@@ -194,6 +197,9 @@ const ENTITY_COLUMNS =
 function mapEntityRow(row: Record<string, unknown>): VerifiedEntity {
   const type = row.entity_type as VerifiedEntityType;
   const name = row.name as string;
+  const aliases = Array.isArray(row.aliases)
+    ? row.aliases.map((alias) => String(alias))
+    : createAliases(name);
   const base = {
     id: row.slug as string,
     name,
@@ -205,9 +211,8 @@ function mapEntityRow(row: Record<string, unknown>): VerifiedEntity {
     fcaWarning: Boolean(row.fca_warning),
     notes: toStringOrNull(row.notes) ?? "",
     source: toStringOrNull(row.source) ?? "",
-    aliases: Array.isArray(row.aliases)
-      ? row.aliases.map((alias) => String(alias))
-      : createAliases(name),
+    aliases,
+    collapsedAliases: aliases.map((alias) => alias.replace(/ /g, "")),
   };
 
   if (type === "propfirm") {
@@ -311,6 +316,7 @@ async function loadVerifiedEntitiesFromSupabase(): Promise<VerifiedEntity[]> {
 /** Clears the in-memory entity list cache (e.g. after tests or long-running reload hooks). */
 export function clearVerifiedEntitiesCache() {
   verifiedEntitiesCache = undefined;
+  tokenIndexCache = undefined;
 }
 
 async function getVerifiedEntities() {
@@ -319,6 +325,172 @@ async function getVerifiedEntities() {
   }
 
   return verifiedEntitiesCache;
+}
+
+/**
+ * Tokens too common to anchor a "did you mean" suggestion on their own — they
+ * appear across many firms, so sharing one means nothing.
+ */
+const COMMON_NAME_TOKENS = new Set([
+  // Industry words — shared by countless firms, so sharing one means nothing.
+  "fx", "forex", "trading", "trade", "trader", "traders", "capital", "markets",
+  "market", "fund", "funds", "funded", "funding", "group", "global", "invest",
+  "investing", "pro", "signals", "signal", "academy", "official", "international",
+  "finance", "financial", "prime", "gold", "money", "wealth", "the", "and",
+  "firm", "firms", "prop", "broker", "brokers", "company", "online", "team",
+  "course", "courses", "mentor", "fintech", "ventures", "limited",
+  // Question / filler words that ride along in natural-language queries.
+  "good", "best", "this", "that", "safe", "legit", "legitimate", "scam", "scams",
+  "review", "reviews", "with", "what", "about", "which", "recommend", "trust",
+  "trusted", "deposit", "really", "still", "their", "they", "from", "your",
+]);
+
+/** A shared token counts as distinctive only if at most this many entities use it. */
+const MAX_DISTINCTIVE_SHARE = 3;
+const MIN_TOKEN_LENGTH = 4;
+
+function distinctiveTokens(text: string): string[] {
+  return text
+    .split(" ")
+    .filter((token) => token.length >= MIN_TOKEN_LENGTH && !COMMON_NAME_TOKENS.has(token));
+}
+
+/** token -> entities whose name/aliases use it. Built lazily, cleared with the entity cache. */
+async function getTokenIndex(): Promise<Map<string, VerifiedEntity[]>> {
+  if (!tokenIndexCache) {
+    tokenIndexCache = (async () => {
+      const entities = await getVerifiedEntities();
+      const index = new Map<string, VerifiedEntity[]>();
+      for (const entity of entities) {
+        const tokens = new Set<string>();
+        for (const text of [entity.normalizedName, ...entity.aliases]) {
+          for (const token of distinctiveTokens(text)) {
+            tokens.add(token);
+          }
+        }
+        for (const token of tokens) {
+          const bucket = index.get(token);
+          if (bucket) {
+            bucket.push(entity);
+          } else {
+            index.set(token, [entity]);
+          }
+        }
+      }
+      return index;
+    })();
+  }
+  return tokenIndexCache;
+}
+
+function isFlagged(entity: VerifiedEntity): boolean {
+  return entity.status === "avoid" || entity.status === "warning" || entity.guruTier === "Caution";
+}
+
+/** Character trigrams of a string, for typo-tolerant (Dice) similarity. */
+function trigrams(value: string): Set<string> {
+  const padded = `  ${value} `;
+  const set = new Set<string>();
+  for (let i = 0; i < padded.length - 2; i += 1) set.add(padded.slice(i, i + 3));
+  return set;
+}
+
+function diceCoefficient(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  for (const gram of a) if (b.has(gram)) shared += 1;
+  return (2 * shared) / (a.size + b.size);
+}
+
+/** Label tells the model how much to trust a candidate. NEVER a confirmed verdict. */
+export type EntityCandidateLabel = "lookalike" | "similar";
+
+export interface EntityCandidate {
+  entity: VerifiedEntity;
+  /** The brand the query is close to, e.g. "astro fx". */
+  brand: string;
+  /** "lookalike" = shares a rare distinctive word; "similar" = close spelling (typo). */
+  label: EntityCandidateLabel;
+  flagged: boolean;
+  score: number;
+}
+
+const FUZZY_SIMILARITY_FLOOR = 0.72;
+
+function shortestAliasWith(entity: VerifiedEntity, token: string): string {
+  return (
+    entity.aliases
+      .filter((alias) => alias.split(" ").includes(token))
+      .sort((a, b) => a.length - b.length)[0] ?? token
+  );
+}
+
+/**
+ * For a name we hold NO confident record of, surface the closest brands the user
+ * might mean, each LABELLED — never asserted as identity. The model phrases the
+ * "did you mean X?" and decides; we only supply scored, defensible candidates.
+ * Two signals: a rare shared word (lookalike) and close spelling (similar/typo).
+ */
+export async function findEntityCandidates(query: string, limit = 3): Promise<EntityCandidate[]> {
+  const normalized = normalizeEntityText(query);
+  const collapsed = collapseEntityText(query);
+  const queryTokens = distinctiveTokens(normalized);
+  const index = await getTokenIndex();
+  const entities = await getVerifiedEntities();
+
+  const best = new Map<string, EntityCandidate>();
+  const consider = (candidate: EntityCandidate) => {
+    const existing = best.get(candidate.entity.id);
+    if (!existing || candidate.score > existing.score) {
+      best.set(candidate.entity.id, candidate);
+    }
+  };
+
+  // 1) Lookalike: shares a rare, distinctive word (e.g. "astro").
+  for (const token of queryTokens) {
+    const matches = index.get(token);
+    if (!matches || matches.length > MAX_DISTINCTIVE_SHARE) continue;
+    for (const entity of matches) {
+      const flagged = isFlagged(entity);
+      consider({
+        entity,
+        brand: shortestAliasWith(entity, token),
+        label: "lookalike",
+        flagged,
+        score: 1 + 1 / matches.length + (flagged ? 0.1 : 0),
+      });
+    }
+  }
+
+  // 2) Similar spelling: trigram-close to a name/alias (typos like "peperstone").
+  // Only when the query carries a distinctive token — a pure run of common words
+  // ("global fx markets") should never fuzzy-match a real firm.
+  if (collapsed.length >= 4 && queryTokens.length > 0) {
+    const queryGrams = trigrams(collapsed);
+    for (const entity of entities) {
+      let bestSim = 0;
+      let bestAlias = entity.normalizedName;
+      // Aliases carry their collapsed form already; reuse it rather than re-strip.
+      entity.collapsedAliases.forEach((collapsedAlias, i) => {
+        const sim = diceCoefficient(queryGrams, trigrams(collapsedAlias));
+        if (sim > bestSim) {
+          bestSim = sim;
+          bestAlias = entity.aliases[i] ?? entity.normalizedName;
+        }
+      });
+      if (bestSim >= FUZZY_SIMILARITY_FLOOR) {
+        consider({
+          entity,
+          brand: bestAlias,
+          label: "similar",
+          flagged: isFlagged(entity),
+          score: bestSim,
+        });
+      }
+    }
+  }
+
+  return [...best.values()].sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
 export interface VerifiedEntityListItem {
@@ -427,6 +599,22 @@ export async function lookupVerifiedEntity(query: string): Promise<LookupVerifie
   const entities = await getVerifiedEntities();
   const normalizedQuery = normalizeEntityText(query);
   const collapsedQuery = collapseEntityText(query);
+  const paddedQuery = ` ${normalizedQuery} `;
+
+  // Collapsed forms of every contiguous token window (up to 4 tokens). This
+  // matches spacing variants — "the 5ers" -> "the5ers", "ic markets" -> "icmarkets"
+  // — while staying word-boundary aligned: each window is whole tokens, so a bare
+  // substring like "amarkets" inside "zentova markets" -> "zentovamarkets" can
+  // never match (that broke an unrelated firm, AMarkets).
+  const queryTokens = normalizedQuery.split(" ").filter(Boolean);
+  const windowForms = new Set<string>();
+  for (let i = 0; i < queryTokens.length; i += 1) {
+    let window = "";
+    for (let j = i; j < Math.min(i + 4, queryTokens.length); j += 1) {
+      window += queryTokens[j];
+      windowForms.add(window);
+    }
+  }
 
   let match: VerifiedEntity | null = null;
   let bestScore = 0;
@@ -436,8 +624,15 @@ export async function lookupVerifiedEntity(query: string): Promise<LookupVerifie
     for (const alias of entity.aliases) {
       if (normalizedQuery === alias || collapsedQuery === alias) {
         score = Math.max(score, 400);
-      } else if (normalizedQuery.includes(alias) || collapsedQuery.includes(alias)) {
-        score = Math.max(score, alias.length >= 4 ? 250 : 0);
+      } else if (alias.length >= 4 && paddedQuery.includes(` ${alias} `)) {
+        score = Math.max(score, 250);
+      }
+    }
+    // Spacing variant: a query token-window collapses to a (precomputed) alias.
+    for (const collapsedAlias of entity.collapsedAliases) {
+      if (collapsedAlias.length >= 4 && windowForms.has(collapsedAlias)) {
+        score = Math.max(score, 350);
+        break;
       }
     }
 

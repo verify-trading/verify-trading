@@ -4,40 +4,9 @@ import path from "node:path";
 import nextEnv from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
+import { parseCsvLine } from "./_shared.mjs";
+
 const { loadEnvConfig } = nextEnv;
-
-function parseCsvLine(line) {
-  const values = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-
-    if (character === '"') {
-      const next = line[index + 1];
-      if (inQuotes && next === '"') {
-        current += '"';
-        index += 1;
-        continue;
-      }
-
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (character === "," && !inQuotes) {
-      values.push(current);
-      current = "";
-      continue;
-    }
-
-    current += character;
-  }
-
-  values.push(current);
-  return values.map((value) => value.trim());
-}
 
 async function main() {
   loadEnvConfig(process.cwd());

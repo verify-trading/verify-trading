@@ -23,8 +23,10 @@ import {
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
 import {
+  findEntityCandidates,
   listVerifiedEntities,
   lookupVerifiedEntity,
+  type EntityCandidate,
   type LookupVerifiedEntityResult,
 } from "@/lib/ask/entities";
 import {
@@ -389,23 +391,15 @@ function buildPropFirmCard(lookup: LookupVerifiedEntityResult): BrokerCard | nul
     return null;
   }
 
-  // For a rated firm with no founder note, fall back to a concrete line built from
-  // the data already on the card (band + Trustpilot) rather than a flat placeholder
-  // — otherwise the highest-scored firms (no note on file) read the most generic.
-  const tp = hint.trustpilot;
-  const ratedSummary = tp
-    ? `Rated ${tp.rating.toFixed(1)} on Trustpilot${
-        tp.count ? ` across ${tp.count >= 1000 ? `${Math.round(tp.count / 1000)}k` : tp.count} reviews` : ""
-      }.`
-    : hint.band
-      ? `Reviewed prop firm rated ${hint.band}.`
-      : "Reviewed prop firm record.";
-
+  // This card is type "broker", so the cascade always re-synthesizes the verdict
+  // from the structured facts (score, band, Trustpilot — all in propFirmUiMeta).
+  // So we pass curated text or a terse fact, never hand-written prose; the model
+  // writes the natural line and keeps the numbers.
   const verdict = hint.closed
-    ? hint.founderNote || `${entity.notes} This firm has closed down — avoid depositing.`.trim()
+    ? hint.founderNote || entity.notes || "Closed down — avoid depositing."
     : hint.notRated
-      ? "Not enough reliable public data to rate this firm yet."
-      : hint.founderNote || entity.notes || ratedSummary;
+      ? "Not enough public data to rate yet."
+      : hint.founderNote || entity.notes || "Reviewed prop firm.";
 
   return {
     type: "broker",
@@ -453,22 +447,6 @@ function buildGuruCard(lookup: LookupVerifiedEntityResult): GuruCard | null {
     citationUrl: hint.tier === "Caution" ? hint.citationUrl : null,
     verdict: entity.bioSummary || entity.notes || "No documented regulatory action found.",
   };
-}
-
-function buildCoverageInsightCard(): AskCard {
-  return buildInsightCard(
-    "No Record Yet",
-    "I haven't got a reviewed record on that one yet.",
-    "What's the exact broker, firm, or brand name? I'll check it.",
-  );
-}
-
-function buildUrlCoverageInsightCard(displayName: string): AskCard {
-  return buildInsightCard(
-    "Need The Name",
-    `I can't open links, so I read that one as ${displayName}, but I haven't got a record on it yet.`,
-    "Drop the exact firm or brand name and I'll run it.",
-  );
 }
 
 function extractHostnameLabel(hostname: string) {
@@ -614,7 +592,54 @@ type VerificationToolResponse =
         note: string | null;
         source: string;
       };
-    };
+    }
+  | { coverage: CoverageEvidence };
+
+/**
+ * No confident record for the queried name. We hand the model the facts — the
+ * closest LABELLED candidates and their standing — and it writes the reply
+ * (ask for the exact name, or "did you mean X?"). It must never treat a
+ * candidate as a confirmed verdict; that is enforced in the prompt.
+ */
+interface CoverageEvidence {
+  queriedName: string;
+  fromUrl: boolean;
+  /** Closest brands on file, each a suggestion only — never the queried name. */
+  candidates: Array<{
+    name: string;
+    /** "lookalike" = shares a distinctive word; "similar" = close spelling. */
+    match: EntityCandidate["label"];
+    type: string;
+    /** Why it's notable, e.g. "regulator warning on file", "rated Avoid". */
+    standing: string;
+  }>;
+}
+
+function candidateStanding(candidate: EntityCandidate): string {
+  if (candidate.entity.guruTier === "Caution") return "regulator warning on file";
+  if (candidate.entity.status === "avoid") return "rated Avoid";
+  if (candidate.entity.status === "warning") return "flagged";
+  return "reviewed record on file";
+}
+
+async function coverageEvidence(
+  queriedName: string,
+  fromUrl: boolean,
+): Promise<{ coverage: CoverageEvidence }> {
+  const candidates = await findEntityCandidates(queriedName);
+  return {
+    coverage: {
+      queriedName,
+      fromUrl,
+      candidates: candidates.map((candidate) => ({
+        name: candidate.entity.name,
+        match: candidate.label,
+        type: candidate.entity.type,
+        standing: candidateStanding(candidate),
+      })),
+    },
+  };
+}
 
 const askLiveMarketOptions = { live: true } as const satisfies MarketDataOptions;
 
@@ -913,51 +938,45 @@ async function resolveVerificationToolResult(
 
   if (lookup.found && lookup.entity) {
     if (lookup.entity.type === "guru") {
-      return withCard(buildGuruCard(lookup) ?? buildCoverageInsightCard());
+      const card = buildGuruCard(lookup);
+      if (card) return withCard(card);
+    } else if (lookup.entity.type === "propfirm") {
+      const card = buildPropFirmCard(lookup);
+      if (card) return withCard(card, propFirmUiMeta(lookup));
+    } else {
+      const fcaStatus = await getFcaStatusImpl({
+        name: lookup.entity.name,
+        frn: lookup.entity.fcaReference ?? undefined,
+      });
+      const card = buildBrokerCard(lookup, fcaStatus);
+      if (card) {
+        return withCard(card, {
+          verificationKind: "broker",
+          verificationSourceLabel: fcaStatus.available ? "Live FCA confirmed" : "Reviewed record",
+        });
+      }
     }
-
-    if (lookup.entity.type === "propfirm") {
-      const card = buildPropFirmCard(lookup) ?? buildCoverageInsightCard();
-      return withCard(card, card.type === "broker" ? propFirmUiMeta(lookup) : undefined);
+  } else if (!normalized.fromUrl) {
+    // A plain name we don't hold — check the live FCA register before giving up.
+    const fcaStatus = await getFcaStatusImpl({ name: normalized.lookupName, frn: undefined });
+    if (fcaStatus.available && fcaStatus.statusText) {
+      return {
+        fcaData: {
+          queriedName: fcaStatus.queriedName,
+          frn: fcaStatus.frn,
+          statusText: fcaStatus.statusText,
+          authorised: fcaStatus.authorised,
+          warning: fcaStatus.warning,
+          note: fcaStatus.note,
+          source: fcaStatus.source,
+        },
+      };
     }
-
-    const fcaStatus = await getFcaStatusImpl({
-      name: lookup.entity.name,
-      frn: lookup.entity.fcaReference ?? undefined,
-    });
-    const card = buildBrokerCard(lookup, fcaStatus) ?? buildCoverageInsightCard();
-
-    return withCard(
-      card,
-      card.type === "broker"
-        ? {
-            verificationKind: "broker",
-            verificationSourceLabel: fcaStatus.available ? "Live FCA confirmed" : "Reviewed record",
-          }
-        : undefined,
-    );
   }
 
-  if (normalized.fromUrl) {
-    return withCard(buildUrlCoverageInsightCard(normalized.displayName));
-  }
-
-  const fcaStatus = await getFcaStatusImpl({ name: normalized.lookupName, frn: undefined });
-  if (fcaStatus.available && fcaStatus.statusText) {
-    return {
-      fcaData: {
-        queriedName: fcaStatus.queriedName,
-        frn: fcaStatus.frn,
-        statusText: fcaStatus.statusText,
-        authorised: fcaStatus.authorised,
-        warning: fcaStatus.warning,
-        note: fcaStatus.note,
-        source: fcaStatus.source,
-      },
-    };
-  }
-
-  return withCard(buildCoverageInsightCard());
+  // No confident record: hand the model the closest labelled candidates and let
+  // it write the reply ("did you mean X?" or ask for the exact name).
+  return coverageEvidence(normalized.fromUrl ? normalized.displayName : normalized.lookupName, normalized.fromUrl);
 }
 
 export async function resolveVerificationCard(
@@ -967,6 +986,19 @@ export async function resolveVerificationCard(
   const result = await resolveVerificationToolResult(name, dependencies);
   if ("card" in result) {
     return result;
+  }
+
+  if ("coverage" in result) {
+    const top = result.coverage.candidates[0];
+    return {
+      card: buildInsightCard(
+        top ? "Possible Match" : "No Record Yet",
+        top
+          ? `No exact record for ${result.coverage.queriedName}; closest on file is ${top.name} (${top.standing}).`
+          : `No reviewed record for ${result.coverage.queriedName} yet.`,
+        "Send the exact registered name and I'll check it.",
+      ),
+    };
   }
 
   return {

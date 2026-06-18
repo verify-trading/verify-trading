@@ -19,64 +19,15 @@ import path from "node:path";
 import nextEnv from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
+import { backfillKnowledge } from "./backfill-knowledge.mjs";
+import {
+  collapseEntityText,
+  createAliases,
+  isValidCitation,
+  parseCsvLine,
+} from "./_shared.mjs";
+
 const { loadEnvConfig } = nextEnv;
-
-function parseCsvLine(line) {
-  const values = [];
-  let current = "";
-  let inQuotes = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-    if (character === '"') {
-      if (inQuotes && line[index + 1] === '"') {
-        current += '"';
-        index += 1;
-        continue;
-      }
-      inQuotes = !inQuotes;
-      continue;
-    }
-    if (character === "," && !inQuotes) {
-      values.push(current);
-      current = "";
-      continue;
-    }
-    current += character;
-  }
-  values.push(current);
-  return values.map((value) => value.trim());
-}
-
-function normalizeEntityText(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
-}
-function collapseEntityText(value) {
-  return normalizeEntityText(value).replace(/\s+/g, "");
-}
-function createAliases(name, handle) {
-  const base = normalizeEntityText(name);
-  const aliases = new Set([base, collapseEntityText(name)]);
-  if (base.startsWith("the ")) {
-    aliases.add(base.slice(4));
-  }
-  const handleText = normalizeEntityText(String(handle ?? "").replace(/^@/, ""));
-  if (handleText) {
-    aliases.add(handleText);
-    aliases.add(collapseEntityText(handleText));
-  }
-  return [...aliases].filter(Boolean);
-}
-
-function isValidCitation(source) {
-  const trimmed = String(source ?? "").trim();
-  if (!trimmed) return false;
-  try {
-    const url = new URL(trimmed);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 function normalizeTier(value) {
   switch (String(value ?? "").trim().toLowerCase()) {
@@ -225,6 +176,9 @@ async function main() {
     `Upserted ${upserted} gurus (${cautions} cited Caution, ${downgraded} unsupported Caution -> Unverified, ` +
       `${publishable} publishable after review).`,
   );
+
+  // Keep the retrieval index in sync — never leave it stale after a load.
+  await backfillKnowledge(supabase);
 }
 
 function normalizeTierOrNull(value) {

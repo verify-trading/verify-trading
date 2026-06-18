@@ -5,7 +5,9 @@ import { z } from "zod";
 import type { DailyMarketBrief } from "@/lib/markets/market-intelligence";
 
 export const DAILY_MARKET_BRIEF_CACHE_KEY = "intelligence:daily-brief";
-const DAILY_MARKET_BRIEF_MODEL = "claude-sonnet-4-20250514";
+// Env-overridable so it tracks the same model as Ask (provider.ts) and can't rot
+// to a retired snapshot. claude-sonnet-4-20250514 was retired 2026-06-15.
+const DAILY_MARKET_BRIEF_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
 
 const dailyMarketBriefSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

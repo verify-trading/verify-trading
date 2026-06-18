@@ -74,6 +74,18 @@ const seedRows: Record<string, unknown>[] = [
     source: "Community research",
     aliases: ["the5ers", "the 5 ers"],
   },
+  {
+    // Precision trap: collapse("zentova markets") = "zentovamarkets" CONTAINS
+    // "amarkets" as a trailing substring. Resolution must NOT match this firm.
+    slug: "amarkets",
+    name: "AMarkets",
+    entity_type: "broker",
+    status: "warning",
+    trust_score: 5,
+    notes: "Not FCA regulated.",
+    source: "research",
+    aliases: ["amarkets"],
+  },
 ];
 
 describe("lookupVerifiedEntity", () => {
@@ -113,6 +125,21 @@ describe("lookupVerifiedEntity", () => {
     expect(result.found).toBe(false);
     expect(result.entity).toBeUndefined();
     expect(result.brokerCardHint).toBeUndefined();
+  });
+
+  it("never resolves a lookalike via a trailing substring (zentova !-> AMarkets)", async () => {
+    // collapse("zentova markets") contains "amarkets" — a bare substring must
+    // not produce a false verdict for the unrelated firm AMarkets.
+    const result = await lookupVerifiedEntity("is zentova markets legit");
+
+    expect(result.found).toBe(false);
+  });
+
+  it("resolves spacing variants of a digit brand (the 5ers -> The5ers)", async () => {
+    const result = await lookupVerifiedEntity("is the 5ers any good");
+
+    expect(result.found).toBe(true);
+    expect(result.entity?.name).toBe("The5ers");
   });
 
   it("resolves a cited guru to Caution with its citation link", async () => {
