@@ -383,18 +383,29 @@ function buildBrokerCard(
 }
 
 function buildPropFirmCard(lookup: LookupVerifiedEntityResult): BrokerCard | null {
-  const hint = lookup.brokerCardHint;
+  const hint = lookup.propFirmCardHint;
   const entity = lookup.entity;
   if (!hint || !entity) {
     return null;
   }
 
-  const hasRegulationContext = /not fca|not regulated|not authorised|not authorized/i.test(
-    entity.notes,
-  );
-  const verdict = hasRegulationContext
-    ? entity.notes
-    : `${entity.notes} Not FCA-regulated because it is a prop firm, not a retail broker.`;
+  // For a rated firm with no founder note, fall back to a concrete line built from
+  // the data already on the card (band + Trustpilot) rather than a flat placeholder
+  // — otherwise the highest-scored firms (no note on file) read the most generic.
+  const tp = hint.trustpilot;
+  const ratedSummary = tp
+    ? `Rated ${tp.rating.toFixed(1)} on Trustpilot${
+        tp.count ? ` across ${tp.count >= 1000 ? `${Math.round(tp.count / 1000)}k` : tp.count} reviews` : ""
+      }.`
+    : hint.band
+      ? `Reviewed prop firm rated ${hint.band}.`
+      : "Reviewed prop firm record.";
+
+  const verdict = hint.closed
+    ? hint.founderNote || `${entity.notes} This firm has closed down — avoid depositing.`.trim()
+    : hint.notRated
+      ? "Not enough reliable public data to rate this firm yet."
+      : hint.founderNote || entity.notes || ratedSummary;
 
   return {
     type: "broker",
@@ -408,6 +419,23 @@ function buildPropFirmCard(lookup: LookupVerifiedEntityResult): BrokerCard | nul
   };
 }
 
+function propFirmUiMeta(lookup: LookupVerifiedEntityResult): AskUiMeta {
+  const hint = lookup.propFirmCardHint;
+  const trustpilot = hint?.trustpilot ?? null;
+  return {
+    verificationKind: "propfirm",
+    verificationSourceLabel: "Reviewed record",
+    // Optional fields left undefined are omitted on serialize.
+    propFirm: {
+      band: hint?.band ?? undefined,
+      notRated: hint?.notRated ? true : undefined,
+      trustpilotRating: trustpilot?.rating,
+      trustpilotCount: trustpilot?.count ?? undefined,
+      trustpilotDate: trustpilot?.date ?? undefined,
+    },
+  };
+}
+
 function buildGuruCard(lookup: LookupVerifiedEntityResult): GuruCard | null {
   const hint = lookup.guruCardHint;
   const entity = lookup.entity;
@@ -415,30 +443,31 @@ function buildGuruCard(lookup: LookupVerifiedEntityResult): GuruCard | null {
     return null;
   }
 
+  // bio_summary is the public, defensibility-checked body. Internal founder notes
+  // are never loaded into the entity, so they cannot reach the card.
   return {
     type: "guru",
     name: hint.name,
-    score: hint.score,
-    status: hint.status,
-    verified: hint.verified,
-    verdict: entity.notes,
-    color: hint.color,
+    tier: hint.tier,
+    trackRecord: hint.trackRecord,
+    citationUrl: hint.tier === "Caution" ? hint.citationUrl : null,
+    verdict: entity.bioSummary || entity.notes || "No documented regulatory action found.",
   };
 }
 
 function buildCoverageInsightCard(): AskCard {
   return buildInsightCard(
-    "Limited Coverage",
-    "I do not have a reviewed record for that name yet.",
-    "Send the exact broker, firm, or brand name.",
+    "No Record Yet",
+    "I haven't got a reviewed record on that one yet.",
+    "What's the exact broker, firm, or brand name? I'll check it.",
   );
 }
 
 function buildUrlCoverageInsightCard(displayName: string): AskCard {
   return buildInsightCard(
-    "Need Firm Name",
-    `I cannot inspect websites directly. I treated that link as ${displayName} but I do not have a reviewed record for it yet.`,
-    "Send the exact registered firm or brand name and I will check it.",
+    "Need The Name",
+    `I can't open links, so I read that one as ${displayName}, but I haven't got a record on it yet.`,
+    "Drop the exact firm or brand name and I'll run it.",
   );
 }
 
@@ -889,15 +918,7 @@ async function resolveVerificationToolResult(
 
     if (lookup.entity.type === "propfirm") {
       const card = buildPropFirmCard(lookup) ?? buildCoverageInsightCard();
-      return withCard(
-        card,
-        card.type === "broker"
-          ? {
-              verificationKind: "propfirm",
-              verificationSourceLabel: "Reviewed record",
-            }
-          : undefined,
-      );
+      return withCard(card, card.type === "broker" ? propFirmUiMeta(lookup) : undefined);
     }
 
     const fcaStatus = await getFcaStatusImpl({

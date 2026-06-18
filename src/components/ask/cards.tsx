@@ -39,6 +39,11 @@ function CardFrame({
 
 // Renders the score as an "X / 10" bar, or just the label when the score is
 // non-numeric (e.g. "Provisional"), which would otherwise parse to a NaN width.
+/** Compact review count, e.g. 21000 -> "21k". */
+function formatReviewCount(count: number): string {
+  return count >= 1000 ? `${Math.round(count / 1000)}k` : String(count);
+}
+
 function TrustScoreBar({ score, accent }: { score: string; accent: string }) {
   const numericScore = Number.parseFloat(score);
   const isNumeric = Number.isFinite(numericScore);
@@ -70,8 +75,20 @@ function BrokerCard({
   card: Extract<AskCard, { type: "broker" }>;
   uiMeta?: AskUiMeta;
 }) {
-  const accent = card.color === "green" ? "var(--vt-green)" : "var(--vt-coral)";
   const isPropFirm = uiMeta?.verificationKind === "propfirm";
+  // Prop firms span five trust bands, so the two middle ones read as amber rather
+  // than the same coral as Avoid/closed — a mid-trust firm shouldn't look defunct.
+  const propBand = uiMeta?.propFirm?.band;
+  const propCaution =
+    isPropFirm && (propBand === "Proceed With Caution" || propBand === "High Risk");
+  const accent =
+    card.color === "green" ? "var(--vt-green)" : propCaution ? "var(--vt-amber)" : "var(--vt-coral)";
+  const accentClassName =
+    card.color === "green"
+      ? "text-[var(--vt-green)]"
+      : propCaution
+        ? "text-[var(--vt-amber)]"
+        : "text-[var(--vt-coral)]";
   const eyebrow = isPropFirm ? "Firm Check" : "Broker Check";
   const primaryLabel = isPropFirm ? "Type" : "FCA";
   const primaryValue = isPropFirm ? "Prop Firm" : card.fca;
@@ -81,11 +98,21 @@ function BrokerCard({
       ? "text-[var(--vt-green)]"
       : "text-[var(--vt-coral)]";
 
+  const propFirm = uiMeta?.propFirm;
+  const notRated = propFirm?.notRated ?? false;
+  const trailingLabel = isPropFirm && propFirm?.band ? propFirm.band : card.status;
+  const trustpilot =
+    propFirm?.trustpilotRating !== undefined
+      ? `${propFirm.trustpilotRating.toFixed(1)}${
+          propFirm.trustpilotCount ? ` (${formatReviewCount(propFirm.trustpilotCount)})` : ""
+        }`
+      : "—";
+
   return (
     <CardFrame
       eyebrow={eyebrow}
-      accentClassName={card.color === "green" ? "text-[var(--vt-green)]" : "text-[var(--vt-coral)]"}
-      trailing={<span>{card.status}</span>}
+      accentClassName={accentClassName}
+      trailing={<span>{trailingLabel}</span>}
     >
       <div className="space-y-4">
         <div>
@@ -95,7 +122,11 @@ function BrokerCard({
               {uiMeta.verificationSourceLabel}
             </div>
           ) : null}
-          <TrustScoreBar score={card.score} accent={accent} />
+          {notRated ? (
+            <div className="mt-3 text-sm font-bold text-[var(--vt-muted)]">Not yet rated</div>
+          ) : (
+            <TrustScoreBar score={card.score} accent={accent} />
+          )}
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3 text-center">
@@ -108,9 +139,11 @@ function BrokerCard({
           </div>
           <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3 text-center">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
-              Complaints
+              {isPropFirm ? "Trustpilot" : "Complaints"}
             </div>
-            <div className="mt-1 break-words text-sm font-bold text-white">{card.complaints}</div>
+            <div className="mt-1 break-words text-sm font-bold text-white">
+              {isPropFirm ? trustpilot : card.complaints}
+            </div>
           </div>
         </div>
         <div className="border-t border-white/[0.06] pt-3">
@@ -228,26 +261,37 @@ function CalcCard({ card }: { card: Extract<AskCard, { type: "calc" }> }) {
   );
 }
 
+// Gurus are named individuals: Unverified is a neutral default (never styled as a
+// warning), Caution is shown only with its regulatory citation, Verified is earned.
+const GURU_TIER_STYLE = {
+  Verified: { accent: "text-[var(--vt-green)]" },
+  Unverified: { accent: "text-[var(--vt-muted)]" },
+  Caution: { accent: "text-[var(--vt-amber)]" },
+} as const;
+
 function GuruCard({ card }: { card: Extract<AskCard, { type: "guru" }> }) {
-  const accent = card.color === "green" ? "var(--vt-green)" : "var(--vt-coral)";
+  const accent = GURU_TIER_STYLE[card.tier].accent;
 
   return (
-    <CardFrame
-      eyebrow="Guru Check"
-      accentClassName={card.color === "green" ? "text-[var(--vt-green)]" : "text-[var(--vt-coral)]"}
-      trailing={<span>{card.status}</span>}
-    >
+    <CardFrame eyebrow="Guru Check" accentClassName={accent} trailing={<span className={accent}>{card.tier}</span>}>
       <div className="space-y-4">
-        <div>
-          <div className="text-lg font-black text-white sm:text-xl">{card.name}</div>
-          <TrustScoreBar score={card.score} accent={accent} />
-        </div>
+        <div className="text-lg font-black text-white sm:text-xl">{card.name}</div>
         <div className="rounded-2xl bg-[var(--vt-card-alt)] p-3">
           <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
-            Verified
+            Verified track record
           </div>
-          <div className="mt-1 break-words text-sm font-bold text-white">{card.verified}</div>
+          <div className="mt-1 break-words text-sm font-bold text-white">{card.trackRecord}</div>
         </div>
+        {card.tier === "Caution" && card.citationUrl ? (
+          <a
+            href={card.citationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--vt-amber)] underline underline-offset-2"
+          >
+            View regulatory source →
+          </a>
+        ) : null}
         <div className="border-t border-white/[0.06] pt-3">
           <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
         </div>

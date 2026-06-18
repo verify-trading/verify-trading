@@ -144,7 +144,7 @@ export function deriveAskSessionMemory(
     if ((card.type === "broker" || card.type === "guru") && !state.lastVerifiedEntity) {
       state.lastVerifiedEntity = {
         name: card.name,
-        status: card.status,
+        status: card.type === "guru" ? card.tier : card.status,
         kind: card.type,
       };
     }
