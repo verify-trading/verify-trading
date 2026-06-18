@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { VerifiedEntity } from "@/lib/ask/entities";
-
 vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdminClient: vi.fn(),
 }));
@@ -9,55 +7,69 @@ vi.mock("@/lib/supabase/admin", () => ({
 import { clearVerifiedEntitiesCache, lookupVerifiedEntity } from "@/lib/ask/entities";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
-const seedLikeRows: VerifiedEntity[] = [
+// Rows shaped like the verified_entities columns the loader reads; unset columns
+// resolve to null/false, exactly as Supabase returns them.
+const seedRows: Record<string, unknown>[] = [
   {
-    id: "ftmo",
+    slug: "ftmo",
     name: "FTMO",
-    type: "propfirm",
+    entity_type: "propfirm",
     status: "legitimate",
-    fcaRegistered: false,
-    fcaReference: null,
-    fcaWarning: false,
-    trustScore: 9.1,
+    trust_score: 9.1,
     notes: "Most trusted prop firm globally.",
     source: "verify.trading research",
     aliases: ["ftmo"],
+    trustpilot_rating: 4.8,
+    trustpilot_count: 30000,
   },
   {
-    id: "trading212",
+    slug: "trading212",
     name: "Trading212",
-    type: "broker",
+    entity_type: "broker",
     status: "legitimate",
-    fcaRegistered: true,
-    fcaReference: "609146",
-    fcaWarning: false,
-    trustScore: 8,
+    fca_registered: true,
+    fca_reference: "609146",
+    trust_score: 8,
+    final_tier: "Tier 1",
+    founder_verified: true,
     notes: "FCA authorised.",
     source: "FCA Register",
     aliases: ["trading212", "trading 212"],
   },
   {
-    id: "switzyman",
+    slug: "switzyman",
     name: "SwitzyMan",
-    type: "guru",
+    entity_type: "guru",
     status: "avoid",
-    fcaRegistered: false,
-    fcaReference: null,
-    fcaWarning: true,
-    trustScore: 1.2,
     notes: "FCA warning issued October 2024.",
     source: "FCA Warning fca.org.uk",
     aliases: ["switzyman"],
+    guru_tier: "Caution",
+    regulator_flag_source: "https://www.fca.org.uk/news/warnings/switzyman",
+    verified_track_record: "No",
+    bio_summary: "Named on the FCA Warning List for unauthorised financial promotions.",
+    research_status: "RESEARCHED (FCA-confirmed)",
+    founder_reviewed: true,
+    identity_confirmed: true,
   },
   {
-    id: "the5ers",
-    name: "The5ers",
-    type: "propfirm",
+    slug: "ghostguru",
+    name: "GhostGuru",
+    entity_type: "guru",
     status: "legitimate",
-    fcaRegistered: false,
-    fcaReference: null,
-    fcaWarning: false,
-    trustScore: 8.6,
+    notes: "Thin directory entry.",
+    source: "Directory",
+    aliases: ["ghostguru"],
+    guru_tier: "Unverified",
+    research_status: "DIRECTORY-THIN (verify before publish)",
+    founder_reviewed: false,
+  },
+  {
+    slug: "the5ers",
+    name: "The5ers",
+    entity_type: "propfirm",
+    status: "legitimate",
+    trust_score: 8.6,
     notes: "Not FCA but well established prop firm.",
     source: "Community research",
     aliases: ["the5ers", "the 5 ers"],
@@ -69,23 +81,7 @@ describe("lookupVerifiedEntity", () => {
     clearVerifiedEntitiesCache();
     vi.mocked(getSupabaseAdminClient).mockReturnValue({
       from: () => ({
-        select: () =>
-          Promise.resolve({
-            data: seedLikeRows.map((e) => ({
-              slug: e.id,
-              name: e.name,
-              entity_type: e.type,
-              status: e.status,
-              fca_registered: e.fcaRegistered,
-              fca_reference: e.fcaReference,
-              fca_warning: e.fcaWarning,
-              trust_score: e.trustScore,
-              notes: e.notes,
-              source: e.source,
-              aliases: e.aliases,
-            })),
-            error: null,
-          }),
+        select: () => Promise.resolve({ data: seedRows, error: null }),
       }),
     } as never);
   });
@@ -100,7 +96,7 @@ describe("lookupVerifiedEntity", () => {
 
     expect(result.found).toBe(true);
     expect(result.entity?.name).toBe("FTMO");
-    expect(result.brokerCardHint?.status).toBe("LEGITIMATE");
+    expect(result.propFirmCardHint?.status).toBe("LEGITIMATE");
   });
 
   it("matches alias-like user phrasing", async () => {
@@ -119,20 +115,27 @@ describe("lookupVerifiedEntity", () => {
     expect(result.brokerCardHint).toBeUndefined();
   });
 
-  it("matches guru entities and exposes guru card hints", async () => {
+  it("resolves a cited guru to Caution with its citation link", async () => {
     const result = await lookupVerifiedEntity("Is SwitzyMan legitimate?");
 
     expect(result.found).toBe(true);
     expect(result.entity?.type).toBe("guru");
-    expect(result.guruCardHint?.status).toBe("AVOID");
-    expect(result.guruCardHint?.verified).toBe("No");
+    expect(result.guruCardHint?.tier).toBe("Caution");
+    expect(result.guruCardHint?.citationUrl).toContain("fca.org.uk");
   });
 
-  it("matches prop firms through broker-style lookup", async () => {
+  it("excludes unpublishable gurus from matching", async () => {
+    const result = await lookupVerifiedEntity("What about GhostGuru?");
+
+    expect(result.found).toBe(false);
+  });
+
+  it("returns prop firms through the prop-firm card hint", async () => {
     const result = await lookupVerifiedEntity("What about The5ers?");
 
     expect(result.found).toBe(true);
     expect(result.entity?.type).toBe("propfirm");
-    expect(result.brokerCardHint?.status).toBe("LEGITIMATE");
+    expect(result.propFirmCardHint?.status).toBe("LEGITIMATE");
+    expect(result.propFirmCardHint?.band).toBe("Strongly Trusted");
   });
 });

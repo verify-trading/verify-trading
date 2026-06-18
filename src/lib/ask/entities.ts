@@ -1,12 +1,22 @@
 import { computeBrokerTrustScore, type BtsBand } from "@/lib/ask/bts";
+import { computePropFirmScore, type PropFirmBand } from "@/lib/ask/prop-firms";
+import { resolveGuruTier, type GuruTier } from "@/lib/ask/gurus";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type VerifiedEntityType = "broker" | "guru" | "propfirm";
 export type VerifiedEntityStatus = "legitimate" | "warning" | "avoid";
 
+export interface TrustpilotSnapshot {
+  rating: number;
+  count: number | null;
+  date: string | null;
+}
+
 export interface VerifiedEntity {
   id: string;
   name: string;
+  /** Normalized name, precomputed once at load for the lookup hot path. */
+  normalizedName: string;
   type: VerifiedEntityType;
   status: VerifiedEntityStatus;
   fcaRegistered: boolean;
@@ -27,29 +37,60 @@ export interface VerifiedEntity {
   band?: BtsBand | null;
   /** True when the row still awaits live/register verification. */
   provisional?: boolean;
+  // Prop firm (entity_type = 'propfirm') compute-on-read results.
+  notRated?: boolean;
+  propBand?: PropFirmBand | null;
+  closed?: boolean;
+  trustpilot?: TrustpilotSnapshot | null;
+  // Guru (entity_type = 'guru') resolved tier + gated publish flag.
+  guruTier?: GuruTier;
+  guruPublishable?: boolean;
+  trackRecord?: string | null;
+  citationUrl?: string | null;
+  bioSummary?: string | null;
+}
+
+export interface BrokerCardHint {
+  name: string;
+  score: string;
+  status: "LEGITIMATE" | "WARNING" | "AVOID";
+  fca: "Yes" | "No";
+  complaints: "Low" | "Medium" | "High";
+  color: "green" | "red";
+  provisional: boolean;
+  band: BtsBand | null;
+  founderNote: string | null;
+}
+
+export interface PropFirmCardHint {
+  name: string;
+  /** Numeric score to 1dp, or "Not yet rated". */
+  score: string;
+  band: PropFirmBand | null;
+  status: "LEGITIMATE" | "WARNING" | "AVOID";
+  complaints: "Low" | "Medium" | "High";
+  color: "green" | "red";
+  notRated: boolean;
+  closed: boolean;
+  trustpilot: TrustpilotSnapshot | null;
+  founderNote: string | null;
+}
+
+export interface GuruCardHint {
+  name: string;
+  tier: GuruTier;
+  /** Track-record badge text, e.g. "No". */
+  trackRecord: string;
+  /** Citation URL, present only when the resolved tier is Caution. */
+  citationUrl: string | null;
 }
 
 export interface LookupVerifiedEntityResult {
   found: boolean;
   entity?: VerifiedEntity;
-  brokerCardHint?: {
-    name: string;
-    score: string;
-    status: "LEGITIMATE" | "WARNING" | "AVOID";
-    fca: "Yes" | "No";
-    complaints: "Low" | "Medium" | "High";
-    color: "green" | "red";
-    provisional: boolean;
-    band: BtsBand | null;
-    founderNote: string | null;
-  };
-  guruCardHint?: {
-    name: string;
-    score: string;
-    status: "LEGITIMATE" | "WARNING" | "AVOID";
-    verified: "Yes" | "No";
-    color: "green" | "red";
-  };
+  brokerCardHint?: BrokerCardHint;
+  propFirmCardHint?: PropFirmCardHint;
+  guruCardHint?: GuruCardHint;
 }
 
 let verifiedEntitiesCache: Promise<VerifiedEntity[]> | undefined;
@@ -104,19 +145,6 @@ function deriveComplaints(status: VerifiedEntityStatus, notes: string, fcaWarnin
   return "Low" as const;
 }
 
-function deriveGuruVerified(status: VerifiedEntityStatus, notes: string, trustScore: number) {
-  const lowerNotes = notes.toLowerCase();
-  if (status !== "legitimate") {
-    return "No" as const;
-  }
-
-  if (lowerNotes.includes("no verified") || lowerNotes.includes("unverified")) {
-    return "No" as const;
-  }
-
-  return trustScore >= 7 ? "Yes" : "No";
-}
-
 function mapStatus(status: VerifiedEntityStatus) {
   switch (status) {
     case "legitimate":
@@ -132,66 +160,152 @@ function mapColor(status: VerifiedEntityStatus) {
   return status === "legitimate" ? ("green" as const) : ("red" as const);
 }
 
+/** Prop-firm band -> the legitimate/warning/avoid status used for colour + complaints. */
+function propStatusFromBand(band: PropFirmBand | null): VerifiedEntityStatus {
+  if (band === "Strongly Trusted" || band === "Trusted") {
+    return "legitimate";
+  }
+  if (band === "Avoid") {
+    return "avoid";
+  }
+  return "warning";
+}
+
+function toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toStringOrNull(value: unknown): string | null {
+  return (value as string | null) ?? null;
+}
+
+const ENTITY_COLUMNS =
+  "slug, name, entity_type, status, fca_registered, fca_reference, fca_warning, trust_score, " +
+  "notes, source, aliases, regulators_listed, leverage, final_tier, final_status, " +
+  "founder_verified, founder_notes, verification_method, firm_status, " +
+  "trustpilot_rating, trustpilot_count, trustpilot_date, founder_override_score, " +
+  "guru_tier, founder_tier_override, regulator_flag_source, " +
+  "verified_track_record, research_status, founder_reviewed, identity_confirmed, bio_summary";
+
+function mapEntityRow(row: Record<string, unknown>): VerifiedEntity {
+  const type = row.entity_type as VerifiedEntityType;
+  const name = row.name as string;
+  const base = {
+    id: row.slug as string,
+    name,
+    normalizedName: normalizeEntityText(name),
+    type,
+    status: row.status as VerifiedEntityStatus,
+    fcaRegistered: Boolean(row.fca_registered),
+    fcaReference: toStringOrNull(row.fca_reference),
+    fcaWarning: Boolean(row.fca_warning),
+    notes: toStringOrNull(row.notes) ?? "",
+    source: toStringOrNull(row.source) ?? "",
+    aliases: Array.isArray(row.aliases)
+      ? row.aliases.map((alias) => String(alias))
+      : createAliases(name),
+  };
+
+  if (type === "propfirm") {
+    const prop = computePropFirmScore({
+      firmStatus: toStringOrNull(row.firm_status),
+      autoScore: toNumberOrNull(row.trust_score),
+      founderOverrideScore: toNumberOrNull(row.founder_override_score),
+    });
+    const rating = toNumberOrNull(row.trustpilot_rating);
+    return {
+      ...base,
+      status: propStatusFromBand(prop.band),
+      trustScore: prop.score ?? 0,
+      founderNotes: toStringOrNull(row.founder_notes),
+      notRated: prop.notRated,
+      propBand: prop.band,
+      closed: prop.closed,
+      trustpilot:
+        rating === null
+          ? null
+          : {
+              rating,
+              count: toNumberOrNull(row.trustpilot_count),
+              date: toStringOrNull(row.trustpilot_date),
+            },
+    };
+  }
+
+  if (type === "guru") {
+    const resolution = resolveGuruTier({
+      tier: toStringOrNull(row.guru_tier),
+      founderTierOverride: toStringOrNull(row.founder_tier_override),
+      regulatorFlagSource: toStringOrNull(row.regulator_flag_source),
+      verifiedTrackRecord: toStringOrNull(row.verified_track_record),
+      researchStatus: toStringOrNull(row.research_status),
+      founderReviewed: Boolean(row.founder_reviewed),
+      identityConfirmed: Boolean(row.identity_confirmed),
+    });
+    return {
+      ...base,
+      // Gurus carry no numeric score; status stays neutral and the card uses the tier.
+      trustScore: 0,
+      guruTier: resolution.tier,
+      guruPublishable: resolution.publishable,
+      trackRecord: toStringOrNull(row.verified_track_record),
+      citationUrl: resolution.tier === "Caution" ? toStringOrNull(row.regulator_flag_source) : null,
+      bioSummary: toStringOrNull(row.bio_summary),
+    };
+  }
+
+  // Brokers (BTS): compute the score on read from the stored tier inputs.
+  const finalTier = toStringOrNull(row.final_tier);
+  const founderVerified = Boolean(row.founder_verified);
+  const leverage = toStringOrNull(row.leverage);
+  const regulatorsListed = toStringOrNull(row.regulators_listed);
+  const verificationMethod = toStringOrNull(row.verification_method);
+  const stored = toNumberOrNull(row.trust_score);
+  const computed = finalTier
+    ? computeBrokerTrustScore({
+        finalTier,
+        finalStatus: toStringOrNull(row.final_status),
+        founderVerified,
+        leverage,
+        regulatorsListed,
+        verificationMethod,
+      })
+    : null;
+
+  return {
+    ...base,
+    trustScore: computed ? computed.score : (stored ?? 0),
+    finalTier,
+    founderVerified,
+    founderNotes: toStringOrNull(row.founder_notes),
+    leverage,
+    regulatorsListed,
+    verificationMethod,
+    band: computed ? computed.band : null,
+    provisional: computed ? computed.provisional : false,
+  };
+}
+
 async function loadVerifiedEntitiesFromSupabase(): Promise<VerifiedEntity[]> {
   const client = getSupabaseAdminClient();
   if (!client) {
     return [];
   }
 
-  const { data, error } = await client.from("verified_entities").select(
-    "slug, name, entity_type, status, fca_registered, fca_reference, fca_warning, trust_score, notes, source, aliases, regulators_listed, leverage, final_tier, final_status, founder_verified, founder_notes, verification_method",
-  );
-
+  const { data, error } = await client.from("verified_entities").select(ENTITY_COLUMNS);
   if (error || !data) {
     return [];
   }
 
-  return data.map((row) => {
-    const finalTier = (row.final_tier as string | null) ?? null;
-    const founderVerified = Boolean(row.founder_verified);
-    const founderNotes = (row.founder_notes as string | null) ?? null;
-    const leverage = (row.leverage as string | null) ?? null;
-    const regulatorsListed = (row.regulators_listed as string | null) ?? null;
-    const verificationMethod = (row.verification_method as string | null) ?? null;
-
-    // BTS rows (with a tier) compute their score on read from stored inputs;
-    // legacy rows (gurus / prop firms / pre-BTS brokers) keep their stored score.
-    const stored = row.trust_score === null ? null : Number(row.trust_score);
-    const computed = finalTier
-      ? computeBrokerTrustScore({
-          finalTier,
-          finalStatus: (row.final_status as string | null) ?? null,
-          founderVerified,
-          leverage,
-          regulatorsListed,
-          verificationMethod,
-        })
-      : null;
-
-    return {
-      id: row.slug as string,
-      name: row.name as string,
-      type: row.entity_type as VerifiedEntityType,
-      status: row.status as VerifiedEntityStatus,
-      fcaRegistered: Boolean(row.fca_registered),
-      fcaReference: (row.fca_reference as string | null) ?? null,
-      fcaWarning: Boolean(row.fca_warning),
-      trustScore: computed ? computed.score : (stored ?? 0),
-      notes: (row.notes as string | null) ?? "",
-      source: (row.source as string | null) ?? "",
-      aliases: Array.isArray(row.aliases)
-        ? row.aliases.map((alias) => String(alias))
-        : createAliases(String(row.name)),
-      finalTier,
-      founderVerified,
-      founderNotes,
-      leverage,
-      regulatorsListed,
-      verificationMethod,
-      band: computed ? computed.band : null,
-      provisional: computed ? computed.provisional : false,
-    };
-  });
+  // Unpublishable gurus (thin research, unreviewed, or identity-on-hold) are
+  // excluded entirely so they can never match or be listed.
+  return data
+    .map((row) => mapEntityRow(row as unknown as Record<string, unknown>))
+    .filter((entity) => entity.type !== "guru" || entity.guruPublishable);
 }
 
 /** Clears the in-memory entity list cache (e.g. after tests or long-running reload hooks). */
@@ -210,9 +324,10 @@ async function getVerifiedEntities() {
 export interface VerifiedEntityListItem {
   name: string;
   type: VerifiedEntityType;
+  /** Numeric score, "Provisional"/"Not yet rated", or the guru tier. */
   score: string;
   status: VerifiedEntityStatus;
-  band: BtsBand | null;
+  band: string | null;
   founderNote: string | null;
   fcaRegistered: boolean;
 }
@@ -225,17 +340,87 @@ export async function listVerifiedEntities(
   const entities = await getVerifiedEntities();
   return entities
     .filter((entity) => entity.type === type)
-    .sort((a, b) => b.trustScore - a.trustScore)
+    .sort((a, b) => guruTierRank(b) - guruTierRank(a) || b.trustScore - a.trustScore)
     .slice(0, Math.max(1, Math.min(limit, 15)))
     .map((entity) => ({
       name: entity.name,
       type: entity.type,
-      score: formatTrustScore(entity.provisional, entity.trustScore),
+      score: listScore(entity),
       status: entity.status,
-      band: entity.band ?? null,
+      band: entity.propBand ?? entity.band ?? null,
       founderNote: entity.founderNotes ?? null,
       fcaRegistered: entity.fcaRegistered,
     }));
+}
+
+/** Verified gurus rank above Unverified above Caution; non-gurus are unaffected. */
+function guruTierRank(entity: VerifiedEntity) {
+  switch (entity.guruTier) {
+    case "Verified":
+      return 2;
+    case "Unverified":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function listScore(entity: VerifiedEntity): string {
+  if (entity.type === "guru") {
+    return entity.guruTier ?? "Unverified";
+  }
+  if (entity.notRated) {
+    return "Not yet rated";
+  }
+  return formatTrustScore(entity.provisional, entity.trustScore);
+}
+
+function buildCardHints(entity: VerifiedEntity): Pick<
+  LookupVerifiedEntityResult,
+  "brokerCardHint" | "propFirmCardHint" | "guruCardHint"
+> {
+  if (entity.type === "propfirm") {
+    return {
+      propFirmCardHint: {
+        name: entity.name,
+        score: entity.notRated ? "Not yet rated" : entity.trustScore.toFixed(1),
+        band: entity.propBand ?? null,
+        status: mapStatus(entity.status),
+        complaints: deriveComplaints(entity.status, entity.notes, entity.fcaWarning),
+        color: mapColor(entity.status),
+        notRated: entity.notRated ?? false,
+        closed: entity.closed ?? false,
+        trustpilot: entity.trustpilot ?? null,
+        founderNote: entity.founderNotes ?? null,
+      },
+    };
+  }
+
+  if (entity.type === "guru") {
+    return {
+      guruCardHint: {
+        name: entity.name,
+        tier: entity.guruTier ?? "Unverified",
+        trackRecord: entity.trackRecord ?? "No",
+        citationUrl: entity.citationUrl ?? null,
+      },
+    };
+  }
+
+  return {
+    brokerCardHint: {
+      name: entity.name,
+      // Unverified rows show "Provisional", never a hard score.
+      score: formatTrustScore(entity.provisional, entity.trustScore),
+      status: mapStatus(entity.status),
+      fca: entity.fcaRegistered ? "Yes" : "No",
+      complaints: deriveComplaints(entity.status, entity.notes, entity.fcaWarning),
+      color: mapColor(entity.status),
+      provisional: entity.provisional ?? false,
+      band: entity.band ?? null,
+      founderNote: entity.founderNotes ?? null,
+    },
+  };
 }
 
 export async function lookupVerifiedEntity(query: string): Promise<LookupVerifiedEntityResult> {
@@ -256,7 +441,7 @@ export async function lookupVerifiedEntity(query: string): Promise<LookupVerifie
       }
     }
 
-    if (normalizedQuery === normalizeEntityText(entity.name)) {
+    if (normalizedQuery === entity.normalizedName) {
       score = Math.max(score, 500);
     }
 
@@ -274,24 +459,6 @@ export async function lookupVerifiedEntity(query: string): Promise<LookupVerifie
   return {
     found: true,
     entity: match,
-    brokerCardHint: {
-      name: match.name,
-      // Unverified rows show "Provisional", never a hard score.
-      score: formatTrustScore(match.provisional, match.trustScore),
-      status: mapStatus(match.status),
-      fca: match.fcaRegistered ? "Yes" : "No",
-      complaints: deriveComplaints(match.status, match.notes, match.fcaWarning),
-      color: mapColor(match.status),
-      provisional: match.provisional ?? false,
-      band: match.band ?? null,
-      founderNote: match.founderNotes ?? null,
-    },
-    guruCardHint: {
-      name: match.name,
-      score: formatTrustScore(match.provisional, match.trustScore),
-      status: mapStatus(match.status),
-      verified: deriveGuruVerified(match.status, match.notes, match.trustScore),
-      color: mapColor(match.status),
-    },
+    ...buildCardHints(match),
   };
 }

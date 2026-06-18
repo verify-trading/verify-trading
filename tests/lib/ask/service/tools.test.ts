@@ -237,9 +237,9 @@ describe("createAskTools", () => {
     expect(result).toEqual({
       card: {
         type: "insight",
-        headline: "Limited Coverage",
-        body: "I do not have a reviewed record for that name yet.",
-        verdict: "Send the exact broker, firm, or brand name.",
+        headline: "No Record Yet",
+        body: "I haven't got a reviewed record on that one yet.",
+        verdict: "What's the exact broker, firm, or brand name? I'll check it.",
       },
     });
   });
@@ -283,9 +283,9 @@ describe("createAskTools", () => {
     expect(result).toEqual({
       card: {
         type: "insight",
-        headline: "Need Firm Name",
-        body: "I cannot inspect websites directly. I treated that link as Tiger Funded but I do not have a reviewed record for it yet.",
-        verdict: "Send the exact registered firm or brand name and I will check it.",
+        headline: "Need The Name",
+        body: "I can't open links, so I read that one as Tiger Funded, but I haven't got a record on it yet.",
+        verdict: "Drop the exact firm or brand name and I'll run it.",
       },
     });
   });
@@ -309,13 +309,17 @@ describe("createAskTools", () => {
           source: "verify.trading research",
           aliases: ["ftmo"],
         },
-        brokerCardHint: {
+        propFirmCardHint: {
           name: "FTMO",
           score: "9.1",
+          band: "Strongly Trusted",
           status: "LEGITIMATE",
-          fca: "No",
           complaints: "Low",
           color: "green",
+          notRated: false,
+          closed: false,
+          trustpilot: { rating: 4.8, count: 30000, date: null },
+          founderNote: null,
         },
       }),
     });
@@ -336,13 +340,17 @@ describe("createAskTools", () => {
         status: "LEGITIMATE",
         fca: "No",
         complaints: "Low",
-        verdict:
-          "Most trusted prop firm globally. Consistent payouts. Strong community reputation. Not FCA-regulated because it is a prop firm, not a retail broker.",
+        verdict: "Most trusted prop firm globally. Consistent payouts. Strong community reputation.",
         color: "green",
       },
       uiMeta: {
         verificationKind: "propfirm",
         verificationSourceLabel: "Reviewed record",
+        propFirm: {
+          band: "Strongly Trusted",
+          trustpilotRating: 4.8,
+          trustpilotCount: 30000,
+        },
       },
     });
   });

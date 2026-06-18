@@ -83,11 +83,12 @@ const calcCardSchema = z.object({
 const guruCardSchema = z.object({
   type: z.literal("guru"),
   name: textFieldSchema,
-  score: textFieldSchema,
-  status: brokerStatusSchema,
-  verified: booleanStringSchema,
+  // Gurus carry no numeric score — only a gated three-tier label.
+  tier: z.enum(["Verified", "Unverified", "Caution"]),
+  trackRecord: textFieldSchema,
+  // Citation link; present (and required to display) only when tier is Caution.
+  citationUrl: nullableTextFieldSchema,
   verdict: textFieldSchema,
-  color: cardColorSchema,
 });
 
 const insightCardSchema = z.object({
@@ -283,6 +284,17 @@ export const askUiMetaSchema = z
     projectionMarkers: z.array(z.number().int().nonnegative()).optional(),
     verificationKind: z.enum(["broker", "propfirm"]).optional(),
     verificationSourceLabel: z.string().trim().min(1).optional(),
+    // Prop-firm extras shown alongside the reused broker card: the trust band,
+    // the "Not yet rated" state, and the Trustpilot snapshot the score rests on.
+    propFirm: z
+      .object({
+        band: z.string().trim().min(1).optional(),
+        notRated: z.boolean().optional(),
+        trustpilotRating: z.number().optional(),
+        trustpilotCount: z.number().int().nonnegative().optional(),
+        trustpilotDate: z.string().trim().min(1).optional(),
+      })
+      .optional(),
     // Tappable next-question suggestions under the answer (in the user's voice).
     // Lives in uiMeta so it persists with the message and survives a refresh.
     followups: z.array(z.string().trim().min(1).max(120)).max(3).optional(),

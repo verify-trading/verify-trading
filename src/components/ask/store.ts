@@ -107,8 +107,8 @@ function serializeAssistantCardForContext(card: AskCard) {
       return JSON.stringify({
         type: card.type,
         name: card.name,
-        status: card.status,
-        verified: card.verified,
+        tier: card.tier,
+        trackRecord: card.trackRecord,
         verdict: card.verdict,
       });
     case "briefing":
