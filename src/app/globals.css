@@ -99,6 +99,47 @@ select {
   }
 }
 
+/* Hero "Ask" demo — gentle device float (phone / glass panel) */
+@keyframes demo-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Hero "Ask" demo — ambient glow breathing behind the frameless glass panel */
+@keyframes demo-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.06);
+  }
+}
+
+/* Hero "Ask" demo — conic gradient halo rotation (dynamic-island variant) */
+@keyframes demo-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Hero "Ask" demo — diagonal sheen sweeping across the glass panel */
+@keyframes demo-sheen {
+  0% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(230%) skewX(-18deg);
+  }
+}
+
 /* Sonner — library dark theme uses pure black + gray; remap to `--vt-*` (same surfaces as auth / Ask) */
 [data-sonner-toaster] {
   font-family: var(--font-sans);

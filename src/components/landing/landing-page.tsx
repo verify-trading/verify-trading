@@ -18,6 +18,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { HeroAskDemo } from "@/components/landing/hero-ask-demo";
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
 import { AppWordmarkInline, Logo } from "@/components/site/logo";
 import { SiteNav } from "@/components/site/site-nav";
@@ -223,6 +224,63 @@ function HeroSection() {
         </div>
       </div>
       <ProductVideoModal appName={appName} open={videoOpen} onClose={() => setVideoOpen(false)} />
+    </section>
+  );
+}
+
+/* ─── Ask live demo ─── */
+
+function AskDemoSection() {
+  const points = [
+    "Broker & prop-firm trust checks",
+    "Live market briefings with key levels",
+    "Instant position sizing to your risk",
+  ];
+
+  return (
+    <section className="border-b border-white/[0.06] bg-black/15">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 md:grid-cols-2 lg:gap-16">
+        <div className="order-2 min-w-0 md:order-1">
+          <SectionEyebrow>Ask · live demo</SectionEyebrow>
+          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+            Ask anything. Get a verified answer.
+          </h2>
+          <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
+            Check a broker, size a position, or read the market — in plain English,
+            backed by live data. Watch it work, then try it yourself.
+          </p>
+          <ul className="mt-6 flex flex-col gap-2.5 text-sm text-slate-300">
+            {points.map((p) => (
+              <li key={p} className="flex items-center gap-2.5">
+                <CheckCircle2
+                  className="size-4 shrink-0 text-[var(--vt-green)]"
+                  aria-hidden
+                />
+                {p}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-8 flex flex-col items-start gap-3">
+            <Button
+              asChild
+              variant="default"
+              size="pill"
+              className="justify-between bg-gradient-to-r from-[var(--vt-blue)] via-[#8b5cf6] to-[var(--vt-coral)] px-6 shadow-[0_18px_36px_-12px_rgba(242,109,109,0.7)] hover:brightness-110"
+            >
+              <Link href="/ask" prefetch={false}>
+                Start Free Now
+                <ArrowRight className="size-4" aria-hidden />
+              </Link>
+            </Button>
+            <p className="text-xs text-slate-500">
+              Tap the screen and start typing to try a question →
+            </p>
+          </div>
+        </div>
+        <div className="order-1 min-w-0 md:order-2">
+          <HeroAskDemo variant="device" />
+        </div>
+      </div>
     </section>
   );
 }
@@ -592,6 +650,7 @@ export function LandingPage({
       <SiteNav />
       <main>
         <HeroSection />
+        <AskDemoSection />
         <HowItWorksSection />
         <FeaturesSection />
         <PricingPlansSection pricing={pricing} billingContext={billingContext} />
