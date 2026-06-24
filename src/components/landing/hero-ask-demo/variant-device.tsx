@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-} from "framer-motion";
-import { useRef } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { getAppName } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
@@ -56,7 +49,7 @@ function DynamicIsland({ thinking }: { thinking: boolean }) {
   );
 }
 
-/** Design 1 (base) — polished iPhone frame with scroll parallax + a live thread. */
+/** Design 1 (base) — polished iPhone frame with a live thread. */
 export function DeviceView({
   state,
   onActivate,
@@ -64,34 +57,18 @@ export function DeviceView({
   onCloseCta,
 }: VariantViewProps) {
   const reduced = useReducedMotion();
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "end start"],
-  });
-  // Subtle scroll-linked parallax + 3D tilt as the phone passes through the viewport.
-  const parallaxY = useTransform(scrollYProgress, [0, 1], [44, -44]);
-  const tiltX = useTransform(scrollYProgress, [0, 0.5, 1], [7, 0, -7]);
 
   return (
-    <div ref={ref} className="mx-auto w-full max-w-[392px] [perspective:1500px]">
-      <motion.div style={reduced ? undefined : { y: parallaxY, rotateX: tiltX }}>
-        {/* Reveal on first scroll into view */}
-        <motion.div
-          initial={reduced ? false : { opacity: 0, y: 36, scale: 0.94 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-        >
-          {/* Idle float */}
-          <motion.div
-            animate={reduced ? undefined : { y: [0, -9, 0] }}
-            transition={
-              reduced
-                ? undefined
-                : { duration: 6.5, repeat: Infinity, ease: "easeInOut" }
-            }
-          >
+    <div className="mx-auto w-full max-w-[392px]">
+      {/* Idle float */}
+      <motion.div
+        animate={reduced ? undefined : { y: [0, -9, 0] }}
+        transition={
+          reduced
+            ? undefined
+            : { duration: 6.5, repeat: Infinity, ease: "easeInOut" }
+        }
+      >
             {/* Device body */}
             <div className="relative aspect-[392/800] rounded-[56px] border border-white/[0.08] bg-[#05060f] p-[12px] shadow-[0_50px_110px_-35px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.02)] ring-1 ring-white/[0.04]">
               {/* Screen */}
@@ -149,8 +126,6 @@ export function DeviceView({
               </div>
             </div>
           </motion.div>
-        </motion.div>
-      </motion.div>
     </div>
   );
 }
