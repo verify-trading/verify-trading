@@ -13,11 +13,9 @@ import {
   Upload,
   Scale,
   X,
-  PlayCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { HeroAskDemo } from "@/components/landing/hero-ask-demo";
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
 import { AppWordmarkInline, Logo } from "@/components/site/logo";
@@ -95,191 +93,116 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
 
 /* ─── Hero ─── */
 
-function ProductPreviewVideo({ appName }: { appName: string }) {
+function AppleMark({ className }: { className?: string }) {
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-[var(--vt-navy)] shadow-[0_24px_64px_-28px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
-      <video
-        className="h-full w-full object-cover [filter:brightness(0.97)_saturate(0.92)]"
-        src="/main-video.mp4"
-        autoPlay
-        loop
-        muted
-        playsInline
-        aria-label={`${appName} product preview`}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] rounded-2xl shadow-[inset_0_0_72px_20px_rgba(10,13,46,0.75)]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 z-[2] rounded-2xl bg-gradient-to-b from-[rgba(10,13,46,0.5)] via-transparent to-[rgba(10,13,46,0.45)]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 z-[3] rounded-2xl bg-gradient-to-r from-[rgba(10,13,46,0.25)] via-transparent to-transparent max-md:bg-gradient-to-b max-md:from-[rgba(10,13,46,0.35)] max-md:via-transparent max-md:to-[rgba(10,13,46,0.2)]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 z-[4] rounded-2xl ring-1 ring-inset ring-white/[0.05]"
-        aria-hidden
-      />
-    </div>
+    <svg viewBox="0 0 384 512" className={className} fill="currentColor" aria-hidden>
+      <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+    </svg>
   );
 }
 
-function ProductVideoModal({
-  appName,
-  open,
-  onClose,
-}: {
-  appName: string;
-  open: boolean;
-  onClose: () => void;
-}) {
+function GooglePlayMark({ className }: { className?: string }) {
   return (
-    <Modal open={open} onClose={onClose} size="2xl" aria-label={`${appName} walkthrough video`}>
-      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-950">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full border border-white/15 bg-slate-950/55 text-white/85 backdrop-blur transition hover:bg-slate-950/75 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
-          aria-label="Close video"
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M3.609 1.814L13.792 12 3.609 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .61-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.198l2.807 1.626a1 1 0 0 1 0 1.73l-2.808 1.626L15.397 12l2.301-2.491zM5.864 2.658L16.802 8.99l-2.302 2.302-8.636-8.634z" />
+    </svg>
+  );
+}
+
+/** App-store download badges. For now both route to /signup. */
+function StoreBadges() {
+  const badges = [
+    {
+      icon: <AppleMark className="size-6" />,
+      line1: "Download on the",
+      line2: "App Store",
+    },
+    {
+      icon: <GooglePlayMark className="size-5" />,
+      line1: "GET IT ON",
+      line2: "Google Play",
+    },
+  ];
+  return (
+    <div className="flex flex-row flex-wrap items-center justify-center gap-3">
+      {badges.map((b) => (
+        <Link
+          key={b.line2}
+          href="/signup"
+          prefetch={false}
+          className="inline-flex items-center gap-2.5 rounded-xl border border-white/25 bg-black px-4 py-2.5 text-white transition hover:border-white/45 hover:bg-[#0c0c0c]"
         >
-          <X className="size-4" aria-hidden />
-        </button>
-        <video
-          key={open ? "open" : "closed"}
-          className="aspect-video w-full bg-slate-950 object-cover"
-          src="/main-video.mp4"
-          autoPlay
-          controls
-          playsInline
-          aria-label={`${appName} walkthrough video`}
-        >
-          <track kind="captions" />
-        </video>
-      </div>
-    </Modal>
+          {b.icon}
+          <span className="text-left leading-tight">
+            <span className="block text-[10px] font-medium text-white/70">{b.line1}</span>
+            <span className="block text-[15px] font-semibold tracking-tight">{b.line2}</span>
+          </span>
+        </Link>
+      ))}
+    </div>
   );
 }
 
 function HeroSection() {
   const appName = getAppName();
-  const [videoOpen, setVideoOpen] = useState(false);
 
   return (
-    <section className="border-b border-white/[0.06] bg-[radial-gradient(ellipse_90%_70%_at_100%_35%,rgba(76,110,245,0.1),transparent_52%),var(--vt-navy)] max-md:bg-[radial-gradient(ellipse_100%_60%_at_50%_0%,rgba(76,110,245,0.1),transparent_45%),var(--vt-navy)]">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-12 sm:px-6 sm:py-16 md:grid-cols-2 md:items-center md:gap-12 md:py-20 lg:gap-16 lg:py-24">
-        <div className="min-w-0 max-w-2xl text-left">
-          <h1
-            className="text-[2.125rem] font-semibold leading-[1.05] tracking-normal text-white sm:text-4xl sm:leading-[1.06] lg:text-5xl"
-            aria-label={`${appName}: One Check. Better Decisions. Fewer Losses.`}
-          >
-            <span className="mb-3 block text-xl font-bold tracking-normal sm:mb-4 sm:text-2xl">
-              <AppWordmarkInline />
-            </span>
-            <span className="block">One Check.</span>
-            <span className="block text-[var(--vt-coral)]">
+    <section className="overflow-hidden border-b border-white/[0.06] bg-[radial-gradient(ellipse_110%_55%_at_50%_0%,rgba(76,110,245,0.1),transparent_55%),var(--vt-navy)]">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-4 pb-16 pt-12 text-center sm:px-6 sm:pb-20 sm:pt-16">
+        <h1
+          className="text-[2.6rem] font-bold leading-[1.02] tracking-[-0.02em] text-white sm:text-[3.25rem] sm:leading-[1.01]"
+          aria-label={`${appName}: One Check. Better Decisions. Fewer Losses.`}
+        >
+          <span className="mb-4 block text-xl font-bold tracking-normal sm:mb-5 sm:text-2xl">
+            <AppWordmarkInline />
+          </span>
+          <span className="block">One Check.</span>
+          <span className="block">
+            <span className="bg-gradient-to-r from-[#a78bfa] via-[var(--vt-coral)] to-[#f472b6] bg-clip-text text-transparent">
               Better Decisions.
             </span>
-            <span className="block">Fewer Losses.</span>
-            <span className="mt-4 block max-w-xl text-sm font-normal leading-6 text-slate-400 sm:text-[15px]">
-              Verify traders, validate trades, and manage risk with live data & AI - all in one place.
-            </span>
-          </h1>
-          <div className="mt-7 flex w-full max-w-[13rem] flex-col items-stretch gap-3 sm:mt-8">
-            <Button
-              asChild
-              variant="default"
-              size="pill"
-              className="min-w-48 justify-between bg-gradient-to-r from-[var(--vt-blue)] via-[#8b5cf6] to-[var(--vt-coral)] px-6 shadow-[0_18px_36px_-12px_rgba(242,109,109,0.7)] hover:brightness-110"
-            >
-              <Link href="/ask" prefetch={false}>
-                Start Free Now
-                <ArrowRight className="size-4" aria-hidden />
-              </Link>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="pill"
-              className="justify-between border-white/15 bg-white/[0.02] px-6 text-white/90 hover:bg-white/[0.06]"
-              onClick={() => setVideoOpen(true)}
-            >
-              See How It Works
-              <PlayCircle className="size-4" aria-hidden />
-            </Button>
+          </span>
+          <span className="block">Fewer Losses.</span>
+        </h1>
+        <p className="mt-5 max-w-md text-[15px] font-normal leading-6 text-slate-400 sm:max-w-xl sm:text-base">
+          Verify traders, validate trades, and manage risk with live data &amp; AI -
+          all in one place.
+        </p>
+
+        <div className="mt-8">
+          <StoreBadges />
+        </div>
+
+        {/* Phone demo with a soft gradient glow behind it */}
+        <div className="relative mt-12 w-full sm:mt-14">
+          {/* Wide soft glow blooming out behind the phone */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-1/2 z-0 size-[26rem] max-w-[150vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(76,110,245,0.45),rgba(139,92,246,0.22)_45%,transparent_70%)] blur-3xl"
+          />
+          <div className="relative z-10 mx-auto w-full max-w-[392px]">
+            {/* Colored aura that blooms out around the phone edges */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-3 inset-y-6 -z-10 rounded-[3.5rem] bg-gradient-to-b from-[rgba(76,110,245,0.6)] via-[rgba(139,92,246,0.45)] to-[rgba(242,109,109,0.28)] blur-2xl"
+            />
+            <HeroAskDemo variant="device" />
           </div>
-          <ul className="mt-5 flex flex-col items-start gap-2 text-sm text-slate-500 sm:mt-6 sm:flex-row sm:flex-wrap sm:justify-start sm:gap-x-8 sm:gap-y-2">
-            {["Stop bad trades in seconds", "Avoid any scams", "Control your risk"].map((t) => (
+        </div>
+
+        <ul className="mt-10 flex flex-col items-center gap-3 text-[15px] text-slate-300 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8">
+          {["Stop bad trades in seconds", "Avoid any scams", "Control your risk"].map(
+            (t) => (
               <li key={t} className="flex items-center gap-2">
-                <CheckCircle2 className="size-3.5 shrink-0 text-[var(--vt-green)]" aria-hidden />
-                {t}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="hidden min-w-0 md:block">
-          <ProductPreviewVideo appName={appName} />
-        </div>
-      </div>
-      <ProductVideoModal appName={appName} open={videoOpen} onClose={() => setVideoOpen(false)} />
-    </section>
-  );
-}
-
-/* ─── Ask live demo ─── */
-
-function AskDemoSection() {
-  const points = [
-    "Broker & prop-firm trust checks",
-    "Live market briefings with key levels",
-    "Instant position sizing to your risk",
-  ];
-
-  return (
-    <section className="border-b border-white/[0.06] bg-black/15">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 md:grid-cols-2 lg:gap-16">
-        <div className="order-2 min-w-0 md:order-1">
-          <SectionEyebrow>Ask · live demo</SectionEyebrow>
-          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
-            Ask anything. Get a verified answer.
-          </h2>
-          <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
-            Check a broker, size a position, or read the market — in plain English,
-            backed by live data. Watch it work, then try it yourself.
-          </p>
-          <ul className="mt-6 flex flex-col gap-2.5 text-sm text-slate-300">
-            {points.map((p) => (
-              <li key={p} className="flex items-center gap-2.5">
                 <CheckCircle2
                   className="size-4 shrink-0 text-[var(--vt-green)]"
                   aria-hidden
                 />
-                {p}
+                {t}
               </li>
-            ))}
-          </ul>
-          <div className="mt-8 flex flex-col items-start gap-3">
-            <Button
-              asChild
-              variant="default"
-              size="pill"
-              className="justify-between bg-gradient-to-r from-[var(--vt-blue)] via-[#8b5cf6] to-[var(--vt-coral)] px-6 shadow-[0_18px_36px_-12px_rgba(242,109,109,0.7)] hover:brightness-110"
-            >
-              <Link href="/ask" prefetch={false}>
-                Start Free Now
-                <ArrowRight className="size-4" aria-hidden />
-              </Link>
-            </Button>
-            <p className="text-xs text-slate-500">
-              Tap the screen and start typing to try a question →
-            </p>
-          </div>
-        </div>
-        <div className="order-1 min-w-0 md:order-2">
-          <HeroAskDemo variant="device" />
-        </div>
+            ),
+          )}
+        </ul>
       </div>
     </section>
   );
@@ -650,7 +573,6 @@ export function LandingPage({
       <SiteNav />
       <main>
         <HeroSection />
-        <AskDemoSection />
         <HowItWorksSection />
         <FeaturesSection />
         <PricingPlansSection pricing={pricing} billingContext={billingContext} />
