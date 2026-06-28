@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
@@ -94,11 +96,28 @@ export function PricingPlansSection({
           <div className="mt-6">
             {!billingContext?.isSignedIn ? (
               <Button asChild variant="outline" size="pill" className="w-full">
-                <Link href="/signup">Create free account</Link>
+                <Link
+                  href="/signup"
+                  onClick={() =>
+                    trackAnalyticsEvent(ANALYTICS_EVENTS.createAccountClicked, {
+                      location: compactHeader ? "pricing_page" : "homepage_pricing",
+                    })
+                  }
+                >
+                  Create free account
+                </Link>
               </Button>
             ) : (
               <Button asChild variant="outline" size="pill" className="w-full">
-                <Link href="/ask" prefetch={false}>
+                <Link
+                  href="/ask"
+                  prefetch={false}
+                  onClick={() =>
+                    trackAnalyticsEvent(ANALYTICS_EVENTS.openAskClicked, {
+                      location: compactHeader ? "pricing_page" : "homepage_pricing",
+                    })
+                  }
+                >
                   Open Ask
                 </Link>
               </Button>
