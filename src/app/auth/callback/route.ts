@@ -53,6 +53,16 @@ function setRecentOauthSignupCookie(response: NextResponse, userId: string) {
   });
 }
 
+function appendSignupCompletedParams(destination: string, method: "email" | "oauth") {
+  const [pathAndQuery, hash = ""] = destination.split("#", 2);
+  const [pathname, query = ""] = pathAndQuery.split("?", 2);
+  const params = new URLSearchParams(query);
+  params.set("signup", "completed");
+  params.set("signup_method", method);
+  const nextQuery = params.toString();
+  return `${pathname}${nextQuery ? `?${nextQuery}` : ""}${hash ? `#${hash}` : ""}`;
+}
+
 /**
  * Extract the Rewardful referral UUID from the cookie value.
  * The cookie stores a JSON object like {"id":"<uuid>","..."}.
@@ -106,9 +116,11 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const next =
     searchParams.get("next") ?? readCookie(cookieHeader, AUTH_REDIRECT_COOKIE_NAME);
+  const emailSignupFlow = searchParams.get("signup") === "1";
   const oauthFlow = parseOAuthFlow(
     readCookie(cookieHeader, OAUTH_FLOW_COOKIE_NAME) ?? searchParams.get("oauth"),
   );
+  const isSignupFlow = oauthFlow === "signup" || emailSignupFlow;
 
   if (!code) {
     const response = NextResponse.redirect(new URL("/login?error=auth_code", origin));
@@ -142,12 +154,19 @@ export async function GET(request: Request) {
     );
   }
 
-  const destination = getSafeRedirectPath(next, "/ask");
+  const safeDestination = getSafeRedirectPath(next, "/ask");
+  const destination =
+    isSignupFlow && user?.id
+      ? appendSignupCompletedParams(
+          safeDestination,
+          oauthFlow === "signup" ? "oauth" : "email",
+        )
+      : safeDestination;
   const response = NextResponse.redirect(new URL(destination, origin));
   clearOAuthFlowCookie(response);
   clearAuthRedirectCookie(response);
 
-  if (oauthFlow === "signup" && user?.id) {
+  if (isSignupFlow && user?.id) {
     setRecentOauthSignupCookie(response, user.id);
   }
 
