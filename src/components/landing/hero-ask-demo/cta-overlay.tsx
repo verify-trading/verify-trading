@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { PRO_PLAN_FEATURES } from "@/lib/marketing/pro-plan-features";
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { cn } from "@/lib/utils";
@@ -27,6 +29,7 @@ function PlanCard({
   ctaLabel,
   ctaHref,
   ctaVariant,
+  onCtaClick,
   highlighted = false,
 }: {
   badge: string;
@@ -37,6 +40,7 @@ function PlanCard({
   ctaLabel: string;
   ctaHref: string;
   ctaVariant: "default" | "outline";
+  onCtaClick: () => void;
   highlighted?: boolean;
 }) {
   return (
@@ -78,7 +82,7 @@ function PlanCard({
         size="pill"
         className="mt-3.5 w-full justify-center"
       >
-        <Link href={ctaHref} prefetch={false}>
+        <Link href={ctaHref} prefetch={false} onClick={onCtaClick}>
           {ctaLabel}
           <ArrowRight className="size-3.5" aria-hidden />
         </Link>
@@ -154,6 +158,11 @@ export function AskCtaOverlay({
                   ctaLabel="Create free account"
                   ctaHref="/signup"
                   ctaVariant="outline"
+                  onCtaClick={() =>
+                    trackAnalyticsEvent(ANALYTICS_EVENTS.createAccountClicked, {
+                      location: "hero_demo_overlay",
+                    })
+                  }
                 />
                 <PlanCard
                   badge="Most popular"
@@ -164,6 +173,12 @@ export function AskCtaOverlay({
                   ctaLabel="See Pro plans"
                   ctaHref="/pricing"
                   ctaVariant="default"
+                  onCtaClick={() =>
+                    trackAnalyticsEvent(ANALYTICS_EVENTS.proPlanClicked, {
+                      location: "hero_demo_overlay",
+                      plan: "pricing_page",
+                    })
+                  }
                   highlighted
                 />
               </div>

@@ -11,6 +11,8 @@ import { DeviceView } from "./variant-device";
 import { EditorialView } from "./variant-editorial";
 import { GlassView } from "./variant-glass";
 import { IslandView } from "./variant-island";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 
 // Only the *type* crosses the client barrel; the HERO_ASK_VARIANTS value lives in
 // the server-safe ./types so Server Components can read it without this boundary.
@@ -38,7 +40,13 @@ export function HeroAskDemo({
   const [ctaOpen, setCtaOpen] = useState(false);
   const state = useAskDemoSequence({ paused: ctaOpen || !inView });
   // Stable identities so the memoized message rows aren't invalidated each frame.
-  const onActivate = useCallback(() => setCtaOpen(true), []);
+  const onActivate = useCallback(() => {
+    trackAnalyticsEvent(ANALYTICS_EVENTS.demoClicked, {
+      location: "hero_demo",
+      variant,
+    });
+    setCtaOpen(true);
+  }, [variant]);
   const onCloseCta = useCallback(() => setCtaOpen(false), []);
   const View = VIEWS[variant];
 
