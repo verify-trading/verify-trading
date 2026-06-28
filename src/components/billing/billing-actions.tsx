@@ -9,6 +9,8 @@ import type { VariantProps } from "class-variance-authority";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Modal } from "@/components/ui/modal";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import type { BillingPlanKey } from "@/lib/billing/config";
 import {
   trackMetaInitiateCheckout,
@@ -36,6 +38,7 @@ type BillingActionButtonProps = {
   buttonVariant?: ButtonVariant;
   buttonSize?: ButtonSize;
   className?: string;
+  onActionStart?: () => void;
 };
 
 type BillingCheckoutSyncProps = {
@@ -45,6 +48,31 @@ type BillingCheckoutSyncProps = {
   checkoutValue?: number | null;
   checkoutCurrency?: string | null;
 };
+
+const PENDING_CHECKOUT_STORAGE_KEY = "vt_pending_checkout";
+
+type PendingCheckoutTracking = {
+  plan?: BillingPlanKey;
+  value?: number;
+  currency?: string;
+};
+
+function readPendingCheckoutTracking(): PendingCheckoutTracking | null {
+  try {
+    const stored = window.sessionStorage.getItem(PENDING_CHECKOUT_STORAGE_KEY);
+    return stored ? (JSON.parse(stored) as PendingCheckoutTracking) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingCheckoutTracking(checkout: PendingCheckoutTracking | undefined) {
+  if (!checkout) {
+    return;
+  }
+
+  window.sessionStorage.setItem(PENDING_CHECKOUT_STORAGE_KEY, JSON.stringify(checkout));
+}
 
 async function syncCheckoutSession(checkoutSessionId: string) {
   const response = await fetch("/api/stripe/sync-checkout", {
@@ -114,6 +142,7 @@ export function BillingActionButton({
   buttonVariant,
   buttonSize,
   className,
+  onActionStart,
 }: BillingActionButtonProps) {
   const { refresh } = useRouter();
   const [isPending, setIsPending] = useState(false);
@@ -171,6 +200,7 @@ export function BillingActionButton({
             value: responsePayload?.checkout?.value,
             currency: responsePayload?.checkout?.currency,
           });
+          writePendingCheckoutTracking(responsePayload?.checkout);
           await waitForTrackingRequest();
         }
         window.location.assign(responsePayload!.url!);
@@ -193,6 +223,8 @@ export function BillingActionButton({
     if (disabled || isPending) {
       return;
     }
+
+    onActionStart?.();
 
     if (confirmMessage) {
       setConfirmOpen(true);
@@ -286,14 +318,25 @@ export function BillingCheckoutSync({
             typeof window !== "undefined" && window.sessionStorage.getItem(storageKey) === "1";
 
           if (!alreadyTracked) {
+            const pendingCheckout = readPendingCheckoutTracking();
+            const trackedPlan = checkoutPlan ?? pendingCheckout?.plan ?? null;
+            const trackedValue = checkoutValue ?? pendingCheckout?.value ?? null;
+            const trackedCurrency = checkoutCurrency ?? pendingCheckout?.currency ?? null;
             trackMetaPurchase({
-              plan: checkoutPlan,
-              value: checkoutValue,
-              currency: checkoutCurrency,
+              plan: trackedPlan,
+              value: trackedValue,
+              currency: trackedCurrency,
               checkoutSessionId,
+            });
+            trackAnalyticsEvent(ANALYTICS_EVENTS.proUpgradeCompleted, {
+              plan: trackedPlan ?? "unknown",
+              value: trackedValue ?? undefined,
+              currency: trackedCurrency ?? undefined,
+              checkout_session_id: checkoutSessionId,
             });
             if (typeof window !== "undefined") {
               window.sessionStorage.setItem(storageKey, "1");
+              window.sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY);
             }
           }
           toast.success("Subscription activated.");
