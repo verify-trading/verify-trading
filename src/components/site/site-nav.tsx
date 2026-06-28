@@ -7,6 +7,8 @@ import { BookOpen, LineChart, Menu, MessageSquare } from "lucide-react";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { Button } from "@/components/ui/button";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import { Logo } from "@/components/site/logo";
 import { Sheet } from "@/components/ui/sheet";
@@ -19,7 +21,6 @@ const navItems = [
   { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: false },
 ] as const;
 
-/** Mobile header height for fixed overlays (single row + safe area). */
 const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
 
 function subscribeToClient() {
@@ -41,6 +42,20 @@ function siteNavLinkClass(active: boolean) {
       ? "bg-white/10 text-white"
       : "text-white/45 hover:bg-white/[0.06] hover:text-white",
   ].join(" ");
+}
+
+function trackNavClick(label: string) {
+  if (label === "Guide") {
+    trackAnalyticsEvent(ANALYTICS_EVENTS.guideClicked, {
+      location: "site_nav",
+    });
+  }
+
+  if (label === "Ask") {
+    trackAnalyticsEvent(ANALYTICS_EVENTS.openAskClicked, {
+      location: "site_nav",
+    });
+  }
 }
 
 export function SiteNav() {
@@ -69,7 +84,6 @@ export function SiteNav() {
     : navItems.filter((item) => !item.requiresAuth || (ready && isSignedIn));
 
   const showMenu = visibleNavItems.length > 0;
-  /** Avoid hydration mismatch: SSR and first paint match (end-aligned); after mount, centre when signed in. */
   const desktopNavCentered = hasMounted && ready && isSignedIn;
 
   return (
@@ -89,7 +103,6 @@ export function SiteNav() {
             </span>
           </Link>
 
-          {/* Desktop: centred when signed in; end-aligned when signed out (no centre links) */}
           <div
             className={cn(
               "hidden min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:items-center lg:px-4",
@@ -111,6 +124,7 @@ export function SiteNav() {
                       href={item.href}
                       prefetch={false}
                       className={siteNavLinkClass(active)}
+                      onClick={() => trackNavClick(item.label)}
                     >
                       {item.label}
                     </Link>
@@ -159,7 +173,10 @@ export function SiteNav() {
                   href={item.href}
                   prefetch={false}
                   className={sheetLinkClass(active)}
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => {
+                    trackNavClick(item.label);
+                    setMobileMenuOpen(false);
+                  }}
                 >
                   <Icon
                     className="size-5 shrink-0 text-[var(--vt-muted)]"
