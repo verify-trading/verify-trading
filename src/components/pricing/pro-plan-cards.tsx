@@ -6,6 +6,8 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 import { BillingActionButton } from "@/components/billing/billing-actions";
 import { Button } from "@/components/ui/button";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import type { BillingPlanKey, PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { ANNUAL_PLAN_FEATURES } from "@/lib/marketing/annual-plan-features";
@@ -35,10 +37,21 @@ function PaidPlanAction({
   defaultLabel: ReactNode;
   variant: "default" | "outline";
 }) {
+  const trackPlanClick = () => {
+    trackAnalyticsEvent(ANALYTICS_EVENTS.proPlanClicked, {
+      plan: checkoutPlan,
+      location: "pricing_card",
+      signed_in: Boolean(billingContext?.isSignedIn),
+      has_subscription: Boolean(billingContext?.hasManageableSubscription),
+    });
+  };
+
   if (!billingContext?.isSignedIn) {
     return (
       <Button asChild variant={variant} size="pill" className="w-full">
-        <Link href={signedOutCheckoutHref(checkoutPlan)}>{defaultLabel}</Link>
+        <Link href={signedOutCheckoutHref(checkoutPlan)} onClick={trackPlanClick}>
+          {defaultLabel}
+        </Link>
       </Button>
     );
   }
@@ -51,6 +64,7 @@ function PaidPlanAction({
         buttonSize="pill"
         className="w-full gap-2"
         payload={{ plan: checkoutPlan }}
+        onActionStart={trackPlanClick}
       >
         {defaultLabel}
       </BillingActionButton>
@@ -73,6 +87,7 @@ function PaidPlanAction({
         buttonSize="pill"
         className="w-full gap-2"
         payload={{ flow: "subscription_update" }}
+        onActionStart={trackPlanClick}
       >
         Change plan in Stripe
       </BillingActionButton>

@@ -21,6 +21,8 @@ import { PricingPlansSection } from "@/components/pricing/pricing-plans";
 import { AppWordmarkInline, Logo } from "@/components/site/logo";
 import { SiteNav } from "@/components/site/site-nav";
 import { SiteFooter } from "@/components/site/site-footer";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
@@ -116,11 +118,13 @@ function StoreBadges() {
       icon: <AppleMark className="size-6" />,
       line1: "Download on the",
       line2: "App Store",
+      store: "apple",
     },
     {
       icon: <GooglePlayMark className="size-5" />,
       line1: "GET IT ON",
       line2: "Google Play",
+      store: "google_play",
     },
   ];
   return (
@@ -130,6 +134,12 @@ function StoreBadges() {
           key={b.line2}
           href="/signup"
           prefetch={false}
+          onClick={() =>
+            trackAnalyticsEvent(ANALYTICS_EVENTS.appStoreClicked, {
+              location: "hero",
+              store: b.store,
+            })
+          }
           className="inline-flex items-center gap-2.5 rounded-xl border border-white/25 bg-black px-4 py-2.5 text-white transition hover:border-white/45 hover:bg-[#0c0c0c]"
         >
           {b.icon}
@@ -484,7 +494,14 @@ function GuideCTASection() {
         </div>
 
         <Button asChild variant="default" size="pill" className="mt-8 gap-2 px-6">
-          <Link href="/guide">
+          <Link
+            href="/guide"
+            onClick={() =>
+              trackAnalyticsEvent(ANALYTICS_EVENTS.guideClicked, {
+                location: "homepage_guide_cta",
+              })
+            }
+          >
             Get the guide
             <ArrowRight className="size-4" aria-hidden />
           </Link>
@@ -525,13 +542,28 @@ function FinalCTASection() {
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild variant="default" size="pill" className="gap-2 px-6">
-                  <Link href="/signup">
+                  <Link
+                    href="/signup"
+                    onClick={() =>
+                      trackAnalyticsEvent(ANALYTICS_EVENTS.createAccountClicked, {
+                        location: "homepage_final_cta",
+                      })
+                    }
+                  >
                     Create free account
                     <ArrowRight className="size-4" aria-hidden />
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="pill" className="px-6">
-                  <Link href="/ask" prefetch={false}>
+                  <Link
+                    href="/ask"
+                    prefetch={false}
+                    onClick={() =>
+                      trackAnalyticsEvent(ANALYTICS_EVENTS.openAskClicked, {
+                        location: "homepage_final_cta",
+                      })
+                    }
+                  >
                     Open Ask
                   </Link>
                 </Button>

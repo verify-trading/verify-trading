@@ -19,6 +19,8 @@ import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { linkAffiliateReferral } from "@/lib/affiliates/link-stripe-customer";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { beginOAuthFlow, setAuthRedirectCookie } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
@@ -29,6 +31,7 @@ import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
 
 const EMPTY_SIGNUP: SignupFormValues = { username: "", email: "", password: "" };
+const SIGNUP_COMPLETED_KEY = "vt_sign_up_completed";
 
 function readSearchParam(params: ReturnType<typeof useSearchParams>, key: string): string | null {
   return params.get(key);
@@ -71,7 +74,7 @@ function SignupPageContent() {
       email,
       password: values.password,
       options: {
-        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}&signup=1`,
         data: {
           username: username.toLowerCase(),
           full_name: username,
@@ -93,6 +96,13 @@ function SignupPageContent() {
         method: "POST",
         keepalive: true,
       }).catch(() => undefined);
+      if (window.localStorage.getItem(SIGNUP_COMPLETED_KEY) !== "true") {
+        trackAnalyticsEvent(ANALYTICS_EVENTS.signUpCompleted, {
+          method: "email",
+          source: "signup_form",
+        });
+        window.localStorage.setItem(SIGNUP_COMPLETED_KEY, "true");
+      }
       toast.success("Welcome — you're signed in.");
       window.location.assign(next);
       return;

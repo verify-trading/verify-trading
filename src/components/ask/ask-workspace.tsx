@@ -47,6 +47,8 @@ import {
   isPinnedNearBottom,
 } from "@/lib/ask/scroll-thread";
 import { askToolStatusSchema, type AskToolStatus } from "@/lib/ask/stream";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { getAccountMenuQueryKey } from "@/lib/auth/account-menu-query";
 import { logger } from "@/lib/observability/logger";
 import { loadAskUsageState } from "@/lib/rate-limit/load-ask-usage";
@@ -54,6 +56,7 @@ import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usag
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
 const ASK_SESSION_PAGE_SIZE = 40;
+const FIRST_CHECK_COMPLETED_KEY_PREFIX = "vt_first_check_completed";
 const InitialAskSessionContext = createContext<string | null>(null);
 
 function parseUrlSessionId(value: string | null) {
@@ -127,6 +130,19 @@ function buildInitialToolStatus(hasImage: boolean): AskToolStatus {
       ? "Pulling context from the uploaded image before answering."
       : "Deciding which checks or live tools are actually needed.",
   };
+}
+
+function trackFirstCheckCompleted(userId: string | undefined, hasImage: boolean) {
+  const storageKey = `${FIRST_CHECK_COMPLETED_KEY_PREFIX}:${userId ?? "anonymous"}`;
+  if (window.localStorage.getItem(storageKey) === "true") {
+    return;
+  }
+
+  trackAnalyticsEvent(ANALYTICS_EVENTS.firstCheckCompleted, {
+    source: "ask",
+    has_image: hasImage,
+  });
+  window.localStorage.setItem(storageKey, "true");
 }
 
 function isAskLimitError(error: unknown) {
@@ -363,6 +379,7 @@ function useAskWorkspaceView() {
         }
 
         appendAssistantCard(card, extractUiMeta(message), attachmentPreviewUrl);
+        trackFirstCheckCompleted(user?.id, Boolean(attachmentPreviewUrl));
         const resolvedSessionId = sessionData?.sessionId ?? useAskStore.getState().sessionId;
         const pendingSessionTitle = pendingSessionTitleRef.current;
 
