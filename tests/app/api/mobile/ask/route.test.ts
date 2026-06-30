@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/ask/service", () => ({
+vi.mock("@/lib/ask/pipeline", () => ({
   generateAskResponse: vi.fn(),
 }));
 
@@ -19,7 +19,7 @@ vi.mock("@/lib/rate-limit/reserve-ask-query", () => ({
 import { POST } from "@/app/api/mobile/ask/route";
 import { fallbackInsightCard } from "@/lib/ask/contracts";
 import { getAskPersistence } from "@/lib/ask/persistence";
-import { generateAskResponse } from "@/lib/ask/service";
+import { generateAskResponse } from "@/lib/ask/pipeline";
 import { getSessionUser } from "@/lib/auth/session";
 import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
@@ -31,8 +31,6 @@ describe("POST /api/mobile/ask", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Route plumbing is pipeline-agnostic; pin the mocked legacy pipeline.
-    process.env.ASK_PIPELINE = "legacy";
     vi.mocked(getSessionUser).mockResolvedValue({
       user: { id: "00000000-0000-0000-0000-000000000001" } as never,
       supabase: {} as never,

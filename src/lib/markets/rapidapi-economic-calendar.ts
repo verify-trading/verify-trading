@@ -5,6 +5,7 @@ import type {
   EconomicEventItem,
 } from "@/lib/markets/economic-calendar";
 import { ECONOMIC_CALENDAR_COUNTRIES } from "@/lib/markets/economic-calendar";
+import { fetchWithRetry } from "@/lib/http/fetch-with-retry";
 
 export const ECONOMIC_CALENDAR_CACHE_KEY = "events:economic:week";
 export const ECONOMIC_CALENDAR_REFRESH_MS = 60 * 60 * 1000;
@@ -190,7 +191,7 @@ async function fetchCountryEvents(
     to: window.to,
     countries: country,
   });
-  const response = await fetch(`${API_URL}?${params.toString()}`, {
+  const response = await fetchWithRetry(`${API_URL}?${params.toString()}`, {
     headers: {
       "Content-Type": "application/json",
       "x-rapidapi-host": API_HOST,

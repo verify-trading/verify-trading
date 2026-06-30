@@ -5,7 +5,7 @@ import type { ComponentType } from "react";
 import { useCallback, useRef, useState } from "react";
 
 import type { VariantViewProps } from "./shared";
-import type { HeroAskVariant } from "./types";
+import type { HeroAskVariant, HeroLiveBriefing } from "./types";
 import { useAskDemoSequence } from "./use-ask-demo-sequence";
 import { DeviceView } from "./variant-device";
 import { EditorialView } from "./variant-editorial";
@@ -29,14 +29,16 @@ const VIEWS: Record<HeroAskVariant, ComponentType<VariantViewProps>> = {
  */
 export function HeroAskDemo({
   variant = "device",
+  liveBriefing = null,
 }: {
   variant?: HeroAskVariant;
+  liveBriefing?: HeroLiveBriefing | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Pause the loop while the demo is off-screen (saves work; resumes in place).
   const inView = useInView(containerRef, { amount: 0.25 });
   const [ctaOpen, setCtaOpen] = useState(false);
-  const state = useAskDemoSequence({ paused: ctaOpen || !inView });
+  const state = useAskDemoSequence({ paused: ctaOpen || !inView, liveBriefing });
   // Stable identities so the memoized message rows aren't invalidated each frame.
   const onActivate = useCallback(() => setCtaOpen(true), []);
   const onCloseCta = useCallback(() => setCtaOpen(false), []);

@@ -46,6 +46,16 @@ export type DemoCalcCard = {
 
 export type DemoCard = DemoBrokerCard | DemoBriefingCard | DemoCalcCard;
 
+/**
+ * Real, server-fetched gold values that override the scripted briefing card.
+ * Computed in @/lib/landing/hero-gold and passed down as a plain prop, so the
+ * client demo never imports the server market module.
+ */
+export type HeroLiveBriefing = Pick<
+  DemoBriefingCard,
+  "price" | "change" | "direction" | "level1" | "level2" | "series" | "verdict"
+> & { event?: undefined };
+
 /** A complete user-question -> assistant-answer pair. */
 export type DemoExchange = {
   id: string;
@@ -130,18 +140,18 @@ export const DEMO_EXCHANGES: DemoExchange[] = [
     card: {
       type: "briefing",
       asset: "XAU/USD · Gold",
-      price: "$2,418.30",
+      price: "$4,118.30",
       change: "0.74%",
       direction: "up",
-      level1: "$2,432",
-      level2: "$2,401",
+      level1: "$4,142",
+      level2: "$4,098",
       event: "US CPI at 13:30 BST — expect a volatility spike.",
       series: [
         0.32, 0.36, 0.3, 0.4, 0.46, 0.42, 0.5, 0.55, 0.49, 0.58, 0.64, 0.6,
         0.68, 0.72, 0.66, 0.74, 0.8, 0.76, 0.84, 0.88, 0.82, 0.9, 0.95, 1,
       ],
       verdict:
-        "Holding above $2,401 keeps the intraday bias bullish. Lose it and $2,388 opens up.",
+        "Holding above $4,098 keeps the intraday bias bullish. Lose it and $4,072 opens up.",
     },
     followups: [
       "What's the trade setup with R:R?",

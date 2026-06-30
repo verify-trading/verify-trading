@@ -27,14 +27,13 @@ export interface GuruResolveInputs {
   regulatorFlagSource: string | null;
   verifiedTrackRecord: string | null;
   researchStatus: string | null;
-  founderReviewed: boolean;
   identityConfirmed: boolean;
 }
 
 export interface GuruResolution {
   /** Public tier, after the Caution and Verified gates. */
   tier: GuruTier;
-  /** A row is only eligible for public display once research + review gates pass. */
+  /** A row is only eligible for public display once research + identity gates pass. */
   publishable: boolean;
 }
 
@@ -87,7 +86,6 @@ export function resolveGuruTier(inputs: GuruResolveInputs): GuruResolution {
 
   const publishable =
     PUBLISHABLE_STATUSES.has((inputs.researchStatus ?? "").trim().toLowerCase()) &&
-    inputs.founderReviewed &&
     inputs.identityConfirmed;
 
   return { tier, publishable };

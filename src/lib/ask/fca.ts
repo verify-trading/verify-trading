@@ -292,7 +292,7 @@ async function searchFcaByName(name: string): Promise<FcaStatusResult | null> {
   try {
     const url = `${endpoint}/Search?q=${encodeURIComponent(name)}&type=firm`;
 
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
       method: "GET",
       headers: {
         "Accept": "application/json",

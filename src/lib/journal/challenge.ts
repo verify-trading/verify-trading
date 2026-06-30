@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 
 import { getAskSimpleModel } from "@/lib/ask/service/provider";
+import { fetchPublicUrl } from "@/lib/http/safe-fetch";
 
 export const challengeConfigSchema = z.object({
   firmUrl: z.url(),
@@ -48,7 +49,8 @@ export function toChallengeConfig(row: ChallengeConfigRow) {
 }
 
 export async function extractChallengeRules(input: z.infer<typeof challengeConfigSchema>) {
-  const pageText = await fetch(input.firmUrl)
+  // SSRF guard: only fetch public http(s) hosts, with a timeout (see fetchPublicUrl).
+  const pageText = await fetchPublicUrl(input.firmUrl)
     .then((response) => response.text())
     .then((html) => html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").slice(0, 20_000));
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/ask/service", () => ({
+vi.mock("@/lib/ask/pipeline", () => ({
   generateAskResponse: vi.fn(),
 }));
 
@@ -23,7 +23,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
 import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
-import { generateAskResponse } from "@/lib/ask/service";
+import { generateAskResponse } from "@/lib/ask/pipeline";
 
 async function readResponseJson(response: Response) {
   return await response.json();
@@ -38,8 +38,6 @@ describe("POST /api/ask", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Route plumbing is pipeline-agnostic; pin the mocked legacy pipeline.
-    process.env.ASK_PIPELINE = "legacy";
     vi.mocked(getSessionUser).mockResolvedValue({
       user: { id: "00000000-0000-0000-0000-000000000001" } as never,
       supabase: {} as never,
@@ -403,6 +401,8 @@ describe("POST /api/ask", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     const body = await response.text();
-    expect(body).toContain("boom");
+    // The raw internal error must NOT leak to the client; a safe message is sent.
+    expect(body).not.toContain("boom");
+    expect(body).toContain("Could not get an answer");
   });
 });

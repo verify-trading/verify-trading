@@ -159,18 +159,27 @@ async function enrichSavedEntry(supabase: SupabaseClient, userId: string, entry:
 
   if (!configData || entry.pnl_amount === null) return { entry, overheat };
 
-  const note = await generateChallengeStatus({
-    config: configData as ChallengeConfigRow,
-    entry,
-    cumulativePnl: entries.reduce((sum, item) => sum + Number(item.pnl_amount ?? 0), 0),
-    daysTraded: entries.length,
-  });
-  const { data: updated } = await supabase
-    .from("journal_entries")
-    .update({ challenge_status_note: note })
-    .eq("id", entry.id)
-    .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
-    .single();
+  // The entry is already saved; a failure here (LLM/provider) must not surface as a
+  // failed save. Best-effort enrich, otherwise return the saved entry without the note.
+  try {
+    const note = await generateChallengeStatus({
+      config: configData as ChallengeConfigRow,
+      entry,
+      cumulativePnl: entries.reduce((sum, item) => sum + Number(item.pnl_amount ?? 0), 0),
+      daysTraded: entries.length,
+    });
+    const { data: updated } = await supabase
+      .from("journal_entries")
+      .update({ challenge_status_note: note })
+      .eq("id", entry.id)
+      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
+      .single();
 
-  return { entry: (updated as JournalEntryRow | null) ?? entry, overheat };
+    return { entry: (updated as JournalEntryRow | null) ?? entry, overheat };
+  } catch (enrichError) {
+    logger.warn("Journal challenge enrichment failed; returning saved entry without it.", {
+      error: enrichError instanceof Error ? enrichError.message : "unknown",
+    });
+    return { entry, overheat };
+  }
 }

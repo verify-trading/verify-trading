@@ -7,6 +7,11 @@ import { getMarketQuote, getMarketSeries } from "@/lib/ask/market";
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
 import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
 
+/** Side-channel hooks the route uses to stream tool activity to the client. */
+export type AskGenerationCallbacks = {
+  onToolCall?: (event: { toolName: string; input: unknown }) => void;
+};
+
 export interface ParsedImageInput {
   base64: string;
   mediaType: "image/jpeg" | "image/png" | "image/webp";

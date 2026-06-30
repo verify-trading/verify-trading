@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { generateWeeklyInsight } from "@/lib/journal/ai";
 import type { JournalEntryRow } from "@/lib/journal/contracts";
+import { logger } from "@/lib/observability/logger";
 
 const PRIVATE_CACHE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0",
@@ -40,7 +41,23 @@ export async function POST() {
   if (error || !rows) return jsonApiError(500, "journal_insight_failed", "Could not load journal insight.");
   if (rows.length < 5) return NextResponse.json({ insight: "Add more sessions to unlock your AI insight.", generatedAt: null }, { headers: PRIVATE_CACHE_HEADERS });
 
-  const insight = await generateWeeklyInsight(rows as JournalEntryRow[], session.user.email ?? "Trader");
+  // Bound the prompt: trim long free-text fields so cost/latency don't scale with content.
+  const trimmed = (rows as JournalEntryRow[]).map((row) => ({
+    ...row,
+    note: typeof row.note === "string" ? row.note.slice(0, 800) : row.note,
+    lesson: typeof row.lesson === "string" ? row.lesson.slice(0, 400) : row.lesson,
+  }));
+
+  let insight: string;
+  try {
+    insight = await generateWeeklyInsight(trimmed, session.user.email ?? "Trader");
+  } catch (insightError) {
+    logger.error("Journal insight generation failed.", {
+      error: insightError instanceof Error ? insightError.message : "unknown",
+    });
+    return jsonApiError(503, "journal_insight_failed", "Could not generate your insight right now. Try again shortly.");
+  }
+
   const { data } = await session.supabase
     .from("journal_insights")
     .insert({ user_id: session.user.id, insight_text: insight })

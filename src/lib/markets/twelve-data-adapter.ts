@@ -1,3 +1,4 @@
+import { fetchWithRetry } from "@/lib/http/fetch-with-retry";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const API_KEY = process.env.TWELVE_DATA_API_KEY ?? "";
@@ -76,7 +77,7 @@ function parseBoolean(value: unknown): boolean {
 }
 
 async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetchWithRetry(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`HTTP ${res.status} from Twelve Data`);
   }

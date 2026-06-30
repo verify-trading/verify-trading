@@ -4,7 +4,6 @@ import { isValidCitation, resolveGuruTier } from "@/lib/ask/gurus";
 
 const PUBLISHABLE = {
   researchStatus: "RESEARCHED",
-  founderReviewed: true,
   identityConfirmed: true,
 };
 
@@ -88,9 +87,8 @@ describe("resolveGuruTier — the Verified bar", () => {
 });
 
 describe("resolveGuruTier — the publish gate", () => {
-  it("is publishable only when research, review, and identity all pass", () => {
+  it("is publishable only when research and identity pass", () => {
     expect(resolveGuruTier({ ...base(), ...PUBLISHABLE }).publishable).toBe(true);
-    expect(resolveGuruTier({ ...base(), ...PUBLISHABLE, founderReviewed: false }).publishable).toBe(false);
     expect(resolveGuruTier({ ...base(), ...PUBLISHABLE, identityConfirmed: false }).publishable).toBe(false);
     expect(
       resolveGuruTier({ ...base(), ...PUBLISHABLE, researchStatus: "DIRECTORY-THIN (verify before publish)" })

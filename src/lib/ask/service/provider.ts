@@ -1,20 +1,29 @@
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
+
+/**
+ * The AI SDK appends "/messages" to the base URL, so the base URL MUST include
+ * the version segment. A bare `ANTHROPIC_BASE_URL=https://api.anthropic.com`
+ * (no `/v1`) silently turns every request into a 404 — normalize it here so a
+ * misconfigured env can't take Ask down. When unset we let the SDK use its own
+ * default (which already includes `/v1`).
+ */
+function resolveAnthropicBaseURL() {
+  const raw = process.env.ANTHROPIC_BASE_URL?.trim();
+  if (!raw) return undefined;
+  const trimmed = raw.replace(/\/+$/, "");
+  return /\/v\d+$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
+}
+
+const anthropic = createAnthropic({ baseURL: resolveAnthropicBaseURL() });
 
 /** Primary model for Ask (Sonnet-class by default). */
 export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
-/** Used when the primary model fails after retries (overload / 5xx / rate limits). */
-const DEFAULT_ANTHROPIC_FALLBACK_MODEL = "claude-haiku-4-5-20251001";
-
-/** Used for simple Ask requests that do not need Sonnet-class reasoning. */
-export const DEFAULT_ANTHROPIC_SIMPLE_MODEL = DEFAULT_ANTHROPIC_FALLBACK_MODEL;
+/** Simple model now matches primary — single-model pipeline. */
+export const DEFAULT_ANTHROPIC_SIMPLE_MODEL = DEFAULT_ANTHROPIC_MODEL;
 
 export function getAskPrimaryModelId() {
   return process.env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
-}
-
-export function getAskFallbackModelId() {
-  return process.env.ANTHROPIC_FALLBACK_MODEL ?? DEFAULT_ANTHROPIC_FALLBACK_MODEL;
 }
 
 export function getAskSimpleModelId() {
@@ -23,10 +32,6 @@ export function getAskSimpleModelId() {
 
 export function getAskModel() {
   return anthropic(getAskPrimaryModelId());
-}
-
-export function getAskFallbackModel() {
-  return anthropic(getAskFallbackModelId());
 }
 
 export function getAskSimpleModel() {

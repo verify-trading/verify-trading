@@ -1,19 +1,19 @@
 /**
- * Manual end-to-end smoke test for the cascade RAG flow. Makes REAL Anthropic +
+ * Manual end-to-end smoke test for the Ask RAG flow. Makes REAL Anthropic +
  * Supabase calls, so it is opt-in:
  *
- *   RUN_CASCADE_SMOKE=1 npx vitest run tests/manual/cascade-rag-smoke.test.ts
+ *   RUN_ASK_SMOKE=1 npx vitest run tests/manual/ask-rag-smoke.test.ts
  *
  * It runs a spread of human-style queries (rushed / mistyped / professional)
- * through generateAskCascadeResponse and prints the final card + tool calls so
+ * through generateAskResponse and prints the final card + tool calls so
  * the answers can be validated against the BTS/entity ground truth.
  */
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, it } from "vitest";
 
-import { generateAskCascadeResponse } from "@/lib/ask/cascade";
+import { generateAskResponse } from "@/lib/ask/pipeline";
 
 // @next/env skips .env.local when NODE_ENV=test (which vitest sets), so the real
 // API keys never load through the normal path. Parse .env.local directly.
@@ -34,10 +34,11 @@ function loadDotEnvLocal() {
 }
 loadDotEnvLocal();
 
-const RUN = process.env.RUN_CASCADE_SMOKE === "1";
+const RUN = process.env.RUN_ASK_SMOKE === "1";
 
 type Turn = { role: "user" | "assistant"; content: string };
-const PROPFIRM_QUERIES: { q: string; expect: string }[] = [
+type SmokeQuery = { q: string; expect: string; history?: Turn[] };
+const PROPFIRM_QUERIES: SmokeQuery[] = [
   { q: "tell me the top pop firms", expect: "typo for prop firms -> RAG grounds in DB prop firms + followups" },
   { q: "is FTMO worth it", expect: "FTMO -> legit prop firm, payout framing" },
   { q: "best prop firm for fast payouts", expect: "grounded list, not invented" },
@@ -55,7 +56,7 @@ const PROPFIRM_HISTORY: Turn[] = [
 ];
 
 // Confusing / tough conversational follow-ups — the cases that produced "the mess".
-const TOUGH_QUERIES: { q: string; expect: string; history?: Turn[] }[] = [
+const TOUGH_QUERIES: SmokeQuery[] = [
   { q: "how long is the challenge?", history: FTMO_HISTORY, expect: "ANSWER the FTMO challenge duration (insight), NOT the trust card" },
   { q: "whats their fee", history: FTMO_HISTORY, expect: "ANSWER FTMO fee (insight), NOT the trust card" },
   { q: "is it safe though?", history: FTMO_HISTORY, expect: "trust check on 'it' = FTMO -> broker card 9.1" },
@@ -64,7 +65,7 @@ const TOUGH_QUERIES: { q: string; expect: string; history?: Turn[] }[] = [
 ];
 
 // Broad spread of real user phrasings across every answer type.
-const DIVERSE_QUERIES: { q: string; expect: string; history?: Turn[] }[] = [
+const DIVERSE_QUERIES: SmokeQuery[] = [
   { q: "is pepperstone safe for uk traders", expect: "broker, FCA-confirmed" },
   { q: "ftmo or the5ers which is better", expect: "prop comparison, both verified" },
   { q: "is jafx a scam", expect: "broker check, avoid/unknown handled honestly" },
@@ -77,7 +78,7 @@ const DIVERSE_QUERIES: { q: string; expect: string; history?: Turn[] }[] = [
   { q: "set up a long on eurusd", expect: "setup card with entry/stop/target" },
 ];
 
-const QUERIES: { q: string; expect: string; history?: Turn[] }[] = [
+const QUERIES: SmokeQuery[] = [
   // Repetition probe: four unregulated/avoid brokers in a row — verdicts must NOT
   // all read "not FCA authorised, no FSCS, no ombudsman, do not deposit".
   { q: "is olymp trade safe", expect: "avoid — distinct phrasing" },
@@ -127,18 +128,26 @@ const QUERIES: { q: string; expect: string; history?: Turn[] }[] = [
   { q: "whats a good pasta recipe", expect: "out of scope" },
 ];
 
-const FILTER = process.env.CASCADE_FILTER?.toLowerCase();
+// Small 5-query spread for a quick "how does it answer" check.
+const LIVE_QUERIES: SmokeQuery[] = [
+  { q: "is fundedx good", expect: "prop firm; if not in DB, web_search fallback rather than dead-end" },
+  { q: "is FTMO legit", expect: "known prop firm, payout framing" },
+  { q: "whats gold doing today", expect: "live briefing card" },
+  { q: "is pepperstone safe for uk traders", expect: "broker, FCA-confirmed" },
+  { q: "where do I put my stop loss", expect: "method insight, actionable" },
+];
 
-describe.skipIf(!RUN)("cascade RAG smoke", () => {
-  const activeSet =
-    process.env.CASCADE_SET === "diverse"
-      ? DIVERSE_QUERIES
-      : process.env.CASCADE_SET === "tough"
-        ? TOUGH_QUERIES
-        : process.env.CASCADE_SET === "propfirm"
-          ? PROPFIRM_QUERIES
-          : QUERIES;
-  for (const { q, expect, history } of activeSet.filter((item) => !FILTER || item.q.toLowerCase().includes(FILTER)) as { q: string; expect: string; history?: Turn[] }[]) {
+const FILTER = process.env.ASK_SMOKE_FILTER?.toLowerCase();
+
+describe.skipIf(!RUN)("Ask RAG smoke", () => {
+  const SETS: Record<string, SmokeQuery[]> = {
+    live: LIVE_QUERIES,
+    diverse: DIVERSE_QUERIES,
+    tough: TOUGH_QUERIES,
+    propfirm: PROPFIRM_QUERIES,
+  };
+  const activeSet = SETS[process.env.ASK_SMOKE_SET ?? ""] ?? QUERIES;
+  for (const { q, expect, history } of activeSet.filter((item) => !FILTER || item.q.toLowerCase().includes(FILTER))) {
     it(
       q,
       async () => {
@@ -148,7 +157,7 @@ describe.skipIf(!RUN)("cascade RAG smoke", () => {
         let card: unknown = null;
         let error: string | null = null;
         try {
-          const res = await generateAskCascadeResponse(
+          const res = await generateAskResponse(
             { message: q, ...(history ? { history } : {}) },
             {},
             { onToolCall: ({ toolName }) => timeline.push(`${toolName} ${at()}`) },
@@ -158,12 +167,11 @@ describe.skipIf(!RUN)("cascade RAG smoke", () => {
           error = e instanceof Error ? e.message : String(e);
         }
         const ms = Date.now() - start;
-        // eslint-disable-next-line no-console
-        console.log(
-          `\n———————————————————————————————————————————————\nQ: ${q}  (TOTAL ${ms}ms)\nexpect: ${expect}\ntimeline: ${timeline.join(" | ")} | done ${at()}\n${
-            error ? `ERROR: ${error}` : `cardType: ${(card as { type?: string })?.type}`
-          }`,
-        );
+        const block = `\n———————————————————————————————————————————————\nQ: ${q}  (TOTAL ${ms}ms)\nexpect: ${expect}\ntimeline: ${timeline.join(" | ")} | done ${at()}\n${
+          error ? `ERROR: ${error}` : `card: ${JSON.stringify(card, null, 2)}`
+        }`;
+        console.log(block);
+        if (process.env.ASK_SMOKE_OUT) appendFileSync(process.env.ASK_SMOKE_OUT, block + "\n");
       },
       120_000,
     );
