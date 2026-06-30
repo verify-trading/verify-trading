@@ -7,11 +7,9 @@ vi.mock("@/lib/observability/logger", () => ({
   },
 }));
 
-import { generateAskCascadeResponse, mergeToolOwnedNumbers } from "@/lib/ask/cascade";
-import {
-  DEFAULT_ANTHROPIC_MODEL,
-  DEFAULT_ANTHROPIC_SIMPLE_MODEL,
-} from "@/lib/ask/service/provider";
+import { generateAskResponse, mergeToolOwnedNumbers } from "@/lib/ask/pipeline";
+import { fallbackInsightCard, imageFallbackInsightCard } from "@/lib/ask/contracts";
+import { DEFAULT_ANTHROPIC_MODEL } from "@/lib/ask/service/provider";
 
 const insightCard = {
   type: "insight" as const,
@@ -45,12 +43,37 @@ const briefingToolCard = {
   verdict: "Tool verdict.",
 };
 
+const chartCard = {
+  type: "chart" as const,
+  pattern: "Descending channel",
+  bias: "Bearish" as const,
+  entry: "4045.00",
+  stop: "4060.00",
+  target: "4000.00",
+  rr: "3:1",
+  confidence: "Medium" as const,
+  verdict: "Short the rejection of channel resistance; do not chase weakness.",
+};
+
+/** Smallest valid 1x1 PNG, enough to pass the image decode/MIME gate. */
+const TINY_PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
 function submitResult(card: unknown) {
   return { toolName: "submit_ask_card", output: { card } };
 }
 
-function escalateResult(reason = "needs live setup judgment") {
-  return { toolName: "escalate", output: { escalated: true, reason } };
+function textOnlyResult(text: string) {
+  return { text, toolResults: [] };
+}
+
+function imageRequest(message: string) {
+  return {
+    message,
+    image: TINY_PNG_DATA_URL,
+    sessionId: crypto.randomUUID(),
+    history: [],
+  };
 }
 
 function textResult(toolResults: unknown[]) {
@@ -85,34 +108,33 @@ function baseRequest(message: string) {
   };
 }
 
-describe("generateAskCascadeResponse", () => {
+describe("generateAskResponse", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("answers easy queries on the Haiku tier with a single model call", async () => {
+  it("answers queries with a single Sonnet model call", async () => {
     const generateTextImpl = vi
       .fn()
       .mockResolvedValue(textResult([submitResult(insightCard)])) as never;
 
-    const response = await generateAskCascadeResponse(baseRequest("Is Pepperstone legit?"), {
+    const response = await generateAskResponse(baseRequest("Is Pepperstone legit?"), {
       generateTextImpl,
       retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge),
     });
 
     expect(generateTextImpl).toHaveBeenCalledTimes(1);
-    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_SIMPLE_MODEL);
-    expect(getCallTools(generateTextImpl)).toContain("escalate");
+    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_MODEL);
+    expect(getCallTools(generateTextImpl)).not.toContain("escalate");
     expect(response.data).toEqual(insightCard);
   });
 
-  it("runs Sonnet when the Haiku tier escalates, without the escalate tool", async () => {
+  it("handles setup cards in a single Sonnet pass", async () => {
     const generateTextImpl = vi
       .fn()
-      .mockResolvedValueOnce(textResult([escalateResult()]))
-      .mockResolvedValueOnce(textResult([submitResult(setupCard)])) as never;
+      .mockResolvedValue(textResult([submitResult(setupCard)])) as never;
 
-    const response = await generateAskCascadeResponse(
+    const response = await generateAskResponse(
       baseRequest("Best trade right now across gold and BTC?"),
       {
         generateTextImpl,
@@ -120,43 +142,29 @@ describe("generateAskCascadeResponse", () => {
       },
     );
 
-    expect(generateTextImpl).toHaveBeenCalledTimes(2);
-    expect(getCallModelId(generateTextImpl, 0)).toBe(DEFAULT_ANTHROPIC_SIMPLE_MODEL);
-    expect(getCallModelId(generateTextImpl, 1)).toBe(DEFAULT_ANTHROPIC_MODEL);
-    expect(getCallTools(generateTextImpl, 1)).not.toContain("escalate");
+    expect(generateTextImpl).toHaveBeenCalledTimes(1);
+    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_MODEL);
     expect(response.data).toEqual(setupCard);
   });
 
-  it("guards trade-action cards: Haiku setups rerun on Sonnet with forwarded evidence", async () => {
+  it("returns setup card with tool-owned numbers merged", async () => {
     const marketSetupResult = {
       toolName: "get_market_setup",
       output: { card: setupCard },
     };
     const generateTextImpl = vi
       .fn()
-      .mockResolvedValueOnce(textResult([marketSetupResult, submitResult(setupCard)]))
-      .mockResolvedValueOnce(
-        textResult([submitResult({ ...setupCard, verdict: "Sonnet verdict." })]),
+      .mockResolvedValue(
+        textResult([marketSetupResult, submitResult({ ...setupCard, verdict: "Sonnet verdict." })]),
       ) as never;
 
-    const response = await generateAskCascadeResponse(baseRequest("Set up a gold long"), {
+    const response = await generateAskResponse(baseRequest("Set up a gold long"), {
       generateTextImpl,
       retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge),
     });
 
-    expect(generateTextImpl).toHaveBeenCalledTimes(2);
-    expect(getCallModelId(generateTextImpl, 1)).toBe(DEFAULT_ANTHROPIC_MODEL);
-
-    const tier2Messages = getCallMessages(generateTextImpl, 1);
-    const evidence = tier2Messages.find(
-      (message) =>
-        message.role === "system" &&
-        typeof message.content === "string" &&
-        message.content.includes("TOOL EVIDENCE FROM A PRIOR PASS"),
-    );
-    expect(evidence).toBeDefined();
-    expect(String(evidence?.content)).toContain("get_market_setup");
-
+    expect(generateTextImpl).toHaveBeenCalledTimes(1);
+    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_MODEL);
     expect(response.data).toMatchObject({ type: "setup", verdict: "Sonnet verdict." });
   });
 
@@ -178,7 +186,7 @@ describe("generateAskCascadeResponse", () => {
       chunks: [],
     });
 
-    await generateAskCascadeResponse(baseRequest("Is FTMO worth it?"), {
+    await generateAskResponse(baseRequest("Is FTMO worth it?"), {
       generateTextImpl,
       retrieveAskKnowledgeImpl,
     });
@@ -199,8 +207,7 @@ describe("generateAskCascadeResponse", () => {
   it("keeps tool-owned numbers when the model rewrites a briefing", async () => {
     const generateTextImpl = vi
       .fn()
-      .mockResolvedValueOnce(textResult([escalateResult()]))
-      .mockResolvedValueOnce(
+      .mockResolvedValue(
         textResult([
           { toolName: "get_market_briefing", output: { card: briefingToolCard } },
           submitResult({
@@ -212,7 +219,7 @@ describe("generateAskCascadeResponse", () => {
         ]),
       ) as never;
 
-    const response = await generateAskCascadeResponse(
+    const response = await generateAskResponse(
       baseRequest("What is Bitcoin doing today and should I care?"),
       {
         generateTextImpl,
@@ -228,18 +235,65 @@ describe("generateAskCascadeResponse", () => {
     });
   });
 
-  it("falls back to the Haiku card when the Sonnet tier fails", async () => {
+  it("throws when the single Sonnet call fails", async () => {
     const generateTextImpl = vi
       .fn()
-      .mockResolvedValueOnce(textResult([escalateResult(), submitResult(insightCard)]))
-      .mockRejectedValueOnce(new Error("overloaded")) as never;
+      .mockRejectedValue(new Error("overloaded")) as never;
 
-    const response = await generateAskCascadeResponse(baseRequest("tricky question"), {
+    await expect(
+      generateAskResponse(baseRequest("tricky question"), {
+        generateTextImpl,
+        retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge),
+      }),
+    ).rejects.toThrow("overloaded");
+  });
+
+  it("salvages a chart card the model returned as text instead of submit_ask_card", async () => {
+    const generateTextImpl = vi
+      .fn()
+      .mockResolvedValue(textOnlyResult(JSON.stringify(chartCard))) as never;
+
+    const response = await generateAskResponse(imageRequest("analyse this chart"), {
+      generateTextImpl,
+      retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge),
+      getActiveAnalysisRulesImpl: vi.fn().mockResolvedValue([]),
+    });
+
+    // Images skip the Haiku tier and go straight to Sonnet.
+    expect(generateTextImpl).toHaveBeenCalledTimes(1);
+    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_MODEL);
+    expect(response.data).toMatchObject({
+      type: "chart",
+      pattern: "Descending channel",
+      bias: "Bearish",
+    });
+  });
+
+  it("returns the image-specific fallback when an image yields no card", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue(textOnlyResult("")) as never;
+
+    const response = await generateAskResponse(imageRequest("analyse this chart"), {
+      generateTextImpl,
+      retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge),
+      getActiveAnalysisRulesImpl: vi.fn().mockResolvedValue([]),
+    });
+
+    expect(response.data).toEqual(imageFallbackInsightCard);
+  });
+
+  it("wraps a prose answer into an insight instead of the generic fallback", async () => {
+    const prose =
+      "Gold is heavy here and momentum is against longs. Wait for a clean reclaim before buying.";
+    const generateTextImpl = vi.fn().mockResolvedValue(textOnlyResult(prose)) as never;
+
+    const response = await generateAskResponse(baseRequest("should I buy gold now?"), {
       generateTextImpl,
       retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge),
     });
 
-    expect(response.data).toEqual(insightCard);
+    expect(response.data.type).toBe("insight");
+    expect(response.data).not.toEqual(fallbackInsightCard);
+    expect(String((response.data as { body?: string }).body)).toContain("Gold is heavy");
   });
 
   it("limits the static cached prefix to one system breakpoint", async () => {
@@ -247,7 +301,7 @@ describe("generateAskCascadeResponse", () => {
       .fn()
       .mockResolvedValue(textResult([submitResult(insightCard)])) as never;
 
-    await generateAskCascadeResponse(
+    await generateAskResponse(
       {
         ...baseRequest("quick question"),
         sessionMemory: {

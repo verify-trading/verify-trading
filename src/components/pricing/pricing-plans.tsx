@@ -4,8 +4,6 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { trackAnalyticsEvent } from "@/lib/analytics/client";
-import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
@@ -32,6 +30,7 @@ export function PricingPlansSection({
   billingContext,
   compactHeader = false,
   showBackHome = false,
+  hideFreePlan = false,
 }: {
   pricing: PublicBillingPricing;
   billingContext?: PricingPageBillingContext | null;
@@ -39,6 +38,8 @@ export function PricingPlansSection({
   compactHeader?: boolean;
   /** Compact page only: Home link above the title; keeps spacing tight. */
   showBackHome?: boolean;
+  /** Drop the Free card and show only the three Pro plans (landing page). */
+  hideFreePlan?: boolean;
 }) {
   return (
     <section
@@ -65,65 +66,53 @@ export function PricingPlansSection({
             Free to start. Pro when you need more.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-400">
-            {`Free includes ${FREE_DAILY_ASK_LIMIT} Ask chats per day. Pro includes ${PRO_DAILY_ASK_LIMIT} Ask chats per day and premium app features.`}
+            {hideFreePlan
+              ? `Pro includes ${PRO_DAILY_ASK_LIMIT} Ask chats per day, premium app features, and a members-only community. Cancel anytime.`
+              : `Free includes ${FREE_DAILY_ASK_LIMIT} Ask chats per day. Pro includes ${PRO_DAILY_ASK_LIMIT} Ask chats per day and premium app features.`}
           </p>
         </div>
       )}
 
       <div
         className={cn(
-          "grid gap-4 md:grid-cols-2 xl:grid-cols-4",
+          "grid gap-4",
+          hideFreePlan ? "sm:grid-cols-2 lg:grid-cols-3" : "md:grid-cols-2 xl:grid-cols-4",
           compactHeader ? "mt-5" : "mt-12",
         )}
       >
-        <div className={cn(surface, "flex flex-col p-6 transition-colors hover:border-white/[0.12]")}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{pricing.free.badge}</span>
-          <h3 className="mt-4 text-3xl font-bold tracking-tight text-white">{pricing.free.headline}</h3>
-          <p className="mt-3 text-sm leading-relaxed text-slate-400">{pricing.free.detail}</p>
-          <ul className="mt-6 flex-1 space-y-2">
-            {[
-              `${FREE_DAILY_ASK_LIMIT} Ask chats per day`,
-              "Broker verification",
-              "Trade Analysis",
-              "Risk Calculators",
-            ].map((feature) => (
-              <li key={feature} className="flex items-center gap-2 text-sm text-slate-300">
-                <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
-                {feature}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6">
-            {!billingContext?.isSignedIn ? (
-              <Button asChild variant="outline" size="pill" className="w-full">
-                <Link
-                  href="/signup"
-                  onClick={() =>
-                    trackAnalyticsEvent(ANALYTICS_EVENTS.createAccountClicked, {
-                      location: compactHeader ? "pricing_page" : "homepage_pricing",
-                    })
-                  }
-                >
-                  Create free account
-                </Link>
-              </Button>
-            ) : (
-              <Button asChild variant="outline" size="pill" className="w-full">
-                <Link
-                  href="/ask"
-                  prefetch={false}
-                  onClick={() =>
-                    trackAnalyticsEvent(ANALYTICS_EVENTS.openAskClicked, {
-                      location: compactHeader ? "pricing_page" : "homepage_pricing",
-                    })
-                  }
-                >
-                  Open Ask
-                </Link>
-              </Button>
-            )}
+        {!hideFreePlan ? (
+          <div className={cn(surface, "flex flex-col p-6 transition-colors hover:border-white/[0.12]")}>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{pricing.free.badge}</span>
+            <h3 className="mt-4 text-3xl font-bold tracking-tight text-white">{pricing.free.headline}</h3>
+            <p className="mt-3 text-sm leading-relaxed text-slate-400">{pricing.free.detail}</p>
+            <ul className="mt-6 flex-1 space-y-2">
+              {[
+                `${FREE_DAILY_ASK_LIMIT} Ask chats per day`,
+                "Broker verification",
+                "Trade Analysis",
+                "Risk Calculators",
+              ].map((feature) => (
+                <li key={feature} className="flex items-center gap-2 text-sm text-slate-300">
+                  <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-green)]" aria-hidden />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-6">
+              {!billingContext?.isSignedIn ? (
+                <Button asChild variant="outline" size="pill" className="w-full">
+                  <Link href="/signup">Create free account</Link>
+                </Button>
+              ) : (
+                <Button asChild variant="outline" size="pill" className="w-full">
+                  <Link href="/ask" prefetch={false}>
+                    Open Ask
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <ProWeeklyPlanCard pricing={pricing} billingContext={billingContext} />
         <ProMonthlyPlanCard pricing={pricing} billingContext={billingContext} />

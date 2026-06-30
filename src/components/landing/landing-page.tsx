@@ -3,29 +3,23 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  Activity,
-  ArrowRight,
+  Brain,
+  CalendarClock,
   CheckCircle2,
-  Shield,
-  Calculator,
-  TrendingUp,
   ChevronDown,
-  Upload,
-  Scale,
+  MessagesSquare,
+  NotebookPen,
   X,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { HeroAskDemo } from "@/components/landing/hero-ask-demo";
+import type { HeroLiveBriefing } from "@/components/landing/hero-ask-demo/types";
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
-import { AppWordmarkInline, Logo } from "@/components/site/logo";
+import { AppWordmarkInline } from "@/components/site/logo";
 import { SiteNav } from "@/components/site/site-nav";
-import { SiteFooter } from "@/components/site/site-footer";
-import { trackAnalyticsEvent } from "@/lib/analytics/client";
-import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
-import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+import { LEGAL_LINKS } from "@/lib/legal/legal-links";
 import { trackMetaViewContent } from "@/lib/marketing/meta-pixel";
 import { getAppName } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
@@ -42,15 +36,6 @@ const featureIconClass: Record<IconTheme, string> = {
   purple: "border-[rgba(168,85,247,0.35)] bg-[rgba(168,85,247,0.1)] text-purple-400",
   green: "border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.1)] text-[var(--vt-green)]",
   cyan: "border-[rgba(34,211,238,0.35)] bg-[rgba(34,211,238,0.1)] text-cyan-400",
-};
-
-const featureFooterClass: Record<IconTheme, string> = {
-  blue: "text-[var(--vt-blue)]",
-  amber: "text-[var(--vt-amber)]",
-  coral: "text-[var(--vt-coral)]",
-  purple: "text-purple-400",
-  green: "text-[var(--vt-green)]",
-  cyan: "text-cyan-400",
 };
 
 /** Pain icons — use theme `--vt-coral` (same token as hero dot, eyebrows, error accents). */
@@ -118,13 +103,11 @@ function StoreBadges() {
       icon: <AppleMark className="size-6" />,
       line1: "Download on the",
       line2: "App Store",
-      store: "apple",
     },
     {
       icon: <GooglePlayMark className="size-5" />,
       line1: "GET IT ON",
       line2: "Google Play",
-      store: "google_play",
     },
   ];
   return (
@@ -134,12 +117,6 @@ function StoreBadges() {
           key={b.line2}
           href="/signup"
           prefetch={false}
-          onClick={() =>
-            trackAnalyticsEvent(ANALYTICS_EVENTS.appStoreClicked, {
-              location: "hero",
-              store: b.store,
-            })
-          }
           className="inline-flex items-center gap-2.5 rounded-xl border border-white/25 bg-black px-4 py-2.5 text-white transition hover:border-white/45 hover:bg-[#0c0c0c]"
         >
           {b.icon}
@@ -153,7 +130,7 @@ function StoreBadges() {
   );
 }
 
-function HeroSection() {
+function HeroSection({ liveGold }: { liveGold: HeroLiveBriefing | null }) {
   const appName = getAppName();
 
   return (
@@ -175,8 +152,8 @@ function HeroSection() {
           <span className="block">Fewer Losses.</span>
         </h1>
         <p className="mt-5 max-w-md text-[15px] font-normal leading-6 text-slate-400 sm:max-w-xl sm:text-base">
-          Verify traders, validate trades, and manage risk with live data &amp; AI -
-          all in one place.
+          Verify brokers, prop firms and gurus, validate trades, and manage risk
+          with live data &amp; AI — all in one place.
         </p>
 
         <div className="mt-8">
@@ -196,12 +173,12 @@ function HeroSection() {
               aria-hidden
               className="pointer-events-none absolute inset-x-3 inset-y-6 -z-10 rounded-[3.5rem] bg-gradient-to-b from-[rgba(76,110,245,0.6)] via-[rgba(139,92,246,0.45)] to-[rgba(242,109,109,0.28)] blur-2xl"
             />
-            <HeroAskDemo variant="device" />
+            <HeroAskDemo variant="device" liveBriefing={liveGold} />
           </div>
         </div>
 
         <ul className="mt-10 flex flex-col items-center gap-3 text-[15px] text-slate-300 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8">
-          {["Stop bad trades in seconds", "Avoid any scams", "Control your risk"].map(
+          {["Check any entity in seconds", "Get alerts before everyone else", "Pressure-test your setup"].map(
             (t) => (
               <li key={t} className="flex items-center gap-2">
                 <CheckCircle2
@@ -221,91 +198,56 @@ function HeroSection() {
 /* ─── Features ─── */
 
 function FeaturesSection() {
-  const appName = getAppName();
-
   const features: Array<{
-    icon: typeof Shield;
+    icon: typeof Brain;
     theme: IconTheme;
     title: string;
-    bullets: string[];
-    footer?: string;
+    description: string;
   }> = [
-      {
-        icon: TrendingUp,
-        theme: "blue",
-        title: "Verify your trade before entry",
-        bullets: [
-          "Risk / Reward check",
-          "Structure validation",
-          "Confirmation logic",
-          "Key insight in 1 line",
-        ],
-        footer: "Stop losing trades before they happen.",
-      },
-      {
-        icon: Shield,
-        theme: "green",
-        title: "Verify any broker in 2 seconds",
-        bullets: [
-          "Regulation status (FCA, ASIC, CySEC…)",
-          "Trust score",
-          "Complaint history",
-          "Final AI verdict",
-        ],
-        footer: "Avoid scams before you deposit.",
-      },
-
-      {
-        icon: Calculator,
-        theme: "purple",
-        title: "Calculate your risk instantly",
-        bullets: ["Lot size calculator", "Pip value", "Reward ratio", "6 professional tools"],
-        footer: "Trade like a professional.",
-      },
-      {
-        icon: Upload,
-        theme: "amber",
-        title: "Input your trade",
-        bullets: ["Pair", "Entry price", "Stop loss", "Take profit", "Upload chart (optional)"],
-      },
-      {
-        icon: Activity,
-        theme: "coral",
-        title: "AI analysis",
-        bullets: [
-          "Checking structure",
-          "Evaluating risk",
-          "Scanning for errors",
-          "Calculating probability",
-        ],
-        footer: "Analyzing trade…",
-      },
-      {
-        icon: Scale,
-        theme: "cyan",
-        title: "Verdict",
-        bullets: [
-          "DO NOT TRADE — High risk",
-          "WEAK TRADE — Fixable",
-          "VALID SETUP — Good to go",
-        ],
-      },
-    ];
+    {
+      icon: NotebookPen,
+      theme: "blue",
+      title: "Journal",
+      description:
+        "Logs trades, tags rule-risk behaviour — find the breach pattern before it costs the account.",
+    },
+    {
+      icon: Brain,
+      theme: "purple",
+      title: "Psychology AI",
+      description:
+        "A 6-minute assessment, then weekly reviews that surface tilt and revenge-trade patterns.",
+    },
+    {
+      icon: CalendarClock,
+      theme: "amber",
+      title: "Calendar + Intelligence",
+      description:
+        "Red-folder events that breach news rules, plus session context before you sit down.",
+    },
+    {
+      icon: MessagesSquare,
+      theme: "green",
+      title: "Ask + Community",
+      description:
+        "20 AI asks a day on records, markets and news — plus a members-only room.",
+    },
+  ];
 
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
       <div className="max-w-2xl">
-        <SectionEyebrow>Features</SectionEyebrow>
+        <SectionEyebrow>Pro</SectionEyebrow>
         <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
-          AI Decision Engine for Traders
+          verify.trading Pro
         </h2>
-        <p className="mt-4 text-base leading-relaxed text-slate-400">
-          {appName} reduces guesswork: artificial intelligence built with verified inputs, structured routing, and
-          deterministic maths, the only AI that thinks like a trader.
+        <p className="mt-4 text-lg font-semibold leading-snug text-slate-200 sm:text-xl">
+          Verify protects you from them.{" "}
+          <span className="text-[var(--vt-coral)]">Pro protects you from yourself.</span>
         </p>
       </div>
 
-      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-12 grid gap-4 sm:grid-cols-2">
         {features.map((f) => {
           const Icon = f.icon;
           return (
@@ -325,14 +267,7 @@ function FeaturesSection() {
                 <Icon className="size-5" strokeWidth={1.75} aria-hidden />
               </div>
               <h3 className="mt-4 text-lg font-semibold tracking-tight text-white">{f.title}</h3>
-              <ul className="mt-3 flex-1 list-disc list-outside space-y-1.5 pl-5 text-sm leading-relaxed text-slate-400 marker:text-slate-600">
-                {f.bullets.map((line) => (
-                  <li key={`${f.title}-${line}`}>{line}</li>
-                ))}
-              </ul>
-              {f.footer ? (
-                <p className={cn("mt-4 text-sm font-medium", featureFooterClass[f.theme])}>{f.footer}</p>
-              ) : null}
+              <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-400">{f.description}</p>
             </div>
           );
         })}
@@ -346,6 +281,11 @@ function FeaturesSection() {
 function HowItWorksSection() {
   const pitfalls = [
     {
+      variant: "close" as const,
+      title: "Trusting the wrong entities",
+      description: "Many traders lose money before they even start.",
+    },
+    {
       variant: "exclaim" as const,
       title: "Entering trades too early",
       description: "No confirmation. No edge. Just guesswork.",
@@ -354,11 +294,6 @@ function HowItWorksSection() {
       variant: "risk" as const,
       title: "Risking too much per position",
       description: "Over-leverage turns one loss into a margin call.",
-    },
-    {
-      variant: "close" as const,
-      title: "Trusting the wrong broker",
-      description: "Many traders lose money before they even start.",
     },
   ];
 
@@ -409,24 +344,23 @@ function HowItWorksSection() {
 
 function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const appName = getAppName();
 
   const faqs = [
     {
-      q: "What makes this different from ChatGPT?",
-      a: "Structured routing. Broker checks use a seeded layer; market data from feeds; maths from deterministic engines—not a single generic completion.",
+      q: "Is this financial advice?",
+      a: "No. Verify.Trading publishes records and analysis — regulator-sourced entity records, risk maths against rules you set, and market context. We never recommend trades or tell you where to deposit. The decision is always yours.",
     },
     {
-      q: "Is the market data real-time?",
-      a: "We use FMP’s professional feed. Prices refresh on dashboard visits and are cached for 15 minutes. Pro sees live data for all supported assets.",
+      q: "What makes this different from ChatGPT?",
+      a: "Structured routing. Entity checks answer only from our verified registry with citations; market data comes from professional feeds; risk maths runs on deterministic engines. Where we have no record, we say so — and you can request a check.",
+    },
+    {
+      q: "How does an entity earn a “Caution”?",
+      a: "Only with a documented regulator or court action — an FCA warning, an FTC settlement, a confirmed closure — and the official citation is shown on the record. No citation, no caution. The rule is enforced in our system, not just our policy.",
     },
     {
       q: "Can I cancel anytime?",
-      a: "Yes. Cancel from billing; you keep access through the end of the paid period.",
-    },
-    {
-      q: "Which platforms do you support?",
-      a: `${appName} is platform-agnostic: we verify and analyse—you trade where you want.`,
+      a: "Yes. Cancel from billing and you keep access through the end of the paid period. Entity checks stay free either way.",
     },
   ];
 
@@ -434,7 +368,7 @@ function FAQSection() {
     <section className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 sm:py-24">
       <div className="max-w-2xl">
         <SectionEyebrow>FAQ</SectionEyebrow>
-        <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">Common questions</h2>
+        <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">Common Questions</h2>
       </div>
 
       <div className="mt-10 space-y-2">
@@ -477,111 +411,68 @@ function FAQSection() {
   );
 }
 
-/* ─── Guide CTA ─── */
+/* ─── Closing (lights on) ─── */
 
-function GuideCTASection() {
+function ClosingSection() {
   return (
-    <section className="border-t border-white/[0.06] bg-black/15">
-      <div className="mx-auto w-full max-w-3xl px-4 py-16 text-left sm:px-6 sm:py-24">
-        <div className="max-w-2xl">
-          <SectionEyebrow>Guide</SectionEyebrow>
-          <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
-            Before You Trade: Read This
+    <section className="text-white">
+      <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+        {/* "Lights on" reveal card */}
+        <div className="relative overflow-hidden rounded-[2rem] bg-[#0a1126] bg-[radial-gradient(110%_110%_at_8%_4%,rgba(76,110,245,0.32),transparent_52%),radial-gradient(120%_120%_at_55%_115%,rgba(139,92,246,0.22),transparent_60%),radial-gradient(110%_110%_at_96%_92%,rgba(242,109,109,0.2),transparent_55%)] px-6 py-16 text-center text-white shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] ring-1 ring-inset ring-white/10 sm:px-10 sm:py-24">
+          <h2 className="mx-auto max-w-3xl text-3xl font-bold tracking-[-0.03em] sm:text-5xl">
+            Welcome to trading with the lights on.
           </h2>
-          <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-400">
-            A step-by-step guide to verifying trades, avoiding risk, and using every feature in seconds.
+          <p className="mx-auto mt-4 max-w-xl text-base text-white/70 sm:text-lg">
+            Run your first check now — it’s free, and it stays free.
           </p>
-        </div>
-
-        <Button asChild variant="default" size="pill" className="mt-8 gap-2 px-6">
-          <Link
-            href="/guide"
-            onClick={() =>
-              trackAnalyticsEvent(ANALYTICS_EVENTS.guideClicked, {
-                location: "homepage_guide_cta",
-              })
-            }
-          >
-            Get the guide
-            <ArrowRight className="size-4" aria-hidden />
-          </Link>
-        </Button>
-      </div>
-    </section>
-  );
-}
-
-/* ─── Final CTA ─── */
-
-function FinalCTASection() {
-  const benefits = [
-    `${FREE_DAILY_ASK_LIMIT} free Ask chats per day`,
-    "No credit card required",
-    "Cancel anytime",
-  ];
-
-  return (
-    <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-      <div
-        className={cn(
-          surface,
-          "bg-gradient-to-r from-[rgba(76,110,245,0.06)] to-transparent px-6 py-10 sm:px-10 sm:py-12",
-        )}
-      >
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-stretch lg:gap-10">
-          <div className="flex min-w-0 flex-1 flex-col gap-6 sm:flex-row sm:items-start sm:gap-5">
-            <div className="shrink-0 pt-0.5" aria-hidden>
-              <Logo compact />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">
-                Ready to trade with clearer answers?
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-400 sm:text-base">
-                {`Start with ${FREE_DAILY_ASK_LIMIT} free Ask chats per day—no card required.`}
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Button asChild variant="default" size="pill" className="gap-2 px-6">
-                  <Link
-                    href="/signup"
-                    onClick={() =>
-                      trackAnalyticsEvent(ANALYTICS_EVENTS.createAccountClicked, {
-                        location: "homepage_final_cta",
-                      })
-                    }
-                  >
-                    Create free account
-                    <ArrowRight className="size-4" aria-hidden />
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="pill" className="px-6">
-                  <Link
-                    href="/ask"
-                    prefetch={false}
-                    onClick={() =>
-                      trackAnalyticsEvent(ANALYTICS_EVENTS.openAskClicked, {
-                        location: "homepage_final_cta",
-                      })
-                    }
-                  >
-                    Open Ask
-                  </Link>
-                </Button>
-              </div>
-            </div>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/ask"
+              prefetch={false}
+              className="inline-flex items-center justify-center rounded-full bg-white px-7 py-3 text-sm font-semibold text-[#0a0d2e] transition hover:bg-white/90"
+            >
+              Check a name
+            </Link>
+            <Link
+              href="/methodology"
+              className="inline-flex items-center justify-center rounded-full border border-white/30 px-7 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              See the methodology
+            </Link>
           </div>
-
-          <div className="hidden h-auto w-px shrink-0 bg-white/[0.08] lg:block" aria-hidden />
-
-          <ul className="flex flex-col justify-center gap-3 border-t border-white/[0.08] pt-6 lg:max-w-[14rem] lg:shrink-0 lg:border-t-0 lg:pt-0">
-            {benefits.map((t) => (
-              <li key={t} className="flex items-center gap-2.5 text-sm text-slate-300">
-                <CheckCircle2 className="size-4 shrink-0 text-[var(--vt-coral)]" aria-hidden />
-                {t}
-              </li>
-            ))}
-          </ul>
         </div>
+
+        {/* Independence statement */}
+        <p className="mt-12 max-w-4xl text-sm leading-relaxed text-white/60">
+          <span className="font-semibold text-white">Independence, in writing:</span> we take no
+          affiliate commissions from brokers, prop firms or educators, and rated entities cannot be
+          our affiliates. Verdicts are computed from regulator records and are not for sale.
+          Verify.Trading provides records and analysis, not investment advice; trading involves
+          significant risk of loss. Absence of a regulatory action is not an endorsement, and absence
+          from a regulator’s list is not proof of authorisation.
+        </p>
+
+        {/* Footer links */}
+        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-white/10 pt-6 text-sm">
+          <Link
+            href="/methodology"
+            className="font-medium text-white/70 underline-offset-4 transition hover:text-white hover:underline"
+          >
+            Methodology
+          </Link>
+          {LEGAL_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="font-medium text-white/70 underline-offset-4 transition hover:text-white hover:underline"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+        <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.15em] text-white/40">
+          © 2026 verify.trading · UK · Records re-checked on a rolling basis
+        </p>
       </div>
     </section>
   );
@@ -592,9 +483,11 @@ function FinalCTASection() {
 export function LandingPage({
   pricing,
   billingContext,
+  liveGold,
 }: {
   pricing: PublicBillingPricing;
   billingContext: PricingPageBillingContext | null;
+  liveGold: HeroLiveBriefing | null;
 }) {
   useEffect(() => {
     trackMetaViewContent();
@@ -604,15 +497,13 @@ export function LandingPage({
     <div className="min-h-screen bg-[var(--vt-navy)] text-white">
       <SiteNav />
       <main>
-        <HeroSection />
+        <HeroSection liveGold={liveGold} />
         <HowItWorksSection />
         <FeaturesSection />
-        <PricingPlansSection pricing={pricing} billingContext={billingContext} />
+        <PricingPlansSection pricing={pricing} billingContext={billingContext} hideFreePlan />
         <FAQSection />
-        <GuideCTASection />
-        <FinalCTASection />
+        <ClosingSection />
       </main>
-      <SiteFooter />
     </div>
   );
 }

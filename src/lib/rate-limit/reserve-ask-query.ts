@@ -37,3 +37,16 @@ export async function reserveAskQuery(supabase: SupabaseClient): Promise<Reserve
     remaining: row.remaining !== undefined && row.remaining !== null ? Number(row.remaining) : undefined,
   };
 }
+
+/**
+ * Give back a reserved query when generation fails, so a user is never charged a
+ * daily ask for an answer they did not receive. Best-effort: never throws.
+ * Requires the `refund_ask_query` RPC (decrements today's count, floored at 0).
+ */
+export async function refundAskQuery(supabase: SupabaseClient): Promise<void> {
+  try {
+    await supabase.rpc("refund_ask_query");
+  } catch {
+    // A failed refund only over-counts the user's quota — never block on it.
+  }
+}

@@ -192,7 +192,7 @@ const ENTITY_COLUMNS =
   "founder_verified, founder_notes, verification_method, firm_status, " +
   "trustpilot_rating, trustpilot_count, trustpilot_date, founder_override_score, " +
   "guru_tier, founder_tier_override, regulator_flag_source, " +
-  "verified_track_record, research_status, founder_reviewed, identity_confirmed, bio_summary";
+  "verified_track_record, research_status, identity_confirmed, bio_summary";
 
 function mapEntityRow(row: Record<string, unknown>): VerifiedEntity {
   const type = row.entity_type as VerifiedEntityType;
@@ -248,7 +248,6 @@ function mapEntityRow(row: Record<string, unknown>): VerifiedEntity {
       regulatorFlagSource: toStringOrNull(row.regulator_flag_source),
       verifiedTrackRecord: toStringOrNull(row.verified_track_record),
       researchStatus: toStringOrNull(row.research_status),
-      founderReviewed: Boolean(row.founder_reviewed),
       identityConfirmed: Boolean(row.identity_confirmed),
     });
     return {
@@ -306,8 +305,8 @@ async function loadVerifiedEntitiesFromSupabase(): Promise<VerifiedEntity[]> {
     return [];
   }
 
-  // Unpublishable gurus (thin research, unreviewed, or identity-on-hold) are
-  // excluded entirely so they can never match or be listed.
+  // Unpublishable gurus (thin research or identity-on-hold) are excluded
+  // entirely so they can never match or be listed.
   return data
     .map((row) => mapEntityRow(row as unknown as Record<string, unknown>))
     .filter((entity) => entity.type !== "guru" || entity.guruPublishable);

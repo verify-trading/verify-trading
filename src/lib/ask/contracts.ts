@@ -366,14 +366,21 @@ export const fallbackInsightCard: InsightCard = {
   verdict: "Send the asset, setup, broker, or calculation you want checked.",
 };
 
-function trimToWordLimit(value: string, maxWords: number, options: { keepPunctuation?: boolean }) {
+/** Shown when an image was attached but no card could be produced from it. */
+export const imageFallbackInsightCard: InsightCard = {
+  type: "insight",
+  headline: "Couldn't Read That Chart",
+  body: "I couldn't make out that chart clearly enough to analyse it.",
+  verdict: "Resend a sharper screenshot and name the asset and timeframe.",
+};
+
+function trimToWordLimit(value: string, maxWords: number) {
   const words = value.split(/\s+/).filter(Boolean);
   if (words.length <= maxWords) {
     return value;
   }
 
-  const trimmed = words.slice(0, maxWords).join(" ").replace(/[,.!?;:]+$/u, "");
-  return options.keepPunctuation === false ? trimmed : `${trimmed}.`;
+  return words.slice(0, maxWords).join(" ").replace(/[,.!?;:]+$/u, "");
 }
 
 function limitSentences(value: string, maxSentences: number) {
@@ -394,19 +401,19 @@ function limitSentences(value: string, maxSentences: number) {
 
 function sanitizeNaturalLanguageField(
   value: string,
-  limits?: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean },
+  limits?: { maxSentences?: number; maxWords?: number },
 ): string;
 function sanitizeNaturalLanguageField(
   value: null,
-  limits?: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean },
+  limits?: { maxSentences?: number; maxWords?: number },
 ): null;
 function sanitizeNaturalLanguageField(
   value: string | null,
-  limits?: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean },
+  limits?: { maxSentences?: number; maxWords?: number },
 ): string | null;
 function sanitizeNaturalLanguageField(
   value: string | null,
-  limits: { maxSentences?: number; maxWords?: number; keepPunctuation?: boolean } = {},
+  limits: { maxSentences?: number; maxWords?: number } = {},
 ): string | null {
   if (value === null) {
     return value;
@@ -428,9 +435,7 @@ function sanitizeNaturalLanguageField(
 
   return limits.maxWords === undefined
     ? sentenceLimited
-    : trimToWordLimit(sentenceLimited, limits.maxWords, {
-        keepPunctuation: limits.keepPunctuation,
-      });
+    : trimToWordLimit(sentenceLimited, limits.maxWords);
 }
 
 function sanitizeCardNaturalLanguage(card: AskCard): AskCard {
@@ -438,52 +443,52 @@ function sanitizeCardNaturalLanguage(card: AskCard): AskCard {
     case "broker":
       return {
         ...card,
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3, maxWords: 45 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3 }),
       };
     case "briefing":
       return {
         ...card,
-        event: sanitizeNaturalLanguageField(card.event, { maxSentences: 1, maxWords: 22 }),
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3, maxWords: 45 }),
+        event: sanitizeNaturalLanguageField(card.event, { maxSentences: 1 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3 }),
       };
     case "calc":
       return {
         ...card,
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2 }),
       };
     case "guru":
       return {
         ...card,
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3, maxWords: 45 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 3 }),
       };
     case "insight":
       return {
         ...card,
-        headline: sanitizeNaturalLanguageField(card.headline, { maxWords: 4, keepPunctuation: false }),
-        body: sanitizeNaturalLanguageField(card.body, { maxSentences: 3, maxWords: 55 }),
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+        headline: sanitizeNaturalLanguageField(card.headline, { maxWords: 4 }),
+        body: sanitizeNaturalLanguageField(card.body, { maxSentences: 3 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2 }),
       };
     case "plan":
       return {
         ...card,
-        rationale: sanitizeNaturalLanguageField(card.rationale, { maxSentences: 3, maxWords: 55 }),
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+        rationale: sanitizeNaturalLanguageField(card.rationale, { maxSentences: 3 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2 }),
       };
     case "chart":
       return {
         ...card,
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2 }),
       };
     case "setup":
       return {
         ...card,
-        rationale: sanitizeNaturalLanguageField(card.rationale, { maxSentences: 3, maxWords: 55 }),
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+        rationale: sanitizeNaturalLanguageField(card.rationale, { maxSentences: 3 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2 }),
       };
     case "projection":
       return {
         ...card,
-        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2, maxWords: 35 }),
+        verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2 }),
       };
   }
 }

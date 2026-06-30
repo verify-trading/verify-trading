@@ -126,8 +126,8 @@ export function createAliases(name, handle) {
   return [...aliases].filter(Boolean);
 }
 
-// Guru publish gate — a guru publishes only when research is complete, a founder
-// has reviewed it, and its identity is confirmed.
+// Guru publish gate — a guru publishes only when research is complete and its
+// identity is confirmed.
 export const GURU_PUBLISHABLE_STATUSES = new Set(publishableStatuses);
 
 export function isGuruPublishable(row) {
@@ -137,7 +137,6 @@ export function isGuruPublishable(row) {
   const status = String(row.research_status ?? "").trim().toLowerCase();
   return (
     GURU_PUBLISHABLE_STATUSES.has(status) &&
-    Boolean(row.founder_reviewed) &&
     Boolean(row.identity_confirmed)
   );
 }

@@ -2,7 +2,7 @@
  * ITVE v3 — trade-verification framework. Injected as a volatile system block on
  * the chart path (image present), immediately followed by the active analysis
  * rules, which it references as Engine 5's "rules listed below" (the ordering is
- * enforced in cascade.ts). Findings are emitted through the existing setup /
+ * enforced in pipeline.ts). Findings are emitted through the existing setup /
  * chart / insight cards, not ITVE's standalone mobile text block.
  */
 export const itveVerificationFramework = `INSTITUTIONAL TRADE VERIFICATION ENGINE (ITVE v3)

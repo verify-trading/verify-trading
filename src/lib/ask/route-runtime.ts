@@ -1,16 +1,16 @@
 import { ZodError } from "zod";
 
-import { classifyAskRouteError } from "@/lib/ask/ask-failure";
+import { classifyAskRouteError, getUserMessageForAskFailureCode } from "@/lib/ask/ask-failure";
 import { askRequestSchema, type AskResponse, type AskSessionMemory } from "@/lib/ask/contracts";
 import { getAskPersistence, type AskPersistence } from "@/lib/ask/persistence";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
-import { generateAskCascadeResponse } from "@/lib/ask/cascade";
-import { generateAskResponse, type AskGenerationCallbacks } from "@/lib/ask/service";
+import { generateAskResponse } from "@/lib/ask/pipeline";
+import type { AskGenerationCallbacks } from "@/lib/ask/service/types";
 import { buildUpdatedSessionMemory } from "@/lib/ask/session-memory";
 import { AskValidationError } from "@/lib/ask/validation-error";
 import { getSessionUser } from "@/lib/auth/session";
 import { logger } from "@/lib/observability/logger";
-import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
+import { refundAskQuery, reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 
 type ParsedAskRequest = ReturnType<typeof askRequestSchema.parse>;
@@ -20,6 +20,8 @@ export type PreparedAskRoute = {
   parsedRequest: ParsedAskRequest;
   requestInput: AskRequestInput;
   persistence: AskPersistence;
+  /** Returns the reserved daily query if generation fails. Best-effort, never throws. */
+  refundReservation: () => Promise<void>;
 };
 
 export type AskRouteFailure = {
@@ -95,6 +97,7 @@ export async function prepareAskRoute(request: Request, logScope = "Ask"): Promi
     value: {
       parsedRequest,
       persistence,
+      refundReservation: () => refundAskQuery(session.supabase),
       requestInput: {
         ...parsedRequest,
         message: parsedRequest.message || (parsedRequest.image ? defaultAskImagePrompt : ""),
@@ -106,22 +109,19 @@ export async function prepareAskRoute(request: Request, logScope = "Ask"): Promi
   };
 }
 
-/**
- * The retrieval + Haiku-first cascade pipeline is the default. Set
- * ASK_PIPELINE=legacy to fall back to the older single-model pipeline.
- */
-function isCascadePipelineEnabled() {
-  return process.env.ASK_PIPELINE !== "legacy";
-}
-
 export async function completeAskExchange(
   prepared: PreparedAskRoute,
   callbacks?: AskGenerationCallbacks,
 ): Promise<AskResponse> {
-  const generate = isCascadePipelineEnabled()
-    ? generateAskCascadeResponse
-    : generateAskResponse;
-  const response = await generate(prepared.requestInput, {}, callbacks);
+  let response: AskResponse;
+  try {
+    response = await generateAskResponse(prepared.requestInput, {}, callbacks);
+  } catch (error) {
+    // Generation failed — refund the reserved daily query so the user isn't charged.
+    await prepared.refundReservation();
+    throw error;
+  }
+
   await saveAskExchangeBestEffort(prepared, response);
   return response;
 }
@@ -171,13 +171,14 @@ export function askRouteFailure(error: unknown, logMessage: string): AskRouteFai
     return { error: "invalid_request", status: 400, message: error.message };
   }
 
-  const { code, message } = classifyAskRouteError(error);
+  const { code } = classifyAskRouteError(error);
   logger.error(logMessage, {
     error: error instanceof Error ? error.message : "unknown",
     code,
   });
 
-  return { error: "ask_failed", status: 502, code, message };
+  // Never return the raw provider/internal message to the client — map to a safe one.
+  return { error: "ask_failed", status: 502, code, message: getUserMessageForAskFailureCode(code) };
 }
 
 function invalidAskRequest(): AskRouteFailure {

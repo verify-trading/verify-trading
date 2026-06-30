@@ -14,6 +14,10 @@ vi.mock("@/lib/billing/pricing-page-data", () => ({
   getPricingPageData: mockGetPricingPageData,
 }));
 
+vi.mock("@/lib/landing/hero-gold", () => ({
+  getHeroGoldBriefing: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("@/components/landing/landing-page", () => ({
   LandingPage: ({
     billingContext,

@@ -127,13 +127,15 @@ export function buildKnowledgeContextBlock(
       lines.push("");
     }
     lines.push("Relevant knowledge:");
+    // Track the running length instead of re-joining every iteration.
+    let used = lines.reduce((total, line) => total + line.length + 1, 0);
     for (const chunk of knowledge.chunks) {
       const entry = `- [${chunk.kind}] ${chunk.title}: ${chunk.content.replace(/\s+/g, " ").trim()}`;
-      const used = lines.join("\n").length;
       if (used + entry.length > charBudget) {
         break;
       }
       lines.push(entry);
+      used += entry.length + 1;
     }
   }
 

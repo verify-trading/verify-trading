@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { challengeConfigSchema, extractChallengeRules, toChallengeConfig, type ChallengeConfigRow } from "@/lib/journal/challenge";
+import { UnsafeUrlError } from "@/lib/http/safe-fetch";
 import { logger } from "@/lib/observability/logger";
 
 const PRIVATE_CACHE_HEADERS = {
@@ -48,6 +49,9 @@ export async function POST(request: Request) {
     if (error || !data) return jsonApiError(500, "challenge_config_save_failed", "Could not save challenge mode.");
     return NextResponse.json({ config: toChallengeConfig(data as ChallengeConfigRow) }, { status: 201, headers: PRIVATE_CACHE_HEADERS });
   } catch (error) {
+    if (error instanceof UnsafeUrlError) {
+      return jsonApiError(400, "challenge_config_invalid", "That firm URL can’t be reached. Use the public website address.");
+    }
     logger.error("Challenge config save failed.", { error: error instanceof Error ? error.message : "unknown" });
     return jsonApiError(500, "challenge_config_save_failed", "Could not save challenge mode.");
   }

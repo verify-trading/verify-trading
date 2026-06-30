@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { askCardSchema, type AskCard } from "@/lib/ask/contracts";
+import { extractJson } from "@/lib/ask/service/context";
 
 export const askCardOutputEnvelopeSchema = z.object({
   card_json: z
@@ -19,6 +20,15 @@ function buildInsightCard(headline: string, body: string, verdict: string): AskC
 
 function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function clampWords(value: string, maxWords: number) {
+  const words = normalizeWhitespace(value).split(" ");
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+
+  return `${words.slice(0, maxWords).join(" ")}…`;
 }
 
 function asRecord(value: unknown) {
@@ -154,4 +164,60 @@ export function buildInsightCardFromLooseCard(value: unknown): AskCard | null {
     body ?? "I have partial context, but not enough clean detail for a full structured card.",
     verdict ?? "Ask for the asset, levels, setup, broker, or calculation you want checked.",
   );
+}
+
+/**
+ * Last-resort salvage: wrap a plain-prose model answer (no JSON, no tool card)
+ * into an insight card so the user sees the model's actual words instead of a
+ * generic fallback. Returns null for JSON-shaped text — that is handled by the
+ * card parsers above.
+ */
+export function buildInsightCardFromModelText(text: string): AskCard | null {
+  const normalized = normalizeWhitespace(text);
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.startsWith("{") || normalized.startsWith("[")) {
+    return null;
+  }
+
+  const sentences = normalized.split(/(?<=[.!?])\s+/).flatMap((sentence) => {
+    const trimmed = sentence.trim();
+    return trimmed ? [trimmed] : [];
+  });
+
+  const first = sentences[0] ?? normalized;
+  const second = sentences[1] ?? "";
+  const asksForInput = /\?/.test(normalized) || /\b(i need|send|give me|what)\b/i.test(first);
+
+  return buildInsightCard(
+    asksForInput ? "Need Input" : "Quick Take",
+    clampWords(first, 60),
+    clampWords(
+      second ||
+        (asksForInput
+          ? "Reply with the missing detail."
+          : "Ask a sharper follow-up if you want me to refine it."),
+      60,
+    ),
+  );
+}
+
+/**
+ * Salvage a card from a model's free text when no tool card was produced: parse
+ * inline JSON into a card, else wrap the prose. Shared by both Ask pipelines so
+ * the parse-order contract can't drift.
+ */
+export function salvageCardFromText(text: string): AskCard | null {
+  if (!text.trim()) {
+    return null;
+  }
+
+  const parsed = extractJson(text);
+  if (parsed) {
+    return parseAskCardCandidate(parsed) ?? buildInsightCardFromLooseCard(parsed);
+  }
+
+  return buildInsightCardFromModelText(text);
 }

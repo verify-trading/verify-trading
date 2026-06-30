@@ -3,6 +3,8 @@ const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 interface FetchWithRetryOptions {
   attempts?: number;
   baseDelayMs?: number;
+  /** Per-attempt timeout. A hung upstream otherwise ties up the whole invocation. */
+  timeoutMs?: number;
 }
 
 function wait(delayMs: number) {
@@ -47,10 +49,15 @@ export async function fetchWithRetry(
 ) {
   const attempts = Math.max(1, options.attempts ?? 3);
   const baseDelayMs = Math.max(0, options.baseDelayMs ?? 250);
+  const timeoutMs = Math.max(0, options.timeoutMs ?? 15_000);
 
   async function runAttempt(attempt: number): Promise<Response> {
     try {
-      const response = await fetch(input, init);
+      const timeoutSignal = AbortSignal.timeout(timeoutMs);
+      const signal = init?.signal
+        ? AbortSignal.any([init.signal, timeoutSignal])
+        : timeoutSignal;
+      const response = await fetch(input, { ...init, signal });
       if (!shouldRetryStatus(response.status) || attempt === attempts) {
         return response;
       }

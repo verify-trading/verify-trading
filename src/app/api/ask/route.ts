@@ -1,9 +1,8 @@
 import type { UIMessage } from "ai";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
-import { NextResponse } from "next/server";
 
 import { logger } from "@/lib/observability/logger";
-import { classifyAskRouteError } from "@/lib/ask/ask-failure";
+import { classifyAskRouteError, getUserMessageForAskFailureCode } from "@/lib/ask/ask-failure";
 import { jsonApiFailure } from "@/lib/http/json-response";
 import type { AskStreamData, AskToolStatus } from "@/lib/ask/stream";
 import {
@@ -35,6 +34,7 @@ function buildToolStatus(toolName: string, rawArgs: unknown): AskToolStatus {
   const entity = readStringArg(args, "name", "query");
   const timeframe = readStringArg(args, "timeframe");
   const side = readStringArg(args, "side", "direction");
+  const url = readStringArg(args, "url");
 
   switch (toolName) {
     case "verify_entity":
@@ -72,6 +72,22 @@ function buildToolStatus(toolName: string, rawArgs: unknown): AskToolStatus {
         toolName,
         label: "Scanning headlines",
         detail: entity ? `Searching recent news for ${entity}.` : "Searching for fresh market-moving headlines.",
+      };
+    case "web_search":
+      return {
+        id: crypto.randomUUID(),
+        phase: "working",
+        toolName,
+        label: "Searching the web",
+        detail: entity ? `Searching the web for ${entity}.` : "Searching the live web for the latest on this.",
+      };
+    case "web_fetch":
+      return {
+        id: crypto.randomUUID(),
+        phase: "working",
+        toolName,
+        label: "Reading a source",
+        detail: url ? `Reading ${url}.` : "Reading the full page for more detail.",
       };
     case "get_economic_calendar":
       return {
@@ -160,6 +176,7 @@ function buildAskStreamResponse({
   parsedRequest,
   requestInput,
   persistence,
+  refundReservation,
 }: PreparedAskRoute) {
   return createUIMessageStreamResponse({
     stream: createUIMessageStream<AskRouteMessage>({
@@ -177,7 +194,7 @@ function buildAskStreamResponse({
           transient: true,
         });
 
-        const response = await completeAskExchange({ parsedRequest, requestInput, persistence }, {
+        const response = await completeAskExchange({ parsedRequest, requestInput, persistence, refundReservation }, {
           onToolCall: ({ toolName, input }) => {
             writer.write({
               type: "data-tool-status",
@@ -228,14 +245,15 @@ function buildAskStreamResponse({
         writer.write({ type: "finish", finishReason: "stop" });
       },
       onError: (error) => {
-        const { code, message } = classifyAskRouteError(error);
+        const { code } = classifyAskRouteError(error);
 
         logger.error("Ask response generation failed.", {
           error: error instanceof Error ? error.message : "unknown",
           code,
         });
 
-        return message;
+        // Surface a safe, stable message — never the raw provider/internal string.
+        return getUserMessageForAskFailureCode(code);
       },
     }),
   });

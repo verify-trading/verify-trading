@@ -1,5 +1,4 @@
-import { generateText, stepCountIs, tool, type ModelMessage } from "ai";
-import { z } from "zod";
+import { generateText, stepCountIs, type ModelMessage } from "ai";
 
 import {
   buildAnalysisRulesPrompt,
@@ -10,6 +9,7 @@ import {
   askRequestSchema,
   askResponseSchema,
   fallbackInsightCard,
+  imageFallbackInsightCard,
   sanitizeCard,
   sanitizeUiMeta,
   type AskCard,
@@ -21,7 +21,7 @@ import {
   retrieveAskKnowledge,
 } from "@/lib/ask/knowledge/retrieve";
 import { logger } from "@/lib/observability/logger";
-import { cascadeAskSystemPrompt } from "@/lib/ask/cascade-prompt";
+import { askSystemPrompt } from "@/lib/ask/system-prompt";
 import { itveVerificationFramework } from "@/lib/ask/itve-prompt";
 import { askImageResponseGuide, defaultAskImagePrompt } from "@/lib/ask/prompt";
 import {
@@ -31,63 +31,39 @@ import {
   parseImageDataUrl,
   withFollowups,
 } from "@/lib/ask/service/context";
+import { salvageCardFromText } from "@/lib/ask/service/card-output";
 import {
   createSystemMessage,
   getAskModel,
   getAskPrimaryModelId,
-  getAskSimpleModel,
-  getAskSimpleModelId,
 } from "@/lib/ask/service/provider";
 import { createAskTools } from "@/lib/ask/service/tools";
-import type { AskServiceDependencies } from "@/lib/ask/service/types";
+import type {
+  AskGenerationCallbacks,
+  AskServiceDependencies,
+} from "@/lib/ask/service/types";
 import {
   buildSessionMemoryMessage,
   deriveAskSessionMemory,
 } from "@/lib/ask/session-memory";
 import { expandPromptTemplate } from "@/lib/site-config";
-import type { AskGenerationCallbacks } from "@/lib/ask/service";
 
-const CASCADE_MAX_OUTPUT_TOKENS = 1500;
-const CASCADE_MODEL_MAX_RETRIES = 2;
-const TIER1_MAX_STEPS = 5;
-const TIER2_MAX_STEPS = 7;
+const ASK_MAX_OUTPUT_TOKENS = 2500;
+const ASK_MODEL_MAX_RETRIES = 2;
+/**
+ * Step budget for one Ask turn — headroom to chain a few tools (verify + web
+ * search + a market tool) and still reach submit_ask_card.
+ */
+const ASK_MAX_STEPS = 10;
 
 /** Recent turns kept verbatim; older context is carried by session memory. */
 const MAX_HISTORY_TURNS = 12;
 
-/** Tool evidence forwarded from tier 1 to tier 2 is truncated per result. */
-const MAX_FORWARDED_EVIDENCE_CHARS = 1200;
-
 type ToolResultRecord = { toolName?: string; output?: unknown };
 
-type CascadeDependencies = AskServiceDependencies & {
+type AskGenerationDependencies = AskServiceDependencies & {
   retrieveAskKnowledgeImpl?: typeof retrieveAskKnowledge;
 };
-
-const escalateInputSchema = z.object({
-  reason: z
-    .string()
-    .min(1)
-    .describe("One short sentence on why this needs the deeper model."),
-});
-
-function createEscalateTool() {
-  return tool({
-    description:
-      "Hand this question to the deeper analysis model instead of answering yourself. " +
-      "Call it when the question needs a live trade setup, chart or market-structure judgment, " +
-      "comparing multiple markets to pick a trade, or a nuanced risk decision with conflicting factors. " +
-      "Do NOT call it for broker/prop-firm/guru verification, calculators, projections, growth plans, " +
-      "price checks, scheduled economic events, education, psychology basics, or acknowledgements: " +
-      "answer those yourself with the other tools.",
-    inputSchema: escalateInputSchema,
-    execute: async ({ reason }) => ({ escalated: true, reason }),
-  });
-}
-
-function hasToolResultNamed(toolResults: ToolResultRecord[], toolName: string) {
-  return toolResults.some((toolResult) => toolResult.toolName === toolName);
-}
 
 function stopAfterFinalToolResult({
   steps,
@@ -95,19 +71,14 @@ function stopAfterFinalToolResult({
   steps: Array<{ toolResults?: Array<{ toolName?: string }> }>;
 }) {
   const lastStep = steps[steps.length - 1];
-  return (
-    lastStep?.toolResults?.some(
-      (toolResult) =>
-        toolResult.toolName === "submit_ask_card" || toolResult.toolName === "escalate",
-    ) ?? false
-  );
+  return lastStep?.toolResults?.some((toolResult) => toolResult.toolName === "submit_ask_card") ?? false;
 }
 
 function plainSystemMessage(content: string): ModelMessage {
   return { role: "system", content };
 }
 
-function buildCascadeMessages({
+function buildAskMessages({
   request,
   normalizedMessage,
   image,
@@ -136,7 +107,7 @@ function buildCascadeMessages({
 
   return [
     // Single cached static block — one stable cache breakpoint.
-    createSystemMessage(expandPromptTemplate(cascadeAskSystemPrompt)),
+    createSystemMessage(expandPromptTemplate(askSystemPrompt)),
     // Volatile context stays uncached so it never invalidates the prefix.
     ...(sessionMemoryMessage ? [plainSystemMessage(sessionMemoryMessage)] : []),
     ...(image ? [plainSystemMessage(askImageResponseGuide)] : []),
@@ -158,40 +129,6 @@ function buildCascadeMessages({
     })),
     userMessage,
   ];
-}
-
-function summarizeEvidence(toolResults: ToolResultRecord[]) {
-  return toolResults
-    .filter(
-      (toolResult) =>
-        toolResult.toolName &&
-        toolResult.toolName !== "escalate" &&
-        toolResult.toolName !== "submit_ask_card",
-    )
-    .map((toolResult) => {
-      const serialized = JSON.stringify(toolResult.output);
-      const clipped =
-        serialized.length > MAX_FORWARDED_EVIDENCE_CHARS
-          ? `${serialized.slice(0, MAX_FORWARDED_EVIDENCE_CHARS)}…`
-          : serialized;
-      return `${toolResult.toolName}: ${clipped}`;
-    });
-}
-
-function buildEvidenceMessage(toolResults: ToolResultRecord[]): ModelMessage | null {
-  const lines = summarizeEvidence(toolResults);
-  if (lines.length === 0) {
-    return null;
-  }
-
-  return plainSystemMessage(
-    [
-      "TOOL EVIDENCE FROM A PRIOR PASS",
-      "These tool results were already fetched for this exact question. Reuse them instead of calling the same tool with the same input again. Call tools only for data that is missing.",
-      "",
-      ...lines,
-    ].join("\n"),
-  );
 }
 
 /**
@@ -250,22 +187,26 @@ export function mergeToolOwnedNumbers(
     }
   }
 
+  if (card.type === "broker") {
+    // A numeric trust score is only ours to show when verify_entity matched a
+    // reviewed record: copy that exact score from the tool card. With no DB
+    // match (coverage miss, FCA-only, or a web-researched firm), the number is
+    // not ours — force "N/A" so a model-assembled score never reads as a rating.
+    const verifiedDbCard = findToolCard("verify_entity", "broker");
+    return { ...card, score: verifiedDbCard?.type === "broker" ? verifiedDbCard.score : "N/A" };
+  }
+
   return card;
 }
 
-type TierRunResult = {
+type AskRunResult = {
   toolResults: ToolResultRecord[];
   card: AskCard | null;
-  escalated: boolean;
-  escalationReason: string | null;
+  /** The model's final free text, kept so a non-tool answer can still be salvaged. */
+  text: string;
 };
 
-type TierLabel = "haiku" | "sonnet";
-
-async function runTier({
-  tier,
-  model,
-  modelId,
+async function runAskGeneration({
   messages,
   tools,
   maxSteps,
@@ -274,9 +215,6 @@ async function runTier({
   messageId,
   callbacks,
 }: {
-  tier: TierLabel;
-  model: ReturnType<typeof getAskModel>;
-  modelId: string;
   messages: ModelMessage[];
   tools: Record<string, unknown>;
   maxSteps: number;
@@ -284,24 +222,24 @@ async function runTier({
   sessionId: string;
   messageId: string;
   callbacks: AskGenerationCallbacks;
-}): Promise<TierRunResult> {
+}): Promise<AskRunResult> {
+  const modelId = getAskPrimaryModelId();
   const collectedToolResults: ToolResultRecord[] = [];
 
   const result = await generateTextImpl({
-    model,
+    model: getAskModel(),
     temperature: 0.2,
-    maxOutputTokens: CASCADE_MAX_OUTPUT_TOKENS,
-    maxRetries: CASCADE_MODEL_MAX_RETRIES,
+    maxOutputTokens: ASK_MAX_OUTPUT_TOKENS,
+    maxRetries: ASK_MODEL_MAX_RETRIES,
     stopWhen: [stepCountIs(maxSteps), stopAfterFinalToolResult],
     messages,
     tools: tools as Parameters<typeof generateText>[0]["tools"],
     onStepFinish({ stepNumber, toolCalls, toolResults, finishReason, usage }) {
       collectedToolResults.push(...(toolResults as ToolResultRecord[]));
 
-      logger.info("Ask cascade step finished.", {
+      logger.info("Ask step finished.", {
         sessionId,
         messageId,
-        tier,
         modelId,
         stepNumber,
         finishReason,
@@ -313,9 +251,7 @@ async function runTier({
       });
 
       toolCalls.forEach((toolCall) => {
-        if (toolCall.toolName !== "escalate") {
-          callbacks.onToolCall?.({ toolName: toolCall.toolName, input: toolCall.input });
-        }
+        callbacks.onToolCall?.({ toolName: toolCall.toolName, input: toolCall.input });
       });
     },
   });
@@ -329,39 +265,24 @@ async function runTier({
     }
   }
 
-  const escalateResult = collectedToolResults.find(
-    (toolResult) => toolResult.toolName === "escalate",
-  );
-  const escalationReason =
-    escalateResult?.output && typeof escalateResult.output === "object"
-      ? String((escalateResult.output as { reason?: unknown }).reason ?? "")
-      : null;
-
   return {
     toolResults: collectedToolResults,
     card: extractSubmitAskCard(collectedToolResults, askCardSchema),
-    escalated: hasToolResultNamed(collectedToolResults, "escalate"),
-    escalationReason,
+    text: typeof result.text === "string" ? result.text : "",
   };
 }
 
-function resolveTierCard(run: TierRunResult): AskCard | null {
+function resolveRunCard(run: AskRunResult): AskCard | null {
   return run.card ?? extractToolCard(run.toolResults, askCardSchema);
 }
 
-/** Haiku may not finalize trade-action cards; those always get Sonnet's judgment. */
-function requiresEscalationGuard(card: AskCard | null) {
-  return card?.type === "setup" || card?.type === "chart";
-}
-
 /**
- * Cascade Ask pipeline (default; ASK_PIPELINE=legacy opts out):
- * retrieve → Haiku with full tools + escalate() → Sonnet only when escalated
- * (reusing tier-1 tool evidence) → tool-owned numeric merge.
+ * Ask pipeline: retrieve knowledge (RAG) → one Sonnet pass with the full
+ * toolset → tool-owned numeric merge → final card.
  */
-export async function generateAskCascadeResponse(
+export async function generateAskResponse(
   input: AskRequest,
-  dependencies: CascadeDependencies = {},
+  dependencies: AskGenerationDependencies = {},
   callbacks: AskGenerationCallbacks = {},
 ): Promise<AskResponse> {
   const request = askRequestSchema.parse(input);
@@ -376,7 +297,7 @@ export async function generateAskCascadeResponse(
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
 
-  logger.info("Ask cascade generation started.", {
+  logger.info("Ask generation started.", {
     sessionId,
     messageId,
     hasImage: Boolean(image),
@@ -386,7 +307,7 @@ export async function generateAskCascadeResponse(
 
   const [knowledge, analysisRulesMessage] = await Promise.all([
     retrieveAskKnowledgeImpl(normalizedMessage).catch((error: unknown) => {
-      logger.warn("Ask cascade knowledge retrieval failed.", {
+      logger.warn("Ask knowledge retrieval failed.", {
         sessionId,
         messageId,
         error: error instanceof Error ? error.message : String(error),
@@ -399,7 +320,7 @@ export async function generateAskCascadeResponse(
   ]);
 
   const knowledgeContextBlock = buildKnowledgeContextBlock(knowledge);
-  const messages = buildCascadeMessages({
+  const messages = buildAskMessages({
     request,
     normalizedMessage,
     image,
@@ -412,14 +333,12 @@ export async function generateAskCascadeResponse(
     card: AskCard,
     source: string,
     toolResults: ToolResultRecord[],
-    tier: TierLabel,
   ) => {
     const merged = mergeToolOwnedNumbers(card, toolResults);
 
-    logger.info("Ask cascade generation completed.", {
+    logger.info("Ask generation completed.", {
       sessionId,
       messageId,
-      tier,
       cardSource: source,
       finalCardType: merged.type,
       toolNames: toolResults.map((toolResult) => toolResult.toolName ?? "unknown"),
@@ -435,109 +354,35 @@ export async function generateAskCascadeResponse(
     });
   };
 
-  // Images skip the cheap tier: chart reading is a Sonnet job.
-  let tier1: TierRunResult | null = null;
-  if (!image) {
-    try {
-      tier1 = await runTier({
-        tier: "haiku",
-        model: getAskSimpleModel(),
-        modelId: getAskSimpleModelId(),
-        messages,
-        tools: { ...baseTools, escalate: createEscalateTool() },
-        maxSteps: TIER1_MAX_STEPS,
-        generateTextImpl,
-        sessionId,
-        messageId,
-        callbacks,
-      });
-    } catch (error) {
-      logger.warn("Ask cascade tier 1 failed; falling through to tier 2.", {
-        sessionId,
-        messageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-
-    if (tier1 && !tier1.escalated) {
-      const card = resolveTierCard(tier1);
-      // A raw verify_entity card (broker/guru from a tool result, with no
-      // submit_ask_card) can't answer follow-on product questions like "how long
-      // is the challenge" and carries no follow-ups. Force Sonnet to synthesize.
-      const unsynthesizedEntityCard =
-        !tier1.card && (card?.type === "broker" || card?.type === "guru");
-      if (card && !requiresEscalationGuard(card) && !unsynthesizedEntityCard) {
-        return finalize(card, tier1.card ? "submit_ask_card" : "tool_result", tier1.toolResults, "haiku");
-      }
-
-      if (card) {
-        logger.info("Ask cascade guard escalated an unsynthesized or trade-action card to tier 2.", {
-          sessionId,
-          messageId,
-          cardType: card.type,
-          unsynthesizedEntityCard,
-        });
-      }
-    } else if (tier1?.escalated) {
-      logger.info("Ask cascade model escalated to tier 2.", {
-        sessionId,
-        messageId,
-        reason: tier1.escalationReason,
-      });
-    }
-  }
-
-  const evidenceMessage = tier1 ? buildEvidenceMessage(tier1.toolResults) : null;
-  const tier2Messages = evidenceMessage
-    ? [...messages.slice(0, -1), evidenceMessage, messages[messages.length - 1]]
-    : messages;
-
-  let tier2: TierRunResult;
-  try {
-    tier2 = await runTier({
-      tier: "sonnet",
-      model: getAskModel(),
-      modelId: getAskPrimaryModelId(),
-      messages: tier2Messages,
-      tools: baseTools,
-      maxSteps: TIER2_MAX_STEPS,
-      generateTextImpl,
-      sessionId,
-      messageId,
-      callbacks,
-    });
-  } catch (error) {
-    // Recover anything usable from either tier before surfacing the failure.
-    const recovered = tier1 ? resolveTierCard(tier1) : null;
-    if (recovered) {
-      logger.warn("Ask cascade tier 2 failed; returning tier 1 card.", {
-        sessionId,
-        messageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return finalize(recovered, "tier1_recovery", tier1?.toolResults ?? [], "haiku");
-    }
-    throw error;
-  }
-
-  const tier2Card = resolveTierCard(tier2);
-  if (tier2Card) {
-    return finalize(
-      tier2Card,
-      tier2.card ? "submit_ask_card" : "tool_result",
-      tier2.toolResults,
-      "sonnet",
-    );
-  }
-
-  const tier1Card = tier1 ? resolveTierCard(tier1) : null;
-  if (tier1Card) {
-    return finalize(tier1Card, "tier1_recovery", tier1?.toolResults ?? [], "haiku");
-  }
-
-  logger.warn("Ask cascade produced no card; returning fallback insight.", {
+  const result = await runAskGeneration({
+    messages,
+    tools: baseTools,
+    maxSteps: ASK_MAX_STEPS,
+    generateTextImpl,
     sessionId,
     messageId,
+    callbacks,
   });
-  return finalize(fallbackInsightCard, "fallback", tier2.toolResults, "sonnet");
+
+  const toolCard = resolveRunCard(result);
+  const card = toolCard ?? salvageCardFromText(result.text);
+  if (card) {
+    const source = result.card
+      ? "submit_ask_card"
+      : toolCard
+        ? "tool_result"
+        : "model_text";
+    return finalize(card, source, result.toolResults);
+  }
+
+  logger.warn("Ask produced no card; returning fallback insight.", {
+    sessionId,
+    messageId,
+    hasImage: Boolean(image),
+  });
+  return finalize(
+    image ? imageFallbackInsightCard : fallbackInsightCard,
+    "fallback",
+    result.toolResults,
+  );
 }

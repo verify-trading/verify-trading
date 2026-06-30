@@ -7,6 +7,7 @@ import {
   DEMO_EXCHANGES,
   DEMO_SUGGESTIONS,
   type DemoExchange,
+  type HeroLiveBriefing,
 } from "./types";
 
 /**
@@ -58,7 +59,17 @@ const TIMING = {
  * frames makes pause/resume trivial (just stop advancing the index) and keeps
  * the loop perfectly deterministic between renders.
  */
-function buildFrames(): Frame[] {
+/** Merge real gold values over the scripted briefing card when available. */
+function resolveExchanges(liveBriefing: HeroLiveBriefing | null): DemoExchange[] {
+  if (!liveBriefing) return DEMO_EXCHANGES;
+  return DEMO_EXCHANGES.map((exchange) =>
+    exchange.card.type === "briefing"
+      ? { ...exchange, card: { ...exchange.card, ...liveBriefing } }
+      : exchange,
+  );
+}
+
+function buildFrames(exchanges: DemoExchange[]): Frame[] {
   const frames: Frame[] = [];
   const push = (patch: Partial<DemoState>, ms: number, base: DemoState) =>
     frames.push({ state: { ...base, ...patch }, ms });
@@ -71,7 +82,7 @@ function buildFrames(): Frame[] {
   // animates in. This keeps every card fully visible (no ever-growing scroll).
   let prev: DemoExchange | null = null;
 
-  DEMO_EXCHANGES.forEach((exchange, exchangeIndex) => {
+  exchanges.forEach((exchange, exchangeIndex) => {
     const onIntro = exchangeIndex === 0;
     const chipIndex = DEMO_SUGGESTIONS.indexOf(exchange.question);
     const carried: DemoState = {
@@ -120,19 +131,17 @@ function buildFrames(): Frame[] {
   return frames;
 }
 
-/** Representative still frame used when the visitor prefers reduced motion. */
-const STATIC_STATE: DemoState = {
-  ...EMPTY,
-  thread: [DEMO_EXCHANGES[0]],
-  showIntro: false,
-};
-
 /**
  * Drives the looping Ask demo. Pass `paused` (e.g. while the CTA modal is open
- * or the section is off-screen) to freeze the animation in place.
+ * or the section is off-screen) to freeze the animation in place. `liveBriefing`
+ * overrides the scripted gold card with real, server-fetched values.
  */
-export function useAskDemoSequence({ paused = false }: { paused?: boolean } = {}): DemoState {
-  const frames = useMemo(() => buildFrames(), []);
+export function useAskDemoSequence({
+  paused = false,
+  liveBriefing = null,
+}: { paused?: boolean; liveBriefing?: HeroLiveBriefing | null } = {}): DemoState {
+  const exchanges = useMemo(() => resolveExchanges(liveBriefing), [liveBriefing]);
+  const frames = useMemo(() => buildFrames(exchanges), [exchanges]);
   const reduced = useReducedMotion() ?? false;
   const [index, setIndex] = useState(0);
 
@@ -145,5 +154,6 @@ export function useAskDemoSequence({ paused = false }: { paused?: boolean } = {}
     return () => clearTimeout(timer);
   }, [index, paused, reduced, frames]);
 
-  return reduced ? STATIC_STATE : frames[index].state;
+  // Representative still frame for visitors who prefer reduced motion.
+  return reduced ? { ...EMPTY, thread: [exchanges[0]], showIntro: false } : frames[index].state;
 }

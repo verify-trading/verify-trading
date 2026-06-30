@@ -1,4 +1,5 @@
-import { tool, type ToolSet } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
+import { tool } from "ai";
 import { z } from "zod";
 
 import {
@@ -38,7 +39,6 @@ import {
 import { formatMarketPrice } from "@/lib/ask/market-format";
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
 import { parseSubmittedAskCardJson } from "@/lib/ask/service/card-output";
-import type { AskToolPolicy } from "@/lib/ask/service/model-routing";
 import type { AskServiceDependencies } from "@/lib/ask/service/types";
 import { generateProjectionCard, generateProjectionInputSchema } from "@/lib/ask/projections";
 import { generateGrowthPlanCard, generateGrowthPlanInputSchema } from "@/lib/ask/plans";
@@ -391,7 +391,7 @@ function buildPropFirmCard(lookup: LookupVerifiedEntityResult): BrokerCard | nul
     return null;
   }
 
-  // This card is type "broker", so the cascade always re-synthesizes the verdict
+  // This card is type "broker", so the pipeline always re-synthesizes the verdict
   // from the structured facts (score, band, Trustpilot — all in propFirmUiMeta).
   // So we pass curated text or a terse fact, never hand-written prose; the model
   // writes the natural line and keeps the numbers.
@@ -437,8 +437,9 @@ function buildGuruCard(lookup: LookupVerifiedEntityResult): GuruCard | null {
     return null;
   }
 
-  // bio_summary is the public, defensibility-checked body. Internal founder notes
-  // are never loaded into the entity, so they cannot reach the card.
+  // bio_summary is the public-facing body, gated on research completeness and a
+  // confirmed identity (no longer on a separate founder-review flag). Internal
+  // founder notes are never loaded into the entity, so they cannot reach the card.
   return {
     type: "guru",
     name: hint.name,
@@ -679,7 +680,7 @@ async function enrichPositionSizeInput(
   };
 }
 
-export function buildPipValueCard(result: ReturnType<typeof calculatePipValue>): AskCard {
+function buildPipValueCard(result: ReturnType<typeof calculatePipValue>): AskCard {
   return buildInsightCard(
     "Pip Value",
     `${result.lotSize} lot on ${result.pair} moves ${result.currency} ${result.pipValue.toFixed(2)} per pip.`,
@@ -695,7 +696,7 @@ function buildMarginCard(result: ReturnType<typeof calculateMarginRequirement>):
   );
 }
 
-export function buildRiskRewardCard(result: ReturnType<typeof calculateRiskReward>): AskCard {
+function buildRiskRewardCard(result: ReturnType<typeof calculateRiskReward>): AskCard {
   return buildInsightCard(
     "Risk Reward",
     `Risk is ${result.riskDistance}. Reward is ${result.rewardDistance}. Reward-to-risk is ${result.ratio.toFixed(2)}:1 (${result.ratio.toFixed(2)}R).`,
@@ -797,6 +798,18 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         }
       },
     }),
+    // Server-side Claude web tools: live web, no key or quota, for anything our own data doesn't cover.
+    // Basic (single-round) variants, capped at one use each — the _20260209 dynamic-filtering variants
+    // run multiple server-side code-execution rounds and pushed one entity lookup to ~35s+. One search
+    // returns in ~5-8s and is enough to answer; the cap keeps every turn fast and cheap.
+    web_search: anthropic.tools.webSearch_20250305({
+      maxUses: 1,
+      userLocation: { type: "approximate", country: "GB" },
+    }),
+    web_fetch: anthropic.tools.webFetch_20250910({
+      maxUses: 1,
+      citations: { enabled: true },
+    }),
     get_economic_calendar: tool({
       description:
         "Cached economic calendar events for scheduled macro releases. Use this for questions like economic calendar today/this week, what high-impact events are next, CPI/NFP/Fed timings, USD/GBP/EUR events, and what a release means for FX pairs or Gold. This reads the cached calendar only; do not use it for breaking-news reactions.",
@@ -875,55 +888,6 @@ export function createAskTools(dependencies: AskServiceDependencies) {
 }
 
 export type AskToolSet = ReturnType<typeof createAskTools>;
-export type AskToolsForPolicy = ToolSet;
-
-const TOOL_NAMES_BY_POLICY: Record<AskToolPolicy, readonly (keyof AskToolSet)[]> = {
-  none: [],
-  verification: ["verify_entity", "list_verified_entities", "submit_ask_card"],
-  calculator: [
-    "calculate_position_size",
-    "calculate_risk_reward",
-    "calculate_pip_value",
-    "calculate_margin_required",
-    "calculate_profit_loss",
-    "generate_projection",
-    "generate_growth_plan",
-    "submit_ask_card",
-  ],
-  full: [
-    "verify_entity",
-    "list_verified_entities",
-    "get_market_briefing",
-    "get_market_setup",
-    "search_news",
-    "get_economic_calendar",
-    "calculate_position_size",
-    "calculate_risk_reward",
-    "calculate_pip_value",
-    "calculate_margin_required",
-    "calculate_profit_loss",
-    "generate_projection",
-    "generate_growth_plan",
-    "submit_ask_card",
-  ],
-};
-
-export function createAskToolsForPolicy(
-  dependencies: AskServiceDependencies,
-  toolPolicy: AskToolPolicy,
-): AskToolsForPolicy {
-  const tools = createAskTools(dependencies);
-  if (toolPolicy === "full") {
-    return tools;
-  }
-
-  const selectedTools: ToolSet = {};
-  for (const toolName of TOOL_NAMES_BY_POLICY[toolPolicy]) {
-    selectedTools[toolName] = tools[toolName];
-  }
-
-  return selectedTools;
-}
 
 async function resolveVerificationToolResult(
   name: string,
@@ -977,35 +941,4 @@ async function resolveVerificationToolResult(
   // No confident record: hand the model the closest labelled candidates and let
   // it write the reply ("did you mean X?" or ask for the exact name).
   return coverageEvidence(normalized.fromUrl ? normalized.displayName : normalized.lookupName, normalized.fromUrl);
-}
-
-export async function resolveVerificationCard(
-  name: string,
-  dependencies: AskServiceDependencies,
-) {
-  const result = await resolveVerificationToolResult(name, dependencies);
-  if ("card" in result) {
-    return result;
-  }
-
-  if ("coverage" in result) {
-    const top = result.coverage.candidates[0];
-    return {
-      card: buildInsightCard(
-        top ? "Possible Match" : "No Record Yet",
-        top
-          ? `No exact record for ${result.coverage.queriedName}; closest on file is ${top.name} (${top.standing}).`
-          : `No reviewed record for ${result.coverage.queriedName} yet.`,
-        "Send the exact registered name and I'll check it.",
-      ),
-    };
-  }
-
-  return {
-    card: buildInsightCard(
-      "Live FCA Result",
-      `${result.fcaData.queriedName} ${result.fcaData.authorised ? "appears authorised" : "does not appear authorised"}${result.fcaData.statusText ? ` (${result.fcaData.statusText})` : ""}.`,
-      result.fcaData.note ?? "Confirm the exact firm name before relying on this result.",
-    ),
-  };
 }

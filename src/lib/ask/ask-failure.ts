@@ -14,7 +14,7 @@ const USER_MESSAGES: Record<AskFailureCode, string> = {
   unknown: "Could not get an answer right now. Please try again.",
 };
 
-function getUserMessageForAskFailureCode(code: AskFailureCode): string {
+export function getUserMessageForAskFailureCode(code: AskFailureCode): string {
   return USER_MESSAGES[code];
 }
 
@@ -55,7 +55,7 @@ function isRetryableCapacityError(error: unknown): boolean {
 }
 
 /**
- * Maps thrown errors from `generateAskResponse` (and similar) to a stable code and short server message.
+ * Maps thrown errors from the Ask pipeline to a stable code and short server message.
  */
 export function classifyAskRouteError(error: unknown): {
   code: AskFailureCode;
