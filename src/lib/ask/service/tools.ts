@@ -726,7 +726,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
   return {
     verify_entity: tool({
       description:
-        "Verify a SINGLE named broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks on a specific firm. It returns reviewed entity data plus live FCA confirmation as EVIDENCE — it is not your reply. After calling it you must still call submit_ask_card with the final card (echo the exact score and status) and 2-3 followups. Never end your turn on the raw verify_entity result.",
+        "Verify a SINGLE named broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks on a specific firm. Pass the name EXACTLY as the user wrote it — the resolver already handles misspellings, spacing, and run-together words, so never correct it, normalize it, or substitute a different/similar-looking firm name you guessed. It returns reviewed entity data plus live FCA confirmation as EVIDENCE — it is not your reply. After calling it you must still call submit_ask_card with the final card (echo the exact score and status) and 2-3 followups. Never end your turn on the raw verify_entity result.",
       inputSchema: verifyEntityInputSchema,
       execute: async ({ name }) => resolveVerificationToolResult(name, dependencies),
     }),

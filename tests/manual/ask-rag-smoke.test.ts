@@ -130,6 +130,7 @@ const QUERIES: SmokeQuery[] = [
 
 // Small 5-query spread for a quick "how does it answer" check.
 const LIVE_QUERIES: SmokeQuery[] = [
+  { q: "ceniqabouncerplaydirty", expect: "run-together name -> verify_entity verbatim -> CENIQA / Bouncerplaydirty guru card, NOT a guessed broker" },
   { q: "is fundedx good", expect: "prop firm; if not in DB, web_search fallback rather than dead-end" },
   { q: "is FTMO legit", expect: "known prop firm, payout framing" },
   { q: "whats gold doing today", expect: "live briefing card" },
