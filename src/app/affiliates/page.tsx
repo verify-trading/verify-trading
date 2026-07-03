@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     "Turn referrals into recurring revenue. Earn 30% commission every month, for every Pro member you refer to verify.trading. No caps, no expiry.",
 };
 
-const APPLY_URL = "https://verify-trading-7obzcxakf-verify-tradings-projects.vercel.app/affiliate-terms";
+const APPLY_URL = "/affiliate-terms";
 const SUPPORT_EMAIL = "affiliates@verify.trading";
 
 const surface = "rounded-xl border border-white/[0.08] bg-white/[0.02]";
