@@ -11,6 +11,8 @@ export function AcceptanceForm() {
   const [email, setEmail] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
   const [accepted, setAccepted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const continueUrl = useMemo(() => {
     const url = new URL(APPLY_URL);
@@ -29,12 +31,42 @@ export function AcceptanceForm() {
 
   const canContinue = name.trim() && email.trim() && accepted;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canContinue) {
+    if (!canContinue || isSubmitting) {
       return;
     }
-    window.location.href = continueUrl;
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/affiliates/terms-acceptance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: name,
+          email,
+          accountEmail,
+          termsVersion: "1.0",
+        }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+
+        setError(body?.error || "Could not record acceptance. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      window.location.href = continueUrl;
+    } catch {
+      setError("Could not record acceptance. Please try again.");
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -112,6 +144,12 @@ export function AcceptanceForm() {
         </span>
       </label>
 
+      {error ? (
+        <p className="mt-4 rounded-lg border border-[var(--vt-coral)]/30 bg-[var(--vt-coral)]/10 px-4 py-3 text-sm text-red-100">
+          {error}
+        </p>
+      ) : null}
+
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
         <Link
           href="/affiliates"
@@ -121,10 +159,10 @@ export function AcceptanceForm() {
         </Link>
         <button
           type="submit"
-          disabled={!canContinue}
+          disabled={!canContinue || isSubmitting}
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 px-6 text-sm font-bold text-white shadow-[0_0_30px_rgba(139,92,246,0.3)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
         >
-          Accept & Continue to Sign-up
+          {isSubmitting ? "Recording acceptance..." : "Accept & Continue to Sign-up"}
           <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
         </button>
       </div>
