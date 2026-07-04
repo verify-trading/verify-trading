@@ -19,6 +19,7 @@ const navItems = [
   { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
   { href: "/markets", label: "Markets", icon: LineChart, requiresAuth: true },
   { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: false },
+    { href: "/contact", label: "Contact", icon: Mail, requiresAuth: false },
 ] as const;
 
 const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
