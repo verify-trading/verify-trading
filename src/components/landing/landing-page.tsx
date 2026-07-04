@@ -20,6 +20,8 @@ import { SiteNav } from "@/components/site/site-nav";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { LEGAL_LINKS } from "@/lib/legal/legal-links";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { trackMetaViewContent } from "@/lib/marketing/meta-pixel";
 import { getAppName } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
@@ -103,11 +105,13 @@ function StoreBadges() {
       icon: <AppleMark className="size-6" />,
       line1: "Download on the",
       line2: "App Store",
+      store: "apple",
     },
     {
       icon: <GooglePlayMark className="size-5" />,
       line1: "GET IT ON",
       line2: "Google Play",
+      store: "google_play",
     },
   ];
   return (
@@ -117,6 +121,12 @@ function StoreBadges() {
           key={b.line2}
           href="/signup"
           prefetch={false}
+          onClick={() =>
+            trackAnalyticsEvent(ANALYTICS_EVENTS.appStoreClicked, {
+              location: "hero",
+              store: b.store,
+            })
+          }
           className="inline-flex items-center gap-2.5 rounded-xl border border-white/25 bg-black px-4 py-2.5 text-white transition hover:border-white/45 hover:bg-[#0c0c0c]"
         >
           {b.icon}
@@ -429,12 +439,24 @@ function ClosingSection() {
             <Link
               href="/ask"
               prefetch={false}
+              onClick={() =>
+                trackAnalyticsEvent(ANALYTICS_EVENTS.openAskClicked, {
+                  location: "homepage_closing_cta",
+                  label: "Check a name",
+                })
+              }
               className="inline-flex items-center justify-center rounded-full bg-white px-7 py-3 text-sm font-semibold text-[#0a0d2e] transition hover:bg-white/90"
             >
               Check a name
             </Link>
             <Link
               href="/methodology"
+              onClick={() =>
+                trackAnalyticsEvent(ANALYTICS_EVENTS.guideClicked, {
+                  location: "homepage_closing_cta",
+                  label: "See the methodology",
+                })
+              }
               className="inline-flex items-center justify-center rounded-full border border-white/30 px-7 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
             >
               See the methodology
