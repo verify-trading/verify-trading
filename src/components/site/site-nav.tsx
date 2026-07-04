@@ -7,6 +7,8 @@ import { BookOpen, LineChart, Mail, Menu, MessageSquare } from "lucide-react";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { Button } from "@/components/ui/button";
+import { trackAnalyticsEvent } from "@/lib/analytics/client";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { hidesAuthChrome } from "@/lib/auth/auth-paths";
 import { Logo } from "@/components/site/logo";
 import { Sheet } from "@/components/ui/sheet";
@@ -42,6 +44,23 @@ function siteNavLinkClass(active: boolean) {
       ? "bg-white/10 text-white"
       : "text-white/45 hover:bg-white/[0.06] hover:text-white",
   ].join(" ");
+}
+
+function trackNavItemClick(label: string) {
+  if (label === "Ask") {
+    trackAnalyticsEvent(ANALYTICS_EVENTS.openAskClicked, {
+      location: "site_nav",
+      label,
+    });
+    return;
+  }
+
+  if (label === "Guide") {
+    trackAnalyticsEvent(ANALYTICS_EVENTS.guideClicked, {
+      location: "site_nav",
+      label,
+    });
+  }
 }
 
 export function SiteNav() {
@@ -112,6 +131,7 @@ export function SiteNav() {
                       href={item.href}
                       prefetch={false}
                       className={siteNavLinkClass(active)}
+                      onClick={() => trackNavItemClick(item.label)}
                     >
                       {item.label}
                     </Link>
@@ -160,7 +180,10 @@ export function SiteNav() {
                   href={item.href}
                   prefetch={false}
                   className={sheetLinkClass(active)}
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => {
+                    trackNavItemClick(item.label);
+                    setMobileMenuOpen(false);
+                  }}
                 >
                   <Icon
                     className="size-5 shrink-0 text-[var(--vt-muted)]"
