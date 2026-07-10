@@ -20,7 +20,6 @@ import {
 import { readUserDisplayName } from "@/lib/auth/read-user-display-name";
 import { getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { ensureStripeCustomerForUser } from "@/lib/billing/repository";
-import { maybeSendSignupWelcomeEmail } from "@/lib/email/maybe-send-signup-welcome";
 import { logger } from "@/lib/observability/logger";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -168,23 +167,6 @@ export async function GET(request: Request) {
 
   if (isSignupFlow && user?.id) {
     setRecentOauthSignupCookie(response, user.id);
-  }
-
-  if (user?.id) {
-    await maybeSendSignupWelcomeEmail({
-      userId: user.id,
-      email: user.email,
-      displayName,
-      oauthFlow,
-      createdAt: user.created_at,
-      emailConfirmedAt: user.email_confirmed_at,
-      appOrigin: origin,
-    }).catch((sendError) => {
-      logger.warn("Failed to queue signup welcome email from auth callback.", {
-        userId: user.id,
-        error: sendError instanceof Error ? sendError.message : String(sendError),
-      });
-    });
   }
 
   return response;

@@ -1,8 +1,6 @@
-import type { OAuthFlow } from "@/lib/auth/oauth-flow";
 import { isEmailConfigured } from "@/lib/email/config";
 import { logEmailError } from "@/lib/email/log-email-error";
 import { sendSignupWelcomeEmail } from "@/lib/email/send-signup-welcome";
-import { isEligibleForSignupWelcomeEmail } from "@/lib/email/signup-eligibility";
 import { subscribeSignupToKit } from "@/lib/marketing/kit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -10,17 +8,7 @@ type MaybeSendSignupWelcomeEmailInput = {
   userId: string;
   email?: string | null;
   displayName?: string | null;
-  oauthFlow?: OAuthFlow | null;
-  createdAt?: string | null;
-  emailConfirmedAt?: string | null;
   appOrigin: string;
-  /**
-   * Set by the email-confirmed webhook (`/api/hooks/email-confirmed`). The DB
-   * event itself proves the address was just confirmed, so we skip the
-   * 10-minute recency heuristic that the browser /auth/callback path relies on.
-   * The idempotent `signup_welcome_email_sent_at` claim still prevents doubles.
-   */
-  trustedConfirmation?: boolean;
 };
 
 type ProfileWelcomeRow = {
@@ -32,25 +20,10 @@ export async function maybeSendSignupWelcomeEmail({
   userId,
   email,
   displayName,
-  oauthFlow,
-  createdAt,
-  emailConfirmedAt,
   appOrigin,
-  trustedConfirmation = false,
 }: MaybeSendSignupWelcomeEmailInput): Promise<void> {
   const normalizedEmail = email?.trim();
   if (!normalizedEmail) {
-    return;
-  }
-
-  if (
-    !trustedConfirmation &&
-    !isEligibleForSignupWelcomeEmail({
-      oauthFlow,
-      createdAt,
-      emailConfirmedAt,
-    })
-  ) {
     return;
   }
 
