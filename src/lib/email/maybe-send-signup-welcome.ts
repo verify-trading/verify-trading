@@ -14,6 +14,13 @@ type MaybeSendSignupWelcomeEmailInput = {
   createdAt?: string | null;
   emailConfirmedAt?: string | null;
   appOrigin: string;
+  /**
+   * Set by the email-confirmed webhook (`/api/hooks/email-confirmed`). The DB
+   * event itself proves the address was just confirmed, so we skip the
+   * 10-minute recency heuristic that the browser /auth/callback path relies on.
+   * The idempotent `signup_welcome_email_sent_at` claim still prevents doubles.
+   */
+  trustedConfirmation?: boolean;
 };
 
 type ProfileWelcomeRow = {
@@ -29,6 +36,7 @@ export async function maybeSendSignupWelcomeEmail({
   createdAt,
   emailConfirmedAt,
   appOrigin,
+  trustedConfirmation = false,
 }: MaybeSendSignupWelcomeEmailInput): Promise<void> {
   const normalizedEmail = email?.trim();
   if (!normalizedEmail) {
@@ -36,6 +44,7 @@ export async function maybeSendSignupWelcomeEmail({
   }
 
   if (
+    !trustedConfirmation &&
     !isEligibleForSignupWelcomeEmail({
       oauthFlow,
       createdAt,
