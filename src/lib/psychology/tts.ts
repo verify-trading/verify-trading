@@ -5,10 +5,16 @@
 
 const ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech";
 
-// "Sarah" — mature, reassuring, confident. A calm coach voice.
-const COACH_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
-// 32 languages, low latency — good for a back-and-forth call.
-const COACH_MODEL_ID = "eleven_turbo_v2_5";
+// "Eric" — smooth, trustworthy, middle-aged. ElevenLabs tags him `conversational`,
+// which is the point: the previous voice ("Sarah") is tagged `entertainment_tv`, an
+// announcer read being asked to hold a phone conversation. That mismatch, not the model,
+// was most of why the coach sounded synthetic.
+const COACH_VOICE_ID = "cjVigY5qzO86Huf0OWal";
+// The most lifelike model ElevenLabs still endorses for real-time agents (v3 is excluded
+// for first-token latency; Flash trades emotional depth for speed we do not need).
+// Measured time-to-first-audio: flash 0.92s, turbo 1.07s, multilingual 1.83s — all well
+// inside the client's 6s fallback window, so we can afford the most human of the three.
+const COACH_MODEL_ID = "eleven_multilingual_v2";
 
 export const TTS_MAX_CHARS = 800;
 
@@ -28,7 +34,9 @@ export async function synthesizeCoachSpeech(text: string, signal?: AbortSignal):
     body: JSON.stringify({
       text: text.slice(0, TTS_MAX_CHARS),
       model_id: COACH_MODEL_ID,
-      voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.15, use_speaker_boost: true },
+      // Lower stability = more pitch/pace variation, which is what reads as human rather
+      // than read-aloud; style adds delivery colour. Pushed too far either becomes unstable.
+      voice_settings: { stability: 0.35, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true },
     }),
     signal,
   });
