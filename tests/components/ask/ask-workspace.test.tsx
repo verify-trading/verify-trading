@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ImgHTMLAttributes, ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "@ai-sdk/react";
@@ -299,10 +299,13 @@ describe("AskWorkspace", () => {
     });
   });
 
-  it("lifts the mobile composer above the Android visual keyboard inset", async () => {
+  it("lifts the mobile composer above the visual keyboard inset while a field is focused", async () => {
+    // An iPhone UA on purpose. The lift used to be gated to Android; iOS Safari ignores
+    // interactive-widget=resizes-content, so without lifting here the composer sits behind
+    // the keyboard and iPhone users see blank space where the input should be.
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
-      value: "Mozilla/5.0 (Linux; Android 14) Chrome/125 Mobile Safari/537.36",
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari/604.1",
     });
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -326,14 +329,35 @@ describe("AskWorkspace", () => {
 
     renderWithQueryClient(<AskWorkspace />);
 
-    await waitFor(() => {
-      const liftedComposer = screen
+    const liftedComposer = () =>
+      screen
         .getAllByTestId("ask-composer-strip")
         .find((element) => element.style.transform.includes("-280px"));
-      expect(liftedComposer).toHaveStyle({
+
+    // Geometry alone must not be enough to lift. iOS 26 keeps reporting a keyboard-sized
+    // inset after the keyboard is dismissed, so focus is what proves one is actually up.
+    expect(liftedComposer()).toBeUndefined();
+
+    const textarea = screen.getAllByLabelText("Ask message")[0];
+    act(() => {
+      textarea.focus();
+      textarea.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+
+    await waitFor(() => {
+      expect(liftedComposer()).toHaveStyle({
         transform: "translate3d(0, -280px, 0)",
       });
     });
+
+    // Blur while the viewport metrics stay stale — exactly the iOS 26 bug. The lift has to
+    // drop anyway, or the composer strands itself above a keyboard that has already gone,
+    // reproducing the very blank-space symptom this test exists to prevent.
+    act(() => {
+      textarea.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+
+    await waitFor(() => expect(liftedComposer()).toBeUndefined());
   });
 
   it("shows the restoring state immediately when opened with a session from the page", () => {
