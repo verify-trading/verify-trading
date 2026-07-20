@@ -225,9 +225,6 @@ function useAskWorkspaceView() {
     getMobileLayoutSnapshot,
     () => false,
   );
-  const [isAndroidViewport] = useState(
-    () => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent),
-  );
   const [composerStripHeight, setComposerStripHeight] = useState(0);
   const [prefillFocusSignal, setPrefillFocusSignal] = useState(0);
   const handledPrefillRef = useRef<string | null>(null);
@@ -302,8 +299,17 @@ function useAskWorkspaceView() {
   } = useAskStore();
 
   const keyboardInsetPx = useVisualViewportKeyboardInset(isMobileLayout);
-  const composerKeyboardLiftPx =
-    isMobileLayout && isAndroidViewport ? keyboardInsetPx : 0;
+  // Lift by whatever the visual viewport says is obscured, on any mobile platform.
+  // This used to be gated to Android because layout.tsx asks for
+  // interactive-widget=resizes-content, which shrinks the layout viewport so a
+  // fixed-bottom composer clears the keyboard on its own. But interactive-widget is a
+  // Chromium feature — iOS Safari ignores it and keeps resizes-visual, so the layout
+  // viewport stays full height, the composer sits behind the keyboard, and iPhone users
+  // see blank space where the input should be.
+  // Gating on the measured inset instead of the user agent is self-correcting: where
+  // resizes-content does apply, the inset collapses to ~0 and this contributes nothing,
+  // so there is no double-compensation.
+  const composerKeyboardLiftPx = isMobileLayout ? keyboardInsetPx : 0;
 
   useLayoutEffect(() => {
     const el = composerStripRef.current;
