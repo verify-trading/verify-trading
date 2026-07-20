@@ -14,11 +14,12 @@ import {
   OAUTH_FLOW_COOKIE_NAME,
   parseOAuthFlow,
   readCookie,
+  RECENT_OAUTH_SIGNUP_COOKIE_MAX_AGE_SECONDS,
+  RECENT_OAUTH_SIGNUP_COOKIE_NAME,
 } from "@/lib/auth/oauth-flow";
 import { readUserDisplayName } from "@/lib/auth/read-user-display-name";
 import { getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { ensureStripeCustomerForUser } from "@/lib/billing/repository";
-import { maybeSendSignupWelcomeEmail } from "@/lib/email/maybe-send-signup-welcome";
 import { logger } from "@/lib/observability/logger";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -40,6 +41,14 @@ function clearAuthRedirectCookie(response: NextResponse) {
   response.cookies.set(AUTH_REDIRECT_COOKIE_NAME, "", {
     ...AUTH_COOKIE_OPTIONS,
     maxAge: 0,
+  });
+}
+
+function setRecentOauthSignupCookie(response: NextResponse, userId: string) {
+  response.cookies.set(RECENT_OAUTH_SIGNUP_COOKIE_NAME, userId, {
+    ...AUTH_COOKIE_OPTIONS,
+    httpOnly: true,
+    maxAge: RECENT_OAUTH_SIGNUP_COOKIE_MAX_AGE_SECONDS,
   });
 }
 
@@ -156,20 +165,8 @@ export async function GET(request: Request) {
   clearOAuthFlowCookie(response);
   clearAuthRedirectCookie(response);
 
-  if (user?.id) {
-    await maybeSendSignupWelcomeEmail({
-      userId: user.id,
-      email: user.email,
-      displayName,
-      createdAt: user.created_at,
-      emailConfirmedAt: user.email_confirmed_at,
-      appOrigin: origin,
-    }).catch((sendError) => {
-      logger.warn("Failed to queue signup welcome email from auth callback.", {
-        userId: user.id,
-        error: sendError instanceof Error ? sendError.message : String(sendError),
-      });
-    });
+  if (isSignupFlow && user?.id) {
+    setRecentOauthSignupCookie(response, user.id);
   }
 
   return response;

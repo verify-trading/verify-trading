@@ -5,8 +5,10 @@ export type OAuthFlow = "login_only" | "signup";
 export const OAUTH_FLOW_COOKIE_NAME = "vt_oauth_flow";
 /** Short-lived post-login path if `next` is missing from `/auth/callback` query (some OAuth flows strip it). */
 export const AUTH_REDIRECT_COOKIE_NAME = "vt_auth_redirect";
+export const RECENT_OAUTH_SIGNUP_COOKIE_NAME = "vt_recent_oauth_signup";
 const OAUTH_FLOW_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 const AUTH_REDIRECT_COOKIE_MAX_AGE_SECONDS = 10 * 60;
+export const RECENT_OAUTH_SIGNUP_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 
 /**
  * Persists a safe in-app path before OAuth so `/auth/callback` can redirect even when `next`

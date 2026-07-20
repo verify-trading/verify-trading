@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/affiliates" },
 };
 
-const APPLY_URL = "https://verify-trading.getrewardful.com/signup";
+const APPLY_URL = "/affiliate-terms";
 const SUPPORT_EMAIL = "affiliates@verify.trading";
 
 type IconTheme = "blue" | "amber" | "coral" | "purple" | "green" | "cyan";

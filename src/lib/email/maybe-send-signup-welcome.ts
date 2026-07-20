@@ -1,7 +1,6 @@
 import { isEmailConfigured } from "@/lib/email/config";
 import { logEmailError } from "@/lib/email/log-email-error";
 import { sendSignupWelcomeEmail } from "@/lib/email/send-signup-welcome";
-import { isEligibleForSignupWelcomeEmail } from "@/lib/email/signup-eligibility";
 import { subscribeSignupToKit } from "@/lib/marketing/kit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -9,16 +8,7 @@ type MaybeSendSignupWelcomeEmailInput = {
   userId: string;
   email?: string | null;
   displayName?: string | null;
-  createdAt?: string | null;
-  emailConfirmedAt?: string | null;
   appOrigin: string;
-  /**
-   * Set by the email-confirmed webhook (`/api/hooks/email-confirmed`). The DB
-   * event itself proves the address was just confirmed, so we skip the
-   * 10-minute recency heuristic that the browser /auth/callback path relies on.
-   * The idempotent `signup_welcome_email_sent_at` claim still prevents doubles.
-   */
-  trustedConfirmation?: boolean;
 };
 
 type ProfileWelcomeRow = {
@@ -30,23 +20,10 @@ export async function maybeSendSignupWelcomeEmail({
   userId,
   email,
   displayName,
-  createdAt,
-  emailConfirmedAt,
   appOrigin,
-  trustedConfirmation = false,
 }: MaybeSendSignupWelcomeEmailInput): Promise<void> {
   const normalizedEmail = email?.trim();
   if (!normalizedEmail) {
-    return;
-  }
-
-  if (
-    !trustedConfirmation &&
-    !isEligibleForSignupWelcomeEmail({
-      createdAt,
-      emailConfirmedAt,
-    })
-  ) {
     return;
   }
 
@@ -67,13 +44,6 @@ export async function maybeSendSignupWelcomeEmail({
   }
 
   const profile = data as ProfileWelcomeRow | null;
-
-  // Gate Kit on the same once-per-user marker as the email — subscribing above this
-  // guard re-hit Kit on every eligible call.
-  if (profile?.signup_welcome_email_sent_at) {
-    return;
-  }
-
   await subscribeSignupToKit({
     email: normalizedEmail,
     displayName: displayName ?? profile?.display_name ?? null,
@@ -81,6 +51,10 @@ export async function maybeSendSignupWelcomeEmail({
   }).catch((kitError) => {
     logEmailError("Failed to subscribe signup to Kit.", { userId }, kitError);
   });
+
+  if (profile?.signup_welcome_email_sent_at) {
+    return;
+  }
 
   if (!isEmailConfigured()) {
     return;

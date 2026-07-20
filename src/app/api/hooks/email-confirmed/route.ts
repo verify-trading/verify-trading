@@ -10,21 +10,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Supabase Database Webhook target (see supabase/migration_22_welcome_email_on_confirm.sql).
+ * Single source of the signup welcome email. Driven by two Supabase triggers on
+ * auth.users (see supabase/migration_22 and migration_23):
+ *   - UPDATE, email_confirmed_at NULL -> NOT NULL: email signups confirming.
+ *   - INSERT, email_confirmed_at already set: Google/OAuth and auto-confirmed users.
  *
- * Fires the moment `auth.users.email_confirmed_at` transitions NULL -> NOT NULL.
- * This is the reliable, event-driven trigger for the signup welcome email: it
- * does NOT depend on the browser completing the /auth/callback PKCE exchange,
- * which silently dropped ~8% of welcomes (confirmation opened on a different
- * device, expired/reused link, etc.).
+ * Both fire pg_net (async, post-commit) at this endpoint, so a welcome no longer
+ * depends on the browser completing the /auth/callback exchange — the leg that
+ * silently dropped ~8% of welcomes (cross-device confirmation, expired link, ...).
  *
- * Google / OAuth users are confirmed at row INSERT (no NULL -> NOT NULL update),
- * so the trigger does not fire for them; they keep the /auth/callback path.
- *
- * Auth: shared secret in the `Authorization: Bearer` header, mirroring the
- * markets cron. The send itself remains idempotent via the
- * `profiles.signup_welcome_email_sent_at` claim, so duplicate webhook deliveries
- * (pg_net can retry) never send twice.
+ * Auth: shared secret in the `Authorization: Bearer` header. The send is
+ * idempotent via the `profiles.signup_welcome_email_sent_at` claim, so duplicate
+ * or retried deliveries (either trigger, or pg_net retries) never send twice.
  */
 export async function POST(request: Request) {
   const secret = process.env.WELCOME_EMAIL_HOOK_SECRET;
@@ -82,10 +79,7 @@ export async function POST(request: Request) {
     userId: user.id,
     email: user.email,
     displayName: readUserDisplayName(user.user_metadata),
-    createdAt: user.created_at,
-    emailConfirmedAt: user.email_confirmed_at,
     appOrigin,
-    trustedConfirmation: true,
   }).catch((sendError) => {
     logger.warn("email-confirmed hook: welcome send failed", {
       userId,

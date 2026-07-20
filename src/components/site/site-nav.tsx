@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useState, useSyncExternalStore } from "react";
-import { BookOpen, LineChart, Menu, MessageSquare } from "lucide-react";
+import { BookOpen, LineChart, Mail, Menu, MessageSquare } from "lucide-react";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,10 @@ const navItems = [
   { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
   { href: "/markets", label: "Markets", icon: LineChart, requiresAuth: true },
   { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: false },
+  { href: "/contact", label: "Contact", icon: Mail, requiresAuth: false },
 ] as const;
 
+/** Mobile header height for fixed overlays (single row + safe area). */
 const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
 
 function subscribeToClient() {
@@ -44,16 +46,19 @@ function siteNavLinkClass(active: boolean) {
   ].join(" ");
 }
 
-function trackNavClick(label: string) {
-  if (label === "Guide") {
-    trackAnalyticsEvent(ANALYTICS_EVENTS.guideClicked, {
-      location: "site_nav",
-    });
-  }
-
+function trackNavItemClick(label: string) {
   if (label === "Ask") {
     trackAnalyticsEvent(ANALYTICS_EVENTS.openAskClicked, {
       location: "site_nav",
+      label,
+    });
+    return;
+  }
+
+  if (label === "Guide") {
+    trackAnalyticsEvent(ANALYTICS_EVENTS.guideClicked, {
+      location: "site_nav",
+      label,
     });
   }
 }
@@ -84,6 +89,7 @@ export function SiteNav() {
     : navItems.filter((item) => !item.requiresAuth || (ready && isSignedIn));
 
   const showMenu = visibleNavItems.length > 0;
+  /** Avoid hydration mismatch: SSR and first paint match (end-aligned); after mount, centre when signed in. */
   const desktopNavCentered = hasMounted && ready && isSignedIn;
 
   return (
@@ -103,6 +109,7 @@ export function SiteNav() {
             </span>
           </Link>
 
+          {/* Desktop: centred when signed in; end-aligned when signed out (no centre links) */}
           <div
             className={cn(
               "hidden min-w-0 flex-1 overflow-x-auto hide-scrollbar lg:flex lg:items-center lg:px-4",
@@ -124,7 +131,7 @@ export function SiteNav() {
                       href={item.href}
                       prefetch={false}
                       className={siteNavLinkClass(active)}
-                      onClick={() => trackNavClick(item.label)}
+                      onClick={() => trackNavItemClick(item.label)}
                     >
                       {item.label}
                     </Link>
@@ -174,7 +181,7 @@ export function SiteNav() {
                   prefetch={false}
                   className={sheetLinkClass(active)}
                   onClick={() => {
-                    trackNavClick(item.label);
+                    trackNavItemClick(item.label);
                     setMobileMenuOpen(false);
                   }}
                 >
