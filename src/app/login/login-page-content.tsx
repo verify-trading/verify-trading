@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { CaptchaWidget } from "@/components/auth/captcha-widget";
+import { useCaptcha } from "@/components/auth/use-captcha";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { beginOAuthFlow, setAuthRedirectCookie } from "@/lib/auth/oauth-flow";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
@@ -28,8 +29,6 @@ import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 function readSearchParam(params: ReturnType<typeof useSearchParams>, key: string): string | null {
   return params.get(key);
@@ -49,9 +48,7 @@ function LoginPageContent() {
   const resetParam = readSearchParam(searchParams, "reset");
 
   const [googleBusy, setGoogleBusy] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaKey, setCaptchaKey] = useState(0);
-  const captchaRequired = Boolean(TURNSTILE_SITE_KEY);
+  const captcha = useCaptcha();
 
   const defaultError = useMemo(() => {
     if (!paramError) {
@@ -84,7 +81,7 @@ function LoginPageContent() {
       return;
     }
 
-    if (captchaRequired && !captchaToken) {
+    if (captcha.blocked) {
       setError("root", { message: "Please complete the security check before signing in." });
       return;
     }
@@ -93,14 +90,13 @@ function LoginPageContent() {
       email: values.email.trim(),
       password: values.password,
       options: {
-        captchaToken: captchaToken ?? undefined,
+        captchaToken: captcha.token,
       },
     });
 
     if (signInError) {
       setError("root", { message: signInError.message });
-      setCaptchaToken(null);
-      setCaptchaKey((key) => key + 1);
+      captcha.reset();
       return;
     }
 
@@ -119,13 +115,15 @@ function LoginPageContent() {
         setGoogleBusy(false);
         return;
       }
-      beginOAuthFlow("signup");
+      // `login_only`, not `signup` — otherwise every Google sign-in reports itself as a
+      // completed signup to analytics. Google may still create a first-time account here.
+      beginOAuthFlow("login_only");
       setAuthRedirectCookie(next);
       const origin = window.location.origin;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}&oauth=signup`,
+          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}&oauth=login_only`,
         },
       });
 
@@ -201,19 +199,13 @@ function LoginPageContent() {
             </Link>
           </div>
         </div>
-        <CaptchaWidget
-          siteKey={TURNSTILE_SITE_KEY ?? ""}
-          captchaKey={captchaKey}
-          onSuccess={setCaptchaToken}
-          onExpire={() => setCaptchaToken(null)}
-          onError={() => setCaptchaToken(null)}
-        />
+        <CaptchaWidget {...captcha.widgetProps} />
         <Button
           type="submit"
           variant="default"
           size="pill"
           className="w-full"
-          disabled={googleBusy || isSubmitting || (captchaRequired && !captchaToken)}
+          disabled={googleBusy || isSubmitting || captcha.blocked}
         >
           {isSubmitting ? "Signing in…" : "Sign in with email"}
         </Button>

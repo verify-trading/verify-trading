@@ -96,19 +96,22 @@ export function buildCategoryCards(
   });
 }
 
+// Explicit crypto symbol set, checked before the forex branch — BTC/USD etc. also match
+// "*/USD" and would otherwise render at 5dp with no separators (e.g. "109482.51000").
+const CRYPTO_SYMBOLS = new Set(CATEGORY_CONFIG.crypto.symbols);
+
 export function formatPrice(symbol: string, price: number): string {
   if (!Number.isFinite(price) || price <= 0) return "—";
 
+  // Crypto vs USD: 2 decimals (with separators) for dollar-and-up prices, 4 for sub-dollar
+  // coins like XRP. Checked first so large crypto never falls into the 5dp forex branch.
+  if (CRYPTO_SYMBOLS.has(symbol)) {
+    const digits = price >= 1 ? 2 : 4;
+    return price.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  }
   // Forex: 5 decimals
   if (symbol.includes("/USD") && !symbol.startsWith("X")) {
     return price.toFixed(5);
-  }
-  // Crypto: 2 decimals for large, 4 for small
-  if (["BTC/USD", "ETH/USD", "BNB/USD"].includes(symbol)) {
-    return price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  if (["SOL/USD", "XRP/USD"].includes(symbol)) {
-    return price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   // Commodities: 2 decimals
   if (symbol.startsWith("X") || symbol.includes("WTI") || symbol.includes("XBR")) {

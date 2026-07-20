@@ -1,4 +1,9 @@
 import { computeBrokerTrustScore, type BtsBand } from "@/lib/ask/bts";
+import {
+  httpUrlSchema,
+  type CardConfirmedFact,
+  type EntityCardFacts,
+} from "@/lib/ask/contracts";
 import { computePropFirmScore, type PropFirmBand } from "@/lib/ask/prop-firms";
 import { resolveGuruTier, type GuruTier } from "@/lib/ask/gurus";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -6,10 +11,50 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 export type VerifiedEntityType = "broker" | "guru" | "propfirm";
 export type VerifiedEntityStatus = "legitimate" | "warning" | "avoid";
 
+export type { CardConfirmedFact, EntityCardFacts };
+
+/** Marks a record retained on discovery but never scored. Single source of truth. */
+export const DEVELOPING_RESEARCH_STATUS = "DEVELOPING — MONITOR";
+
 export interface TrustpilotSnapshot {
   rating: number;
   count: number | null;
   date: string | null;
+}
+
+export interface DevelopingPropFirmInput {
+  name: string;
+  confirmed: CardConfirmedFact[];
+  unconfirmed?: string[];
+  reverifyTrigger?: string | null;
+  trustpilot?: { rating: number; count: number | null; date?: string | null } | null;
+}
+
+// Reviews can surface leads quickly, but their allegations are not verified
+// facts. They remain useful on a developing record, under the explicit
+// unconfirmed section rather than the confirmed card section.
+const SECONDHAND_REVIEW_HOSTS = new Set([
+  "trustpilot.com",
+  "reddit.com",
+  "forexpeacearmy.com",
+  "fundedtrading.com",
+  "myfxbook.com",
+]);
+
+function isSecondhandReviewSource(url: string | null | undefined) {
+  if (!url) return false;
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return true;
+  }
+  for (const domain of SECONDHAND_REVIEW_HOSTS) {
+    if (hostname === domain || hostname.endsWith(`.${domain}`)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export interface VerifiedEntity {
@@ -44,6 +89,10 @@ export interface VerifiedEntity {
   propBand?: PropFirmBand | null;
   closed?: boolean;
   trustpilot?: TrustpilotSnapshot | null;
+  /** Raw research status, e.g. "DEVELOPING — MONITOR". Prop firms only. */
+  researchStatus?: string | null;
+  /** Curated structured facts for developing firms; null when not curated. */
+  cardFacts?: EntityCardFacts | null;
   // Guru (entity_type = 'guru') resolved tier + gated publish flag.
   guruTier?: GuruTier;
   guruPublishable?: boolean;
@@ -76,6 +125,8 @@ export interface PropFirmCardHint {
   closed: boolean;
   trustpilot: TrustpilotSnapshot | null;
   founderNote: string | null;
+  researchStatus: string | null;
+  cardFacts: EntityCardFacts | null;
 }
 
 export interface GuruCardHint {
@@ -97,17 +148,25 @@ export interface LookupVerifiedEntityResult {
 
 let verifiedEntitiesCache: Promise<VerifiedEntity[]> | undefined;
 let tokenIndexCache: Promise<Map<string, VerifiedEntity[]>> | undefined;
+let verifiedEntitiesLoadedAt = 0;
+let verifiedEntitiesReloading = false;
+
+/**
+ * Dashboard edits must reach warm serverless instances without a redeploy, so
+ * the in-memory entity list expires and reloads after this window.
+ */
+const VERIFIED_ENTITIES_TTL_MS = 60_000;
 
 /** Display score: "Provisional" until verified, otherwise the trust score to 1dp. */
 function formatTrustScore(provisional: boolean | undefined, trustScore: number) {
   return provisional ? "Provisional" : trustScore.toFixed(1);
 }
 
-function normalizeEntityText(value: string) {
+export function normalizeEntityText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
-function collapseEntityText(value: string) {
+export function collapseEntityText(value: string) {
   return normalizeEntityText(value).replace(/\s+/g, "");
 }
 
@@ -186,13 +245,71 @@ function toStringOrNull(value: unknown): string | null {
   return (value as string | null) ?? null;
 }
 
+function toTrimmedStringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/** A source link only when it is a real http(s) URL; a bad one drops to null. */
+function sanitizeHttpUrl(value: unknown): string | null {
+  const trimmed = toTrimmedStringOrNull(value);
+  return trimmed && httpUrlSchema.safeParse(trimmed).success ? trimmed : null;
+}
+
+/**
+ * Defensive parse of the card_facts jsonb column. Malformed entries are dropped
+ * per-field rather than throwing — one bad sourceUrl drops only that link, never
+ * the fact or the whole card — and an empty result maps to null so callers can
+ * treat "no curated facts" uniformly.
+ */
+function parseCardFacts(value: unknown): EntityCardFacts | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+
+  const confirmed: CardConfirmedFact[] = Array.isArray(raw.confirmed)
+    ? raw.confirmed.flatMap((item) => {
+        if (!item || typeof item !== "object") {
+          return [];
+        }
+        const fact = item as Record<string, unknown>;
+        const text = toTrimmedStringOrNull(fact.text);
+        if (!text) {
+          return [];
+        }
+        return [
+          {
+            text,
+            sourceLabel: toTrimmedStringOrNull(fact.sourceLabel),
+            sourceUrl: sanitizeHttpUrl(fact.sourceUrl),
+          },
+        ];
+      })
+    : [];
+
+  const unconfirmed: string[] = Array.isArray(raw.unconfirmed)
+    ? raw.unconfirmed.flatMap((item) => {
+        const text = toTrimmedStringOrNull(item);
+        return text ? [text] : [];
+      })
+    : [];
+
+  const footer = toTrimmedStringOrNull(raw.footer);
+
+  if (confirmed.length === 0 && unconfirmed.length === 0 && !footer) {
+    return null;
+  }
+
+  return { confirmed, unconfirmed, footer };
+}
+
 const ENTITY_COLUMNS =
   "slug, name, entity_type, status, fca_registered, fca_reference, fca_warning, trust_score, " +
   "notes, source, aliases, regulators_listed, leverage, final_tier, final_status, " +
   "founder_verified, founder_notes, verification_method, firm_status, " +
   "trustpilot_rating, trustpilot_count, trustpilot_date, founder_override_score, " +
   "guru_tier, founder_tier_override, regulator_flag_source, " +
-  "verified_track_record, research_status, identity_confirmed, bio_summary";
+  "verified_track_record, research_status, identity_confirmed, bio_summary, card_facts";
 
 function mapEntityRow(row: Record<string, unknown>): VerifiedEntity {
   const type = row.entity_type as VerifiedEntityType;
@@ -222,14 +339,24 @@ function mapEntityRow(row: Record<string, unknown>): VerifiedEntity {
       founderOverrideScore: toNumberOrNull(row.founder_override_score),
     });
     const rating = toNumberOrNull(row.trustpilot_rating);
+    const cardFacts = parseCardFacts(row.card_facts);
+    // A developing record's note is derived from its confirmed card facts (one
+    // source), so a curator editing card_facts can never leave a stale founder
+    // note that contradicts the rendered card. Scored rows keep their column.
+    const founderNotes =
+      cardFacts && cardFacts.confirmed.length > 0
+        ? cardFacts.confirmed.map((fact) => fact.text).join(" ")
+        : toStringOrNull(row.founder_notes);
     return {
       ...base,
       status: propStatusFromBand(prop.band),
       trustScore: prop.score ?? 0,
-      founderNotes: toStringOrNull(row.founder_notes),
+      founderNotes,
       notRated: prop.notRated,
       propBand: prop.band,
       closed: prop.closed,
+      researchStatus: toTrimmedStringOrNull(row.research_status),
+      cardFacts,
       trustpilot:
         rating === null
           ? null
@@ -316,11 +443,119 @@ async function loadVerifiedEntitiesFromSupabase(): Promise<VerifiedEntity[]> {
 export function clearVerifiedEntitiesCache() {
   verifiedEntitiesCache = undefined;
   tokenIndexCache = undefined;
+  verifiedEntitiesLoadedAt = 0;
+  verifiedEntitiesReloading = false;
+}
+
+/**
+ * Fast-path persistence for a previously unknown prop firm discovered through
+ * live web research. It deliberately creates a developing, unscored record:
+ * discovery is enough to retain cited facts, never enough to award a score.
+ */
+export async function upsertDevelopingPropFirm(input: DevelopingPropFirmInput) {
+  const client = getSupabaseAdminClient();
+  if (!client) {
+    return { saved: false, reason: "Database is not configured." } as const;
+  }
+
+  const name = input.name.trim();
+  const slug = collapseEntityText(name);
+  if (!name || !slug || input.confirmed.length === 0) {
+    return { saved: false, reason: "A firm name and at least one cited fact are required." } as const;
+  }
+
+  // Never clobber a human-scored or otherwise curated record. Discovery may only
+  // create a fresh developing row or refresh an existing developing one; a scored
+  // row (trust_score set) or any non-developing record is left untouched. This
+  // invariant lives here, not in the prompt, so a mis-ordered tool call or a slug
+  // collision can't silently null a trust score or overwrite curated card_facts.
+  const { data: existing, error: readError } = await client
+    .from("verified_entities")
+    .select("trust_score, research_status")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (readError) {
+    return { saved: false, reason: readError.message } as const;
+  }
+  if (
+    existing &&
+    (existing.trust_score !== null || existing.research_status !== DEVELOPING_RESEARCH_STATUS)
+  ) {
+    return {
+      saved: false,
+      reason: "A reviewed record already exists for this firm; leaving it untouched.",
+    } as const;
+  }
+
+  const confirmed = input.confirmed.filter((fact) => !isSecondhandReviewSource(fact.sourceUrl));
+  const reviewClaims = input.confirmed
+    .filter((fact) => isSecondhandReviewSource(fact.sourceUrl))
+    .map((fact) => `${fact.text} [Reported by ${fact.sourceLabel ?? "a review source"}]`);
+  const cardFacts: EntityCardFacts = {
+    confirmed,
+    unconfirmed: [...reviewClaims, ...(input.unconfirmed ?? [])],
+    footer: input.reverifyTrigger?.trim() || "Re-verify when an official firm statement is available.",
+  };
+  const sourceLabels = [...new Set(confirmed.map((fact) => fact.sourceLabel).filter(Boolean))];
+
+  // founder_notes is intentionally not written: for a developing record the note
+  // is derived from card_facts on read, so there is no second copy to drift.
+  const { error } = await client.from("verified_entities").upsert(
+    {
+      slug,
+      name,
+      entity_type: "propfirm",
+      status: "warning",
+      trust_score: null,
+      notes: "Developing record: no final trust score while evidence is being monitored.",
+      source: sourceLabels.length > 0 ? sourceLabels.join("; ") : "Live web research",
+      aliases: createAliases(name),
+      firm_status: "Operating — monitoring",
+      trustpilot_rating: input.trustpilot?.rating ?? null,
+      trustpilot_count: input.trustpilot?.count ?? null,
+      trustpilot_date: input.trustpilot?.date ?? null,
+      research_status: DEVELOPING_RESEARCH_STATUS,
+      card_facts: cardFacts,
+    },
+    { onConflict: "slug" },
+  );
+
+  if (error) {
+    return { saved: false, reason: error.message } as const;
+  }
+
+  clearVerifiedEntitiesCache();
+  return { saved: true, slug } as const;
 }
 
 async function getVerifiedEntities() {
+  // First load: nothing to serve, so the caller waits for it.
   if (!verifiedEntitiesCache) {
     verifiedEntitiesCache = loadVerifiedEntitiesFromSupabase();
+    verifiedEntitiesLoadedAt = Date.now();
+    tokenIndexCache = undefined;
+    return verifiedEntitiesCache;
+  }
+
+  // Stale-while-revalidate: once loaded, keep serving the resolved list and swap
+  // it in the background when it expires, so no request stalls on a full reload
+  // and a failed reload just keeps the last-good list until the next window.
+  const expired = Date.now() - verifiedEntitiesLoadedAt > VERIFIED_ENTITIES_TTL_MS;
+  if (expired && !verifiedEntitiesReloading) {
+    verifiedEntitiesReloading = true;
+    void loadVerifiedEntitiesFromSupabase()
+      .then((entities) => {
+        verifiedEntitiesCache = Promise.resolve(entities);
+        verifiedEntitiesLoadedAt = Date.now();
+        // The token index derives from the entity list; keep them in lockstep.
+        tokenIndexCache = undefined;
+      })
+      .catch(() => {
+        // Keep serving the stale list; retry on the next expiry window.
+      })
+      .finally(() => {
+        verifiedEntitiesReloading = false;
+      });
   }
 
   return verifiedEntitiesCache;
@@ -563,6 +798,8 @@ function buildCardHints(entity: VerifiedEntity): Pick<
         closed: entity.closed ?? false,
         trustpilot: entity.trustpilot ?? null,
         founderNote: entity.founderNotes ?? null,
+        researchStatus: entity.researchStatus ?? null,
+        cardFacts: entity.cardFacts ?? null,
       },
     };
   }

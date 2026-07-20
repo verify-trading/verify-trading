@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { TwelveMarketsPage } from "@/components/markets/twelve-markets-page";
 import { getSessionUser } from "@/lib/auth/session";
 import { getPricingPageData } from "@/lib/billing/pricing-page-data";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/markets" },
+  robots: { index: false, follow: false },
+};
 
 type ProfileTierRow = {
   tier: string | null;

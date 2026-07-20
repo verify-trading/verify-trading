@@ -71,7 +71,10 @@ export function UpdatePasswordPageContent({ nextParam = null }: { nextParam?: st
       return;
     }
 
-    const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+    // `global` revokes every refresh token, not just this browser's. A password reset is
+    // the recovery path for a compromised account, so sessions already open on other
+    // devices must not survive it.
+    const { error: signOutError } = await supabase.auth.signOut({ scope: "global" });
 
     if (signOutError) {
       setApiError("Password updated, but we could not end the recovery session. Please sign in again.");

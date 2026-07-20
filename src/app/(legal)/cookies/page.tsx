@@ -6,6 +6,7 @@ import { getAppName } from "@/lib/site-config";
 export const metadata: Metadata = {
   title: "Cookie Notice",
   description: `Cookie and storage information for ${getAppName()}.`,
+  alternates: { canonical: "/cookies" },
 };
 
 export default function CookiesPage() {

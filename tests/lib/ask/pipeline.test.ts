@@ -7,7 +7,11 @@ vi.mock("@/lib/observability/logger", () => ({
   },
 }));
 
-import { generateAskResponse, mergeToolOwnedNumbers } from "@/lib/ask/pipeline";
+import {
+  generateAskResponse,
+  mergeToolOwnedNumbers,
+  stopAfterFinalToolResult,
+} from "@/lib/ask/pipeline";
 import { fallbackInsightCard, imageFallbackInsightCard } from "@/lib/ask/contracts";
 import { DEFAULT_ANTHROPIC_MODEL } from "@/lib/ask/service/provider";
 
@@ -323,6 +327,91 @@ describe("generateAskResponse", () => {
       (message) => message.role === "system" && message.providerOptions,
     );
     expect(cachedSystemMessages).toHaveLength(1);
+  });
+});
+
+const calcCard = {
+  type: "calc" as const,
+  lots: "0.50",
+  risk_amount: "£100.00",
+  account: "£10,000.00",
+  risk_pct: "1%",
+  sl_pips: "20",
+  verdict: "Size down first. Protect the downside before chasing the upside.",
+};
+
+function step(toolResults: Array<{ toolName?: string; output?: unknown }>) {
+  return { steps: [{ toolResults }] };
+}
+
+describe("stopAfterFinalToolResult", () => {
+  it("stops on submit_ask_card", () => {
+    expect(stopAfterFinalToolResult(step([submitResult(insightCard)]))).toBe(true);
+  });
+
+  it("stops when a deterministic tool returns a complete card", () => {
+    expect(
+      stopAfterFinalToolResult(
+        step([{ toolName: "calculate_position_size", output: { card: calcCard } }]),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not stop on verify_entity evidence — the model must still synthesize", () => {
+    expect(
+      stopAfterFinalToolResult(
+        step([{ toolName: "verify_entity", output: { card: insightCard } }]),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not stop on get_market_setup — the model rewrites it in trader language", () => {
+    expect(
+      stopAfterFinalToolResult(
+        step([{ toolName: "get_market_setup", output: { card: setupCard } }]),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not stop when a deterministic tool result is missing a valid card", () => {
+    expect(
+      stopAfterFinalToolResult(
+        step([{ toolName: "calculate_position_size", output: { error: "missing input" } }]),
+      ),
+    ).toBe(false);
+  });
+
+  it("only inspects the last step", () => {
+    expect(
+      stopAfterFinalToolResult({
+        steps: [
+          { toolResults: [{ toolName: "calculate_position_size", output: { card: calcCard } }] },
+          { toolResults: [{ toolName: "verify_entity", output: { card: insightCard } }] },
+        ],
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("generateAskResponse short-circuit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("uses a deterministic tool card as the final answer without a submit_ask_card", async () => {
+    const generateTextImpl = vi
+      .fn()
+      .mockResolvedValue(
+        textResult([{ toolName: "calculate_position_size", output: { card: calcCard } }]),
+      ) as never;
+
+    const response = await generateAskResponse(baseRequest("size a 1% trade on a 20 pip stop"), {
+      generateTextImpl,
+      retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge),
+    });
+
+    expect(response.data).toEqual(calcCard);
+    expect(response.uiMeta?.followups ?? []).toEqual([]);
   });
 });
 

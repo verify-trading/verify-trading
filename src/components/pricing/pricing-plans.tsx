@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 
+import { SectionEyebrow, surface } from "@/components/landing/section-primitives";
 import { Button } from "@/components/ui/button";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
@@ -10,16 +11,6 @@ import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usag
 import { cn } from "@/lib/utils";
 
 import { ProAnnualPlanCard, ProMonthlyPlanCard, ProWeeklyPlanCard } from "./pro-plan-cards";
-
-const surface = "rounded-xl border border-white/[0.08] bg-white/[0.02]";
-
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">
-      {children}
-    </p>
-  );
-}
 
 /**
  * Full Free / Pro weekly / Pro monthly / Pro annual grid. Used on `/pricing` and the landing page.

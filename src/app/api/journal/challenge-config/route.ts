@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth/session";
 import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
-import { challengeConfigSchema, extractChallengeRules, toChallengeConfig, type ChallengeConfigRow } from "@/lib/journal/challenge";
+import { challengeConfigSchema, challengeStartedAt, extractChallengeRules, reuseStoredRules, toChallengeConfig, type ChallengeConfigRow } from "@/lib/journal/challenge";
 import { UnsafeUrlError } from "@/lib/http/safe-fetch";
 import { logger } from "@/lib/observability/logger";
 
@@ -32,7 +32,28 @@ export async function POST(request: Request) {
     const session = await getSessionUser();
     if (!session) return jsonUnauthorized("Sign in to set up challenge mode.");
 
-    const rules = await extractChallengeRules(parsed.data);
+    // If the trader already has a config for the same firm + account type with all-percentage
+    // core rules, an accountSize change needs no re-scrape (percentages are size-independent;
+    // the app converts client-side). Otherwise extract fresh.
+    const { data: priorRow } = await session.supabase
+      .from("challenge_config")
+      .select("firm_url, account_type, account_size, rules")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    const prior = (priorRow as { firm_url: string; account_type: ChallengeConfigRow["account_type"]; account_size: number | string; rules: ChallengeConfigRow["rules"] } | null) ?? null;
+
+    // Reset the challenge clock whenever the firm, account type, or size changes (a genuinely
+    // new challenge); an unchanged re-save keeps the original start so progress isn't wiped.
+    const unchanged = Boolean(
+      prior &&
+        prior.firm_url === parsed.data.firmUrl &&
+        prior.account_type === parsed.data.accountType &&
+        Number(prior.account_size) === parsed.data.accountSize,
+    );
+    const startedAt = (unchanged && prior ? challengeStartedAt(prior.rules) : null) ?? new Date().toISOString();
+
+    const extracted = reuseStoredRules(prior, parsed.data) ?? (await extractChallengeRules(parsed.data));
+    const rules = { ...extracted, started_at: startedAt };
     const { data, error } = await session.supabase
       .from("challenge_config")
       .upsert({

@@ -5,169 +5,153 @@ import {
   shouldRefreshEconomicCalendar,
 } from "@/lib/markets/rapidapi-economic-calendar";
 
-describe("rapidapi economic calendar", () => {
+function mockForexApi(events: unknown[], overrides: Partial<Response> = {}) {
+  global.fetch = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ data: events, errors: [], hasError: false }),
+    ...overrides,
+  }) as Response) as unknown as typeof fetch;
+}
+
+describe("forex-api2 economic calendar", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
 
-  it("normalizes weekly events and maps DE display currency to EUR", async () => {
-    vi.stubEnv("ULTIMATE_ECONOMIC_CALENDAR_API_KEY", "test-key");
-    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      const country = new URL(url).searchParams.get("countries");
-      return {
-        ok: true,
-        json: async () => ({
-          result:
-            country === "DE"
-              ? [
-                  {
-                    id: "de-1",
-                    date: "2026-05-06T07:55:00.000Z",
-                    country: "DE",
-                    currency: "DEM",
-                    title: "HCOB Composite Final PMI",
-                    importance: 0,
-                    actual: null,
-                    forecast: 48.3,
-                    previous: 51.9,
-                    unit: "Index (diffusion)",
-                    scale: "",
-                    source: "Markit",
-                    period: "Apr. 2026",
-                  },
-                ]
-              : [],
-        }),
-      } as Response;
-    }) as unknown as typeof fetch;
+  it("requests the whole country set in one call and maps UK -> GB", async () => {
+    vi.stubEnv("RAPIDAPI_KEY", "test-key");
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [
+          {
+            id: "uk-1",
+            dateUtc: "2026-05-06T06:00:00.000Z",
+            countryCode: "UK",
+            currencyCode: "GBP",
+            name: "BoE Interest Rate Decision",
+            actual: 4.25,
+            consensus: 4.25,
+            previous: 4.5,
+            revised: 0,
+            volatility: "HIGH",
+          },
+        ],
+        errors: [],
+        hasError: false,
+      }),
+    }) as Response);
+    global.fetch = fetchSpy as unknown as typeof fetch;
 
-    const snapshot = await getEconomicCalendarWeekSnapshot(
-      null,
-      new Date("2026-05-05T12:00:00.000Z"),
-    );
+    const snapshot = await getEconomicCalendarWeekSnapshot(null, new Date("2026-05-05T12:00:00.000Z"));
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const requestedUrl = new URL(String((fetchSpy.mock.calls[0] as unknown[])[0]));
+    expect(requestedUrl.searchParams.get("startDate")).toBe("2026-05-04");
+    expect(requestedUrl.searchParams.get("endDate")).toBe("2026-05-13");
+    expect(requestedUrl.searchParams.get("includeCountries")).toBe("us;de;uk;ca;jp;au;nz;cn");
+    expect(requestedUrl.searchParams.get("includeVolatilities")).toBe("none;low;medium;high");
 
     expect(snapshot.from).toBe("2026-05-04");
     expect(snapshot.to).toBe("2026-05-13");
     expect(snapshot.dayLabel).toBe("Upcoming events");
     expect(snapshot.items).toHaveLength(1);
     expect(snapshot.items[0]).toMatchObject({
-      id: "de-1",
-      country: "DE",
-      currency: "EUR",
-      impact: "medium",
-      forecast: "48.3 Index (diffusion)",
-      previous: "51.9 Index (diffusion)",
+      id: "uk-1",
+      country: "GB",
+      currency: "GBP",
+      event: "BoE Interest Rate Decision",
+      impact: "high",
+      actual: "4.25",
+      forecast: "4.25",
+      previous: "4.5",
     });
   });
 
-  it("keeps previous country events when that country fetch fails", async () => {
-    vi.stubEnv("ULTIMATE_ECONOMIC_CALENDAR_API_KEY", "test-key");
-    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const country = new URL(String(input)).searchParams.get("countries");
-      if (country === "CN") {
-        return {
-          ok: false,
-          json: async () => ({ message: "rate limited" }),
-        } as Response;
-      }
-      return {
-        ok: true,
-        json: async () => ({ result: [] }),
-      } as Response;
-    }) as unknown as typeof fetch;
-
-    const snapshot = await getEconomicCalendarWeekSnapshot(
+  it("maps volatility to impact and blanks zero placeholders", async () => {
+    vi.stubEnv("RAPIDAPI_KEY", "test-key");
+    mockForexApi([
       {
-        updatedAt: "2026-05-05T00:00:00.000Z",
-        dayLabel: "old",
-        items: [
-          {
-            id: "cn-old",
-            timeUtc: "2026-05-07T08:00:00.000Z",
-            timeLabel: "08:00 UTC",
-            country: "CN",
-            currency: "CNY",
-            event: "FX Reserves",
-            impact: "high",
-            actual: null,
-            forecast: "3.363T USD",
-            previous: "3.342T USD",
-          },
-        ],
+        id: "us-speech",
+        dateUtc: "2026-05-06T14:00:00.000Z",
+        countryCode: "US",
+        currencyCode: "USD",
+        name: "Fed's Barkin speech",
+        actual: 0,
+        consensus: 0,
+        previous: 0,
+        revised: 0,
+        volatility: "MEDIUM",
       },
-      new Date("2026-05-05T12:00:00.000Z"),
-    );
+      {
+        id: "nz-rate",
+        dateUtc: "2026-05-06T12:30:00.000Z",
+        countryCode: "NZ",
+        currencyCode: "NZD",
+        name: "RBNZ Interest Rate Decision",
+        actual: 0, // not released yet — a placeholder, not a real 0
+        consensus: 2.5,
+        previous: 2.25,
+        revised: 0,
+        volatility: "HIGH",
+      },
+    ]);
 
-    expect(snapshot.items).toHaveLength(1);
-    expect(snapshot.items[0]?.id).toBe("cn-old");
+    const snapshot = await getEconomicCalendarWeekSnapshot(null, new Date("2026-05-05T12:00:00.000Z"));
+
+    // Sorted by time: rate decision (12:30) before the speech (14:00).
+    expect(snapshot.items.map((item) => item.id)).toEqual(["nz-rate", "us-speech"]);
+
+    const speech = snapshot.items.find((item) => item.id === "us-speech")!;
+    expect(speech.impact).toBe("medium");
+    expect(speech.actual).toBeNull();
+    expect(speech.forecast).toBeNull();
+    expect(speech.previous).toBeNull();
+
+    const rate = snapshot.items.find((item) => item.id === "nz-rate")!;
+    expect(rate.impact).toBe("high");
+    // Unreleased actual reports as 0, so it blanks; forecast/previous stay.
+    expect(rate.actual).toBeNull();
+    expect(rate.forecast).toBe("2.5");
+    expect(rate.previous).toBe("2.25");
   });
 
-  it("does not retain previous country events outside the current cache window", async () => {
-    vi.stubEnv("ULTIMATE_ECONOMIC_CALENDAR_API_KEY", "test-key");
-    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const country = new URL(String(input)).searchParams.get("countries");
-      if (country === "CN") {
-        return {
-          ok: false,
-          json: async () => ({ message: "temporary provider failure" }),
-        } as Response;
-      }
-      return {
-        ok: true,
-        json: async () => ({
-          result:
-            country === "US"
-              ? [
-                  {
-                    id: "us-current",
-                    date: "2026-05-06T14:00:00.000Z",
-                    country: "US",
-                    currency: "USD",
-                    title: "ISM Services PMI",
-                    importance: 1,
-                    forecast: 53.7,
-                    previous: 54,
-                  },
-                ]
-              : [],
-        }),
-      } as Response;
-    }) as unknown as typeof fetch;
+  it("throws when the provider reports an error", async () => {
+    vi.stubEnv("RAPIDAPI_KEY", "test-key");
+    global.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        data: [],
+        errors: [{ message: "Parameter 'includeCountries' contains an invalid value" }],
+        hasError: true,
+      }),
+    }) as Response) as unknown as typeof fetch;
 
-    const snapshot = await getEconomicCalendarWeekSnapshot(
-      {
-        updatedAt: "2026-04-28T00:00:00.000Z",
-        from: "2026-04-28",
-        to: "2026-05-05",
-        dayLabel: "old",
-        items: [
-          {
-            id: "cn-old-window",
-            timeUtc: "2026-04-30T08:00:00.000Z",
-            timeLabel: "08:00 UTC",
-            country: "CN",
-            currency: "CNY",
-            event: "NBS Manufacturing PMI",
-            impact: "high",
-            actual: null,
-            forecast: "50.5",
-            previous: "50.8",
-          },
-        ],
-      },
-      new Date("2026-05-05T12:00:00.000Z"),
-    );
-
-    expect(snapshot.items.map((item) => item.id)).toEqual(["us-current"]);
+    await expect(
+      getEconomicCalendarWeekSnapshot(null, new Date("2026-05-05T12:00:00.000Z")),
+    ).rejects.toThrow("invalid value");
   });
 
-  it("uses a one-hour refresh threshold", () => {
+  it("throws when empty and no previous snapshot exists", async () => {
+    vi.stubEnv("RAPIDAPI_KEY", "test-key");
+    mockForexApi([]);
+
+    await expect(
+      getEconomicCalendarWeekSnapshot(null, new Date("2026-05-05T12:00:00.000Z")),
+    ).rejects.toThrow("temporarily unavailable");
+  });
+
+  it("uses a one-day refresh threshold", () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-05-05T12:00:00.000Z").getTime());
 
-    expect(shouldRefreshEconomicCalendar("2026-05-05T11:01:00.000Z")).toBe(false);
-    expect(shouldRefreshEconomicCalendar("2026-05-05T11:00:00.000Z")).toBe(true);
+    // 23h59m since last fetch — still fresh.
+    expect(shouldRefreshEconomicCalendar("2026-05-04T12:01:00.000Z")).toBe(false);
+    // Exactly 24h — refresh.
+    expect(shouldRefreshEconomicCalendar("2026-05-04T12:00:00.000Z")).toBe(true);
   });
 
   it("refreshes before the TTL when the cached window is for the previous UTC day", () => {

@@ -4,15 +4,13 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, X } from "lucide-react";
 
+import { surface } from "@/components/landing/section-primitives";
 import { Button } from "@/components/ui/button";
 import { trackAnalyticsEvent } from "@/lib/analytics/client";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { PRO_PLAN_FEATURES } from "@/lib/marketing/pro-plan-features";
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { cn } from "@/lib/utils";
-
-// Same surface token the real pricing cards use (pro-plan-cards.tsx / pricing-plans.tsx).
-const surface = "rounded-xl border border-white/[0.08] bg-white/[0.02]";
 
 // Canonical Free bullets (mirrors pricing-plans.tsx); the daily limit is shown
 // as the subline so it isn't repeated here.

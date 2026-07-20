@@ -65,13 +65,48 @@ type AskGenerationDependencies = AskServiceDependencies & {
   retrieveAskKnowledgeImpl?: typeof retrieveAskKnowledge;
 };
 
-function stopAfterFinalToolResult({
+/**
+ * Tools whose result IS the final card — deterministic calc/plan/projection
+ * cards the model would otherwise just echo into submit_ask_card at the cost of
+ * a full second round-trip. Excludes verify_entity (evidence, must synthesize),
+ * get_market_setup (the model rewrites it in trader language), and the market/
+ * news tools whose numbers still need folding into a synthesized answer.
+ */
+const DETERMINISTIC_CARD_TOOLS = new Set([
+  "calculate_position_size",
+  "calculate_risk_reward",
+  "calculate_pip_value",
+  "calculate_margin_required",
+  "calculate_profit_loss",
+  "generate_projection",
+  "generate_growth_plan",
+]);
+
+function toolResultHasCompleteCard(toolResult: {
+  toolName?: string;
+  output?: unknown;
+}): boolean {
+  if (!toolResult.toolName || !DETERMINISTIC_CARD_TOOLS.has(toolResult.toolName)) {
+    return false;
+  }
+  const output =
+    toolResult.output && typeof toolResult.output === "object"
+      ? (toolResult.output as { card?: unknown })
+      : null;
+  return askCardSchema.safeParse(output?.card).success;
+}
+
+export function stopAfterFinalToolResult({
   steps,
 }: {
-  steps: Array<{ toolResults?: Array<{ toolName?: string }> }>;
+  steps: Array<{ toolResults?: Array<{ toolName?: string; output?: unknown }> }>;
 }) {
   const lastStep = steps[steps.length - 1];
-  return lastStep?.toolResults?.some((toolResult) => toolResult.toolName === "submit_ask_card") ?? false;
+  const toolResults = lastStep?.toolResults ?? [];
+  return toolResults.some(
+    (toolResult) =>
+      toolResult.toolName === "submit_ask_card" || toolResultHasCompleteCard(toolResult),
+  );
 }
 
 function plainSystemMessage(content: string): ModelMessage {

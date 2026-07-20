@@ -6,6 +6,7 @@ import { getAppName } from "@/lib/site-config";
 export const metadata: Metadata = {
   title: "Risk Disclosure",
   description: `Trading risk disclosure for ${getAppName()}.`,
+  alternates: { canonical: "/risk-disclosure" },
 };
 
 export default function RiskDisclosurePage() {

@@ -4,7 +4,6 @@ import { readUserDisplayName } from "@/lib/auth/read-user-display-name";
 import { maybeSendSignupWelcomeEmail } from "@/lib/email/maybe-send-signup-welcome";
 import { jsonApiError, jsonInvalidRequest, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
-import { getSiteUrl } from "@/lib/site-config";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -73,13 +72,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: "not-confirmed" });
   }
 
+  // Canonical site origin — a DB-triggered call has no request origin to read.
+  const appOrigin = (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://www.verify.trading").replace(
+    /\/+$/,
+    "",
+  );
+
   await maybeSendSignupWelcomeEmail({
     userId: user.id,
     email: user.email,
     displayName: readUserDisplayName(user.user_metadata),
     createdAt: user.created_at,
     emailConfirmedAt: user.email_confirmed_at,
-    appOrigin: getSiteUrl(),
+    appOrigin,
     trustedConfirmation: true,
   }).catch((sendError) => {
     logger.warn("email-confirmed hook: welcome send failed", {

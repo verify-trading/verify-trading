@@ -1,4 +1,5 @@
 import { escapeHtml } from "@/lib/email/escape-html";
+import { getSiteUrl } from "@/lib/site-config";
 
 const EMAIL_BACKGROUND = "#0A0D2E";
 const EMAIL_CARD = "#0F1340";
@@ -15,7 +16,6 @@ type EmailButton = {
 
 type MarketingEmailInput = {
   appName: string;
-  appOrigin: string;
   title: string;
   preview: string;
   paragraphs: string[];
@@ -29,19 +29,15 @@ function buildParagraph(text: string) {
 
 export function buildMarketingEmailHtml({
   appName,
-  appOrigin,
   title,
   preview,
   paragraphs,
   button,
   footer,
 }: MarketingEmailInput) {
-  const normalizedAppOrigin = appOrigin.replace(/\/$/, "");
-  const logoOrigin = normalizedAppOrigin.replace(
-    "https://verify.trading",
-    "https://www.verify.trading",
-  );
-  const logoUrl = `${logoOrigin}/verify-trading-email-logo.png`;
+  // The logo must load from the canonical, publicly-reachable origin (never a
+  // per-request/preview/localhost origin), so it's sourced from getSiteUrl().
+  const logoUrl = `${getSiteUrl()}/verify-trading-email-logo.png`;
   const body = paragraphs.map(buildParagraph).join("");
   const footerHtml = footer
     ? `<p style="margin:16px 0 0 0;font-size:12px;line-height:1.45;color:${EMAIL_LABEL};">${escapeHtml(footer)}</p>`

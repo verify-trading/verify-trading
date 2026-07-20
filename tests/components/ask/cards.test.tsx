@@ -84,6 +84,52 @@ describe("AskResponseCard", () => {
     expect(screen.queryByText("FCA")).not.toBeInTheDocument();
   });
 
+  it("renders curated developing-firm evidence instead of the model verdict", () => {
+    render(
+      <AskResponseCard
+        card={{
+          type: "broker",
+          name: "Alpha Futures",
+          score: "Not yet rated",
+          status: "WARNING",
+          fca: "No",
+          complaints: "Medium",
+          verdict: "This must not be shown.",
+          color: "red",
+        }}
+        uiMeta={{
+          verificationKind: "propfirm",
+          verificationSourceLabel: "DEVELOPING — MONITOR",
+          propFirm: {
+            notRated: true,
+            researchStatus: "DEVELOPING — MONITOR",
+            trustpilotRating: 4.8,
+            trustpilotCount: 5384,
+            trustpilotDate: "2026-07-13",
+            confirmedFacts: [
+              {
+                text: "Active Premium accounts are being closed and refunded.",
+                sourceLabel: "Alpha announcement",
+                sourceUrl: "https://example.com/alpha",
+              },
+            ],
+            unconfirmedClaims: ["The payout-denial claim is unconfirmed."],
+            reverifyTrigger: "Re-verify when Alpha publishes its official statement.",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Insufficient verified data")).toBeInTheDocument();
+    expect(screen.getByText("DEVELOPING")).toBeInTheDocument();
+    expect(screen.getByText("4.8 (5k)")).toBeInTheDocument();
+    expect(screen.getByText("as of Jul 13")).toBeInTheDocument();
+    expect(screen.getByText("Confirmed")).toBeInTheDocument();
+    expect(screen.getByText("Not confirmed — do not treat as fact")).toBeInTheDocument();
+    expect(screen.getByText("The payout-denial claim is unconfirmed.")).toBeInTheDocument();
+    expect(screen.queryByText("This must not be shown.")).not.toBeInTheDocument();
+  });
+
   it("renders projection stat tiles with the card's currencySymbol instead of hardcoded £", () => {
     const { container } = render(
       <AskResponseCard

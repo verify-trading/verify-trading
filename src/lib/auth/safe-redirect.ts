@@ -1,3 +1,5 @@
+import { getSiteUrl } from "@/lib/site-config";
+
 /**
  * Returns a safe in-app path for post-login redirects.
  * Blocks open redirects: protocol-relative URLs (`//…`), schemes (`://`), and backslashes.
@@ -29,7 +31,7 @@ export function appendSafeNextParam(path: string, next: string | null | undefine
     return path;
   }
 
-  const url = new URL(path, "https://verify.trading");
+  const url = new URL(path, getSiteUrl());
   url.searchParams.set("next", safeNext);
   return `${url.pathname}${url.search}`;
 }

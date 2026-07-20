@@ -56,7 +56,6 @@ export function buildSignupWelcomeEmail({
     ].join("\n"),
     html: buildMarketingEmailHtml({
       appName,
-      appOrigin,
       title: `Welcome to ${appName}`,
       preview: "Your professional second opinion is ready.",
       paragraphs,

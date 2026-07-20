@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  computeJournalAggregates,
   journalEntriesQuerySchema,
   journalEntryCreateSchema,
+  journalEntryDeleteSchema,
   overheatLogCreateSchema,
   toJournalEntry,
   type JournalEntryRow,
@@ -46,14 +48,33 @@ export async function GET(request: Request) {
       query.lt("entry_date", parsedQuery.data.cursor);
     }
 
-    const { data, error } = await query;
+    // The page (above) is what the client renders; the aggregates read is a light,
+    // full-history scan (minimal columns) so lifetime header metrics stay correct even
+    // when the trader has more sessions than a single page holds. Fanned out in parallel.
+    const [{ data, error }, { data: allRows, error: aggError }] = await Promise.all([
+      query,
+      session.supabase
+        .from("journal_entries")
+        .select("entry_date, pnl_amount, pnl_currency, lesson")
+        .eq("user_id", session.user.id)
+        .order("entry_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        // Without an explicit limit, PostgREST silently caps this at its default
+        // (~1000 rows). Raise the cap and keep newest-first ordering (computeJournalAggregates
+        // expects that) so if truncation ever occurs it's the OLDEST rows that get dropped.
+        .limit(5000),
+    ]);
 
-    if (error || !data) {
+    if (error || !data || aggError || !allRows) {
       return jsonApiError(500, "journal_entries_unavailable", "Could not load journal entries right now.");
     }
 
     return NextResponse.json(
-      { entries: (data as JournalEntryRow[]).map(toJournalEntry) },
+      {
+        entries: (data as JournalEntryRow[]).map(toJournalEntry),
+        aggregates: computeJournalAggregates(allRows as JournalEntryRow[]),
+      },
       { headers: PRIVATE_CACHE_HEADERS },
     );
   } catch (error) {
@@ -142,20 +163,64 @@ export async function PUT(request: Request) {
   return NextResponse.json({ ok: true }, { headers: PRIVATE_CACHE_HEADERS });
 }
 
+export async function DELETE(request: Request) {
+  // Accept entryDate from a JSON body or a ?entryDate= query param.
+  const url = new URL(request.url);
+  const queryDate = url.searchParams.get("entryDate");
+  const bodyDate = queryDate
+    ? null
+    : ((await request.json().catch(() => null)) as { entryDate?: unknown } | null)?.entryDate;
+
+  const parsedBody = journalEntryDeleteSchema.safeParse({ entryDate: queryDate ?? bodyDate });
+  if (!parsedBody.success) {
+    return jsonApiError(400, "journal_entry_delete_invalid", "The journal entry delete request is invalid.");
+  }
+
+  try {
+    const session = await getSessionUser();
+    if (!session) {
+      return jsonUnauthorized("Sign in to delete journal entries.");
+    }
+
+    // RLS (journal_entries_delete_own) scopes this to the caller; the user_id filter keeps
+    // it explicit. Deleting a nonexistent entry is a no-op, so it's still ok:true.
+    const { error } = await session.supabase
+      .from("journal_entries")
+      .delete()
+      .eq("user_id", session.user.id)
+      .eq("entry_date", parsedBody.data.entryDate);
+
+    if (error) {
+      return jsonApiError(500, "journal_entry_delete_failed", "Could not delete the journal entry right now.");
+    }
+
+    return NextResponse.json({ ok: true }, { headers: PRIVATE_CACHE_HEADERS });
+  } catch (error) {
+    logger.error("Journal entry delete failed.", {
+      error: error instanceof Error ? error.message : "unknown",
+    });
+
+    return jsonApiError(500, "journal_entry_delete_failed", "Could not delete the journal entry right now.");
+  }
+}
+
 async function enrichSavedEntry(supabase: SupabaseClient, userId: string, entry: JournalEntryRow) {
-  const { data: rows } = await supabase
-    .from("journal_entries")
-    .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
-    .eq("user_id", userId)
-    .order("entry_date", { ascending: false })
-    .limit(30);
+  // The recent-entries read and the challenge-config read are independent — fan them out.
+  const [{ data: rows }, { data: configData }] = await Promise.all([
+    supabase
+      .from("journal_entries")
+      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
+      .eq("user_id", userId)
+      .order("entry_date", { ascending: false })
+      .limit(30),
+    supabase
+      .from("challenge_config")
+      .select("id, firm_name, firm_url, account_size, account_type, rules, created_at, updated_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
   const entries = (rows ?? []) as JournalEntryRow[];
   const overheat = overheatTrigger(entries);
-  const { data: configData } = await supabase
-    .from("challenge_config")
-    .select("id, firm_name, firm_url, account_size, account_type, rules, created_at, updated_at")
-    .eq("user_id", userId)
-    .maybeSingle();
 
   if (!configData || entry.pnl_amount === null) return { entry, overheat };
 

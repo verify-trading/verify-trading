@@ -17,18 +17,18 @@ import {
   Users,
 } from "lucide-react";
 
+import { SectionEyebrow, surface } from "@/components/landing/section-primitives";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Affiliate Programme — Earn 30% Recurring | verify.trading",
+  title: "Affiliate Programme — Earn 30% Recurring",
   description:
     "Turn referrals into recurring revenue. Earn 30% commission every month, for every Pro member you refer to verify.trading. No caps, no expiry.",
+  alternates: { canonical: "/affiliates" },
 };
 
 const APPLY_URL = "https://verify-trading.getrewardful.com/signup";
 const SUPPORT_EMAIL = "affiliates@verify.trading";
-
-const surface = "rounded-xl border border-white/[0.08] bg-white/[0.02]";
 
 type IconTheme = "blue" | "amber" | "coral" | "purple" | "green" | "cyan";
 
@@ -43,14 +43,6 @@ const featureIconClass: Record<IconTheme, string> = {
 
 const ctaButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 px-8 text-sm font-semibold text-white shadow-[0_0_40px_rgba(139,92,246,0.3)] transition hover:-translate-y-0.5 hover:shadow-[0_0_50px_rgba(139,92,246,0.45)]";
-
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">
-      {children}
-    </p>
-  );
-}
 
 function CtaButton({ size = "default", className }: { size?: "default" | "large"; className?: string }) {
   const sizeClass = size === "large" ? "h-[52px] text-[15px]" : "h-12";

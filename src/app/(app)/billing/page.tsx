@@ -16,6 +16,8 @@ export const metadata: Metadata = {
   title: "Billing",
   description:
     "Manage your verify.trading subscription and Stripe billing status.",
+  alternates: { canonical: "/billing" },
+  robots: { index: false, follow: false },
 };
 
 type BillingPageSearchParams = Promise<

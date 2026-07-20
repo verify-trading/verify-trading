@@ -4,7 +4,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdminClient: vi.fn(),
 }));
 
-import { clearVerifiedEntitiesCache, lookupVerifiedEntity } from "@/lib/ask/entities";
+import { clearVerifiedEntitiesCache, lookupVerifiedEntity, upsertDevelopingPropFirm } from "@/lib/ask/entities";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 // Rows shaped like the verified_entities columns the loader reads; unset columns
@@ -73,6 +73,58 @@ const seedRows: Record<string, unknown>[] = [
     notes: "Not FCA but well established prop firm.",
     source: "Community research",
     aliases: ["the5ers", "the 5 ers"],
+  },
+  {
+    slug: "alpha-futures",
+    name: "Alpha Futures",
+    entity_type: "propfirm",
+    status: "warning",
+    trust_score: null,
+    notes: "Developing record: no final trust score while the payout position is unverified.",
+    source: "Alpha Futures monitoring record",
+    aliases: ["alpha futures", "alphafutures"],
+    firm_status: "Operating — monitoring",
+    trustpilot_rating: 4.8,
+    trustpilot_count: 5384,
+    trustpilot_date: "2026-07-13",
+    research_status: "DEVELOPING — MONITOR",
+    card_facts: {
+      confirmed: [{ text: "Active Premium accounts are being closed and refunded.", sourceLabel: "Alpha announcement", sourceUrl: "https://example.com/alpha" }],
+      unconfirmed: ["The payout-denial claim is unconfirmed."],
+      footer: "Re-verify when Alpha publishes its official statement.",
+    },
+  },
+  {
+    slug: "alpha-capital-group",
+    name: "Alpha Capital Group",
+    entity_type: "propfirm",
+    status: "legitimate",
+    trust_score: 8.4,
+    notes: "Separate record.",
+    source: "research",
+    aliases: ["alpha capital group", "alpha capital"],
+  },
+  {
+    // Developing record whose confirmed fact carries an unsafe (non-http) link:
+    // the reader must keep the fact but drop the URL, never render it as an href.
+    slug: "beta-funding",
+    name: "Beta Funding",
+    entity_type: "propfirm",
+    status: "warning",
+    trust_score: null,
+    notes: "Developing record.",
+    source: "Live web research",
+    aliases: ["beta funding", "betafunding"],
+    firm_status: "Operating — monitoring",
+    research_status: "DEVELOPING — MONITOR",
+    card_facts: {
+      confirmed: [
+        { text: "Firm published a payout policy update.", sourceLabel: "Beta notice", sourceUrl: "javascript:alert(1)" },
+        { text: "Registered as an LLC.", sourceLabel: "Registry", sourceUrl: "trustpilot.com/review/x" },
+      ],
+      unconfirmed: [],
+      footer: null,
+    },
   },
   {
     // Precision trap: collapse("zentova markets") = "zentovamarkets" CONTAINS
@@ -164,5 +216,88 @@ describe("lookupVerifiedEntity", () => {
     expect(result.entity?.type).toBe("propfirm");
     expect(result.propFirmCardHint?.status).toBe("LEGITIMATE");
     expect(result.propFirmCardHint?.band).toBe("Strongly Trusted");
+  });
+
+  it("resolves Alpha Futures to its developing record, not Alpha Capital Group", async () => {
+    const result = await lookupVerifiedEntity("Is Alpha Futures safe?");
+
+    expect(result.entity?.name).toBe("Alpha Futures");
+    expect(result.propFirmCardHint).toMatchObject({
+      score: "Not yet rated",
+      status: "WARNING",
+      researchStatus: "DEVELOPING — MONITOR",
+      trustpilot: { rating: 4.8, count: 5384, date: "2026-07-13" },
+    });
+    expect(result.propFirmCardHint?.cardFacts?.unconfirmed).toEqual(["The payout-denial claim is unconfirmed."]);
+  });
+
+  it("drops an unsafe source link but keeps the confirmed fact", async () => {
+    const result = await lookupVerifiedEntity("Is Beta Funding safe?");
+
+    expect(result.entity?.name).toBe("Beta Funding");
+    const confirmed = result.propFirmCardHint?.cardFacts?.confirmed ?? [];
+    expect(confirmed).toHaveLength(2);
+    // javascript: and scheme-less URLs are both rejected; text survives.
+    expect(confirmed[0]).toMatchObject({ text: "Firm published a payout policy update.", sourceUrl: null });
+    expect(confirmed[1]).toMatchObject({ text: "Registered as an LLC.", sourceUrl: null });
+  });
+
+  it("refuses to overwrite an existing scored record", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValue({ data: { trust_score: 9.1, research_status: null }, error: null });
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      from: () => ({ upsert, select: () => ({ eq: () => ({ maybeSingle }) }) }),
+    } as never);
+
+    const result = await upsertDevelopingPropFirm({
+      name: "FTMO",
+      confirmed: [{ text: "A cited fact.", sourceLabel: "Source", sourceUrl: "https://example.com/x" }],
+    });
+
+    expect(result.saved).toBe(false);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("stores review-source claims as unconfirmed on a newly discovered prop firm", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    // No existing row: discovery is free to create a fresh developing record.
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      from: () => ({
+        upsert,
+        select: () => ({ eq: () => ({ maybeSingle }) }),
+      }),
+    } as never);
+
+    const result = await upsertDevelopingPropFirm({
+      name: "Example Funding",
+      confirmed: [
+        {
+          text: "Traders report delayed withdrawals.",
+          sourceLabel: "Trustpilot Reviews",
+          sourceUrl: "https://www.trustpilot.com/review/example-funding.test",
+        },
+        {
+          text: "The firm announced a platform migration.",
+          sourceLabel: "Example Funding notice",
+          sourceUrl: "https://example-funding.test/notices/migration",
+        },
+      ],
+    });
+
+    expect(result).toEqual({ saved: true, slug: "examplefunding" });
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        research_status: "DEVELOPING — MONITOR",
+        trust_score: null,
+        card_facts: expect.objectContaining({
+          confirmed: [expect.objectContaining({ text: "The firm announced a platform migration." })],
+          unconfirmed: [expect.stringContaining("Traders report delayed withdrawals.")],
+        }),
+      }),
+      { onConflict: "slug" },
+    );
   });
 });

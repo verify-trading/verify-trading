@@ -14,8 +14,6 @@ import {
   OAUTH_FLOW_COOKIE_NAME,
   parseOAuthFlow,
   readCookie,
-  RECENT_OAUTH_SIGNUP_COOKIE_MAX_AGE_SECONDS,
-  RECENT_OAUTH_SIGNUP_COOKIE_NAME,
 } from "@/lib/auth/oauth-flow";
 import { readUserDisplayName } from "@/lib/auth/read-user-display-name";
 import { getSafeRedirectPath } from "@/lib/auth/safe-redirect";
@@ -42,14 +40,6 @@ function clearAuthRedirectCookie(response: NextResponse) {
   response.cookies.set(AUTH_REDIRECT_COOKIE_NAME, "", {
     ...AUTH_COOKIE_OPTIONS,
     maxAge: 0,
-  });
-}
-
-function setRecentOauthSignupCookie(response: NextResponse, userId: string) {
-  response.cookies.set(RECENT_OAUTH_SIGNUP_COOKIE_NAME, userId, {
-    ...AUTH_COOKIE_OPTIONS,
-    httpOnly: true,
-    maxAge: RECENT_OAUTH_SIGNUP_COOKIE_MAX_AGE_SECONDS,
   });
 }
 
@@ -166,16 +156,11 @@ export async function GET(request: Request) {
   clearOAuthFlowCookie(response);
   clearAuthRedirectCookie(response);
 
-  if (isSignupFlow && user?.id) {
-    setRecentOauthSignupCookie(response, user.id);
-  }
-
   if (user?.id) {
     await maybeSendSignupWelcomeEmail({
       userId: user.id,
       email: user.email,
       displayName,
-      oauthFlow,
       createdAt: user.created_at,
       emailConfirmedAt: user.email_confirmed_at,
       appOrigin: origin,

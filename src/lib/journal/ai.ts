@@ -3,6 +3,7 @@ import { generateText } from "ai";
 import { getAskSimpleModel } from "@/lib/ask/service/provider";
 import type { ChallengeConfigRow } from "@/lib/journal/challenge";
 import type { JournalEntryRow } from "@/lib/journal/contracts";
+import { ACCOUNT_TYPE_LABEL, money } from "@/lib/journal/format";
 
 export function overheatTrigger(entries: JournalEntryRow[]) {
   const pnlEntries = entries.filter((entry) => entry.pnl_amount !== null);
@@ -25,28 +26,42 @@ export async function generateChallengeStatus(input: {
 }) {
   const result = await generateText({
     model: getAskSimpleModel(),
-    maxOutputTokens: 140,
-    system: "You are a prop firm challenge assistant. Under 60 words. Be specific with numbers and percentages.",
+    maxOutputTokens: 60,
+    system:
+      "You are the trader's coach at verify.trading. Reply with ONE short, specific sentence (max 20 words) " +
+      "of honest, encouraging guidance for the trader's next session. " +
+      "You are not a trading signal service — never give trade recommendations or entries/exits. " +
+      "The app shows the exact numbers separately, so do NOT restate stats. " +
+      "Plain text only — no markdown, no tables, no lists, no line breaks.",
     prompt: `Prop firm: ${input.config.firm_name}
-Account size: ${input.config.account_size}
-Account type: ${input.config.account_type}
+Account type: ${ACCOUNT_TYPE_LABEL[input.config.account_type] ?? input.config.account_type}
 Rules: ${JSON.stringify(input.config.rules)}
-Today's P&L: ${input.entry.pnl_amount}
-Cumulative P&L this period: ${input.cumulativePnl}
+Today's P&L: ${money(Number(input.entry.pnl_amount ?? 0))}
+Cumulative P&L this period: ${money(input.cumulativePnl)}
 Days traded this evaluation: ${input.daysTraded}
-Generate the challenge status note.`,
+Write one coaching sentence for their next session.`,
   });
-  return result.text.trim();
+  return oneLine(result.text);
+}
+
+// The app renders this as a single coaching line beside its own computed stats, so
+// collapse any stray markdown, table pipes, or line breaks the model emits into one
+// clean sentence.
+function oneLine(text: string): string {
+  return text.replace(/[*_`#>|]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 export async function generateWeeklyInsight(entries: JournalEntryRow[], name: string) {
   const result = await generateText({
     model: getAskSimpleModel(),
     maxOutputTokens: 140,
-    system: "You are the verify.trading Journal AI. Identify one meaningful trading pattern. Under 60 words.",
+    system:
+      "You are the trader's coach at verify.trading. Identify one meaningful trading pattern in under 60 words. " +
+      "Be calm, direct, and honest — tell them what they need to hear, not what flatters them. " +
+      "Plain text only — no markdown.",
     prompt: `Trader: ${name}
 Sessions (last 30 days): ${JSON.stringify(entries)}
 Identify the single most useful pattern in this data.`,
   });
-  return result.text.trim();
+  return oneLine(result.text);
 }

@@ -1,4 +1,4 @@
-import type { AskCard, AskUiMeta } from "@/lib/ask/contracts";
+import { askUiMetaSchema, type AskCard, type AskUiMeta } from "@/lib/ask/contracts";
 import { decodeImageDataUrl } from "@/lib/ask/image-data-url";
 
 import type { ParsedImageInput } from "@/lib/ask/service/types";
@@ -85,17 +85,22 @@ function extractToolUiMeta(
           ? nestedUiMeta.verificationKind
           : undefined;
       const verificationSourceLabel = nestedUiMeta.verificationSourceLabel;
+      const propFirm = asObject(nestedUiMeta.propFirm);
 
       if (
         verificationKind ||
-        typeof verificationSourceLabel === "string"
+        typeof verificationSourceLabel === "string" ||
+        propFirm
       ) {
-        return {
+        const uiMeta = {
           ...(verificationKind ? { verificationKind } : {}),
           ...(typeof verificationSourceLabel === "string"
             ? { verificationSourceLabel }
             : {}),
+          ...(propFirm ? { propFirm } : {}),
         };
+        const parsed = askUiMetaSchema.safeParse(uiMeta);
+        return parsed.success ? parsed.data : undefined;
       }
     }
   }

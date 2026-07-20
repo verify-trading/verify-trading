@@ -3,6 +3,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import {
+  httpUrlSchema,
   type BrokerCard,
   type BriefingCard,
   type GuruCard,
@@ -27,6 +28,7 @@ import {
   findEntityCandidates,
   listVerifiedEntities,
   lookupVerifiedEntity,
+  upsertDevelopingPropFirm,
   type EntityCandidate,
   type LookupVerifiedEntityResult,
 } from "@/lib/ask/entities";
@@ -49,6 +51,30 @@ import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
 
 const verifyEntityInputSchema = z.object({
   name: z.string().min(1).describe("Broker, prop firm, guru, or brand name to verify."),
+});
+
+const persistDiscoveredPropFirmInputSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  confirmed: z
+    .array(
+      z.object({
+        text: z.string().trim().min(1).max(500),
+        sourceLabel: z.string().trim().min(1).max(120),
+        // Same http(s)-only rule the DB reader and render boundary enforce.
+        sourceUrl: httpUrlSchema,
+      }),
+    )
+    .min(1)
+    .max(5),
+  unconfirmed: z.array(z.string().trim().min(1).max(500)).max(5).optional(),
+  reverifyTrigger: z.string().trim().min(1).max(500).optional(),
+  trustpilot: z
+    .object({
+      rating: z.number().min(0).max(5),
+      count: z.number().int().nonnegative(),
+      date: z.iso.date().optional(),
+    })
+    .optional(),
 });
 
 const listVerifiedEntitiesInputSchema = z.object({
@@ -416,16 +442,33 @@ function buildPropFirmCard(lookup: LookupVerifiedEntityResult): BrokerCard | nul
 function propFirmUiMeta(lookup: LookupVerifiedEntityResult): AskUiMeta {
   const hint = lookup.propFirmCardHint;
   const trustpilot = hint?.trustpilot ?? null;
+  const cardFacts = hint?.cardFacts ?? null;
+  // One authoritative "developing" decision, computed here and threaded through
+  // uiMeta, so the card, the badge label, and the score state can't disagree.
+  const developing = Boolean(
+    hint?.researchStatus || cardFacts?.confirmed.length || cardFacts?.unconfirmed.length,
+  );
   return {
     verificationKind: "propfirm",
-    verificationSourceLabel: "Reviewed record",
+    // A developing record must never carry the reassuring "Reviewed record" badge;
+    // the label is pure presentation derived from the developing flag.
+    verificationSourceLabel: developing ? "Not yet scoreable" : "Reviewed record",
     // Optional fields left undefined are omitted on serialize.
     propFirm: {
       band: hint?.band ?? undefined,
       notRated: hint?.notRated ? true : undefined,
+      developing: developing || undefined,
       trustpilotRating: trustpilot?.rating,
       trustpilotCount: trustpilot?.count ?? undefined,
       trustpilotDate: trustpilot?.date ?? undefined,
+      researchStatus: hint?.researchStatus ?? undefined,
+      confirmedFacts: cardFacts?.confirmed.map((fact) => ({
+        text: fact.text,
+        sourceLabel: fact.sourceLabel ?? undefined,
+        sourceUrl: fact.sourceUrl ?? undefined,
+      })),
+      unconfirmedClaims: cardFacts?.unconfirmed,
+      reverifyTrigger: cardFacts?.footer ?? undefined,
     },
   };
 }
@@ -642,7 +685,9 @@ async function coverageEvidence(
   };
 }
 
-const askLiveMarketOptions = { live: true } as const satisfies MarketDataOptions;
+// Ask reads through the shared TTL cache (Twelve Data primary, FMP fallback) rather than
+// hammering the provider live on every turn — a market briefing at most 60s old is fine, and
+// this is what stopped the FMP 429s from repeated/rapid asks re-fetching the same symbol.
 
 async function enrichPositionSizeInput(
   toolInput: z.input<typeof calculatePositionSizeInputSchema>,
@@ -714,10 +759,9 @@ function buildProfitLossCard(result: ReturnType<typeof calculateProfitLoss>): As
 
 export function createAskTools(dependencies: AskServiceDependencies) {
   const getMarketQuoteImpl =
-    dependencies.getMarketQuoteImpl ?? ((asset: string) => getMarketQuote(asset, askLiveMarketOptions));
+    dependencies.getMarketQuoteImpl ?? ((asset: string) => getMarketQuote(asset));
   const getMarketSeriesImpl =
-    dependencies.getMarketSeriesImpl ?? ((asset: string, timeframe) =>
-      getMarketSeries(asset, timeframe, askLiveMarketOptions));
+    dependencies.getMarketSeriesImpl ?? ((asset: string, timeframe) => getMarketSeries(asset, timeframe));
   const fetchNewsEverythingImpl =
     dependencies.fetchNewsEverythingImpl ?? fetchNewsEverything;
   const getEconomicCalendarSnapshotImpl =
@@ -729,6 +773,12 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         "Verify a SINGLE named broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks on a specific firm. Pass the name EXACTLY as the user wrote it — the resolver already handles misspellings, spacing, and run-together words, so never correct it, normalize it, or substitute a different/similar-looking firm name you guessed. It returns reviewed entity data plus live FCA confirmation as EVIDENCE — it is not your reply. After calling it you must still call submit_ask_card with the final card (echo the exact score and status) and 2-3 followups. Never end your turn on the raw verify_entity result.",
       inputSchema: verifyEntityInputSchema,
       execute: async ({ name }) => resolveVerificationToolResult(name, dependencies),
+    }),
+    persist_discovered_prop_firm: tool({
+      description:
+        "Persist a newly discovered prop firm immediately after web_search or web_fetch returns at least one direct source URL. Use only for a prop firm that verify_entity did not find. Put only official, regulator, or independent-tracker facts in confirmed; Trustpilot, Reddit, review-site, and forum allegations MUST go in unconfirmed. Leave the score unfinalized, and include Trustpilot only when the source explicitly shows both rating and review count. After saving, call verify_entity again so the final card comes from the stored developing record.",
+      inputSchema: persistDiscoveredPropFirmInputSchema,
+      execute: async (input) => upsertDevelopingPropFirm(input),
     }),
     list_verified_entities: tool({
       description:

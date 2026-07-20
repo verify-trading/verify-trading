@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { AskWorkspace } from "@/components/ask/ask-workspace";
 import { requireSession } from "@/lib/auth/session";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/ask" },
+  robots: { index: false, follow: false },
+};
 
 function AskSuspenseFallback() {
   return (

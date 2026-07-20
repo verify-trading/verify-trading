@@ -44,6 +44,14 @@ function formatReviewCount(count: number): string {
   return count >= 1000 ? `${Math.round(count / 1000)}k` : String(count);
 }
 
+/** "2026-07-08" → "Jul 8"; anything unparseable renders as-is. */
+function formatAsOfDate(value: string): string {
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 function TrustScoreBar({ score, accent }: { score: string; accent: string }) {
   const numericScore = Number.parseFloat(score);
   const isNumeric = Number.isFinite(numericScore);
@@ -100,7 +108,30 @@ function BrokerCard({
 
   const propFirm = uiMeta?.propFirm;
   const notRated = propFirm?.notRated ?? false;
-  const trailingLabel = isPropFirm && propFirm?.band ? propFirm.band : card.status;
+  const curatedFacts = Boolean(
+    propFirm?.confirmedFacts?.length || propFirm?.unconfirmedClaims?.length,
+  );
+  // Research still developing: the card shows curated evidence and withholds a
+  // score, so every trust cue reads "insufficient data", never "rated". The
+  // server computes this once (uiMeta.propFirm.developing); the local derivation
+  // is only a fallback for messages persisted before that flag existed.
+  const developing =
+    isPropFirm &&
+    (propFirm?.developing ?? (Boolean(propFirm?.researchStatus) || curatedFacts));
+  // One score view for the whole card, instead of threading two flags through
+  // stacked ternaries below.
+  const scoreView: "developing" | "notRated" | "scored" = developing
+    ? "developing"
+    : notRated
+      ? "notRated"
+      : "scored";
+  const trailingLabel = developing
+    // Split only on em/en dash — NOT a plain hyphen, which would truncate hyphenated
+    // words like "Pre-revenue" to "Pre".
+    ? propFirm?.researchStatus?.split(/[—–]/)[0]?.trim() || "Developing"
+    : isPropFirm && propFirm?.band
+      ? propFirm.band
+      : card.status;
   const trustpilot =
     propFirm?.trustpilotRating !== undefined
       ? `${propFirm.trustpilotRating.toFixed(1)}${
@@ -122,13 +153,18 @@ function BrokerCard({
               {uiMeta.verificationSourceLabel}
             </div>
           ) : null}
-          {notRated ? (
+          {scoreView === "developing" ? (
+            <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3 text-sm font-bold">
+              <span className="text-[var(--vt-muted)]">Trust Score</span>
+              <span className="text-[var(--vt-amber)]">Insufficient verified data</span>
+            </div>
+          ) : scoreView === "notRated" ? (
             <div className="mt-3 text-sm font-bold text-[var(--vt-muted)]">Not yet rated</div>
           ) : (
             <TrustScoreBar score={card.score} accent={accent} />
           )}
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3 text-center">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
               {primaryLabel}
@@ -144,11 +180,52 @@ function BrokerCard({
             <div className="mt-1 break-words text-sm font-bold text-white">
               {isPropFirm ? trustpilot : card.complaints}
             </div>
+            {isPropFirm && propFirm?.trustpilotDate ? (
+              <div className="mt-1 text-[10px] text-[var(--vt-muted)]">as of {formatAsOfDate(propFirm.trustpilotDate)}</div>
+            ) : null}
           </div>
         </div>
-        <div className="border-t border-white/[0.06] pt-3">
-          <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
-        </div>
+        {isPropFirm && curatedFacts && propFirm ? (
+          <div className="space-y-4 border-t border-white/[0.06] pt-3">
+            {propFirm.confirmedFacts?.length ? (
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-green)]">Confirmed</h3>
+                <ul className="mt-2 space-y-2 text-sm leading-relaxed text-slate-200">
+                  {propFirm.confirmedFacts.map((fact) => (
+                    <li key={fact.text} className="flex gap-2">
+                      <span className="mt-1 text-[var(--vt-green)]" aria-hidden>•</span>
+                      <span>
+                        {fact.text}{" "}
+                        {fact.sourceUrl ? (
+                          <a href={fact.sourceUrl} target="_blank" rel="noreferrer" className="text-[var(--vt-muted)] underline underline-offset-2">
+                            [{fact.sourceLabel ?? "Source"}]
+                          </a>
+                        ) : fact.sourceLabel ? (
+                          <span className="text-[var(--vt-muted)]">[{fact.sourceLabel}]</span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {propFirm.unconfirmedClaims?.length ? (
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-amber)]">Not confirmed — do not treat as fact</h3>
+                <ul className="mt-2 space-y-2 text-sm italic leading-relaxed text-[var(--vt-muted)]">
+                  {propFirm.unconfirmedClaims.map((claim) => (
+                    <li key={claim} className="flex gap-2"><span className="mt-1 text-[var(--vt-amber)]" aria-hidden>•</span><span>{claim}</span></li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {propFirm.reverifyTrigger ? <p className="text-center text-xs leading-relaxed text-[var(--vt-muted)]">{propFirm.reverifyTrigger}</p> : null}
+          </div>
+        ) : (
+          <div className="border-t border-white/[0.06] pt-3">
+            <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
+          </div>
+        )}
       </div>
     </CardFrame>
   );
@@ -289,7 +366,7 @@ function GuruCard({ card }: { card: Extract<AskCard, { type: "guru" }> }) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--vt-amber)] underline underline-offset-2"
           >
-            View regulatory source →
+            View source →
           </a>
         ) : null}
         <div className="border-t border-white/[0.06] pt-3">

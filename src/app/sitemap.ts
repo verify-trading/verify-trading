@@ -1,69 +1,77 @@
-import type { MetadataRoute } from 'next'
+import type { MetadataRoute } from "next";
+
+import { getSiteUrl } from "@/lib/site-config";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://www.verify.trading'
-  const lastModified = new Date()
+  const baseUrl = getSiteUrl();
+  const lastModified = new Date();
 
   return [
     {
       url: `${baseUrl}/`,
       lastModified,
-      changeFrequency: 'weekly',
+      changeFrequency: "weekly",
       priority: 1.0,
     },
     {
-      url: `${baseUrl}/ask`,
+      url: `${baseUrl}/methodology`,
       lastModified,
-      changeFrequency: 'weekly',
-      priority: 0.9,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/pricing`,
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.8,
     },
     {
       url: `${baseUrl}/guide`,
       lastModified,
-      changeFrequency: 'monthly',
+      changeFrequency: "monthly",
       priority: 0.8,
     },
     {
-     url: `${baseUrl}/affiliates`,
-     lastModified,
-     changeFrequency: 'monthly',
-     priority: 0.7,
-   },
-    {
-      url: `${baseUrl}/markets`,
+      url: `${baseUrl}/tools`,
       lastModified,
-      changeFrequency: 'daily',
-      priority: 0.8,
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/affiliates`,
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.6,
     },
     {
       url: `${baseUrl}/signup`,
       lastModified,
-      changeFrequency: 'monthly',
-      priority: 0.7,
+      changeFrequency: "monthly",
+      priority: 0.6,
     },
     {
       url: `${baseUrl}/privacy`,
       lastModified,
-      changeFrequency: 'yearly',
+      changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: `${baseUrl}/terms`,
       lastModified,
-      changeFrequency: 'yearly',
+      changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: `${baseUrl}/cookies`,
       lastModified,
-      changeFrequency: 'yearly',
+      changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: `${baseUrl}/risk-disclosure`,
       lastModified,
-      changeFrequency: 'yearly',
+      changeFrequency: "yearly",
       priority: 0.3,
     },
-  ]
+  ];
 }

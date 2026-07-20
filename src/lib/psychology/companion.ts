@@ -2,8 +2,10 @@ import { generateText } from "ai";
 
 import { getAskSimpleModel } from "@/lib/ask/service/provider";
 import type { PsychologyAssessmentRow } from "@/lib/psychology/assessment";
+import type { ChallengeRules } from "@/lib/journal/challenge";
+import { ACCOUNT_TYPE_LABEL, money } from "@/lib/journal/format";
 
-type JournalContext = {
+export type JournalContext = {
   sessionCount: number;
   weeklyPnl: number;
   wins: number;
@@ -12,13 +14,49 @@ type JournalContext = {
   losingStreak: number;
 };
 
+// The trader's live prop-firm challenge — firm, rules, and where they stand against the
+// target and the loss limits. This is what lets the coach give grounded, firm-specific
+// guidance ("you're 12% to target with 22 days left, stay inside the 5% daily limit")
+// instead of generic mindset talk.
+export type ChallengeContext = {
+  firmName: string;
+  accountType: string;
+  accountSize: number;
+  rules: ChallengeRules;
+  cumulativePnl: number;
+  daysTraded: number;
+  targetAmount: number | null;
+  progressPct: number | null;
+  amountToGo: number | null;
+  daysLeft: number | null;
+};
+
+export type RecentEntry = {
+  date: string;
+  pnl: number | null;
+  mood: string;
+  note: string | null;
+  lesson: string | null;
+};
+
 const sectionLabels: Record<string, string> = {
   wrong: "Being Wrong",
   fear: "Fear",
   compulsion: "Chasing and Compulsion",
-  awareness: "Self Awareness",
+  awareness: "Self-Awareness",
   discipline: "Discipline and Process",
 };
+
+// Turn a scraped rule string ("10%", "$10,000", "$5k") into an amount for the account size.
+export function ruleToAmount(rule: string | null | undefined, accountSize: number): number | null {
+  if (!rule) return null;
+  const pct = rule.match(/(\d+(?:\.\d+)?)\s*%/);
+  if (pct) return (accountSize * Number(pct[1])) / 100;
+  const num = rule.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*([km])?/i);
+  if (!num) return null;
+  const multiplier = num[2]?.toLowerCase() === "m" ? 1_000_000 : num[2] ? 1_000 : 1;
+  return Number(num[1]) * multiplier;
+}
 
 function flagLines(assessment: Record<string, unknown>) {
   const flags = [
@@ -32,15 +70,42 @@ function flagLines(assessment: Record<string, unknown>) {
   return flags.length > 0 ? flags.join("\n") : "No critical flags.";
 }
 
+function challengeBlock(challenge: ChallengeContext | null): string {
+  if (!challenge) return "THE TRADER'S CHALLENGE:\nNo prop-firm challenge is configured yet — coach on general trading psychology.";
+  const { rules } = challenge;
+  const type = ACCOUNT_TYPE_LABEL[challenge.accountType] ?? challenge.accountType;
+  const progress = challenge.progressPct != null ? `${Math.round(challenge.progressPct * 100)}% of target` : "no profit target detected";
+  const target = challenge.targetAmount != null ? `${money(challenge.targetAmount)} (${rules.profit_target})` : rules.profit_target;
+  const toGo = challenge.amountToGo != null ? `, ${money(Math.max(0, challenge.amountToGo))} to go` : "";
+  const daysLeft = challenge.daysLeft != null ? `, ${challenge.daysLeft} days left` : "";
+  return `THE TRADER'S CHALLENGE:
+Firm: ${challenge.firmName} — ${type}, ${money(challenge.accountSize)} account.
+Rules: profit target ${target}; daily loss limit ${rules.daily_loss_limit}; max drawdown ${rules.max_drawdown}; min trading days ${rules.min_trading_days ?? "n/a"}; weekend holding ${rules.weekend_holding ? "allowed" : "not allowed"}; news trading ${rules.news_trading_allowed ? "allowed" : "restricted"}.
+Standing: cumulative P&L ${money(challenge.cumulativePnl)} (${progress})${toGo}; ${challenge.daysTraded} days traded${daysLeft}.
+${rules.other_rules?.length ? `Notable: ${rules.other_rules.slice(0, 3).join("; ")}.` : ""}`;
+}
+
+function recentBlock(entries: RecentEntry[]): string {
+  if (!entries.length) return "RECENT SESSIONS:\nNo journal entries yet.";
+  const lines = entries.slice(0, 5).map((entry) => {
+    const pnl = entry.pnl == null ? "no P&L" : `${entry.pnl >= 0 ? "+" : ""}${money(entry.pnl)}`;
+    const note = entry.note ? ` — "${entry.note.slice(0, 90)}"` : "";
+    const lesson = entry.lesson ? ` (lesson: ${entry.lesson.slice(0, 70)})` : "";
+    return `- ${entry.date}: ${pnl}, ${entry.mood}${note}${lesson}`;
+  });
+  return `RECENT SESSIONS (most recent first):\n${lines.join("\n")}`;
+}
+
 export function shouldRecommendBreak(journal: JournalContext) {
   return journal.toughSessions >= 3 || journal.losingStreak >= 4;
 }
 
-export async function generatePsychologyReply(input: {
+export function buildPsychologyCoachInstructions(input: {
   name: string;
-  transcript: string;
   assessment: PsychologyAssessmentRow & Record<string, unknown>;
   journal: JournalContext;
+  challenge?: ChallengeContext | null;
+  recentEntries?: RecentEntry[];
 }) {
   const { assessment, journal } = input;
   const section = sectionLabels[String(assessment.focus_area)] ?? String(assessment.focus_area);
@@ -48,40 +113,55 @@ export async function generatePsychologyReply(input: {
     ? "\nIMPORTANT: At a natural point, raise the idea of taking a break. Make it a mentor's honest observation, not a system alert."
     : "";
 
-  const system = `You are the verify.trading Psychology AI - a personal coach and companion for ${input.name}, a retail forex trader.
+  return `You are ${input.name}'s coach at verify.trading — a personal coach and companion for a retail prop-firm trader, on a live voice call.
 
-You are not a trading signal service. Never give trade recommendations.
-You are here purely for mental performance and psychological wellbeing.
-You are warm but honest. Tell them what they need to hear.
+You are not a trading signal service. Never give trade recommendations or entries/exits.
+You are here for mental performance, risk discipline, and psychological wellbeing.
+You are warm but honest — tell them what they need to hear. Speak naturally, like a real call.
 
-Assessment score: ${assessment.total_score}/75 - ${assessment.zone_label}
-Dominant pattern: ${section}
-Focus area: ${assessment.q29_focus}
-Trading situation: ${assessment.q1_trading_situation}
-Current stress level: ${assessment.q2_stress_level}
-Financial situation: ${assessment.q3_financial_situation}
-Sleep quality: ${assessment.q4_sleep_quality}
-Energy levels: ${assessment.q5_energy_level}
+You know their full situation below. USE IT: reference their firm's actual rules, how close they are to the target, the daily-loss/drawdown limits they must respect, and their recent sessions — concretely and naturally, without announcing that you're reading data.
 
+ASSESSMENT:
+Score: ${assessment.total_score}/75 — ${assessment.zone_label}. Dominant pattern: ${section}. Focus: ${assessment.q29_focus}.
+Situation: ${assessment.q1_trading_situation}. Stress: ${assessment.q2_stress_level}. Financial: ${assessment.q3_financial_situation}. Sleep: ${assessment.q4_sleep_quality}. Energy: ${assessment.q5_energy_level}.
 FLAGS:
 ${flagLines(assessment)}
 
-JOURNAL DATA:
-Current streak: ${journal.winningStreak || journal.losingStreak} (${journal.winningStreak > 0 ? "winning" : journal.losingStreak > 0 ? "losing" : "none"})
-Last 7 days P&L: ${journal.weeklyPnl}
-Sessions in last 7 days: ${journal.sessionCount}
-Tough sessions in last 7 days: ${journal.toughSessions}
+${challengeBlock(input.challenge ?? null)}
 
-Use this data naturally. Do not announce that you are reading data.
-Always end with one natural follow-up question.
-Keep responses concise. Maximum 80 words.${breakContext}`;
+WEEK: ${journal.sessionCount} sessions, P&L ${money(journal.weeklyPnl)}, ${journal.toughSessions} tough. Current streak: ${journal.winningStreak || journal.losingStreak} (${journal.winningStreak > 0 ? "winning" : journal.losingStreak > 0 ? "losing" : "none"}).
 
+${recentBlock(input.recentEntries ?? [])}
+
+Keep it conversational and tight — 40 to 80 words, since it's spoken aloud. Plain text only — no markdown, no lists — your reply is read aloud. Always end with one natural follow-up question.${breakContext}`;
+}
+
+export type PsychologyCoachContext = {
+  name: string;
+  assessment: PsychologyAssessmentRow & Record<string, unknown>;
+  journal: JournalContext;
+  challenge?: ChallengeContext | null;
+  recentEntries?: RecentEntry[];
+};
+
+export async function generatePsychologyReply(input: PsychologyCoachContext & { transcript: string }) {
+  return runCoach(buildPsychologyCoachInstructions(input), input.transcript, 240);
+}
+
+async function runCoach(system: string, prompt: string, maxOutputTokens: number) {
   const result = await generateText({
     model: getAskSimpleModel(),
-    maxOutputTokens: 220,
+    maxOutputTokens,
     system,
-    prompt: input.transcript,
+    prompt,
   });
 
-  return result.text.trim();
+  return speakable(result.text);
+}
+
+// The reply is read aloud on a live voice call, so strip any markdown glyphs the model
+// emits (they'd be spoken literally) while preserving sentence flow; newlines collapse to
+// spaces.
+function speakable(text: string): string {
+  return text.replace(/[*_`#>|~]/g, " ").replace(/\s+/g, " ").trim();
 }

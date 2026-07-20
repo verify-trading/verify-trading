@@ -6,6 +6,7 @@ import { getAppName } from "@/lib/site-config";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: `Privacy policy for ${getAppName()}.`,
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

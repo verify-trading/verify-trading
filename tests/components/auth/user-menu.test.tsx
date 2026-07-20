@@ -165,10 +165,9 @@ describe("UserMenu", () => {
 
     expect(screen.getByText("3/5")).toBeInTheDocument();
     expect(screen.getByText("2 free messages left today.")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "Daily message usage" })).toHaveAttribute(
-      "aria-valuenow",
-      "3",
-    );
+    const progressBar = screen.getByRole("progressbar", { name: "Daily message usage" });
+    expect(progressBar).toHaveAttribute("value", "3");
+    expect(progressBar).toHaveAttribute("max", "5");
   });
 
   it("links Upgrade to Pro to the pricing page", async () => {

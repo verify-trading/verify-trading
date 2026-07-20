@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { ZodError } from "zod";
 
 import { classifyAskRouteError, getUserMessageForAskFailureCode } from "@/lib/ask/ask-failure";
@@ -5,6 +6,11 @@ import { askRequestSchema, type AskResponse, type AskSessionMemory } from "@/lib
 import { getAskPersistence, type AskPersistence } from "@/lib/ask/persistence";
 import { defaultAskImagePrompt } from "@/lib/ask/prompt";
 import { generateAskResponse } from "@/lib/ask/pipeline";
+import {
+  isAskCacheCandidate,
+  maybeCacheAskResponse,
+  readCachedAskResponse,
+} from "@/lib/ask/response-cache";
 import type { AskGenerationCallbacks } from "@/lib/ask/service/types";
 import { buildUpdatedSessionMemory } from "@/lib/ask/session-memory";
 import { AskValidationError } from "@/lib/ask/validation-error";
@@ -113,6 +119,33 @@ export async function completeAskExchange(
   prepared: PreparedAskRoute,
   callbacks?: AskGenerationCallbacks,
 ): Promise<AskResponse> {
+  // Bare single-entity lookups ("is alpha futures legit") are served from the
+  // shared response cache when a fresh answer for the same register row
+  // exists — zero model cost, sub-second response. The exchange still counts
+  // against the daily quota and still lands in the user's session history, so
+  // a hit is indistinguishable from a generated answer everywhere else. The
+  // sync pre-gate keeps non-cacheable requests (images, follow-ups) off the
+  // async cache path entirely.
+  const cacheCandidate = isAskCacheCandidate(prepared.requestInput);
+  if (cacheCandidate) {
+    const cached = await readCachedAskResponse(prepared.requestInput);
+    if (cached) {
+      const response: AskResponse = {
+        data: cached.data,
+        uiMeta: cached.uiMeta,
+        // Same fallback chain as generateAskResponse (prepareAskRoute always
+        // sets sessionId, but the request type keeps it optional).
+        sessionId:
+          prepared.requestInput.sessionId ??
+          prepared.requestInput.chatSessionId ??
+          crypto.randomUUID(),
+        messageId: crypto.randomUUID(),
+      };
+      await runAfterResponse(() => saveAskExchangeBestEffort(prepared, response));
+      return response;
+    }
+  }
+
   let response: AskResponse;
   try {
     response = await generateAskResponse(prepared.requestInput, {}, callbacks);
@@ -122,8 +155,32 @@ export async function completeAskExchange(
     throw error;
   }
 
-  await saveAskExchangeBestEffort(prepared, response);
+  await runAfterResponse(async () => {
+    await saveAskExchangeBestEffort(prepared, response);
+    if (cacheCandidate) await maybeCacheAskResponse(prepared.requestInput, response);
+  });
   return response;
+}
+
+/**
+ * Runs post-response work without making the caller wait for it.
+ *
+ * The answer is already complete by this point, so awaiting two more Supabase round trips
+ * only adds latency the user feels. Plain fire-and-forget is unsafe — the serverless
+ * runtime can freeze the moment the response resolves — so `after` is used to keep the
+ * invocation alive until the work finishes.
+ *
+ * `after` requires a Next request scope and throws without one. Callers here run inside
+ * a `try` that converts any throw into a failure response, so an unscoped call would turn
+ * a perfectly good answer into an error. Fall back to awaiting instead: correct
+ * everywhere, just without the latency win outside a request lifecycle.
+ */
+async function runAfterResponse(work: () => Promise<void>) {
+  try {
+    after(work);
+  } catch {
+    await work();
+  }
 }
 
 async function saveAskExchangeBestEffort(prepared: PreparedAskRoute, response: AskResponse) {

@@ -1,13 +1,32 @@
 import { z } from "zod";
 import { fetchWithRetry } from "@/lib/http/fetch-with-retry";
+import {
+  fetchMarketSeries,
+  fetchQuotes,
+  isCacheFresh,
+  readCacheRow,
+  upsertCache,
+  type MarketSeriesTimeframe,
+} from "@/lib/markets/twelve-data-adapter";
+import {
+  toTwelveDataSymbol,
+  twelveDataQuoteToMarketQuote,
+  twelveDataSparklineToCloseValues,
+} from "./market-providers";
 
 const quoteCache = new Map<string, { value: MarketQuote; expiresAt: number }>();
 const seriesCache = new Map<string, { value: MarketSeries; expiresAt: number }>();
 const instrumentCache = new Map<string, { value: MarketInstrument; expiresAt: number }>();
 
-const cacheTtlMs = 60_000;
+/** Server-side TTLs for the shared Supabase cache (and the in-process L1 in front of it). */
+const QUOTE_TTL_MS = 60_000;
+const SERIES_TTL_MS = 300_000;
+const INSTRUMENT_TTL_MS = 60_000;
 
-type MarketInstrument = {
+/** Timeframes Twelve Data's adapter can serve; anything else (e.g. 1Y) falls through to FMP. */
+const TWELVE_DATA_TIMEFRAMES: readonly MarketSeriesTimeframe[] = ["1D", "1W", "1M", "3M"];
+
+export type MarketInstrument = {
   asset: string;
   symbol: string;
   proxyAssumption?: string;
@@ -137,8 +156,9 @@ export interface MarketSeries extends MarketInstrument {
 }
 
 /**
- * Ask tab: pass `{ live: true }` to skip caches and bypass Next.js Data Cache on FMP (always fresh reads).
- * Markets dashboard / API: omit (default) to keep 60s in-memory + FMP revalidation behaviour.
+ * `{ live: true }` skips the TTL cache *reads* (always refetches) but still writes the
+ * fresh value back to the cache. Omit (default) for the normal two-provider + TTL cache
+ * path used by the Ask tab and landing hero.
  */
 export type MarketDataOptions = {
   live?: boolean;
@@ -161,7 +181,7 @@ export function deriveQuoteFromSeries(series: MarketSeries): MarketQuote {
     ...(series.proxyAssumption ? { proxyAssumption: series.proxyAssumption } : {}),
     price: last,
     changePercent,
-    direction: changePercent >= 0 ? "up" : "down",
+    direction: directionFromChange(changePercent),
     isMarketOpen: null,
   };
 }
@@ -201,11 +221,31 @@ function getCached<T>(cache: Map<string, { value: T; expiresAt: number }>, key: 
   return cached.value;
 }
 
-function setCached<T>(cache: Map<string, { value: T; expiresAt: number }>, key: string, value: T) {
+function setCached<T>(cache: Map<string, { value: T; expiresAt: number }>, key: string, value: T, ttlMs: number) {
   cache.set(key, {
     value,
-    expiresAt: Date.now() + cacheTtlMs,
+    expiresAt: Date.now() + ttlMs,
   });
+}
+
+// L2 cache: the shared Supabase market_cache row (survives across serverless invocations,
+// unlike the in-process Maps). Resilient — a cache miss/hiccup is never allowed to break the
+// data path, so read failures read as a miss and writes are fire-and-forget.
+async function readServerCache<T>(key: string, ttlMs: number): Promise<T | null> {
+  try {
+    const row = await readCacheRow<T>(key);
+    return row && isCacheFresh(row.fetchedAt, ttlMs) ? row.payload : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeServerCache(key: string, payload: unknown): void {
+  void upsertCache(key, payload).catch(() => undefined);
+}
+
+function directionFromChange(changePercent: number): "up" | "down" {
+  return changePercent >= 0 ? "up" : "down";
 }
 
 function buildInstrumentLabel(name: string | undefined, symbol: string) {
@@ -473,7 +513,7 @@ async function searchMarketInstrument(
   };
 
   if (!live) {
-    setCached(instrumentCache, cacheKey, instrument);
+    setCached(instrumentCache, cacheKey, instrument, INSTRUMENT_TTL_MS);
   }
   return instrument;
 }
@@ -495,58 +535,131 @@ async function resolveMarketInstrument(
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export async function getMarketQuote(asset: string, options?: MarketDataOptions): Promise<MarketQuote> {
-  const live = options?.live === true;
-  const resolved = await resolveMarketInstrument(asset, options);
-
-  const cacheKey = resolved.symbol;
-  if (!live) {
-    const cached = getCached(quoteCache, cacheKey);
-    if (cached) {
-      return cached;
-    }
-  }
-
-  const json = await fetchFmpData(
-    "stable/quote",
-    {
-      symbol: resolved.symbol,
-    },
-    { live },
-  );
+async function fetchFmpQuote(resolved: MarketInstrument, live: boolean): Promise<MarketQuote> {
+  const json = await fetchFmpData("stable/quote", { symbol: resolved.symbol }, { live });
   const row = Array.isArray(json) ? (json[0] as Record<string, unknown> | undefined) : undefined;
   if (!row) {
     throw new Error(`FMP quote did not return data for ${resolved.symbol}.`);
   }
 
   const price = requireNumericValue(
-    parseNumericValue(row.close) ??
-    parseNumericValue(row.price) ??
-    parseNumericValue(row.last),
+    parseNumericValue(row.close) ?? parseNumericValue(row.price) ?? parseNumericValue(row.last),
     "FMP quote did not include a valid price.",
   );
   const changePercent = requireNumericValue(
     parseNumericValue(row.changePercentage) ??
-    parseNumericValue(row.percent_change) ??
-    parseNumericValue(row.change_percent) ??
-    parseNumericValue(row.change),
+      parseNumericValue(row.percent_change) ??
+      parseNumericValue(row.change_percent) ??
+      parseNumericValue(row.change),
     "FMP quote did not include a valid percentage change.",
   );
 
-  const quote: MarketQuote = {
+  return {
     asset: resolved.asset,
     symbol: resolved.symbol,
     price,
     changePercent,
-    direction: changePercent >= 0 ? "up" : "down",
+    direction: directionFromChange(changePercent),
     isMarketOpen: null,
     ...(resolved.proxyAssumption ? { proxyAssumption: resolved.proxyAssumption } : {}),
   };
+}
 
-  if (!live) {
-    setCached(quoteCache, cacheKey, quote);
+// Twelve Data first — it covers Gold/commodities that FMP's plan blocks and matches the
+// Markets tab, so both surfaces agree — then FMP as the fallback for anything it can't serve.
+async function fetchQuoteFromProviders(resolved: MarketInstrument, live: boolean): Promise<MarketQuote> {
+  const tdSymbol = toTwelveDataSymbol(resolved.symbol);
+  if (tdSymbol) {
+    try {
+      const [td] = await fetchQuotes([tdSymbol]);
+      if (td && Number.isFinite(td.price) && td.price > 0) {
+        return twelveDataQuoteToMarketQuote(resolved, td);
+      }
+    } catch {
+      // Twelve Data unavailable (rate limit, missing key, unsupported symbol) — fall through.
+    }
   }
+  return fetchFmpQuote(resolved, live);
+}
+
+export async function getMarketQuote(asset: string, options?: MarketDataOptions): Promise<MarketQuote> {
+  const live = options?.live === true;
+  const resolved = await resolveMarketInstrument(asset, options);
+
+  const cacheKey = resolved.symbol;
+  const serverKey = `ask:quote:${cacheKey}`;
+  if (!live) {
+    const l1 = getCached(quoteCache, cacheKey);
+    if (l1) return l1;
+    const l2 = await readServerCache<MarketQuote>(serverKey, QUOTE_TTL_MS);
+    if (l2) {
+      setCached(quoteCache, cacheKey, l2, QUOTE_TTL_MS);
+      return l2;
+    }
+  }
+
+  const quote = await fetchQuoteFromProviders(resolved, live);
+  setCached(quoteCache, cacheKey, quote, QUOTE_TTL_MS);
+  writeServerCache(serverKey, quote);
   return quote;
+}
+
+function buildSeries(
+  resolved: MarketInstrument,
+  timeframe: MarketSeries["timeframe"],
+  closeValues: number[],
+): MarketSeries {
+  return {
+    asset: resolved.asset,
+    symbol: resolved.symbol,
+    timeframe,
+    closeValues,
+    resistance: Math.max(...closeValues),
+    support: Math.min(...closeValues),
+    ...(resolved.proxyAssumption ? { proxyAssumption: resolved.proxyAssumption } : {}),
+  };
+}
+
+async function fetchFmpSeries(
+  resolved: MarketInstrument,
+  timeframe: MarketSeries["timeframe"],
+  window: ReturnType<typeof formatTimeframe>,
+  live: boolean,
+): Promise<MarketSeries> {
+  const json = await fetchFmpData(
+    "stable/historical-price-eod/light",
+    { symbol: resolved.symbol, limit: window.limit },
+    { live },
+  );
+  const values = Array.isArray(json) ? json : [];
+  const closeValues = trimCloseValues(parseTimeSeriesCloseValues(values), window.points);
+  if (closeValues.length < 2) {
+    throw new Error("FMP historical prices did not include enough close values.");
+  }
+  return buildSeries(resolved, timeframe, closeValues);
+}
+
+// Twelve Data first (covers the commodities FMP's plan blocks), FMP fallback. Twelve Data
+// only serves the four adapter timeframes; anything else (e.g. 1Y) goes straight to FMP.
+async function fetchSeriesFromProviders(
+  resolved: MarketInstrument,
+  timeframe: MarketSeries["timeframe"],
+  window: ReturnType<typeof formatTimeframe>,
+  live: boolean,
+): Promise<MarketSeries> {
+  const tdSymbol = toTwelveDataSymbol(resolved.symbol);
+  if (tdSymbol && (TWELVE_DATA_TIMEFRAMES as readonly string[]).includes(timeframe)) {
+    try {
+      const sparkline = await fetchMarketSeries(tdSymbol, timeframe as MarketSeriesTimeframe);
+      const closeValues = trimCloseValues(twelveDataSparklineToCloseValues(sparkline), window.points);
+      if (closeValues.length >= 2) {
+        return buildSeries(resolved, timeframe, closeValues);
+      }
+    } catch {
+      // Twelve Data unavailable — fall through to FMP.
+    }
+  }
+  return fetchFmpSeries(resolved, timeframe, window, live);
 }
 
 export async function getMarketSeries(
@@ -558,48 +671,27 @@ export async function getMarketSeries(
   const resolved = await resolveMarketInstrument(asset, options);
   const window = formatTimeframe(timeframe);
 
+  // The cache stores the fetched window; a read re-trims to the requested points (idempotent).
+  const trimToWindow = (series: MarketSeries): MarketSeries => {
+    if (series.closeValues.length <= window.points) return series; // cached at this window — nothing to trim
+    const closeValues = trimCloseValues(series.closeValues, window.points);
+    return { ...series, closeValues, support: Math.min(...closeValues), resistance: Math.max(...closeValues) };
+  };
+
   const cacheKey = `${resolved.symbol}:${timeframe}`;
+  const serverKey = `ask:series:${cacheKey}`;
   if (!live) {
-    const cached = getCached(seriesCache, cacheKey);
-    if (cached) {
-      const closeValues = trimCloseValues(cached.closeValues, window.points);
-      return {
-        ...cached,
-        closeValues,
-        support: Math.min(...closeValues),
-        resistance: Math.max(...closeValues),
-      };
+    const l1 = getCached(seriesCache, cacheKey);
+    if (l1) return trimToWindow(l1);
+    const l2 = await readServerCache<MarketSeries>(serverKey, SERIES_TTL_MS);
+    if (l2) {
+      setCached(seriesCache, cacheKey, l2, SERIES_TTL_MS);
+      return trimToWindow(l2);
     }
   }
 
-  const json = await fetchFmpData(
-    "stable/historical-price-eod/light",
-    {
-      symbol: resolved.symbol,
-      limit: window.limit,
-    },
-    { live },
-  );
-
-  const values = Array.isArray(json) ? json : [];
-  const closeValues = trimCloseValues(parseTimeSeriesCloseValues(values), window.points);
-
-  if (closeValues.length < 2) {
-    throw new Error("FMP historical prices did not include enough close values.");
-  }
-
-  const series: MarketSeries = {
-    asset: resolved.asset,
-    symbol: resolved.symbol,
-    timeframe,
-    closeValues,
-    resistance: Math.max(...closeValues),
-    support: Math.min(...closeValues),
-    ...(resolved.proxyAssumption ? { proxyAssumption: resolved.proxyAssumption } : {}),
-  };
-
-  if (!live) {
-    setCached(seriesCache, cacheKey, series);
-  }
+  const series = await fetchSeriesFromProviders(resolved, timeframe, window, live);
+  setCached(seriesCache, cacheKey, series, SERIES_TTL_MS);
+  writeServerCache(serverKey, series);
   return series;
 }

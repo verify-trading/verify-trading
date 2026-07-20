@@ -17,35 +17,29 @@ import {
 import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { CaptchaWidget } from "@/components/auth/captcha-widget";
+import { useCaptcha } from "@/components/auth/use-captcha";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
 import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
 import { forgotPasswordSchema, type ForgotPasswordFormValues } from "@/lib/auth/schemas";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-
 type ForgotPasswordState = {
   info: string | null;
   loading: boolean;
   apiError: string | null;
-  captchaToken: string | null;
-  captchaKey: number;
 };
 
 type ForgotPasswordAction =
   | { type: "submit_start" }
   | { type: "submit_end" }
-  | { type: "error"; message: string; resetCaptcha?: boolean }
-  | { type: "success"; message: string }
-  | { type: "captcha_token"; token: string | null };
+  | { type: "error"; message: string }
+  | { type: "success"; message: string };
 
 const initialForgotPasswordState: ForgotPasswordState = {
   info: null,
   loading: false,
   apiError: null,
-  captchaToken: null,
-  captchaKey: 0,
 };
 
 function forgotPasswordReducer(
@@ -58,16 +52,9 @@ function forgotPasswordReducer(
     case "submit_end":
       return { ...state, loading: false };
     case "error":
-      return {
-        ...state,
-        apiError: action.message,
-        captchaToken: action.resetCaptcha ? null : state.captchaToken,
-        captchaKey: action.resetCaptcha ? state.captchaKey + 1 : state.captchaKey,
-      };
+      return { ...state, apiError: action.message };
     case "success":
       return { ...state, info: action.message };
-    case "captcha_token":
-      return { ...state, captchaToken: action.token };
   }
 }
 
@@ -82,8 +69,8 @@ function ForgotPasswordPageContent() {
   const next = useMemo(() => getSafeRedirectPath(nextParam, "/ask"), [nextParam]);
   const loginHref = useMemo(() => appendSafeNextParam("/login", nextParam), [nextParam]);
   const [state, dispatch] = useReducer(forgotPasswordReducer, initialForgotPasswordState);
-  const { info, loading, apiError, captchaToken, captchaKey } = state;
-  const captchaRequired = Boolean(TURNSTILE_SITE_KEY);
+  const { info, loading, apiError } = state;
+  const captcha = useCaptcha();
 
   const {
     register,
@@ -103,7 +90,7 @@ function ForgotPasswordPageContent() {
         return;
       }
 
-      if (captchaRequired && !captchaToken) {
+      if (captcha.blocked) {
         dispatch({ type: "error", message: "Please complete the security check before continuing." });
         return;
       }
@@ -112,11 +99,12 @@ function ForgotPasswordPageContent() {
       const updatePasswordPath = appendSafeNextParam("/auth/update-password", next);
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email.trim(), {
         redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(updatePasswordPath)}`,
-        captchaToken: captchaToken ?? undefined,
+        captchaToken: captcha.token,
       });
 
       if (resetError) {
-        dispatch({ type: "error", message: resetError.message, resetCaptcha: true });
+        dispatch({ type: "error", message: resetError.message });
+        captcha.reset();
         return;
       }
 
@@ -164,14 +152,8 @@ function ForgotPasswordPageContent() {
           />
           <AuthFieldError message={errors.email?.message} />
         </div>
-        <CaptchaWidget
-          siteKey={TURNSTILE_SITE_KEY ?? ""}
-          captchaKey={captchaKey}
-          onSuccess={(token) => dispatch({ type: "captcha_token", token })}
-          onExpire={() => dispatch({ type: "captcha_token", token: null })}
-          onError={() => dispatch({ type: "captcha_token", token: null })}
-        />
-        <Button type="submit" variant="default" size="pill" className="w-full" disabled={loading || (captchaRequired && !captchaToken)}>
+        <CaptchaWidget {...captcha.widgetProps} />
+        <Button type="submit" variant="default" size="pill" className="w-full" disabled={loading || captcha.blocked}>
           {loading ? "Sending…" : "Send reset link"}
         </Button>
       </form>

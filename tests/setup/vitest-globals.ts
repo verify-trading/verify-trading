@@ -34,6 +34,20 @@ globalThis.ResizeObserver = class ResizeObserver implements ResizeObserver {
   disconnect(): void {}
 };
 
+/** jsdom has no matchMedia; components that gate behaviour on a media query need a stub. */
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+}
+
 /** jsdom often reports 0×0 for chart containers; Recharts needs non-zero layout. */
 if (typeof Element !== "undefined") {
   Element.prototype.getBoundingClientRect = function getBoundingClientRect(this: Element) {

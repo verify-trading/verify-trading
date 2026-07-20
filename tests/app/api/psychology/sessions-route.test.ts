@@ -1,0 +1,197 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/auth/session", () => ({
+  getSessionUser: vi.fn(),
+}));
+
+vi.mock("@/lib/observability/logger", () => ({
+  logger: {
+    error: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
+import { GET as listSessions } from "@/app/api/psychology/sessions/route";
+import { GET as getSession, PATCH as patchSession } from "@/app/api/psychology/sessions/[id]/route";
+import { getSessionUser } from "@/lib/auth/session";
+
+const SESSION_ID = "3f9d2c1e-8a4b-4c6d-9e0f-1a2b3c4d5e6f";
+
+const sessionRow = {
+  id: SESSION_ID,
+  created_at: "2026-07-17T09:00:00.000Z",
+  duration_secs: 320,
+  message_count: 6,
+  break_recommended: false,
+  assessment_id: "assessment-1",
+};
+
+const sessionShape = {
+  id: SESSION_ID,
+  createdAt: "2026-07-17T09:00:00.000Z",
+  durationSecs: 320,
+  messageCount: 6,
+  breakRecommended: false,
+  assessmentId: "assessment-1",
+};
+
+// Chainable thenable stand-in for a PostgREST query: every builder method returns the
+// builder, awaiting it (or .single()/.maybeSingle()) resolves the provided result.
+function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
+  const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
+
+  for (const method of ["select", "eq", "gt", "order", "limit", "insert", "update"]) {
+    builder[method] = vi.fn(() => builder);
+  }
+  builder.single = vi.fn().mockResolvedValue(result);
+  builder.maybeSingle = vi.fn().mockResolvedValue(result);
+  builder.then = (onFulfilled, onRejected) => Promise.resolve(result).then(onFulfilled, onRejected);
+
+  return builder;
+}
+
+function mockSession(from: ReturnType<typeof vi.fn>) {
+  vi.mocked(getSessionUser).mockResolvedValue({
+    user: { id: "user-1" },
+    supabase: { from },
+  } as never);
+}
+
+function paramsContext(id: string) {
+  return { params: Promise.resolve({ id }) };
+}
+
+describe("Psychology sessions API", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("requires a session to list coaching sessions", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+
+    const response = await listSessions();
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "unauthorized",
+      message: "Sign in to load coaching sessions.",
+    });
+  });
+
+  it("lists only sessions with messages, newest first, as camelCase rows", async () => {
+    const builder = createQueryBuilder({ data: [sessionRow], error: null });
+    const from = vi.fn(() => builder);
+    mockSession(from);
+
+    const response = await listSessions();
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(from).toHaveBeenCalledWith("psychology_sessions");
+    expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(builder.gt).toHaveBeenCalledWith("message_count", 0);
+    expect(builder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(json).toEqual([sessionShape]);
+  });
+
+  it("rejects an invalid session id", async () => {
+    const response = await getSession(
+      new Request(`http://localhost/api/psychology/sessions/not-a-uuid`),
+      paramsContext("not-a-uuid"),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "psychology_session_invalid",
+      message: "The coaching session id is invalid.",
+    });
+  });
+
+  it("returns a session with its transcript ordered oldest first", async () => {
+    const messages = [
+      { role: "coach", content: "Hey Alex, how are you landing today?", created_at: "2026-07-17T09:00:01.000Z" },
+      { role: "user", content: "Rough morning, I chased a loss.", created_at: "2026-07-17T09:00:20.000Z" },
+    ];
+    const sessionBuilder = createQueryBuilder({ data: sessionRow, error: null });
+    const messagesBuilder = createQueryBuilder({ data: messages, error: null });
+    const from = vi.fn((table: string) =>
+      table === "psychology_sessions" ? sessionBuilder : messagesBuilder,
+    );
+    mockSession(from);
+
+    const response = await getSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`),
+      paramsContext(SESSION_ID),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(from).toHaveBeenCalledWith("psychology_session_messages");
+    expect(messagesBuilder.eq).toHaveBeenCalledWith("session_id", SESSION_ID);
+    expect(messagesBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
+    expect(json).toEqual({
+      session: sessionShape,
+      messages: [
+        { role: "coach", content: "Hey Alex, how are you landing today?", createdAt: "2026-07-17T09:00:01.000Z" },
+        { role: "user", content: "Rough morning, I chased a loss.", createdAt: "2026-07-17T09:00:20.000Z" },
+      ],
+    });
+  });
+
+  it("404s when the session does not belong to the caller", async () => {
+    const sessionBuilder = createQueryBuilder({ data: null, error: null });
+    const messagesBuilder = createQueryBuilder({ data: [], error: null });
+    const from = vi.fn((table: string) =>
+      table === "psychology_sessions" ? sessionBuilder : messagesBuilder,
+    );
+    mockSession(from);
+
+    const response = await getSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`),
+      paramsContext(SESSION_ID),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "psychology_session_missing",
+      message: "That coaching session was not found.",
+    });
+  });
+
+  it("rejects an invalid duration patch", async () => {
+    const response = await patchSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ durationSecs: -5 }),
+      }),
+      paramsContext(SESSION_ID),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "psychology_session_invalid",
+      message: "The coaching session update is invalid.",
+    });
+  });
+
+  it("sets duration_secs on the caller's session and returns the updated row", async () => {
+    const builder = createQueryBuilder({ data: { ...sessionRow, duration_secs: 415 }, error: null });
+    const from = vi.fn(() => builder);
+    mockSession(from);
+
+    const response = await patchSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ durationSecs: 415 }),
+      }),
+      paramsContext(SESSION_ID),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(builder.update).toHaveBeenCalledWith({ duration_secs: 415 });
+    expect(builder.eq).toHaveBeenCalledWith("id", SESSION_ID);
+    expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(json).toEqual({ ...sessionShape, durationSecs: 415 });
+  });
+});

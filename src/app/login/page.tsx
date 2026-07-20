@@ -5,6 +5,7 @@ import LoginPageContent from "./login-page-content";
 export const metadata: Metadata = {
   title: "Sign in",
   description: "Sign in to verify.trading.",
+  alternates: { canonical: "/login" },
 };
 
 export default function LoginPage() {

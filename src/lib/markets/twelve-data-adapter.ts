@@ -93,9 +93,16 @@ export async function fetchQuotes(symbols: readonly string[]): Promise<TwelveDat
   const url = buildUrl("quote", { symbol: symbols.join(",") });
   const data = (await fetchJson(url)) as Record<string, Record<string, unknown>>;
 
+  // Single-symbol requests return the quote fields at the top level instead of
+  // keyed by symbol; normalize so both shapes parse identically.
+  const bySymbol: Record<string, Record<string, unknown>> =
+    symbols.length === 1 && !data[symbols[0]] && ("close" in data || "symbol" in data)
+      ? { [symbols[0]]: data as Record<string, unknown> }
+      : data;
+
   const results: TwelveDataQuote[] = [];
   for (const sym of symbols) {
-    const raw = data[sym];
+    const raw = bySymbol[sym];
     if (!raw || typeof raw !== "object") continue;
 
     results.push({
@@ -208,6 +215,13 @@ export async function readCache<T>(key: string): Promise<T | null> {
 
   if (error || !data) return null;
   return data.payload as T;
+}
+
+/** True when a cache row's fetchedAt is within ttlMs of now — pairs with readCacheRow. */
+export function isCacheFresh(fetchedAt: string | null | undefined, ttlMs: number): boolean {
+  if (!fetchedAt) return false;
+  const at = Date.parse(fetchedAt);
+  return Number.isFinite(at) && Date.now() - at < ttlMs;
 }
 
 export async function readCacheRow<T>(key: string): Promise<{ payload: T; fetchedAt: string | null } | null> {

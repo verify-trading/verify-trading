@@ -1,5 +1,4 @@
 import type {
-  EconomicCalendarCountry,
   EconomicCalendarImpact,
   EconomicCalendarSnapshot,
   EconomicEventItem,
@@ -8,23 +7,29 @@ import { ECONOMIC_CALENDAR_COUNTRIES } from "@/lib/markets/economic-calendar";
 import { fetchWithRetry } from "@/lib/http/fetch-with-retry";
 
 export const ECONOMIC_CALENDAR_CACHE_KEY = "events:economic:week";
-export const ECONOMIC_CALENDAR_REFRESH_MS = 60 * 60 * 1000;
+// forex-api2's BASIC plan allows only 50 requests/month, so refresh at most
+// once a day (~30/month). The UTC day-rollover check below still forces a daily
+// refresh to advance the rolling window, which keeps actuals reasonably fresh.
+export const ECONOMIC_CALENDAR_REFRESH_MS = 24 * 60 * 60 * 1000;
 
+/** forex-api2 (RapidAPI) economic calendar event, as returned under `data`. */
 type RawEconomicEvent = {
   id?: unknown;
-  date?: unknown;
-  country?: unknown;
-  currency?: unknown;
-  title?: unknown;
-  indicator?: unknown;
-  importance?: unknown;
+  dateUtc?: unknown;
+  countryCode?: unknown;
+  currencyCode?: unknown;
+  name?: unknown;
   actual?: unknown;
-  forecast?: unknown;
+  consensus?: unknown;
   previous?: unknown;
-  unit?: unknown;
-  scale?: unknown;
-  source?: unknown;
-  period?: unknown;
+  revised?: unknown;
+  volatility?: unknown;
+};
+
+type ForexApiCalendarResponse = {
+  data?: unknown;
+  errors?: Array<{ message?: unknown }>;
+  hasError?: unknown;
 };
 
 type EconomicCalendarWindow = {
@@ -32,10 +37,32 @@ type EconomicCalendarWindow = {
   to: string;
 };
 
-const API_HOST = "ultimate-economic-calendar.p.rapidapi.com";
-const API_URL = `https://${API_HOST}/economic-events/tradingview`;
+const API_HOST = "forex-api2.p.rapidapi.com";
+const API_URL = `https://${API_HOST}/v2/calendar/get`;
 const CACHE_LOOKBACK_DAYS = 1;
 const CACHE_LOOKAHEAD_DAYS = 8;
+/** Every volatility bucket the Markets calendar renders. */
+const INCLUDE_VOLATILITIES = "none;low;medium;high";
+
+/**
+ * forex-api2 codes countries as lowercase ISO alpha-2 on the request and
+ * uppercase on the response, except the United Kingdom which it codes as
+ * `uk`/`UK` rather than `gb`/`GB`. Translate between the app's country codes
+ * and the provider's on the way out and back.
+ */
+const APP_TO_API_COUNTRY: Record<string, string> = {
+  US: "us",
+  DE: "de",
+  GB: "uk",
+  CA: "ca",
+  JP: "jp",
+  AU: "au",
+  NZ: "nz",
+  CN: "cn",
+};
+const API_TO_APP_COUNTRY: Record<string, string> = {
+  UK: "GB",
+};
 
 function formatDateUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -70,41 +97,24 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function mapImpact(value: unknown): EconomicCalendarImpact {
-  if (value === 1) {
-    return "high";
-  }
-  if (value === 0) {
-    return "medium";
-  }
-  return "low";
+function toNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function normalizeCurrency(country: string, currency: string): string {
-  if (country === "DE" && currency === "DEM") {
-    return "EUR";
+function mapImpact(volatility: unknown): EconomicCalendarImpact {
+  switch (asString(volatility).toUpperCase()) {
+    case "HIGH":
+      return "high";
+    case "MEDIUM":
+      return "medium";
+    default:
+      // LOW and NONE both render as low-impact rows.
+      return "low";
   }
-  return currency || country;
 }
 
-function formatValue(value: unknown, scale: string, unit: string): string | null {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-  const rendered = String(value);
-  if (unit === "%") {
-    return `${rendered}%`;
-  }
-  if (scale && unit) {
-    return `${rendered}${scale} ${unit}`;
-  }
-  if (scale) {
-    return `${rendered}${scale}`;
-  }
-  if (unit) {
-    return `${rendered} ${unit}`;
-  }
-  return rendered;
+function mapCountry(apiCountry: string): string {
+  return API_TO_APP_COUNTRY[apiCountry] ?? apiCountry;
 }
 
 function formatTimeLabel(iso: string): string {
@@ -116,17 +126,25 @@ function formatTimeLabel(iso: string): string {
 }
 
 function mapEvent(row: RawEconomicEvent): EconomicEventItem | null {
-  const timeUtc = asString(row.date);
-  const title = asString(row.title) || asString(row.indicator);
-  const country = asString(row.country);
-  const currency = normalizeCurrency(country, asString(row.currency));
+  const timeUtc = asString(row.dateUtc);
+  const title = asString(row.name);
+  const country = mapCountry(asString(row.countryCode).toUpperCase());
+  const currency = asString(row.currencyCode) || country;
 
-  if (!timeUtc || !title || !country || !currency) {
+  if (!timeUtc || !title || !country) {
     return null;
   }
 
-  const scale = asString(row.scale);
-  const unit = asString(row.unit);
+  // forex-api2 has no null: an unreleased actual, a data-less row (speech,
+  // holiday) and an absent forecast/previous all report as 0. Render 0 as a
+  // blank so upcoming rows don't show a misleading "0"; the trade-off is that a
+  // genuine 0 reading is also blanked, which is rarer and more honest than
+  // asserting a value that isn't there.
+  const render = (value: unknown): string | null => {
+    const numeric = toNumber(value);
+    return numeric !== null && numeric !== 0 ? String(numeric) : null;
+  };
+
   const id = asString(row.id) || `${country}:${timeUtc}:${title}`;
 
   return {
@@ -135,31 +153,14 @@ function mapEvent(row: RawEconomicEvent): EconomicEventItem | null {
     timeLabel: formatTimeLabel(timeUtc),
     country,
     currency,
-    event: title.replace(/\s+\*/g, "").trim(),
-    impact: mapImpact(row.importance),
-    actual: formatValue(row.actual, scale, unit),
-    forecast: formatValue(row.forecast, scale, unit),
-    previous: formatValue(row.previous, scale, unit),
-    source: asString(row.source) || null,
-    period: asString(row.period) || null,
+    event: title,
+    impact: mapImpact(row.volatility),
+    actual: render(row.actual),
+    forecast: render(row.consensus),
+    previous: render(row.previous),
+    source: null,
+    period: null,
   };
-}
-
-function mergeWithPreviousCountryEvents(
-  nextItems: EconomicEventItem[],
-  previousItems: EconomicEventItem[],
-  failedCountries: Set<string>,
-  window: EconomicCalendarWindow,
-): EconomicEventItem[] {
-  if (failedCountries.size === 0) {
-    return nextItems;
-  }
-
-  const retained = previousItems.filter((item) => {
-    const eventDate = item.timeUtc.slice(0, 10);
-    return failedCountries.has(item.country) && eventDate >= window.from && eventDate <= window.to;
-  });
-  return [...nextItems, ...retained];
 }
 
 function dedupeAndSort(items: EconomicEventItem[]): EconomicEventItem[] {
@@ -177,35 +178,35 @@ function dedupeAndSort(items: EconomicEventItem[]): EconomicEventItem[] {
   return deduped.sort((a, b) => a.timeUtc.localeCompare(b.timeUtc));
 }
 
-async function fetchCountryEvents(
-  country: EconomicCalendarCountry,
-  window: EconomicCalendarWindow,
-): Promise<EconomicEventItem[]> {
-  const apiKey = process.env.ULTIMATE_ECONOMIC_CALENDAR_API_KEY;
+async function fetchCalendarEvents(window: EconomicCalendarWindow): Promise<EconomicEventItem[]> {
+  const apiKey = process.env.RAPIDAPI_KEY ?? process.env.ULTIMATE_ECONOMIC_CALENDAR_API_KEY;
   if (!apiKey) {
-    throw new Error("ULTIMATE_ECONOMIC_CALENDAR_API_KEY is not set");
+    throw new Error("RAPIDAPI_KEY is not set");
   }
 
+  const includeCountries = ECONOMIC_CALENDAR_COUNTRIES.map((country) => APP_TO_API_COUNTRY[country])
+    .filter(Boolean)
+    .join(";");
   const params = new URLSearchParams({
-    from: window.from,
-    to: window.to,
-    countries: country,
+    startDate: window.from,
+    endDate: window.to,
+    includeVolatilities: INCLUDE_VOLATILITIES,
+    includeCountries,
   });
   const response = await fetchWithRetry(`${API_URL}?${params.toString()}`, {
     headers: {
-      "Content-Type": "application/json",
       "x-rapidapi-host": API_HOST,
       "x-rapidapi-key": apiKey,
     },
     cache: "no-store",
   });
-  const json = (await response.json()) as { result?: unknown; message?: unknown };
-  if (!response.ok) {
-    const message = typeof json.message === "string" ? json.message : `Economic calendar failed with ${response.status}`;
+  const json = (await response.json()) as ForexApiCalendarResponse;
+  if (!response.ok || json.hasError === true) {
+    const message = asString(json.errors?.[0]?.message) || `Economic calendar failed with ${response.status}`;
     throw new Error(message);
   }
 
-  const rawRows = Array.isArray(json.result) ? json.result : [];
+  const rawRows = Array.isArray(json.data) ? json.data : [];
   return rawRows
     .filter((row): row is RawEconomicEvent => row !== null && typeof row === "object")
     .map(mapEvent)
@@ -217,32 +218,11 @@ export async function getEconomicCalendarWeekSnapshot(
   now = new Date(),
 ): Promise<EconomicCalendarSnapshot> {
   const window = getEconomicCalendarWindow(now);
-  const settled = await Promise.allSettled(
-    ECONOMIC_CALENDAR_COUNTRIES.map(async (country) => ({
-      country,
-      items: await fetchCountryEvents(country, window),
-    })),
-  );
+  const items = dedupeAndSort(await fetchCalendarEvents(window));
 
-  const failedCountries = new Set<string>();
-  const nextItems: EconomicEventItem[] = [];
-
-  settled.forEach((result, index) => {
-    const country = ECONOMIC_CALENDAR_COUNTRIES[index]!;
-    if (result.status === "fulfilled") {
-      nextItems.push(...result.value.items);
-      return;
-    }
-    failedCountries.add(country);
-  });
-
-  if (nextItems.length === 0 && !previous?.items.length) {
+  if (items.length === 0 && !previous?.items.length) {
     throw new Error("Economic calendar is temporarily unavailable.");
   }
-
-  const items = dedupeAndSort(
-    mergeWithPreviousCountryEvents(nextItems, previous?.items ?? [], failedCountries, window),
-  );
 
   return {
     updatedAt: new Date().toISOString(),

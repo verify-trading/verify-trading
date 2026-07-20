@@ -130,6 +130,9 @@ const QUERIES: SmokeQuery[] = [
 
 // Small 5-query spread for a quick "how does it answer" check.
 const LIVE_QUERIES: SmokeQuery[] = [
+  { q: "is Alpha Futures safe", expect: "developing Alpha Futures record; cited evidence, no final score" },
+  { q: "is Alpha Capital Group safe", expect: "separate Alpha Capital Group record; never Alpha Futures" },
+  { q: "is alfha futures safe", expect: "typo resolves only to Alpha Futures, never Alpha Capital Group" },
   { q: "ceniqabouncerplaydirty", expect: "run-together name -> verify_entity verbatim -> CENIQA / Bouncerplaydirty guru card, NOT a guessed broker" },
   { q: "is fundedx good", expect: "prop firm; if not in DB, web_search fallback rather than dead-end" },
   { q: "is FTMO legit", expect: "known prop firm, payout framing" },

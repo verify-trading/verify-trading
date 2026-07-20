@@ -59,7 +59,10 @@ vi.mock("@/lib/supabase/auth-context", () => ({
   }),
 }));
 
-import UpdatePasswordPage from "@/app/auth/update-password/page";
+// The route's default export is now an async server component that only awaits
+// searchParams and renders this client content in Suspense; the form under test
+// lives here, so we render it directly with the resolved next param.
+import { UpdatePasswordPageContent } from "@/app/auth/update-password/update-password-page-content";
 
 describe("UpdatePasswordPage", () => {
   beforeEach(() => {
@@ -72,10 +75,10 @@ describe("UpdatePasswordPage", () => {
     mockSignOut.mockResolvedValue({ error: null });
   });
 
-  it("ends the recovery session and redirects to login after a successful reset", async () => {
+  it("ends every session globally and redirects to login after a successful reset", async () => {
     const user = userEvent.setup();
 
-    render(<UpdatePasswordPage />);
+    render(<UpdatePasswordPageContent nextParam="/markets" />);
 
     await user.type(screen.getByLabelText("New password"), "new-password-123");
     await user.type(screen.getByLabelText("Confirm new password"), "new-password-123");
@@ -85,7 +88,7 @@ describe("UpdatePasswordPage", () => {
       expect(mockUpdateUser).toHaveBeenCalledWith({ password: "new-password-123" });
     });
     await waitFor(() => {
-      expect(mockSignOut).toHaveBeenCalledWith({ scope: "local" });
+      expect(mockSignOut).toHaveBeenCalledWith({ scope: "global" });
     });
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/login?reset=success&next=%2Fmarkets");

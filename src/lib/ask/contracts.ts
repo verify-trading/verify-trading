@@ -266,6 +266,44 @@ export const askRequestSchema = z
     });
   });
 
+/**
+ * http(s) only. z.url() accepts javascript:/data: URIs, which must never reach a
+ * rendered <a href>; this is the single source of truth for "a safe source link".
+ */
+export const httpUrlSchema = z
+  .string()
+  .trim()
+  .refine((value) => {
+    try {
+      const protocol = new URL(value).protocol;
+      return protocol === "http:" || protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "Must be an http(s) URL");
+
+/**
+ * One independently confirmed fact on a developing firm's card. The single shape
+ * shared by the DB reader, the tool input, and the uiMeta boundary — declare a
+ * field once here so the four call sites can never drift (they used to disagree
+ * on whether sourceUrl was required).
+ */
+export const cardConfirmedFactSchema = z.object({
+  text: z.string().trim().min(1).max(500),
+  sourceLabel: z.string().trim().min(1).max(120).nullable().optional(),
+  sourceUrl: httpUrlSchema.nullable().optional(),
+});
+
+/** Curated structured facts for a firm whose research is still developing. */
+export const entityCardFactsSchema = z.object({
+  confirmed: z.array(cardConfirmedFactSchema),
+  unconfirmed: z.array(z.string().trim().min(1).max(500)),
+  footer: z.string().trim().min(1).nullable(),
+});
+
+export type CardConfirmedFact = z.infer<typeof cardConfirmedFactSchema>;
+export type EntityCardFacts = z.infer<typeof entityCardFactsSchema>;
+
 const askAttachmentMetaSchema = z
   .object({
     fileName: z.string().trim().min(1).nullable().optional(),
@@ -290,9 +328,16 @@ export const askUiMetaSchema = z
       .object({
         band: z.string().trim().min(1).optional(),
         notRated: z.boolean().optional(),
+        // Authoritative "research still developing" flag, computed once server-side
+        // so the card never re-derives (and disagrees about) developing state.
+        developing: z.boolean().optional(),
         trustpilotRating: z.number().optional(),
         trustpilotCount: z.number().int().nonnegative().optional(),
         trustpilotDate: z.string().trim().min(1).optional(),
+        researchStatus: z.string().trim().min(1).optional(),
+        confirmedFacts: z.array(cardConfirmedFactSchema).optional(),
+        unconfirmedClaims: z.array(z.string().trim().min(1)).optional(),
+        reverifyTrigger: z.string().trim().min(1).optional(),
       })
       .optional(),
     // Tappable next-question suggestions under the answer (in the user's voice).

@@ -1,4 +1,3 @@
-import type { OAuthFlow } from "@/lib/auth/oauth-flow";
 import { isEmailConfigured } from "@/lib/email/config";
 import { logEmailError } from "@/lib/email/log-email-error";
 import { sendSignupWelcomeEmail } from "@/lib/email/send-signup-welcome";
@@ -10,7 +9,6 @@ type MaybeSendSignupWelcomeEmailInput = {
   userId: string;
   email?: string | null;
   displayName?: string | null;
-  oauthFlow?: OAuthFlow | null;
   createdAt?: string | null;
   emailConfirmedAt?: string | null;
   appOrigin: string;
@@ -32,7 +30,6 @@ export async function maybeSendSignupWelcomeEmail({
   userId,
   email,
   displayName,
-  oauthFlow,
   createdAt,
   emailConfirmedAt,
   appOrigin,
@@ -46,7 +43,6 @@ export async function maybeSendSignupWelcomeEmail({
   if (
     !trustedConfirmation &&
     !isEligibleForSignupWelcomeEmail({
-      oauthFlow,
       createdAt,
       emailConfirmedAt,
     })
@@ -71,6 +67,13 @@ export async function maybeSendSignupWelcomeEmail({
   }
 
   const profile = data as ProfileWelcomeRow | null;
+
+  // Gate Kit on the same once-per-user marker as the email — subscribing above this
+  // guard re-hit Kit on every eligible call.
+  if (profile?.signup_welcome_email_sent_at) {
+    return;
+  }
+
   await subscribeSignupToKit({
     email: normalizedEmail,
     displayName: displayName ?? profile?.display_name ?? null,
@@ -78,10 +81,6 @@ export async function maybeSendSignupWelcomeEmail({
   }).catch((kitError) => {
     logEmailError("Failed to subscribe signup to Kit.", { userId }, kitError);
   });
-
-  if (profile?.signup_welcome_email_sent_at) {
-    return;
-  }
 
   if (!isEmailConfigured()) {
     return;

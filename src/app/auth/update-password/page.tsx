@@ -7,8 +7,10 @@ import {
 } from "@/app/auth/update-password/update-password-page-content";
 
 export const metadata: Metadata = {
-  title: "Reset password | verify.trading",
+  title: "Reset password",
   description: "Choose a new password for your verify.trading account.",
+  alternates: { canonical: "/auth/update-password" },
+  robots: { index: false, follow: false },
 };
 
 export default async function UpdatePasswordPage({

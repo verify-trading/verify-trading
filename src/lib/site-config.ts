@@ -4,10 +4,17 @@
  */
 
 const DEFAULT_APP_NAME = "verify.trading";
+const DEFAULT_SITE_URL = "https://www.verify.trading";
 
 export function getAppName(): string {
   const raw = process.env.NEXT_PUBLIC_APP_NAME?.trim();
   return raw || DEFAULT_APP_NAME;
+}
+
+/** Canonical site origin (no trailing slash). Set via NEXT_PUBLIC_SITE_URL for preview/staging deploys. */
+export function getSiteUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  return (raw || DEFAULT_SITE_URL).replace(/\/$/, "");
 }
 
 export function getSiteTitle(): string {

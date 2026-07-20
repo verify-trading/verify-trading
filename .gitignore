@@ -52,3 +52,5 @@ GEMINI.md
 
 # Local architecture doc (not for the repo)
 verify-trading-architecture.docx
+.vercel
+tsconfig.tsbuildinfo

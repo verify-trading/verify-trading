@@ -44,7 +44,9 @@ export function createSystemMessage(content: string) {
     content,
     providerOptions: {
       anthropic: {
-        cacheControl: { type: "ephemeral" as const },
+        // 1-hour TTL: the static prompt is byte-stable across requests, so idle
+        // gaps between turns no longer re-pay cache creation on the long prefix.
+        cacheControl: { type: "ephemeral" as const, ttl: "1h" as const },
       },
     },
   };

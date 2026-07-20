@@ -12,7 +12,6 @@ import { GET } from "@/app/auth/callback/route";
 import {
   AUTH_REDIRECT_COOKIE_NAME,
   OAUTH_FLOW_COOKIE_NAME,
-  RECENT_OAUTH_SIGNUP_COOKIE_NAME,
 } from "@/lib/auth/oauth-flow";
 import { maybeSendSignupWelcomeEmail } from "@/lib/email/maybe-send-signup-welcome";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -75,7 +74,7 @@ describe("GET /auth/callback", () => {
     const response = await GET(
       new Request("http://localhost/auth/callback?code=test-code&next=%2Fmarkets", {
         headers: {
-          cookie: `${OAUTH_FLOW_COOKIE_NAME}=login_only; ${RECENT_OAUTH_SIGNUP_COOKIE_NAME}=user-1`,
+          cookie: `${OAUTH_FLOW_COOKIE_NAME}=login_only`,
         },
       }),
     );
@@ -85,7 +84,7 @@ describe("GET /auth/callback", () => {
     expect(response.cookies.get(OAUTH_FLOW_COOKIE_NAME)?.value).toBe("");
   });
 
-  it("stores a short-lived recent-signup cookie after signup flow succeeds", async () => {
+  it("marks the destination as a completed signup after the signup flow", async () => {
     const response = await GET(
       new Request("http://localhost/auth/callback?code=test-code&next=%2Fask", {
         headers: {
@@ -95,12 +94,12 @@ describe("GET /auth/callback", () => {
     );
 
     expect(signOut).not.toHaveBeenCalled();
-    expect(response.headers.get("location")).toBe("http://localhost/ask");
-    expect(response.cookies.get(RECENT_OAUTH_SIGNUP_COOKIE_NAME)?.value).toBe("user-1");
+    expect(response.headers.get("location")).toBe(
+      "http://localhost/ask?signup=completed&signup_method=oauth",
+    );
     expect(maybeSendSignupWelcomeEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
-        oauthFlow: "signup",
         appOrigin: "http://localhost",
       }),
     );
@@ -118,7 +117,9 @@ describe("GET /auth/callback", () => {
     );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost/ask");
+    expect(response.headers.get("location")).toBe(
+      "http://localhost/ask?signup=completed&signup_method=oauth",
+    );
   });
 
   it("attempts signup welcome email for returning users but leaves eligibility to the helper", async () => {
@@ -148,7 +149,6 @@ describe("GET /auth/callback", () => {
       expect.objectContaining({
         userId: "user-old",
         email: "old@example.com",
-        oauthFlow: "login_only",
       }),
     );
   });

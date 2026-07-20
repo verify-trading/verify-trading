@@ -17,6 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { AuthFieldError } from "@/components/auth/auth-field-error";
 import { AuthShell, AuthShellSpinner } from "@/components/auth/auth-shell";
+import { CaptchaWidget } from "@/components/auth/captcha-widget";
+import { useCaptcha } from "@/components/auth/use-captcha";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { linkAffiliateReferral } from "@/lib/affiliates/link-stripe-customer";
 import { trackAnalyticsEvent } from "@/lib/analytics/client";
@@ -47,6 +49,7 @@ function SignupPageContent() {
   const [sentToEmail, setSentToEmail] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const captcha = useCaptcha();
   const verificationSent = sentToEmail !== null;
 
   const {
@@ -67,6 +70,12 @@ function SignupPageContent() {
       setApiError(AUTH_NOT_CONFIGURED_MESSAGE);
       return;
     }
+
+    if (captcha.blocked) {
+      setApiError("Please complete the security check before creating your account.");
+      return;
+    }
+
     const origin = window.location.origin;
     const username = values.username.trim();
     const email = values.email.trim();
@@ -75,6 +84,7 @@ function SignupPageContent() {
       password: values.password,
       options: {
         emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}&signup=1`,
+        captchaToken: captcha.token,
         data: {
           username: username.toLowerCase(),
           full_name: username,
@@ -84,6 +94,7 @@ function SignupPageContent() {
 
     if (signUpError) {
       setApiError(signUpError.message);
+      captcha.reset();
       return;
     }
 
@@ -250,7 +261,14 @@ function SignupPageContent() {
                 <p className="mt-1.5 text-xs text-(--vt-muted)">Use at least 8 characters.</p>
               ) : null}
             </div>
-            <Button type="submit" variant="default" size="pill" className="w-full" disabled={googleBusy || isSubmitting}>
+            <CaptchaWidget {...captcha.widgetProps} />
+            <Button
+              type="submit"
+              variant="default"
+              size="pill"
+              className="w-full"
+              disabled={googleBusy || isSubmitting || captcha.blocked}
+            >
               {isSubmitting ? "Creating…" : "Create account with email"}
             </Button>
           </form>

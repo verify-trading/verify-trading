@@ -23,7 +23,6 @@ export function buildSubscriptionWelcomeEmail({
   email,
   displayName,
   planKey,
-  appOrigin,
 }: SendSubscriptionWelcomeEmailInput): EmailPayload {
   const appName = getAppName();
   const planLabel = formatBillingPlanLabel(planKey);
@@ -57,7 +56,6 @@ export function buildSubscriptionWelcomeEmail({
     ].join("\n"),
     html: buildMarketingEmailHtml({
       appName,
-      appOrigin,
       title: `Welcome to ${appName} Pro`,
       preview: "Your Pro access is active now.",
       paragraphs,

@@ -6,6 +6,7 @@ import { getPricingPageData } from "@/lib/billing/pricing-page-data";
 export const metadata: Metadata = {
   title: "Pricing",
   description: "Compare Free and Pro plans for verify.trading — Ask, Markets, and tools.",
+  alternates: { canonical: "/pricing" },
 };
 
 export default async function PricingPage() {

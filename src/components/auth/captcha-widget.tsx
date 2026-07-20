@@ -3,20 +3,23 @@
 import { Turnstile } from "@marsidev/react-turnstile";
 
 type CaptchaWidgetProps = {
-  siteKey: string;
   captchaKey: number;
   onSuccess: (token: string) => void;
   onExpire: () => void;
   onError: () => void;
 };
 
+/**
+ * Renders nothing when `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is unset, so auth forms can
+ * mount it unconditionally. Pair with {@link useCaptcha}, which owns the token state.
+ */
 export function CaptchaWidget({
-  siteKey,
   captchaKey,
   onSuccess,
   onExpire,
   onError,
 }: CaptchaWidgetProps) {
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   if (!siteKey) {
     return null;
   }

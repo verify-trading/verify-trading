@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 import { BillingActionButton } from "@/components/billing/billing-actions";
+import { surface } from "@/components/landing/section-primitives";
 import { Button } from "@/components/ui/button";
 import { trackAnalyticsEvent } from "@/lib/analytics/client";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
@@ -13,8 +14,6 @@ import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data"
 import { ANNUAL_PLAN_FEATURES } from "@/lib/marketing/annual-plan-features";
 import { PRO_PLAN_FEATURES } from "@/lib/marketing/pro-plan-features";
 import { cn } from "@/lib/utils";
-
-const surface = "rounded-xl border border-white/[0.08] bg-white/[0.02]";
 
 /**
  * Signed-out plan CTA: sign up, then resume checkout for the chosen plan on the

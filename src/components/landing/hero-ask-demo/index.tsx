@@ -1,16 +1,13 @@
 "use client";
 
 import { useInView } from "framer-motion";
+import dynamic from "next/dynamic";
 import type { ComponentType } from "react";
 import { useCallback, useRef, useState } from "react";
 
 import type { VariantViewProps } from "./shared";
 import type { HeroAskVariant, HeroLiveBriefing } from "./types";
 import { useAskDemoSequence } from "./use-ask-demo-sequence";
-import { DeviceView } from "./variant-device";
-import { EditorialView } from "./variant-editorial";
-import { GlassView } from "./variant-glass";
-import { IslandView } from "./variant-island";
 import { trackAnalyticsEvent } from "@/lib/analytics/client";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 
@@ -18,11 +15,14 @@ import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 // the server-safe ./types so Server Components can read it without this boundary.
 export type { HeroAskVariant } from "./types";
 
+// Lazy-load each variant so the homepage (which only ever renders "device")
+// doesn't ship the other three designs in its JS bundle. SSR stays enabled so
+// there's no hydration layout shift — this is chunk-splitting, not client-only.
 const VIEWS: Record<HeroAskVariant, ComponentType<VariantViewProps>> = {
-  device: DeviceView,
-  glass: GlassView,
-  island: IslandView,
-  editorial: EditorialView,
+  device: dynamic(() => import("./variant-device").then((m) => m.DeviceView)),
+  glass: dynamic(() => import("./variant-glass").then((m) => m.GlassView)),
+  island: dynamic(() => import("./variant-island").then((m) => m.IslandView)),
+  editorial: dynamic(() => import("./variant-editorial").then((m) => m.EditorialView)),
 };
 
 /**

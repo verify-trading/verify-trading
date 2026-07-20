@@ -1,18 +1,17 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import {
   Brain,
   CalendarClock,
   CheckCircle2,
-  ChevronDown,
   MessagesSquare,
   NotebookPen,
   X,
 } from "lucide-react";
 
-import { HeroAskDemo } from "@/components/landing/hero-ask-demo";
+import { FAQSection } from "./faq-section";
+import { SectionEyebrow, surface } from "./section-primitives";
+import { TrackViewContent } from "./track-view-content";
+import { HeroAskDemoLazy } from "@/components/landing/hero-ask-demo/lazy";
 import type { HeroLiveBriefing } from "@/components/landing/hero-ask-demo/types";
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
 import { AppWordmarkInline } from "@/components/site/logo";
@@ -20,12 +19,8 @@ import { SiteNav } from "@/components/site/site-nav";
 import type { PublicBillingPricing } from "@/lib/billing/config";
 import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data";
 import { LEGAL_LINKS } from "@/lib/legal/legal-links";
-import { trackMetaViewContent } from "@/lib/marketing/meta-pixel";
 import { getAppName } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
-
-const surface =
-  "rounded-xl border border-white/[0.08] bg-white/[0.02]";
 
 type IconTheme = "blue" | "amber" | "coral" | "purple" | "green" | "cyan";
 
@@ -67,14 +62,6 @@ function PitfallIcon({ variant }: { variant: "exclaim" | "risk" | "close" }) {
     <div className={pitfallIconShell} aria-hidden>
       <X className="size-5" strokeWidth={3} />
     </div>
-  );
-}
-
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">
-      {children}
-    </p>
   );
 }
 
@@ -173,7 +160,7 @@ function HeroSection({ liveGold }: { liveGold: HeroLiveBriefing | null }) {
               aria-hidden
               className="pointer-events-none absolute inset-x-3 inset-y-6 -z-10 rounded-[3.5rem] bg-gradient-to-b from-[rgba(76,110,245,0.6)] via-[rgba(139,92,246,0.45)] to-[rgba(242,109,109,0.28)] blur-2xl"
             />
-            <HeroAskDemo variant="device" liveBriefing={liveGold} />
+            <HeroAskDemoLazy variant="device" liveBriefing={liveGold} />
           </div>
         </div>
 
@@ -283,7 +270,7 @@ function HowItWorksSection() {
     {
       variant: "close" as const,
       title: "Trusting the wrong entities",
-      description: "Many traders lose money before they even start.",
+      description: "Scam brokers, fake prop firms and gurus drain accounts before the first trade.",
     },
     {
       variant: "exclaim" as const,
@@ -315,7 +302,7 @@ function HowItWorksSection() {
             {pitfalls.map((p) => (
               <div
                 key={p.title}
-                className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 transition-colors hover:border-white/[0.12] sm:p-6"
+                className={cn(surface, "p-5 transition-colors hover:border-white/[0.12] sm:p-6")}
               >
                 <div className="flex gap-4">
                   <PitfallIcon variant={p.variant} />
@@ -328,84 +315,13 @@ function HowItWorksSection() {
             ))}
           </div>
 
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-5 py-5 text-center sm:px-8 sm:py-6">
+          <div className={cn(surface, "px-5 py-5 text-center sm:px-8 sm:py-6")}>
             <p className="text-base leading-snug text-white sm:text-lg">
               One mistake can{" "}
               <span className="font-semibold text-[var(--vt-coral)]">wipe your account.</span>
             </p>
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-/* ─── FAQ ─── */
-
-function FAQSection() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-
-  const faqs = [
-    {
-      q: "Is this financial advice?",
-      a: "No. Verify.Trading publishes records and analysis — regulator-sourced entity records, risk maths against rules you set, and market context. We never recommend trades or tell you where to deposit. The decision is always yours.",
-    },
-    {
-      q: "What makes this different from ChatGPT?",
-      a: "Structured routing. Entity checks answer only from our verified registry with citations; market data comes from professional feeds; risk maths runs on deterministic engines. Where we have no record, we say so — and you can request a check.",
-    },
-    {
-      q: "How does an entity earn a “Caution”?",
-      a: "Only with a documented regulator or court action — an FCA warning, an FTC settlement, a confirmed closure — and the official citation is shown on the record. No citation, no caution. The rule is enforced in our system, not just our policy.",
-    },
-    {
-      q: "Can I cancel anytime?",
-      a: "Yes. Cancel from billing and you keep access through the end of the paid period. Entity checks stay free either way.",
-    },
-  ];
-
-  return (
-    <section className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 sm:py-24">
-      <div className="max-w-2xl">
-        <SectionEyebrow>FAQ</SectionEyebrow>
-        <h2 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">Common Questions</h2>
-      </div>
-
-      <div className="mt-10 space-y-2">
-        {faqs.map((f, i) => {
-          const isOpen = openIndex === i;
-          return (
-            <div key={f.q} className={cn(surface, "overflow-hidden")}>
-              <button
-                type="button"
-                onClick={() => setOpenIndex(isOpen ? null : i)}
-                className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--vt-blue)]/50"
-                aria-expanded={isOpen}
-              >
-                <span className="text-[15px] font-semibold leading-snug text-white">{f.q}</span>
-                <ChevronDown
-                  className={cn(
-                    "mt-0.5 size-5 shrink-0 text-[var(--vt-blue)] transition-transform duration-200",
-                    isOpen && "rotate-180",
-                  )}
-                  aria-hidden
-                />
-              </button>
-              <div
-                className={cn(
-                  "grid transition-[grid-template-rows] duration-200 ease-out",
-                  isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                )}
-              >
-                <div className="min-h-0 overflow-hidden">
-                  <p className="border-t border-white/[0.06] px-5 pb-4 pt-3 text-sm leading-relaxed text-slate-400">
-                    {f.a}
-                  </p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
       </div>
     </section>
   );
@@ -489,13 +405,10 @@ export function LandingPage({
   billingContext: PricingPageBillingContext | null;
   liveGold: HeroLiveBriefing | null;
 }) {
-  useEffect(() => {
-    trackMetaViewContent();
-  }, []);
-
   return (
     <div className="min-h-screen bg-[var(--vt-navy)] text-white">
       <SiteNav />
+      <TrackViewContent />
       <main>
         <HeroSection liveGold={liveGold} />
         <HowItWorksSection />
