@@ -123,11 +123,6 @@ export async function fetchQuotes(symbols: readonly string[]): Promise<TwelveDat
   return results;
 }
 
-/** Fetch 24 hourly closes for sparkline charts (1 credit per symbol). */
-export async function fetchSparkline(symbol: string): Promise<TwelveDataSparkline> {
-  return fetchMarketSeries(symbol, "1D");
-}
-
 /** Fetch close values for the selected-market detail chart. */
 export async function fetchMarketSeries(symbol: string, timeframe: MarketSeriesTimeframe): Promise<TwelveDataSparkline> {
   const config = MARKET_SERIES_TIMEFRAME_CONFIG[timeframe];
@@ -168,25 +163,6 @@ export async function fetchMarketState(): Promise<Array<{
   }));
 }
 
-/** Fetch earnings history for a symbol (20 credits per symbol). */
-export async function fetchEarnings(symbol: string): Promise<Array<{
-  fiscal_date: string | null;
-  eps_actual: number | null;
-  eps_estimate: number | null;
-  surprise_prc: number | null;
-}>> {
-  const url = buildUrl("earnings", { symbol });
-  const data = (await fetchJson(url)) as { earnings?: Array<Record<string, unknown>> };
-  if (!data.earnings) return [];
-
-  return data.earnings.map((e) => ({
-    fiscal_date: e.fiscal_date ? String(e.fiscal_date) : null,
-    eps_actual: e.eps_actual ? parseFloat(String(e.eps_actual)) : null,
-    eps_estimate: e.eps_estimate ? parseFloat(String(e.eps_estimate)) : null,
-    surprise_prc: e.surprise_prc ? parseFloat(String(e.surprise_prc)) : null,
-  }));
-}
-
 /** Upsert a JSONB payload into the single market_cache table. */
 export async function upsertCache(key: string, payload: unknown) {
   const admin = getSupabaseAdminClient();
@@ -200,21 +176,6 @@ export async function upsertCache(key: string, payload: unknown) {
     );
 
   if (error) throw new Error(`Cache upsert failed: ${error.message}`);
-}
-
-/** Read a cached payload by key. */
-export async function readCache<T>(key: string): Promise<T | null> {
-  const admin = getSupabaseAdminClient();
-  if (!admin) return null;
-
-  const { data, error } = await admin
-    .from("market_cache")
-    .select("payload")
-    .eq("cache_key", key)
-    .single();
-
-  if (error || !data) return null;
-  return data.payload as T;
 }
 
 /** True when a cache row's fetchedAt is within ttlMs of now — pairs with readCacheRow. */
@@ -239,56 +200,4 @@ export async function readCacheRow<T>(key: string): Promise<{ payload: T; fetche
     payload: data.payload as T,
     fetchedAt: typeof data.fetched_at === "string" ? data.fetched_at : null,
   };
-}
-
-/** ─── Verification ─── */
-
-export async function verifyTwelveData(): Promise<{
-  quotes: Record<string, TwelveDataQuote[]>;
-  sparklines: Record<string, TwelveDataSparkline>;
-  creditUsage: { current: number; limit: number };
-}> {
-  console.log("\n🔍 Verifying Twelve Data API...\n");
-
-  // 1. Fetch quotes for all categories
-  const quoteEntries = await Promise.all(Object.entries(MARKET_CATEGORIES).map(async ([cat, { label, symbols }]) => {
-    console.log(`Fetching ${label} (${symbols.length} symbols)...`);
-    try {
-      const data = await fetchQuotes(symbols);
-      console.log(`  ✅ ${data.length} quotes received`);
-      data.forEach((q) => {
-        const dir = q.percent_change >= 0 ? "▲" : "▼";
-        console.log(`     ${q.symbol}: ${q.price.toFixed(5)} ${dir} ${q.percent_change.toFixed(2)}%`);
-      });
-      return [cat, data] as const;
-    } catch (e) {
-      console.log(`  ❌ Failed: ${e instanceof Error ? e.message : String(e)}`);
-      return [cat, []] as const;
-    }
-  }));
-  const quotes = Object.fromEntries(quoteEntries);
-
-  // 2. Fetch sparkline for one symbol from each category
-  const sampleSymbols = ["EUR/USD", "XAU/USD", "BTC/USD", "QQQ"];
-  const sparklineEntries = await Promise.all(sampleSymbols.map(async (sym) => {
-    console.log(`\nFetching sparkline for ${sym}...`);
-    try {
-      const data = await fetchSparkline(sym);
-      console.log(`  ✅ ${data.values.length} data points`);
-      console.log(`     Range: ${data.values[0]?.toFixed(5)} → ${data.values[data.values.length - 1]?.toFixed(5)}`);
-      return [sym, data] as const;
-    } catch (e) {
-      console.log(`  ❌ Failed: ${e instanceof Error ? e.message : String(e)}`);
-      return null;
-    }
-  }));
-  const sparklines = Object.fromEntries(sparklineEntries.filter((entry) => entry !== null));
-
-  // 3. Check credit usage
-  console.log("\nChecking API credit usage...");
-  const usageRes = await fetch(buildUrl("api_usage", {}), { cache: "no-store" });
-  const usage = (await usageRes.json()) as { current_usage: number; plan_limit: number };
-  console.log(`  📊 Used: ${usage.current_usage} / ${usage.plan_limit} credits`);
-
-  return { quotes, sparklines, creditUsage: { current: usage.current_usage, limit: usage.plan_limit } };
 }

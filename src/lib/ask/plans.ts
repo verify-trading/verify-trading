@@ -38,52 +38,6 @@ function formatMoneyRange(low: number, high: number, currencySymbol: string) {
   return `${formatMoney(low, currencySymbol)}-${formatMoney(high, currencySymbol)}`;
 }
 
-function parseFlexibleNumber(fragment: string) {
-  const normalized = fragment.replace(/,/g, "").trim().toLowerCase();
-  const multiplier = normalized.endsWith("k") ? 1_000 : normalized.endsWith("m") ? 1_000_000 : 1;
-  const numeric = Number.parseFloat(normalized.replace(/[^\d.]/g, ""));
-
-  if (!Number.isFinite(numeric)) {
-    return null;
-  }
-
-  return numeric * multiplier;
-}
-
-function extractCurrencySymbol(amountText: string) {
-  const symbol = amountText.match(/[$£€]/)?.[0];
-  return symbol ?? DEFAULT_CURRENCY_SYMBOL;
-}
-
-function extractAmount(
-  message: string,
-  patterns: RegExp[],
-): {
-  value: number;
-  currencySymbol: string;
-} | null {
-  for (const pattern of patterns) {
-    const match = message.match(pattern);
-    const amountText = match?.[1];
-
-    if (!amountText) {
-      continue;
-    }
-
-    const value = parseFlexibleNumber(amountText);
-    if (!value || value < 0) {
-      continue;
-    }
-
-    return {
-      value,
-      currencySymbol: extractCurrencySymbol(amountText),
-    };
-  }
-
-  return null;
-}
-
 function resolveGrowthPlanInput(input: GenerateGrowthPlanInput) {
   return {
     startBalance: roundMoney(input.startBalance),
@@ -135,42 +89,4 @@ export function generateGrowthPlanCard(input: GenerateGrowthPlanInput): PlanCard
     rationale: `This plan is built around consistency targets for a small account, not aggressive income expectations. Aim for clean execution first and only move size up after you can hold the low end of the range for several months.${topUpMessage}`,
     verdict: `Keep daily loss capped near ${formatMoney(maxDailyLoss, currencySymbol)}. Treat the daily range as a ceiling, not a quota, and focus on ${formatMoney(monthlyLow, currencySymbol)}-${formatMoney(monthlyHigh, currencySymbol)} per month before scaling.`,
   };
-}
-
-function isGrowthPlanRequest(message: string) {
-  return (
-    /\b(plan|target|goal|aim)\b/.test(message) &&
-    /\b(daily|weekly|monthly|month)\b/.test(message)
-  );
-}
-
-export function extractGrowthPlanShortcutCard(message: string) {
-  const normalized = message.toLowerCase();
-  if (!isGrowthPlanRequest(normalized)) {
-    return null;
-  }
-
-  const startAmount = extractAmount(normalized, [
-    /(?:deposit(?:ed)?|balance|capital|account|start(?:ing)?(?: with)?|from)\s+([$£€]?\s*\d[\d,]*(?:\.\d+)?\s*[km]?)/i,
-    /([$£€]?\s*\d[\d,]*(?:\.\d+)?\s*[km]?)\s+(?:deposit|balance|capital|account)/i,
-    /(?:have|got)\s+([$£€]?\s*\d[\d,]*(?:\.\d+)?\s*[km]?)/i,
-  ]);
-
-  if (!startAmount) {
-    return null;
-  }
-
-  const monthlyAddAmount = extractAmount(normalized, [
-    /(?:top\s*up|add|adding|contribute|deposit)\s+([$£€]?\s*\d[\d,]*(?:\.\d+)?\s*[km]?)\s*(?:\/\s*month|per month|monthly|each month)/i,
-  ]);
-
-  const monthsMatch = normalized.match(/(\d{1,3})\s*[- ]?(?:month|months|mo)\b/i);
-  const projectionMonths = monthsMatch?.[1] ? Number.parseInt(monthsMatch[1], 10) : undefined;
-
-  return generateGrowthPlanCard({
-    startBalance: startAmount.value,
-    monthlyAdd: monthlyAddAmount?.value,
-    currencySymbol: startAmount.currencySymbol,
-    projectionMonths,
-  });
 }

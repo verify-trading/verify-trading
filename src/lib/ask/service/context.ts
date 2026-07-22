@@ -182,50 +182,6 @@ export function extractToolCard(toolResults: ToolResultRecord[], askCardSchema: 
   return null;
 }
 
-/** Briefing card from `get_market_briefing` (FMP-backed). Used to override a duplicate `submit_ask_card` briefing. */
-export function extractMarketBriefingCard(
-  toolResults: ToolResultRecord[],
-  askCardSchema: {
-    safeParse: (value: unknown) => { success: boolean; data?: AskCard };
-  },
-): AskCard | null {
-  for (const result of toolResults) {
-    if (result.toolName !== "get_market_briefing") {
-      continue;
-    }
-
-    const output = asObject(result.output);
-    const nestedParsed = askCardSchema.safeParse(output?.card);
-    if (nestedParsed.success && nestedParsed.data?.type === "briefing") {
-      return nestedParsed.data;
-    }
-  }
-
-  return null;
-}
-
-/** Setup card from `get_market_setup`. Used to keep deterministic setup levels authoritative. */
-export function extractMarketSetupCard(
-  toolResults: ToolResultRecord[],
-  askCardSchema: {
-    safeParse: (value: unknown) => { success: boolean; data?: AskCard };
-  },
-): AskCard | null {
-  for (const result of toolResults) {
-    if (result.toolName !== "get_market_setup") {
-      continue;
-    }
-
-    const output = asObject(result.output);
-    const nestedParsed = askCardSchema.safeParse(output?.card);
-    if (nestedParsed.success && nestedParsed.data?.type === "setup") {
-      return nestedParsed.data;
-    }
-  }
-
-  return null;
-}
-
 function buildProjectionMarkers(card: AskCard) {
   if (card.type !== "projection" || card.lossEvents <= 0 || card.dataPoints.length <= 1) {
     return undefined;

@@ -105,37 +105,6 @@ const supportedAssets = {
   },
 } as const satisfies Record<string, MarketInstrument>;
 
-function collapseAssetText(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-export function inferMarketAssetFromText(text: string): string | null {
-  return inferMarketAssetsFromText(text)[0] ?? null;
-}
-
-export function inferMarketAssetsFromText(text: string): string[] {
-  const collapsed = collapseAssetText(text);
-  const tokenized = text
-    .toLowerCase()
-    .split(/[^a-z0-9/]+/)
-    .flatMap((token) => {
-      const collapsedToken = collapseAssetText(token);
-      return collapsedToken ? [collapsedToken] : [];
-    });
-
-  const matches = Object.entries(supportedAssets)
-    .filter(([key]) => {
-      if (key.length <= 3) {
-        return tokenized.includes(key);
-      }
-
-      return collapsed.includes(key);
-    })
-    .sort((left, right) => right[0].length - left[0].length);
-
-  return [...new Set(matches.map((match) => match[1].asset))];
-}
-
 export const getMarketSeriesInputSchema = z.object({
   asset: z.string().min(1).describe("Market name or symbol such as Gold, Ethereum, EUR/USD, Nasdaq, AAPL, or TSLA."),
   timeframe: z.enum(["1D", "1W", "1M", "3M", "1Y"]).optional().default("1W").describe("Chart window for the briefing."),
