@@ -10,7 +10,7 @@ import {
   canManageSubscription,
 } from "@/lib/billing/subscription-status";
 import { loadAskUsageState } from "@/lib/rate-limit/load-ask-usage";
-import type { FreeAskUsageSummary } from "@/lib/rate-limit/usage";
+import type { AskUsageSummary } from "@/lib/rate-limit/usage";
 
 export const metadata: Metadata = {
   title: "Billing",
@@ -199,7 +199,7 @@ export default async function BillingPage({
     canManageSubscriptionActions ||
     billingStatusGrantsProAccess(subscription?.status);
 
-  let freeAskUsage: FreeAskUsageSummary | null = null;
+  let freeAskUsage: AskUsageSummary | null = null;
   if (!showSubscriptionManagement) {
     const usageState = await loadAskUsageState(
       session.supabase,

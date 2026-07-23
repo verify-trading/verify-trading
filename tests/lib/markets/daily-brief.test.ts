@@ -10,8 +10,8 @@ vi.mock("@ai-sdk/anthropic", () => ({ anthropic: () => "mock-model" }));
 
 // Model returns deliberately wrong levels; the live-price override must win.
 vi.mock("ai", () => ({
-  generateText: vi.fn(async () => ({
-    text: JSON.stringify({
+  generateObject: vi.fn(async () => ({
+    object: {
       date: "2026-06-16",
       overview: "Overview.",
       gold: { level: "9999", bias: "Bullish", verdict: "x" },
@@ -21,7 +21,7 @@ vi.mock("ai", () => ({
       eurusd: { level: "1", bias: "Bearish", verdict: "x" },
       gbpusd: { level: "1", bias: "Bearish", verdict: "x" },
       session_tone: "Tone.",
-    }),
+    },
   })),
 }));
 

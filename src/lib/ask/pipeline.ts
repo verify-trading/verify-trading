@@ -263,7 +263,6 @@ async function runAskGeneration({
 
   const result = await generateTextImpl({
     model: getAskModel(),
-    temperature: 0.2,
     maxOutputTokens: ASK_MAX_OUTPUT_TOKENS,
     maxRetries: ASK_MODEL_MAX_RETRIES,
     stopWhen: [stepCountIs(maxSteps), stopAfterFinalToolResult],

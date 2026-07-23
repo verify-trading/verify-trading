@@ -103,10 +103,6 @@ async function tagSubscriberByEmail(email: string, tagId: number) {
   });
 }
 
-export function isKitSignupConfigured(): boolean {
-  return Boolean(getKitApiKey() && getKitSignupFormId());
-}
-
 export async function subscribeSignupToKit(input: KitSubscriberInput): Promise<void> {
   const email = normalizeEmail(input.email);
   const signupFormId = getKitSignupFormId();

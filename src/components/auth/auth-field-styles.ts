@@ -24,9 +24,5 @@ export const authInlineSuccessBannerClass =
 export const authInlineSuccessBannerFlexClass =
   "flex gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3.5 text-sm leading-relaxed text-emerald-50/95";
 
-/** Neutral info (e.g. signup “check your email”) */
-const authInlineInfoBannerClass =
-  "rounded-2xl border border-(--vt-blue)/35 bg-(--vt-blue)/10 px-4 py-3.5 text-sm leading-relaxed text-white/90";
-
 export const authSecondaryLinkClass =
   "font-medium text-white/60 underline-offset-4 transition-all duration-200 hover:text-white hover:underline hover:decoration-white/50";

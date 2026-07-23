@@ -173,7 +173,7 @@ function HeroSection({ liveGold }: { liveGold: HeroLiveBriefing | null }) {
               aria-hidden
               className="pointer-events-none absolute inset-x-3 inset-y-6 -z-10 rounded-[3.5rem] bg-gradient-to-b from-[rgba(76,110,245,0.6)] via-[rgba(139,92,246,0.45)] to-[rgba(242,109,109,0.28)] blur-2xl"
             />
-            <HeroAskDemoLazy variant="device" liveBriefing={liveGold} />
+            <HeroAskDemoLazy liveBriefing={liveGold} />
           </div>
         </div>
 

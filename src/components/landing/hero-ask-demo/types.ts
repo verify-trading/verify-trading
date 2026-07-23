@@ -66,40 +66,6 @@ export type DemoExchange = {
   thinkingSteps: string[];
 };
 
-/** Identifiers for the four hero visual treatments. */
-export type HeroAskVariant = "device" | "glass" | "island" | "editorial";
-
-/**
- * Variant catalogue — drives the comparison page and any picker UI. Kept in this
- * server-safe module (no "use client") so Server Components can read the values.
- */
-export const HERO_ASK_VARIANTS: {
-  id: HeroAskVariant;
-  name: string;
-  tagline: string;
-}[] = [
-  {
-    id: "device",
-    name: "iPhone Device",
-    tagline: "Polished phone frame with a Dynamic Island and a building thread.",
-  },
-  {
-    id: "glass",
-    name: "Glass Tilt",
-    tagline: "Frameless glass panel floating in 3D over an aurora glow.",
-  },
-  {
-    id: "island",
-    name: "Live Island",
-    tagline: "Energetic phone with a spinning halo and live-data island.",
-  },
-  {
-    id: "editorial",
-    name: "Editorial Minimal",
-    tagline: "Calm, frameless layout where the input is the hero.",
-  },
-];
-
 /** The four chips shown on the intro/empty state — straight from the real app. */
 export const DEMO_SUGGESTIONS: string[] = [
   "Is Pepperstone safe for UK retail CFD?",

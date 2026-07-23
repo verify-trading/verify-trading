@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 
-import type { HeroAskVariant, HeroLiveBriefing } from "./types";
+import type { HeroLiveBriefing } from "./types";
 
 /**
  * Defers the animated phone demo (framer-motion) out of the initial hydration
@@ -28,7 +28,6 @@ const HeroAskDemo = dynamic(() => import("./index").then((m) => m.HeroAskDemo), 
 });
 
 export function HeroAskDemoLazy(props: {
-  variant?: HeroAskVariant;
   liveBriefing?: HeroLiveBriefing | null;
 }) {
   return <HeroAskDemo {...props} />;

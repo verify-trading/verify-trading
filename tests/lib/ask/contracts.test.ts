@@ -61,7 +61,7 @@ describe("ask contracts", () => {
       throw new Error("Expected an insight card.");
     }
 
-    expect(card.headline).toBe("This headline is far");
+    expect(card.headline).toBe("This headline is far too long");
     expect(card.body).toBe(
       "First sentence gives the answer. Second sentence gives the reason. Third sentence gives the action.",
     );

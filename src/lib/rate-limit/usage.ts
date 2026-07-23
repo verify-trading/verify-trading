@@ -8,8 +8,6 @@ export type AskUsageSummary = {
   progressPercent: number;
 };
 
-export type FreeAskUsageSummary = AskUsageSummary;
-
 export function getTodayUtcDateString(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
@@ -28,10 +26,6 @@ export function getAskUsageSummary(queryCount: number | null | undefined, limit:
   };
 }
 
-export function getFreeAskUsageSummary(queryCount: number | null | undefined): FreeAskUsageSummary {
+export function getFreeAskUsageSummary(queryCount: number | null | undefined): AskUsageSummary {
   return getAskUsageSummary(queryCount, FREE_DAILY_ASK_LIMIT);
-}
-
-export function getProAskUsageSummary(queryCount: number | null | undefined): AskUsageSummary {
-  return getAskUsageSummary(queryCount, PRO_DAILY_ASK_LIMIT);
 }

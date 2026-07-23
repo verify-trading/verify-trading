@@ -68,10 +68,6 @@ export function captureUtmAttribution() {
   return attribution;
 }
 
-export function getStoredUtmAttribution() {
-  return readStoredAttribution();
-}
-
 export function getUtmEventParams(): Record<string, string> {
   const attribution = readStoredAttribution();
   if (!attribution) return {};

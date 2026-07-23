@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   FREE_DAILY_ASK_LIMIT,
   PRO_DAILY_ASK_LIMIT,
+  getAskUsageSummary,
   getFreeAskUsageSummary,
-  getProAskUsageSummary,
   getTodayUtcDateString,
 } from "@/lib/rate-limit/usage";
 
@@ -38,7 +38,7 @@ describe("rate-limit usage helpers", () => {
   });
 
   it("builds a capped pro-plan usage summary", () => {
-    expect(getProAskUsageSummary(12)).toEqual({
+    expect(getAskUsageSummary(12, PRO_DAILY_ASK_LIMIT)).toEqual({
       used: 12,
       remaining: PRO_DAILY_ASK_LIMIT - 12,
       limit: PRO_DAILY_ASK_LIMIT,

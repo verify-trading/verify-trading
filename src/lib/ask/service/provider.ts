@@ -17,7 +17,7 @@ function resolveAnthropicBaseURL() {
 const anthropic = createAnthropic({ baseURL: resolveAnthropicBaseURL() });
 
 /** Primary model for Ask (Sonnet-class by default). */
-export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
+export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5";
 
 /** Simple model now matches primary — single-model pipeline. */
 export const DEFAULT_ANTHROPIC_SIMPLE_MODEL = DEFAULT_ANTHROPIC_MODEL;

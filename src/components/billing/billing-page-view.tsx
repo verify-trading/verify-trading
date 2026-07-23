@@ -10,7 +10,7 @@ import { getBillingStatusLabel } from "@/lib/billing/subscription-status";
 import {
   FREE_DAILY_ASK_LIMIT,
   PRO_DAILY_ASK_LIMIT,
-  type FreeAskUsageSummary,
+  type AskUsageSummary,
 } from "@/lib/rate-limit/usage";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ type BillingPageViewProps = {
   renewalDate: string | null;
   recurringAmount: string | null;
   subscription: BillingSubscriptionRow | null;
-  freeAskUsage: FreeAskUsageSummary | null;
+  freeAskUsage: AskUsageSummary | null;
   checkoutState: string | null;
   checkoutSessionId: string | null;
 };

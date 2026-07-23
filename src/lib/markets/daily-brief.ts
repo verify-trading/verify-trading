@@ -1,5 +1,5 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { generateText } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 
 import type { DailyMarketBrief } from "@/lib/markets/market-intelligence";
@@ -7,7 +7,7 @@ import type { DailyMarketBrief } from "@/lib/markets/market-intelligence";
 export const DAILY_MARKET_BRIEF_CACHE_KEY = "intelligence:daily-brief";
 // Env-overridable so it tracks the same model as Ask (provider.ts) and can't rot
 // to a retired snapshot. claude-sonnet-4-20250514 was retired 2026-06-15.
-const DAILY_MARKET_BRIEF_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
+const DAILY_MARKET_BRIEF_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
 
 const dailyMarketBriefSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -89,15 +89,6 @@ export function shouldRefreshDailyMarketBrief(
   return !Number.isFinite(fetchedAtMs);
 }
 
-function extractJsonObject(text: string): string {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error("Daily brief response did not contain JSON.");
-  }
-  return text.slice(start, end + 1);
-}
-
 type QuoteLike = { price?: number | null };
 
 /** Live-quote symbol behind each brief asset (DXY has no Twelve Data feed). */
@@ -143,9 +134,10 @@ export async function generateDailyMarketBrief(
   const headlinesBlock = headlines.length > 0
     ? `\nToday's market headlines (your ONLY source for events and named figures):\n${headlines.map((h) => `- ${h}`).join("\n")}\n`
     : "";
-  const result = await generateText({
+  const { object } = await generateObject({
     model: anthropic(DAILY_MARKET_BRIEF_MODEL),
     maxOutputTokens: 1000,
+    schema: dailyMarketBriefSchema,
     system: "You are verify.trading's market intelligence engine.",
     prompt: `Generate a daily pre-session market brief for today ${dateKey}.
 
@@ -173,8 +165,7 @@ Return only valid JSON in this exact format:
 }${headlinesBlock}`,
   });
 
-  const parsed = dailyMarketBriefSchema.parse(JSON.parse(extractJsonObject(result.text)));
-  const brief = coerceBrief(parsed);
+  const brief = coerceBrief(object);
 
   // Authoritative: overwrite the model's numeric levels with the live prices so a
   // hallucinated number can never reach the UI. DXY has no feed, so it keeps the

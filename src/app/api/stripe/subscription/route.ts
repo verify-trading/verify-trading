@@ -94,14 +94,10 @@ export async function POST(request: Request) {
     }
 
     const stripe = getStripeServerClient();
-    const updatedSubscription =
-      payload.action === "cancel_at_period_end"
-        ? await stripe.subscriptions.update(subscriptionRow.stripe_subscription_id, {
-            cancel_at_period_end: true,
-          })
-        : await stripe.subscriptions.update(subscriptionRow.stripe_subscription_id, {
-            cancel_at_period_end: false,
-          });
+    const updatedSubscription = await stripe.subscriptions.update(
+      subscriptionRow.stripe_subscription_id,
+      { cancel_at_period_end: payload.action === "cancel_at_period_end" },
+    );
 
     const syncResult = await syncStripeSubscription(updatedSubscription);
 

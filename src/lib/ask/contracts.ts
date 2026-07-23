@@ -509,7 +509,7 @@ function sanitizeCardNaturalLanguage(card: AskCard): AskCard {
     case "insight":
       return {
         ...card,
-        headline: sanitizeNaturalLanguageField(card.headline, { maxWords: 4 }),
+        headline: sanitizeNaturalLanguageField(card.headline),
         body: sanitizeNaturalLanguageField(card.body, { maxSentences: 3 }),
         verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2 }),
       };
