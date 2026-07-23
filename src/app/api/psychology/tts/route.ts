@@ -21,14 +21,22 @@ export async function GET(request: Request) {
 
   try {
     const speech = await synthesizeCoachSpeech(text.slice(0, TTS_MAX_CHARS), AbortSignal.timeout(20_000));
-    if (!speech.ok || !speech.body) {
+    if (!speech.ok) {
       logger.error("ElevenLabs TTS request failed.", { status: speech.status });
       return jsonApiError(502, "tts_failed", "The coach's voice is unavailable right now.");
     }
-    return new Response(speech.body, {
+    // Buffer the whole clip and return it with a Content-Length rather than piping the
+    // chunked stream through. The clip is tiny (~30–60 KB) and iOS AVPlayer was slow to
+    // become playable on a chunked, unsized response (~6–7s — past the app's fallback
+    // window, so the coach fell back to the robotic device voice). A sized response plays
+    // near-instantly. Costs a little first-byte latency (we await the full generation) for
+    // a much faster, reliable time-to-playable on the client.
+    const audio = await speech.arrayBuffer();
+    return new Response(audio, {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
+        "Content-Length": String(audio.byteLength),
         "Cache-Control": "private, no-store, max-age=0",
       },
     });
