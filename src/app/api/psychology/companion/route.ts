@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getSessionUser } from "@/lib/auth/session";
 import { hasProAccess } from "@/lib/billing/require-pro";
@@ -8,6 +7,7 @@ import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { generatePsychologyReply, shouldRecommendBreak } from "@/lib/psychology/companion";
 import { loadCoachContext } from "@/lib/psychology/context";
+import { insertSessionMessages, openCoachSession } from "@/lib/psychology/sessions";
 
 const companionRequestSchema = z.object({
   assessmentId: z.uuid(),
@@ -18,19 +18,6 @@ const companionRequestSchema = z.object({
 const PRIVATE_CACHE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0",
 } as const;
-
-// Transcript persistence is the feature on the session-aware paths, so unlike the legacy
-// fire-and-forget session log these writes must succeed before we respond — a failure
-// throws into the route's catch and surfaces as a 500 the client can retry.
-async function insertSessionMessage(
-  supabase: SupabaseClient,
-  message: { session_id: string; user_id: string; role: "user" | "coach"; content: string },
-) {
-  const { error } = await supabase.from("psychology_session_messages").insert(message);
-  if (error) {
-    throw new Error(`psychology_session_messages insert failed: ${error.message}`);
-  }
-}
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -63,7 +50,7 @@ export async function POST(request: Request) {
     // path can't afford to wait for them serially, so run them together. The call-session
     // read (only when the client passed sessionId) doubles as the ownership check.
     const name = session.user.user_metadata?.name ?? session.user.email ?? "there";
-    const [context, callSessionQuery] = await Promise.all([
+    const [coachContext, callSessionQuery] = await Promise.all([
       loadCoachContext(session.supabase, session.user.id, input.assessmentId, name),
       input.sessionId
         ? session.supabase
@@ -75,11 +62,10 @@ export async function POST(request: Request) {
         : Promise.resolve(null),
     ]);
 
-    if (!context) {
+    if (!coachContext) {
       return jsonApiError(404, "psychology_assessment_missing", "Complete the psychology assessment first.");
     }
 
-    const { coachContext, journal } = context;
     const transcript = input.transcript;
 
     // Resolve the call's session: reuse the one the client threaded (turns 2+), else
@@ -104,41 +90,28 @@ export async function POST(request: Request) {
     // the model call — keeping the voice call snappy without giving up durability.
     const replyPromise = generatePsychologyReply({ ...coachContext, transcript });
     if (!callSession) {
-      const created = await session.supabase
-        .from("psychology_sessions")
-        .insert({
-          user_id: session.user.id,
-          assessment_id: input.assessmentId,
-          message_count: 0,
-          break_recommended: false,
-        })
-        .select("id, message_count")
-        .single();
-      if (created.error || !created.data) {
-        throw new Error(`psychology_sessions insert failed: ${created.error?.message ?? "no row"}`);
-      }
-      callSession = created.data as { id: string; message_count: number };
+      callSession = await openCoachSession(session.supabase, session.user.id, input.assessmentId);
     }
     const [reply] = await Promise.all([
       replyPromise,
-      insertSessionMessage(session.supabase, {
+      insertSessionMessages(session.supabase, [{
         session_id: callSession.id,
         user_id: session.user.id,
         role: "user",
         content: transcript,
-      }),
+      }]),
     ]);
-    const breakRecommended = shouldRecommendBreak(journal);
+    const breakRecommended = shouldRecommendBreak(coachContext.journal);
 
     // Coach message + counters are independent writes; both must land before we respond.
     // Turns are sequential on a live call, so the read-then-write increment is race-free.
     const [, sessionUpdate] = await Promise.all([
-      insertSessionMessage(session.supabase, {
+      insertSessionMessages(session.supabase, [{
         session_id: callSession.id,
         user_id: session.user.id,
         role: "coach",
         content: reply,
-      }),
+      }]),
       session.supabase
         .from("psychology_sessions")
         .update({

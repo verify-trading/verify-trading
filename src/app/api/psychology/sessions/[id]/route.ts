@@ -7,6 +7,7 @@ import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { verifyAgentContext } from "@/lib/psychology/agent-token";
 import {
+  insertSessionMessages,
   PSYCHOLOGY_SESSION_COLUMNS,
   toPsychologySession,
   toPsychologySessionMessage,
@@ -81,8 +82,7 @@ async function storeConversationTranscript(
     }));
   if (rows.length === 0) return;
 
-  const inserted = await supabase.from("psychology_session_messages").insert(rows);
-  if (inserted.error) throw new Error(`transcript insert failed: ${inserted.error.message}`);
+  await insertSessionMessages(supabase, rows);
 
   const updated = await supabase
     .from("psychology_sessions")

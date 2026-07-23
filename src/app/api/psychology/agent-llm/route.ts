@@ -37,6 +37,22 @@ function messageText(content: unknown): string {
   return "";
 }
 
+// ElevenLabs calls this endpoint once per spoken turn, but the trader's context (assessment +
+// journal + challenge) is static for the call — so build the system prompt once per session and
+// cache it, keyed by sessionId and expired with the signed token. Saves 3 Supabase reads + a
+// persona rebuild on every turn after the first.
+// ponytail: context is frozen for the call — a trade logged mid-call won't reflect until the
+// next call. Fine for a short voice session; drop the cache if live mid-call updates ever matter.
+const systemCache = new Map<string, { system: string; exp: number }>();
+function cachedSystem(sessionId: string, nowSecs: number): string | undefined {
+  const hit = systemCache.get(sessionId);
+  return hit && hit.exp > nowSecs ? hit.system : undefined;
+}
+function cacheSystem(sessionId: string, system: string, exp: number, nowSecs: number): void {
+  if (systemCache.size > 500) for (const [k, v] of systemCache) if (v.exp <= nowSecs) systemCache.delete(k);
+  systemCache.set(sessionId, { system, exp });
+}
+
 export async function POST(request: Request) {
   const secret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
   if (!secret) {
@@ -71,12 +87,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const context = await loadCoachContext(supabase, ctx.userId, ctx.assessmentId, ctx.name);
-    if (!context) {
-      return jsonApiError(404, "agent_llm_assessment_missing", "Assessment not found.");
+    const nowSecs = Math.floor(Date.now() / 1000);
+    let system = cachedSystem(ctx.sessionId, nowSecs);
+    if (!system) {
+      const coachContext = await loadCoachContext(supabase, ctx.userId, ctx.assessmentId, ctx.name);
+      if (!coachContext) {
+        return jsonApiError(404, "agent_llm_assessment_missing", "Assessment not found.");
+      }
+      system = buildPsychologyCoachInstructions({ ...coachContext, realtime: true });
+      cacheSystem(ctx.sessionId, system, ctx.exp, nowSecs);
     }
-
-    const system = buildPsychologyCoachInstructions({ ...context.coachContext, realtime: true });
 
     // Keep only the spoken turns; our own system prompt replaces ElevenLabs' minimal one.
     const incoming = Array.isArray(body.messages) ? (body.messages as ChatMessage[]) : [];
@@ -98,17 +118,19 @@ export async function POST(request: Request) {
 
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
+        const finish = () => {
+          controller.enqueue(chunk({}, "stop"));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        };
         try {
           controller.enqueue(chunk({ role: "assistant" }, null));
           for await (const delta of result.textStream) {
             if (delta) controller.enqueue(chunk({ content: delta }, null));
           }
-          controller.enqueue(chunk({}, "stop"));
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          finish();
         } catch (error) {
           logger.error("agent-llm stream failed.", { error: error instanceof Error ? error.message : "unknown" });
-          controller.enqueue(chunk({}, "stop"));
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          finish();
         } finally {
           controller.close();
         }

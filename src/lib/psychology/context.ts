@@ -78,14 +78,14 @@ function journalContext(rows: JournalRow[]): JournalContext {
 }
 
 // Loads everything the coach persona needs for one user + assessment. Returns null when the
-// assessment isn't found (missing or not the caller's). `journal` is handed back too because
-// the caller still needs it for shouldRecommendBreak on the turn-based path.
+// assessment isn't found (missing or not the caller's). The turn-based path reads
+// `.journal` off the result for shouldRecommendBreak.
 export async function loadCoachContext(
   supabase: SupabaseClient,
   userId: string,
   assessmentId: string,
   name: string,
-): Promise<{ coachContext: PsychologyCoachContext; journal: JournalContext } | null> {
+): Promise<PsychologyCoachContext | null> {
   const [assessmentQuery, journalQuery, configQuery] = await Promise.all([
     supabase
       .from("psychology_assessments")
@@ -125,13 +125,11 @@ export async function loadCoachContext(
     lesson: row.lesson,
   }));
 
-  const coachContext: PsychologyCoachContext = {
+  return {
     name,
     assessment: assessmentQuery.data as unknown as PsychologyAssessmentRow & Record<string, unknown>,
     journal,
     challenge,
     recentEntries,
   };
-
-  return { coachContext, journal };
 }

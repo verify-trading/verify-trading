@@ -6,6 +6,7 @@ import { hasProAccess } from "@/lib/billing/require-pro";
 import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { signAgentContext } from "@/lib/psychology/agent-token";
+import { openCoachSession } from "@/lib/psychology/sessions";
 
 // Mints a WebRTC conversation token for the ElevenLabs coach agent and opens the session row
 // the transcript will land in. Auth-gated exactly like the companion route (Pro-only), because
@@ -48,35 +49,22 @@ export async function POST(request: Request) {
       return jsonApiError(503, "psychology_realtime_unconfigured", "The live coach is not available right now.");
     }
 
-    // Open the session row (same shape the companion route creates) and mint the token in
-    // parallel — neither depends on the other.
-    const [created, tokenResponse] = await Promise.all([
-      session.supabase
-        .from("psychology_sessions")
-        .insert({
-          user_id: session.user.id,
-          assessment_id: parsed.data.assessmentId,
-          message_count: 0,
-          break_recommended: false,
-        })
-        .select("id")
-        .single(),
+    // Open the session row and mint the token in parallel — neither depends on the other.
+    const [callSession, tokenResponse] = await Promise.all([
+      openCoachSession(session.supabase, session.user.id, parsed.data.assessmentId),
       fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`, {
         headers: { "xi-api-key": apiKey },
         signal: AbortSignal.timeout(15_000),
       }),
     ]);
 
-    if (created.error || !created.data) {
-      throw new Error(`psychology_sessions insert failed: ${created.error?.message ?? "no row"}`);
-    }
     if (!tokenResponse.ok) {
       logger.error("ElevenLabs conversation token request failed.", { status: tokenResponse.status });
       return jsonApiError(502, "psychology_realtime_token_failed", "Could not start the live coach right now.");
     }
 
     const { token } = (await tokenResponse.json()) as { token: string };
-    const sessionId = created.data.id as string;
+    const sessionId = callSession.id;
     const name = session.user.user_metadata?.name ?? session.user.email ?? "there";
 
     const vt_ctx = signAgentContext(
