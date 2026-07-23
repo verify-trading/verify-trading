@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getSessionUser } from "@/lib/auth/session";
 import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
+import { verifyAgentContext } from "@/lib/psychology/agent-token";
 import {
   PSYCHOLOGY_SESSION_COLUMNS,
   toPsychologySession,
@@ -16,7 +18,79 @@ const sessionIdParamSchema = z.uuid();
 
 const sessionPatchSchema = z.object({
   durationSecs: z.number().int().min(0).max(86_400),
+  // Realtime (ElevenLabs) calls report the conversation id on hang-up so we can pull the
+  // transcript server-side — there are no post-call webhooks in this design.
+  conversationId: z.string().trim().min(1).max(200).optional(),
 });
+
+type TranscriptTurn = { role?: string; message?: string | null };
+
+// Pull an ElevenLabs conversation transcript and store it as the same message rows the
+// companion route writes. Idempotent (skips if the session already has messages) so a client
+// retry never duplicates, and bound to the caller: the conversation's echoed vt_ctx must verify
+// to this user + session, so a forged conversationId can't pull someone else's transcript in.
+async function storeConversationTranscript(
+  supabase: SupabaseClient,
+  userId: string,
+  sessionId: string,
+  conversationId: string,
+) {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  const secret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
+  if (!apiKey || !secret) return;
+
+  const existing = await supabase
+    .from("psychology_session_messages")
+    .select("session_id")
+    .eq("user_id", userId)
+    .eq("session_id", sessionId)
+    .limit(1);
+  if (existing.error) throw new Error(`transcript idempotency check failed: ${existing.error.message}`);
+  if ((existing.data?.length ?? 0) > 0) return; // already stored
+
+  const response = await fetch(`https://api.elevenlabs.io/v1/convai/conversations/${encodeURIComponent(conversationId)}`, {
+    headers: { "xi-api-key": apiKey },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    logger.warn("ElevenLabs conversation fetch failed.", { status: response.status });
+    return;
+  }
+
+  const conversation = (await response.json()) as {
+    transcript?: TranscriptTurn[];
+    conversation_initiation_client_data?: { custom_llm_extra_body?: { vt_ctx?: unknown }; dynamic_variables?: { vt_ctx?: unknown } };
+  };
+
+  // Bind the conversation to the caller via the signed context we planted at token mint.
+  const init = conversation.conversation_initiation_client_data;
+  const vtCtx = init?.custom_llm_extra_body?.vt_ctx ?? init?.dynamic_variables?.vt_ctx;
+  const ctx = typeof vtCtx === "string" ? verifyAgentContext(vtCtx, secret) : null;
+  if (!ctx || ctx.userId !== userId || ctx.sessionId !== sessionId) {
+    logger.warn("Conversation transcript rejected: context did not bind to the caller.", { sessionId });
+    return;
+  }
+
+  const rows = (conversation.transcript ?? [])
+    .filter((turn) => (turn.role === "user" || turn.role === "agent") && typeof turn.message === "string" && turn.message.trim())
+    .map((turn) => ({
+      session_id: sessionId,
+      user_id: userId,
+      role: (turn.role === "agent" ? "coach" : "user") as "user" | "coach",
+      content: (turn.message as string).trim(),
+    }));
+  if (rows.length === 0) return;
+
+  const inserted = await supabase.from("psychology_session_messages").insert(rows);
+  if (inserted.error) throw new Error(`transcript insert failed: ${inserted.error.message}`);
+
+  const updated = await supabase
+    .from("psychology_sessions")
+    .update({ message_count: rows.length })
+    .eq("id", sessionId)
+    .eq("user_id", userId);
+  if (updated.error) throw new Error(`message_count update failed: ${updated.error.message}`);
+}
 
 const PRIVATE_CACHE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0",
@@ -119,6 +193,18 @@ export async function PATCH(
 
     if (!data) {
       return jsonApiError(404, "psychology_session_missing", "That coaching session was not found.");
+    }
+
+    // Duration is saved; now (realtime calls only) pull and store the transcript. Failures here
+    // are logged but don't fail the hang-up — the duration report already landed.
+    if (parsedBody.data.conversationId) {
+      try {
+        await storeConversationTranscript(session.supabase, session.user.id, parsed.data, parsedBody.data.conversationId);
+      } catch (error) {
+        logger.error("Storing conversation transcript failed.", {
+          error: error instanceof Error ? error.message : "unknown",
+        });
+      }
     }
 
     return NextResponse.json(

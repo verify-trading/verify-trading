@@ -106,12 +106,18 @@ export function buildPsychologyCoachInstructions(input: {
   journal: JournalContext;
   challenge?: ChallengeContext | null;
   recentEntries?: RecentEntry[];
+  realtime?: boolean;
 }) {
   const { assessment, journal } = input;
   const section = sectionLabels[String(assessment.focus_area)] ?? String(assessment.focus_area);
-  const breakContext = shouldRecommendBreak(journal)
-    ? "\nIMPORTANT: At a natural point, raise the idea of taking a break. Make it a mentor's honest observation, not a system alert."
-    : "";
+  // ponytail: the realtime (ElevenLabs) path can't surface the UI break-nudge — that flag rode
+  // the turn-based companion response, which the live call bypasses. Realtime v1 instead tells
+  // the coach to voice the break aloud whenever it fits; the visual nudge card is dropped there.
+  const breakContext = input.realtime
+    ? "\nIf a break would genuinely help them, say so out loud — a mentor's honest observation, not a system alert."
+    : shouldRecommendBreak(journal)
+      ? "\nIMPORTANT: At a natural point, raise the idea of taking a break. Make it a mentor's honest observation, not a system alert."
+      : "";
 
   return `You are ${input.name}'s coach at verify.trading — a personal coach and companion for a retail prop-firm trader, on a live voice call.
 
