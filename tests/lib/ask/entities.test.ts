@@ -127,6 +127,41 @@ const seedRows: Record<string, unknown>[] = [
     },
   },
   {
+    // Regulated broker awaiting a live-register re-check: NOT founder-locked and its
+    // verification_method still says "NEEDS FCA-API". With a real Tier-1 standing and
+    // regulators on file it must score, never fall back to "Provisional".
+    slug: "pepperstone",
+    name: "Pepperstone",
+    entity_type: "broker",
+    status: "legitimate",
+    fca_registered: true,
+    fca_reference: "684312",
+    final_tier: "Tier 1",
+    final_status: "LEGITIMATE",
+    founder_verified: false,
+    regulators_listed: "FCA, ASIC, CySEC, DFSA",
+    verification_method: "NEEDS FCA-API",
+    notes: "FCA authorised. Top tier execution. Low spreads.",
+    source: "FCA Register",
+    aliases: ["pepperstone"],
+  },
+  {
+    // Genuinely unknown firm: no regulator on file and only a needs-verification
+    // method — this is the case "Provisional" is actually reserved for.
+    slug: "obscure-fx",
+    name: "Obscure FX",
+    entity_type: "broker",
+    status: "warning",
+    final_tier: "Unregulated",
+    final_status: "CAUTION",
+    founder_verified: false,
+    regulators_listed: null,
+    verification_method: "NEEDS register check",
+    notes: "No regulator located.",
+    source: "research",
+    aliases: ["obscure fx", "obscurefx"],
+  },
+  {
     // Precision trap: collapse("zentova markets") = "zentovamarkets" CONTAINS
     // "amarkets" as a trailing substring. Resolution must NOT match this firm.
     slug: "amarkets",
@@ -169,6 +204,24 @@ describe("lookupVerifiedEntity", () => {
     expect(result.found).toBe(true);
     expect(result.entity?.name).toBe("Trading212");
     expect(result.brokerCardHint?.fca).toBe("Yes");
+  });
+
+  it("scores a regulated broker awaiting a register re-check, not Provisional", async () => {
+    const result = await lookupVerifiedEntity("Is Pepperstone safe for UK retail CFD?");
+
+    expect(result.found).toBe(true);
+    expect(result.entity?.name).toBe("Pepperstone");
+    expect(result.entity?.provisional).toBe(false);
+    // Tier 1 → a real numeric grade, never the "Provisional" placeholder.
+    expect(result.brokerCardHint?.score).toBe("9.0");
+  });
+
+  it("keeps Provisional for a genuinely unknown, unregulated broker", async () => {
+    const result = await lookupVerifiedEntity("Is Obscure FX legit?");
+
+    expect(result.found).toBe(true);
+    expect(result.entity?.provisional).toBe(true);
+    expect(result.brokerCardHint?.score).toBe("Provisional");
   });
 
   it("returns a safe miss when the entity is unknown", async () => {

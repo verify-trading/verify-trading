@@ -79,9 +79,24 @@ export function computeBrokerTrustScore(inputs: BtsScoreInputs): BtsScore {
   const trusted = founderLocked && !status.includes("AVOID") && !status.includes("CAUTION");
   const score = trusted ? Math.min(band.max, band.score + 0.5) : band.score;
 
+  // "Provisional" means we genuinely can't grade the firm yet — reserve it for rows
+  // with no regulatory basis at all. A listed regulator or an established regulated
+  // tier (Tier 1/2/3) is enough to publish the computed score even before a live
+  // register re-check clears the "needs verification" method; otherwise almost every
+  // non founder-locked broker (Pepperstone included) reads "Provisional" despite a
+  // clean regulated record. Genuinely unknown/unregulated rows still fall through.
+  const hasRegulatoryBasis =
+    Boolean(inputs.regulatorsListed?.trim()) ||
+    tier === "Tier 1" ||
+    tier === "Tier 2" ||
+    tier === "Tier 3";
+
   return {
     score: Math.round(score * 10) / 10,
     band: band.band,
-    provisional: !founderLocked && /needs (fca-api|register)/i.test(inputs.verificationMethod ?? ""),
+    provisional:
+      !founderLocked &&
+      !hasRegulatoryBasis &&
+      /needs (fca-api|register)/i.test(inputs.verificationMethod ?? ""),
   };
 }

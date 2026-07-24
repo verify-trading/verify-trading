@@ -121,10 +121,24 @@ export function AskEmptyState({
         </div>
       </div>
 
-      {/* ─── Mobile: welcome only (no suggestion chips — desktop keeps the grid) ─── */}
+      {/* ─── Narrow / mobile-web: welcome + the same tappable prompt chips, stacked above the composer ─── */}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-4 lg:hidden sm:max-w-xl sm:px-8 sm:py-6">
         <div className="mx-auto w-full max-w-lg">
           <WelcomeBlock />
+          <ul className="mt-8 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {prompts.map((prompt) => (
+              <li key={prompt} className="min-w-0">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => onPromptClick(prompt)}
+                  className={askSuggestionChipClass}
+                >
+                  <span className="min-w-0 break-words text-pretty">{prompt}</span>
+                </Button>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </div>
