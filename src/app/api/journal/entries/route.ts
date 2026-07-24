@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
     const query = session.supabase
       .from("journal_entries")
-      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
+      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, trade_details, created_at, updated_at")
       .eq("user_id", session.user.id)
       .order("entry_date", { ascending: false })
       .order("created_at", { ascending: false })
@@ -118,9 +118,10 @@ export async function POST(request: Request) {
         note: input.note,
         lesson: input.lesson?.trim() || null,
         tags: input.tags,
+        trade_details: input.tradeDetails ?? null,
         source: "mobile",
       }, { onConflict: "user_id,entry_date" })
-      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
+      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, trade_details, created_at, updated_at")
       .single();
 
     if (error || !data) {
@@ -209,7 +210,7 @@ async function enrichSavedEntry(supabase: SupabaseClient, userId: string, entry:
   const [{ data: rows }, { data: configData }] = await Promise.all([
     supabase
       .from("journal_entries")
-      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
+      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, trade_details, created_at, updated_at")
       .eq("user_id", userId)
       .order("entry_date", { ascending: false })
       .limit(30),
@@ -237,7 +238,7 @@ async function enrichSavedEntry(supabase: SupabaseClient, userId: string, entry:
       .from("journal_entries")
       .update({ challenge_status_note: note })
       .eq("id", entry.id)
-      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
+      .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, trade_details, created_at, updated_at")
       .single();
 
     return { entry: (updated as JournalEntryRow | null) ?? entry, overheat };

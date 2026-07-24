@@ -2,6 +2,24 @@ import { z } from "zod";
 
 const journalMoodSchema = z.enum(["good", "okay", "tough"]);
 
+// Optional structured trade details, stored as a jsonb blob. Every field is optional:
+// the trader can save a session outcome with none, some, or all of them filled in.
+export const tradeDetailsSchema = z
+  .object({
+    asset: z.string().trim().max(40).optional(),
+    direction: z.enum(["long", "short", "scalp"]).optional(),
+    entryPrice: z.number().finite().nullable().optional(),
+    stopLoss: z.number().finite().nullable().optional(),
+    takeProfit: z.number().finite().nullable().optional(),
+    positionSize: z.number().finite().nullable().optional(),
+    entryAt: z.string().trim().max(40).nullable().optional(),
+    timeframe: z.string().trim().max(20).optional(),
+  })
+  .nullable()
+  .optional();
+
+export type TradeDetails = NonNullable<z.infer<typeof tradeDetailsSchema>>;
+
 // A session can't be logged before it happens. Aggregates read entry_date descending, so
 // a future row lands at index 0 and is treated as the latest session: the header reports
 // the wrong streak direction, and overheatTrigger's breakIndex of 0 means a real streak
@@ -21,6 +39,7 @@ export const journalEntryCreateSchema = z.object({
   note: z.string().trim().max(4_000).optional().default(""),
   lesson: z.string().trim().max(2_000).nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(12).optional().default([]),
+  tradeDetails: tradeDetailsSchema,
 });
 
 export const overheatLogCreateSchema = z.object({
@@ -55,6 +74,7 @@ export type JournalEntryRow = {
   lesson: string | null;
   challenge_status_note: string | null;
   tags: string[] | null;
+  trade_details: TradeDetails | null;
   created_at: string;
   updated_at: string;
 };
@@ -69,6 +89,7 @@ export type JournalEntry = {
   lesson: string | null;
   challengeStatusNote: string | null;
   tags: string[];
+  tradeDetails: TradeDetails | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -147,6 +168,7 @@ export function toJournalEntry(row: JournalEntryRow): JournalEntry {
     lesson: row.lesson,
     challengeStatusNote: row.challenge_status_note,
     tags: row.tags ?? [],
+    tradeDetails: row.trade_details ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
