@@ -128,11 +128,11 @@ describe("Psychology companion API", () => {
     });
     expect(messageInsert.insert).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ session_id: SESSION_ID, role: "user", content: "I want to double my size." }),
+      [expect.objectContaining({ session_id: SESSION_ID, role: "user", content: "I want to double my size." })],
     );
     expect(messageInsert.insert).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ session_id: SESSION_ID, role: "coach" }),
+      [expect.objectContaining({ session_id: SESSION_ID, role: "coach" })],
     );
     expect(sessionUpdate.update).toHaveBeenCalledWith({ message_count: 4, break_recommended: false });
   });
@@ -206,11 +206,11 @@ describe("Psychology companion API", () => {
     );
     expect(messageInsert.insert).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ session_id: SESSION_ID, role: "user", content: "Rough session today." }),
+      [expect.objectContaining({ session_id: SESSION_ID, role: "user", content: "Rough session today." })],
     );
     expect(messageInsert.insert).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ session_id: SESSION_ID, role: "coach" }),
+      [expect.objectContaining({ session_id: SESSION_ID, role: "coach" })],
     );
     expect(sessionUpdate.update).toHaveBeenCalledWith({ message_count: 2, break_recommended: false });
   });

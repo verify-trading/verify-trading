@@ -168,6 +168,9 @@ async function runCoach(system: string, prompt: string, maxOutputTokens: number)
 // The reply is read aloud on a live voice call, so strip any markdown glyphs the model
 // emits (they'd be spoken literally) while preserving sentence flow; newlines collapse to
 // spaces.
-function speakable(text: string): string {
+// Markdown glyphs are read aloud by TTS ("star star right star star"), so strip them from
+// anything headed for a voice. Exported because the realtime path streams deltas and has to
+// apply the same cleanup per chunk.
+export function speakable(text: string): string {
   return text.replace(/[*_`#>|~]/g, " ").replace(/\s+/g, " ").trim();
 }

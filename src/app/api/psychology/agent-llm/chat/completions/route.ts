@@ -5,7 +5,7 @@ import { jsonApiError } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { verifyAgentContext } from "@/lib/psychology/agent-token";
-import { buildPsychologyCoachInstructions } from "@/lib/psychology/companion";
+import { buildPsychologyCoachInstructions, speakable } from "@/lib/psychology/companion";
 import { loadCoachContext } from "@/lib/psychology/context";
 
 // OpenAI-compatible custom-LLM endpoint for the ElevenLabs coach agent. ElevenLabs calls this
@@ -16,6 +16,13 @@ import { loadCoachContext } from "@/lib/psychology/context";
 // aloud instead (see buildPsychologyCoachInstructions).
 
 export const runtime = "nodejs";
+// A turn streams for as long as the model takes; the platform default would cut the SSE off
+// mid-sentence.
+export const maxDuration = 60;
+
+// Spoken when the model produced nothing at all, so a provider outage sounds like a hiccup
+// rather than the coach going mute.
+const COACH_FALLBACK_LINE = "Sorry — I lost my train of thought for a second there. Say that again?";
 
 type ChatMessage = { role: string; content: unknown };
 
@@ -48,9 +55,21 @@ function cachedSystem(sessionId: string, nowSecs: number): string | undefined {
   const hit = systemCache.get(sessionId);
   return hit && hit.exp > nowSecs ? hit.system : undefined;
 }
+const MAX_CALL_SECS = 1800; // the agent's own max_duration_seconds
+const CACHE_LIMIT = 500;
+
 function cacheSystem(sessionId: string, system: string, exp: number, nowSecs: number): void {
-  if (systemCache.size > 500) for (const [k, v] of systemCache) if (v.exp <= nowSecs) systemCache.delete(k);
-  systemCache.set(sessionId, { system, exp });
+  for (const [k, v] of systemCache) if (v.exp <= nowSecs) systemCache.delete(k);
+  // Sweeping only expired entries frees nothing when every entry is live, so cap by age too:
+  // Map iterates in insertion order, making the first key the oldest.
+  while (systemCache.size >= CACHE_LIMIT) {
+    const oldest = systemCache.keys().next().value;
+    if (oldest === undefined) break;
+    systemCache.delete(oldest);
+  }
+  // Never trust the token's exp as the cache lifetime — an entry can't outlive the longest
+  // possible call, whatever the token claims.
+  systemCache.set(sessionId, { system, exp: Math.min(exp, nowSecs + MAX_CALL_SECS) });
 }
 
 export async function POST(request: Request) {
@@ -106,7 +125,21 @@ export async function POST(request: Request) {
       .filter((m) => m.content.length > 0);
     if (messages.length === 0) messages.push({ role: "user", content: "Hello." });
 
-    const result = streamText({ model: getPsychologyCoachModel(), maxOutputTokens: 240, system, messages });
+    const result = streamText({
+      model: getPsychologyCoachModel(),
+      maxOutputTokens: 240,
+      system,
+      messages,
+      // streamText does NOT reject when the provider fails — verified against ai@6: the step
+      // promise enqueues an error part and closes the stream, so `textStream` finishes
+      // normally with zero deltas and the catch below never runs. Without this hook an
+      // Anthropic outage is invisible in our logs and silent in the trader's ear.
+      onError: ({ error }) =>
+        logger.error("agent-llm model stream failed.", {
+          sessionId: ctx.sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+    });
 
     const encoder = new TextEncoder();
     const id = `chatcmpl-${ctx.sessionId}`;
@@ -118,21 +151,36 @@ export async function POST(request: Request) {
 
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
+        // Once the caller hangs up mid-turn the controller is closed and every further
+        // enqueue/close throws; without this the teardown throws over the original error.
+        const safe = (run: () => void) => {
+          try {
+            run();
+          } catch {
+            /* controller already closed — the agent went away mid-stream */
+          }
+        };
         const finish = () => {
           controller.enqueue(chunk({}, "stop"));
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         };
+        let spoke = false;
         try {
           controller.enqueue(chunk({ role: "assistant" }, null));
           for await (const delta of result.textStream) {
-            if (delta) controller.enqueue(chunk({ content: delta }, null));
+            if (!delta) continue;
+            spoke = true;
+            controller.enqueue(chunk({ content: speakable(delta) }, null));
           }
+          // Zero deltas means the provider failed (see onError above). Say something — dead
+          // air on a voice call is indistinguishable from the coach ignoring the trader.
+          if (!spoke) controller.enqueue(chunk({ content: COACH_FALLBACK_LINE }, null));
           finish();
         } catch (error) {
           logger.error("agent-llm stream failed.", { error: error instanceof Error ? error.message : "unknown" });
-          finish();
+          safe(finish);
         } finally {
-          controller.close();
+          safe(() => controller.close());
         }
       },
     });

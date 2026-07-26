@@ -24,9 +24,10 @@ export async function GET() {
       .from("psychology_sessions")
       .select(PSYCHOLOGY_SESSION_COLUMNS)
       .eq("user_id", session.user.id)
-      // Hides the legacy per-turn log rows (and calls that never got past the
-      // greeting): only sessions with an actual exchange are worth listing.
-      .gt("message_count", 0)
+      // Hides the legacy contentless log rows, but a real call must still be listed even when
+      // its transcript never stored (ElevenLabs slow to finalise, fetch failed, empty
+      // transcript) — otherwise the trader's call silently disappears from their history.
+      .or("message_count.gt.0,duration_secs.gt.0")
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       // Explicit cap (PostgREST would silently apply ~1000 anyway); newest-first

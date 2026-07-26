@@ -49,6 +49,23 @@ export async function POST(request: Request) {
       return jsonApiError(503, "psychology_realtime_unconfigured", "The live coach is not available right now.");
     }
 
+    // The assessment must exist AND belong to the caller before anything is spent. The FK only
+    // proves the row exists, so a stale or foreign id used to mint a token, open a session and
+    // connect a billed WebRTC call — which then failed on every turn (agent-llm 404s when
+    // loadCoachContext finds nothing) and left the trader listening to silence.
+    const { data: ownsAssessment, error: assessmentError } = await session.supabase
+      .from("psychology_assessments")
+      .select("id")
+      .eq("user_id", session.user.id)
+      .eq("id", parsed.data.assessmentId)
+      .maybeSingle();
+    if (assessmentError) {
+      throw new Error(`psychology_assessments read failed: ${assessmentError.message}`);
+    }
+    if (!ownsAssessment) {
+      return jsonApiError(404, "psychology_assessment_missing", "Complete the psychology assessment first.");
+    }
+
     // Open the session row and mint the token in parallel — neither depends on the other.
     const [callSession, tokenResponse] = await Promise.all([
       openCoachSession(session.supabase, session.user.id, parsed.data.assessmentId),
@@ -63,9 +80,17 @@ export async function POST(request: Request) {
       return jsonApiError(502, "psychology_realtime_token_failed", "Could not start the live coach right now.");
     }
 
-    const { token } = (await tokenResponse.json()) as { token: string };
+    const { token } = (await tokenResponse.json()) as { token?: unknown };
+    if (typeof token !== "string" || !token) {
+      logger.error("ElevenLabs conversation token response had no token.");
+      return jsonApiError(502, "psychology_realtime_token_failed", "Could not start the live coach right now.");
+    }
     const sessionId = callSession.id;
-    const name = session.user.user_metadata?.name ?? session.user.email ?? "there";
+    // user_metadata is arbitrary client-writable JSON: coerce it (a non-string rendered as
+    // "[object Object]" in the coach's opening line) and cap it, since it lands verbatim in
+    // the system prompt that gets re-sent on every turn.
+    const rawName = session.user.user_metadata?.name ?? session.user.email ?? "there";
+    const name = String(rawName).slice(0, 80);
 
     const vt_ctx = signAgentContext(
       { userId: session.user.id, assessmentId: parsed.data.assessmentId, sessionId, name, exp: Math.floor(Date.now() / 1000) + CONTEXT_TTL_SECS },

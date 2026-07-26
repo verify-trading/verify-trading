@@ -25,7 +25,9 @@ export async function openCoachSession(
 // catch and surfaces as a retryable 500. Callers own their own message_count bookkeeping.
 export async function insertSessionMessages(
   supabase: SupabaseClient,
-  rows: Array<{ session_id: string; user_id: string; role: "user" | "coach"; content: string }>,
+  // created_at is optional: the transcript importer stamps it per row so a batch insert keeps
+  // the spoken order, while single-message writers let the column default.
+  rows: Array<{ session_id: string; user_id: string; role: "user" | "coach"; content: string; created_at?: string }>,
 ): Promise<void> {
   if (rows.length === 0) return;
   const { error } = await supabase.from("psychology_session_messages").insert(rows);

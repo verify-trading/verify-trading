@@ -72,24 +72,32 @@ async function storeConversationTranscript(
     return;
   }
 
+  // One multi-row insert shares a single now() default, so every turn would carry an identical
+  // created_at and the GET's created_at ordering would be arbitrary. Stamp them a millisecond
+  // apart to keep the conversation in the order it was spoken.
+  const base = Date.now();
   const rows = (conversation.transcript ?? [])
     .filter((turn) => (turn.role === "user" || turn.role === "agent") && typeof turn.message === "string" && turn.message.trim())
-    .map((turn) => ({
+    .map((turn, index) => ({
       session_id: sessionId,
       user_id: userId,
       role: (turn.role === "agent" ? "coach" : "user") as "user" | "coach",
       content: (turn.message as string).trim(),
+      created_at: new Date(base + index).toISOString(),
     }));
   if (rows.length === 0) return;
 
-  await insertSessionMessages(supabase, rows);
-
+  // Count first, then insert. The reverse order meant a failed count update left stored
+  // messages the list route couldn't see, which the idempotency check above then refused to
+  // repair on retry. This way a failure leaves a visible row a retry can still fill in.
   const updated = await supabase
     .from("psychology_sessions")
     .update({ message_count: rows.length })
     .eq("id", sessionId)
     .eq("user_id", userId);
   if (updated.error) throw new Error(`message_count update failed: ${updated.error.message}`);
+
+  await insertSessionMessages(supabase, rows);
 }
 
 const PRIVATE_CACHE_HEADERS = {

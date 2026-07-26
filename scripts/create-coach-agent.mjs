@@ -30,6 +30,11 @@ if (process.env.ELEVENLABS_AGENT_ID) {
 const ENV_PATH = ".env.local";
 const APP_URL = "https://www.verify.trading";
 const COACH_VOICE_ID = "cgSgspJ2msm6clMCkdW9"; // Jessica — the only female voice tagged `conversational`
+// ElevenLabs treats custom_llm.url as an OpenAI-compatible BASE and appends
+// "/chat/completions" itself — so this must stay suffix-less, and the route lives at
+// src/app/api/psychology/agent-llm/chat/completions/route.ts. Adding the suffix here (or
+// moving the route back up a level) sends every turn to a 404: the agent speaks its
+// first_message and is then silent for the rest of the call, with nothing in our logs.
 const AGENT_LLM_URL = `${APP_URL}/api/psychology/agent-llm`;
 
 // Reuse the secret if it's already in .env.local, else mint one.
@@ -48,12 +53,13 @@ const payload = {
     agent: {
       first_message:
         "Hey, it's your coach here. Good to have you on — take a breath, and tell me what's on your mind today.",
-      // ElevenLabs forbids an English *base* language on the multilingual flash v2.5 model
-      // ("English Agents must use turbo or flash v2"). To keep flash v2.5 + auto-detect (the
-      // task's requirement) we set a non-English base and list English as a preset; the
-      // language_detection tool + Scribe auto-detect the trader's actual language per turn, and
-      // the English first_message text still renders in English (flash v2.5 detects text language).
-      language: "es",
+      // English base on flash v2. The rejection that prompted the old "Spanish base + English
+      // preset" workaround was ElevenLabs enforcing its model mapping — English uses v2,
+      // additional languages use v2.5 — not a ban on English as the base. That workaround
+      // pinned BOTH the TTS and Scribe to Spanish for the whole call, so English replies were
+      // voiced with Spanish phonetics and the trader's English was transcribed against a
+      // Spanish model. Verified: PATCHing language "en" + eleven_flash_v2 returns 200.
+      language: "en",
       prompt: {
         // Minimal: the real persona is rebuilt per session by the custom LLM endpoint.
         prompt:
@@ -64,23 +70,15 @@ const payload = {
           model_id: "verify-coach",
           request_headers: { Authorization: `Bearer ${llmSecret}` },
         },
-        // Auto language detection so the coach can switch to the trader's language mid-call.
-        built_in_tools: {
-          language_detection: {
-            name: "language_detection",
-            description: "",
-            params: { system_tool_type: "language_detection" },
-          },
-        },
+        // ponytail: no built_in_tools. System tools like language_detection are LLM-invoked —
+        // ElevenLabs offers them in the OpenAI `tools` array and waits for a tool_call. Our
+        // custom-LLM endpoint sends no `tools` and emits no `tool_calls`, so the tool could
+        // never fire; it was dead config. Mid-call language switching needs agent-llm to
+        // forward tools and stream tool_call deltas first.
       },
     },
-    tts: { model_id: "eleven_flash_v2_5", voice_id: COACH_VOICE_ID },
+    tts: { model_id: "eleven_flash_v2", voice_id: COACH_VOICE_ID },
     conversation: { max_duration_seconds: 1800 }, // billing cap
-    // The languages the detection tool switches between (English included, since the base is
-    // non-English above). Empty overrides = use the agent's defaults for each.
-    language_presets: Object.fromEntries(
-      ["en", "fr", "de", "pt", "it", "zh", "hi", "ar"].map((code) => [code, { overrides: {} }]),
-    ),
   },
   platform_settings: {
     auth: { enable_auth: true }, // the public agent_id alone cannot connect

@@ -35,7 +35,18 @@ export function verifyAgentContext(token: string, secret: string): AgentContext 
 
   try {
     const ctx = JSON.parse(Buffer.from(payload, "base64url").toString()) as AgentContext;
-    if (!ctx.userId || !ctx.assessmentId || typeof ctx.exp !== "number") return null;
+    // Every field is checked for type, not just truthiness: sessionId keys the per-session
+    // prompt cache downstream, and `typeof NaN === "number"` — with NaN every comparison is
+    // false, so `exp: NaN` sailed past the expiry check below and never expired.
+    if (
+      typeof ctx.userId !== "string" || !ctx.userId ||
+      typeof ctx.assessmentId !== "string" || !ctx.assessmentId ||
+      typeof ctx.sessionId !== "string" || !ctx.sessionId ||
+      typeof ctx.name !== "string" ||
+      !Number.isFinite(ctx.exp)
+    ) {
+      return null;
+    }
     if (ctx.exp < Date.now() / 1000) return null; // expired
     return ctx;
   } catch {

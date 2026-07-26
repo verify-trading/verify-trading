@@ -112,7 +112,11 @@ export async function loadCoachContext(
       .maybeSingle(),
   ]);
 
+  // Every read must succeed. Treating a failed journal or challenge read as "no data" built a
+  // coach that told a trader mid-challenge they had never logged a session — and on the
+  // realtime path that wrong persona is then cached for the rest of the call.
   if (assessmentQuery.error || !assessmentQuery.data) return null;
+  if (journalQuery.error || configQuery.error) return null;
 
   const rows = (journalQuery.data ?? []) as JournalRow[];
   const journal = journalContext(rows);

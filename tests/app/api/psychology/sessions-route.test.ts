@@ -40,7 +40,7 @@ const sessionShape = {
 function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
   const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
 
-  for (const method of ["select", "eq", "gt", "order", "limit", "insert", "update"]) {
+  for (const method of ["select", "eq", "gt", "or", "order", "limit", "insert", "update"]) {
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn().mockResolvedValue(result);
@@ -78,7 +78,7 @@ describe("Psychology sessions API", () => {
     });
   });
 
-  it("lists only sessions with messages, newest first, as camelCase rows", async () => {
+  it("lists sessions that have messages or a recorded duration, newest first, as camelCase rows", async () => {
     const builder = createQueryBuilder({ data: [sessionRow], error: null });
     const from = vi.fn(() => builder);
     mockSession(from);
@@ -89,7 +89,7 @@ describe("Psychology sessions API", () => {
     expect(response.status).toBe(200);
     expect(from).toHaveBeenCalledWith("psychology_sessions");
     expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(builder.gt).toHaveBeenCalledWith("message_count", 0);
+    expect(builder.or).toHaveBeenCalledWith("message_count.gt.0,duration_secs.gt.0");
     expect(builder.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(json).toEqual([sessionShape]);
   });

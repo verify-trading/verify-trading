@@ -72,6 +72,7 @@ describe("Journal entries API", () => {
       lesson: "Patience is the edge.",
       challenge_status_note: null,
       tags: ["london"],
+      trade_details: null,
       created_at: "2026-05-26T12:00:00.000Z",
       updated_at: "2026-05-26T12:00:00.000Z",
     };
@@ -100,6 +101,7 @@ describe("Journal entries API", () => {
         lesson: "Patience is the edge.",
         challengeStatusNote: null,
         tags: ["london"],
+        tradeDetails: null,
         createdAt: "2026-05-26T12:00:00.000Z",
         updatedAt: "2026-05-26T12:00:00.000Z",
       },
