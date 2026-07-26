@@ -29,7 +29,7 @@ if (process.env.ELEVENLABS_AGENT_ID) {
 
 const ENV_PATH = ".env.local";
 const APP_URL = "https://www.verify.trading";
-const COACH_VOICE_ID = "cjVigY5qzO86Huf0OWal"; // Eric
+const COACH_VOICE_ID = "cgSgspJ2msm6clMCkdW9"; // Jessica — the only female voice tagged `conversational`
 const AGENT_LLM_URL = `${APP_URL}/api/psychology/agent-llm`;
 
 // Reuse the secret if it's already in .env.local, else mint one.

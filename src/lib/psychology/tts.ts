@@ -5,11 +5,12 @@
 
 const ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech";
 
-// "Eric" — smooth, trustworthy, middle-aged. ElevenLabs tags him `conversational`,
-// which is the point: the previous voice ("Sarah") is tagged `entertainment_tv`, an
-// announcer read being asked to hold a phone conversation. That mismatch, not the model,
-// was most of why the coach sounded synthetic.
-const COACH_VOICE_ID = "cjVigY5qzO86Huf0OWal";
+// "Jessica" — bright, warm, and the only FEMALE voice ElevenLabs tags `conversational`,
+// which is the property that matters: an `entertainment_tv` voice ("Sarah") is an announcer
+// read being asked to hold a phone conversation, and that mismatch — not the model — was
+// most of why the coach used to sound synthetic. Client asked for a female coach; Jessica
+// is the one that keeps the conversational read.
+const COACH_VOICE_ID = "cgSgspJ2msm6clMCkdW9";
 // Flash v2.5 — ElevenLabs' fastest multilingual model (~75ms inference, 32 languages ⊇ our
 // coverage, 50% cheaper). We moved off multilingual_v2 because the real bottleneck was never
 // ElevenLabs latency (~2s) but the client's time-to-*playable*: iOS AVPlayer was slow to
