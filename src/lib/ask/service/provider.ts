@@ -30,12 +30,27 @@ export function getAskSimpleModelId() {
   return process.env.ANTHROPIC_SIMPLE_MODEL ?? DEFAULT_ANTHROPIC_SIMPLE_MODEL;
 }
 
+/** The live MIND coach. Haiku is ~3x cheaper than Sonnet and, more importantly for a
+ *  voice call, faster to first token — the trader hears the pause. It gets its own
+ *  setting rather than riding ANTHROPIC_SIMPLE_MODEL, which the journal insight and
+ *  challenge-status writers also read; those are not voice and should not follow the
+ *  coach's latency tradeoff. */
+export const DEFAULT_COACH_MODEL = "claude-haiku-4-5";
+
+export function getPsychologyCoachModelId() {
+  return process.env.ANTHROPIC_COACH_MODEL ?? DEFAULT_COACH_MODEL;
+}
+
 export function getAskModel() {
   return anthropic(getAskPrimaryModelId());
 }
 
 export function getAskSimpleModel() {
   return anthropic(getAskSimpleModelId());
+}
+
+export function getPsychologyCoachModel() {
+  return anthropic(getPsychologyCoachModelId());
 }
 
 export function createSystemMessage(content: string) {

@@ -1,6 +1,6 @@
 import { streamText, type ModelMessage } from "ai";
 
-import { getAskSimpleModel } from "@/lib/ask/service/provider";
+import { getPsychologyCoachModel } from "@/lib/ask/service/provider";
 import { jsonApiError } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
       .filter((m) => m.content.length > 0);
     if (messages.length === 0) messages.push({ role: "user", content: "Hello." });
 
-    const result = streamText({ model: getAskSimpleModel(), maxOutputTokens: 240, system, messages });
+    const result = streamText({ model: getPsychologyCoachModel(), maxOutputTokens: 240, system, messages });
 
     const encoder = new TextEncoder();
     const id = `chatcmpl-${ctx.sessionId}`;
