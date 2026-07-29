@@ -17,29 +17,20 @@ vi.mock("@/lib/journal/ai", () => ({
 
 import { GET, POST } from "@/app/api/journal/entries/route";
 import { getSessionUser } from "@/lib/auth/session";
+import { generateChallengeStatus } from "@/lib/journal/ai";
 
-function createQueryBuilder(result: unknown) {
-  const builder = Promise.resolve(result) as Promise<unknown> & {
-    select: ReturnType<typeof vi.fn>;
-    eq: ReturnType<typeof vi.fn>;
-    order: ReturnType<typeof vi.fn>;
-    limit: ReturnType<typeof vi.fn>;
-    lt: ReturnType<typeof vi.fn>;
-    insert: ReturnType<typeof vi.fn>;
-    upsert: ReturnType<typeof vi.fn>;
-    single: ReturnType<typeof vi.fn>;
-    maybeSingle: ReturnType<typeof vi.fn>;
-  };
+// Chainable thenable stand-in for a PostgREST query: every builder method returns the
+// builder, and awaiting it (or .single()/.maybeSingle()) resolves the provided result. A
+// filter method added in src must be added here too, or the chain returns undefined mid-query.
+function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
+  const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
 
-  builder.select = vi.fn(() => builder);
-  builder.eq = vi.fn(() => builder);
-  builder.order = vi.fn(() => builder);
-  builder.limit = vi.fn(() => builder);
-  builder.lt = vi.fn(() => builder);
-  builder.insert = vi.fn(() => builder);
-  builder.upsert = vi.fn(() => builder);
+  for (const method of ["select", "eq", "is", "order", "limit", "insert", "update", "upsert"]) {
+    builder[method] = vi.fn(() => builder);
+  }
   builder.single = vi.fn().mockResolvedValue(result);
   builder.maybeSingle = vi.fn().mockResolvedValue(result);
+  builder.then = (onFulfilled, onRejected) => Promise.resolve(result).then(onFulfilled, onRejected);
 
   return builder;
 }
@@ -180,5 +171,75 @@ describe("Journal entries API", () => {
       pnl_currency: "GBP",
       source: "mobile",
     }), { onConflict: "user_id,entry_date" });
+  });
+
+  it("tells the coaching note only about the days inside the current challenge", async () => {
+    vi.mocked(generateChallengeStatus).mockResolvedValue("Keep the size you traded today.");
+    const saved = {
+      id: "entry-1",
+      entry_date: "2026-07-29",
+      mood: "good",
+      pnl_amount: "100.00",
+      pnl_currency: "GBP",
+      note: "",
+      lesson: null,
+      challenge_status_note: null,
+      tags: [],
+      trade_details: null,
+      source: "mobile",
+      created_at: "2026-07-29T12:00:00.000Z",
+      updated_at: "2026-07-29T12:00:00.000Z",
+    };
+    // Newest-first history: today's £100, a journaled day with no trade on it, and £900
+    // earned weeks BEFORE this challenge was configured.
+    const recent = [
+      saved,
+      { ...saved, id: "entry-2", entry_date: "2026-07-28", pnl_amount: null },
+      { ...saved, id: "entry-3", entry_date: "2026-07-01", pnl_amount: "900.00" },
+    ];
+    const savedBuilder = createQueryBuilder({ data: saved, error: null });
+    const recentBuilder = createQueryBuilder({ data: recent, error: null });
+    const noteBuilder = createQueryBuilder({ data: { ...saved, challenge_status_note: "Keep the size you traded today." }, error: null });
+    const configBuilder = createQueryBuilder({
+      data: {
+        id: "config-1",
+        firm_name: "FTMO",
+        firm_url: "https://ftmo.com",
+        account_size: 10_000,
+        account_type: "2step",
+        rules: { profit_target: "10%", daily_loss_limit: "5%", max_drawdown: "10%", min_trading_days: null, max_trading_days: 30, weekend_holding: false, news_trading_allowed: true, other_rules: [], started_at: "2026-07-28T09:00:00.000Z" },
+        created_at: "2026-07-28T09:00:00.000Z",
+        updated_at: "2026-07-28T09:00:00.000Z",
+      },
+      error: null,
+    });
+    let journalCallCount = 0;
+    const from = vi.fn((table: string) => {
+      if (table === "challenge_config") return configBuilder;
+      if (table !== "journal_entries") return createQueryBuilder({ data: null, error: null });
+      journalCallCount += 1;
+      if (journalCallCount === 1) return savedBuilder; // the upsert
+      if (journalCallCount === 2) return recentBuilder; // the recent-history read
+      return noteBuilder; // writing the note back onto the entry
+    });
+
+    vi.mocked(getSessionUser).mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: { from },
+    } as never);
+
+    const response = await POST(
+      new Request("http://localhost/api/journal/entries", {
+        method: "POST",
+        body: JSON.stringify({ entryDate: "2026-07-29", mood: "good", pnlAmount: 100 }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    // The prompt calls these "this evaluation": pre-challenge history would have handed the
+    // coach £1,000 of a £1,000 target, and counted a no-trade day as a day traded.
+    expect(generateChallengeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ cumulativePnl: 100, daysTraded: 1 }),
+    );
   });
 });

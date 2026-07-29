@@ -24,11 +24,6 @@ import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data"
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 
 const marketsTestPricing = getPublicBillingPricing();
-const signedOutBillingContext: PricingPageBillingContext = {
-  isSignedIn: false,
-  hasManageableSubscription: false,
-  currentPlanKey: null,
-};
 const freeSignedInBillingContext: PricingPageBillingContext = {
   isSignedIn: true,
   hasManageableSubscription: false,

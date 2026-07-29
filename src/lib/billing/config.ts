@@ -74,18 +74,6 @@ function formatGbp(amount: number): string {
   return (Number.isInteger(amount) ? GBP_FORMATTER : GBP_WITH_PENCE_FORMATTER).format(amount);
 }
 
-function formatWeeklyHeadline(amount: number): string {
-  return `${formatGbp(amount)}/week`;
-}
-
-function formatMonthlyHeadline(amount: number): string {
-  return `${formatGbp(amount)}/month`;
-}
-
-function formatAnnualHeadline(amount: number): string {
-  return `${formatGbp(amount)}/year`;
-}
-
 function formatDailyEquivalentHeadline(amountGbp: number, days: number): string {
   const rawPence = (amountGbp / days) * 100;
   const pence = days >= 365 ? Math.round(rawPence) : Math.floor(rawPence + 1e-9);
@@ -101,9 +89,6 @@ function readStripePriceProMonthly(): string {
 }
 
 export function getPublicBillingPricing(): PublicBillingPricing {
-  const weeklyHeadline = formatWeeklyHeadline(WEEKLY_PRICE_GBP);
-  const monthlyHeadline = formatMonthlyHeadline(MONTHLY_PRICE_GBP);
-  const annualHeadline = formatAnnualHeadline(ANNUAL_PRICE_GBP);
   const annualSavings = MONTHLY_PRICE_GBP * 12 - ANNUAL_PRICE_GBP;
 
   return {
@@ -114,21 +99,21 @@ export function getPublicBillingPricing(): PublicBillingPricing {
     },
     weekly: {
       badge: "Flexible",
-      headline: weeklyHeadline,
+      headline: `${formatGbp(WEEKLY_PRICE_GBP)}/week`,
       detail: "Full Pro access billed weekly.",
       dailyEquivalentHeadline: formatDailyEquivalentHeadline(WEEKLY_PRICE_GBP, 7),
       ctaLabel: "Start weekly plan",
     },
     monthly: {
       badge: "Most popular",
-      headline: monthlyHeadline,
+      headline: `${formatGbp(MONTHLY_PRICE_GBP)}/month`,
       detail: `${PRO_DAILY_ASK_LIMIT} Ask chats per day plus premium app features.`,
       dailyEquivalentHeadline: formatDailyEquivalentHeadline(MONTHLY_PRICE_GBP, 30),
       ctaLabel: "Start Pro",
     },
     annual: {
       badge: "Best value",
-      headline: annualHeadline,
+      headline: `${formatGbp(ANNUAL_PRICE_GBP)}/year`,
       detail: "Same Pro features as monthly, with one annual payment.",
       dailyEquivalentHeadline: formatDailyEquivalentHeadline(ANNUAL_PRICE_GBP, 365),
       ctaLabel: "Start annual plan",
@@ -138,38 +123,22 @@ export function getPublicBillingPricing(): PublicBillingPricing {
   };
 }
 
+const READ_CHECKOUT_PRICE_ID: Record<BillingPlanKey, () => string> = {
+  weekly: () => readRequiredEnv("STRIPE_PRICE_PRO_WEEKLY"),
+  monthly: readStripePriceProMonthly,
+  annual: () => readRequiredEnv("STRIPE_PRICE_PRO_ANNUAL"),
+};
+
 export function getCheckoutBillingOffer(planKey: BillingPlanKey): CheckoutBillingOffer {
-  const pricing = getPublicBillingPricing();
-
-  if (planKey === "weekly") {
-    return {
-      planKey,
-      badge: pricing.weekly.badge,
-      headline: pricing.weekly.headline,
-      detail: pricing.weekly.detail,
-      ctaLabel: pricing.weekly.ctaLabel,
-      checkoutPriceId: readRequiredEnv("STRIPE_PRICE_PRO_WEEKLY"),
-    };
-  }
-
-  if (planKey === "annual") {
-    return {
-      planKey,
-      badge: pricing.annual.badge,
-      headline: pricing.annual.headline,
-      detail: pricing.annual.detail,
-      ctaLabel: pricing.annual.ctaLabel,
-      checkoutPriceId: readRequiredEnv("STRIPE_PRICE_PRO_ANNUAL"),
-    };
-  }
+  const plan = getPublicBillingPricing()[planKey];
 
   return {
-    planKey: "monthly",
-    badge: pricing.monthly.badge,
-    headline: pricing.monthly.headline,
-    detail: pricing.monthly.detail,
-    ctaLabel: pricing.monthly.ctaLabel,
-    checkoutPriceId: readStripePriceProMonthly(),
+    planKey,
+    badge: plan.badge,
+    headline: plan.headline,
+    detail: plan.detail,
+    ctaLabel: plan.ctaLabel,
+    checkoutPriceId: READ_CHECKOUT_PRICE_ID[planKey](),
   };
 }
 

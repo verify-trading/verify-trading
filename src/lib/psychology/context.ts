@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { ChallengeRules } from "@/lib/journal/challenge";
+import { challengeStartedAt, type ChallengeRules } from "@/lib/journal/challenge";
+import { currencyTotals, isImportedRow, scopeToChallengeStart, type JournalSource } from "@/lib/journal/contracts";
 import type { PsychologyAssessmentRow } from "@/lib/psychology/assessment";
 import {
   ruleToAmount,
@@ -12,16 +13,20 @@ import {
 
 // Persona-data assembly shared by the two coach brains: the turn-based companion route
 // (user-scoped Supabase client) and the realtime custom-LLM endpoint (service-role client
-// scoped by an explicit userId). The reads and derivations are identical so the coach's
-// grounding is byte-for-byte the same on both paths — extracted verbatim from the companion
-// route, not rewritten.
+// scoped by an explicit userId). Reads and derivations must stay identical so the coach's
+// grounding is byte-for-byte the same on both paths.
 
+// The coach may reason about the money — that part is real — but must never read an
+// imported day's mood as the trader's own, or count it as evidence they journaled. That
+// test is `isImportedRow`, called directly so a grep for it finds every enforcement site.
 type JournalRow = {
   entry_date: string;
   mood: "good" | "okay" | "tough";
   pnl_amount: number | string | null;
+  pnl_currency: string;
   note: string | null;
   lesson: string | null;
+  source: JournalSource;
 };
 
 type ChallengeConfigRow = {
@@ -31,12 +36,18 @@ type ChallengeConfigRow = {
   rules: ChallengeRules;
 };
 
-// The trader's standing in their challenge, computed the same way the app does: cumulative
-// P&L and days across all logged sessions, measured against the firm's scraped rules.
-function buildChallengeContext(config: ChallengeConfigRow | null, rows: JournalRow[]): ChallengeContext | null {
+// The trader's standing in their challenge, computed the same way the app's cockpit does:
+// cumulative P&L and days over the sessions logged since the challenge STARTED, measured
+// against the firm's scraped rules. Reading all-time history here is what had the coach say
+// "you're 140% to target" out loud over a screen showing a fresh challenge at zero.
+function buildChallengeContext(config: ChallengeConfigRow | null, allRows: JournalRow[]): ChallengeContext | null {
   if (!config) return null;
+  const rows = scopeToChallengeStart(allRows, challengeStartedAt(config.rules));
   const withPnl = rows.filter((row) => row.pnl_amount !== null);
-  const cumulativePnl = withPnl.reduce((sum, row) => sum + Number(row.pnl_amount), 0);
+  // The coach says this number out loud against the firm's target, so it has to be an
+  // amount in one currency rather than a blend of every account the trader has logged.
+  const { totalPnl: cumulativePnl } = currencyTotals(withPnl);
+  // Days traded counts sessions, not money, so it spans every currency.
   const daysTraded = withPnl.length;
   const accountSize = Number(config.account_size);
   const targetAmount = ruleToAmount(config.rules.profit_target, accountSize);
@@ -56,10 +67,11 @@ function buildChallengeContext(config: ChallengeConfigRow | null, rows: JournalR
 }
 
 function journalContext(rows: JournalRow[]): JournalContext {
-  const weeklyRows = rows.filter((row) => {
-    const age = Date.now() - new Date(row.entry_date).getTime();
-    return age <= 7 * 24 * 60 * 60 * 1000;
-  });
+  // Today and the six days before it — seven CALENDAR days, compared as day keys the way
+  // entry_date is stored. Subtracting timestamps instead measured age from the row's UTC
+  // midnight, so the seventh day fell out of "this week" at every hour except midnight.
+  const weekStart = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
+  const weeklyRows = rows.filter((row) => row.entry_date >= weekStart);
   const streakRows = rows.filter((row) => row.pnl_amount !== null);
   const streakDirection = Number(streakRows[0]?.pnl_amount ?? 0) >= 0 ? "winning" : "losing";
   const streak = streakRows.findIndex((row) => {
@@ -68,10 +80,12 @@ function journalContext(rows: JournalRow[]): JournalContext {
   });
 
   return {
-    sessionCount: weeklyRows.length,
-    weeklyPnl: weeklyRows.reduce((sum, row) => sum + Number(row.pnl_amount ?? 0), 0),
+    // Journaled sessions only. The P&L lines below stay over every row, imported included —
+    // the trades happened either way, and the coach reasoning about the money is right.
+    sessionCount: weeklyRows.filter((row) => !isImportedRow(row)).length,
+    weeklyPnl: currencyTotals(weeklyRows).totalPnl,
     wins: weeklyRows.filter((row) => Number(row.pnl_amount ?? 0) > 0).length,
-    toughSessions: weeklyRows.filter((row) => row.mood === "tough").length,
+    toughSessions: weeklyRows.filter((row) => !isImportedRow(row) && row.mood === "tough").length,
     winningStreak: streakDirection === "winning" ? (streak === -1 ? streakRows.length : streak) : 0,
     losingStreak: streakDirection === "losing" ? (streak === -1 ? streakRows.length : streak) : 0,
   };
@@ -101,8 +115,9 @@ export async function loadCoachContext(
       .single(),
     supabase
       .from("journal_entries")
-      .select("entry_date, mood, pnl_amount, note, lesson")
+      .select("entry_date, mood, pnl_amount, pnl_currency, note, lesson, source")
       .eq("user_id", userId)
+      .is("deleted_at", null)
       .order("entry_date", { ascending: false })
       .limit(60),
     supabase
@@ -121,7 +136,9 @@ export async function loadCoachContext(
   const rows = (journalQuery.data ?? []) as JournalRow[];
   const journal = journalContext(rows);
   const challenge = buildChallengeContext((configQuery.data as ChallengeConfigRow | null) ?? null, rows);
-  const recentEntries: RecentEntry[] = rows.slice(0, 5).map((row) => ({
+  // Imported days would arrive here as a date, a number, a placeholder mood and two nulls —
+  // nothing for the coach to reflect back, and a feeling the trader never reported.
+  const recentEntries: RecentEntry[] = rows.filter((row) => !isImportedRow(row)).slice(0, 5).map((row) => ({
     date: row.entry_date,
     pnl: row.pnl_amount == null ? null : Number(row.pnl_amount),
     mood: row.mood,

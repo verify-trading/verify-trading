@@ -95,31 +95,13 @@ async function seedSparklines() {
         .map((v) => parseFloat(v.close))
         .filter(Number.isFinite)
         .reverse();
-    } catch (e) {
+    } catch {
       sparklines[sym] = [];
     }
   }
   await upsertCache("sparklines:all", { sparklines });
   console.log(`  💾 Saved sparklines:all (${ALL_SYMBOLS.length} symbols)`);
   return sparklines;
-}
-
-async function seedDividends() {
-  console.log("\n💰 Fetching dividends...");
-  const today = new Date().toISOString().slice(0, 10);
-  const nextWeek = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
-  try {
-    const data = await fetchJson(buildUrl("dividends_calendar", { start_date: today, end_date: nextWeek }));
-    const items = (data ?? [])
-      .map((d) => ({ symbol: d.symbol, name: d.name ?? d.symbol, ex_date: d.ex_date, amount: parseFloat(d.amount ?? 0), currency: d.currency ?? "USD" }))
-      .filter((d) => d.symbol && d.amount > 0);
-    await upsertCache("events:dividends", { items });
-    console.log(`  ✅ ${items.length} dividends | 💾 Saved`);
-    return items;
-  } catch (e) {
-    console.log(`  ⚠️  ${e.message}`);
-    return [];
-  }
 }
 
 async function checkCredits() {
@@ -131,7 +113,6 @@ async function main() {
   console.log("🌱 Seeding market_cache with Twelve Data...\n");
   await seedQuotes();
   await seedSparklines();
-  await seedDividends();
   await checkCredits();
   console.log("\n✅ Done!");
 }

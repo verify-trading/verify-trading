@@ -50,11 +50,7 @@ export async function maybeSendSubscriptionWelcomeEmail({
   }
 
   const subscription = subscriptionData as BillingWelcomeRow | null;
-  if (!subscription) {
-    return;
-  }
-
-  if (subscription?.welcome_email_sent_at) {
+  if (!subscription || subscription.welcome_email_sent_at) {
     return;
   }
 

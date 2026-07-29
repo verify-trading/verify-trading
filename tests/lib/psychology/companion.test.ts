@@ -55,7 +55,6 @@ run("generatePsychologyReply (live, enriched)", () => {
   it("grounds the reply in the firm rules, progress and recent sessions", async () => {
     const transcript = "I just took a loss and I really want to double my size on the next trade to win it back. I'm so close to passing.";
     const reply = await generatePsychologyReply({ name: "Alex", transcript, assessment, journal: { sessionCount: 6, weeklyPnl: 270, wins: 4, toughSessions: 2, winningStreak: 3, losingStreak: 0 }, challenge, recentEntries });
-    // eslint-disable-next-line no-console
     console.log("\n=== COACH REPLY ===\n" + reply + "\n===================\n");
   }, 60_000);
 });

@@ -1,16 +1,8 @@
 import { getSignupEmailFromAddress } from "@/lib/email/config";
-import { sendViaResend } from "@/lib/email/send-via-resend";
+import { sendViaResend, type EmailPayload } from "@/lib/email/send-via-resend";
 import { buildMarketingEmailHtml } from "@/lib/email/templates";
 import { PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { getAppName } from "@/lib/site-config";
-
-type EmailPayload = {
-  from: string;
-  to: string;
-  subject: string;
-  text: string;
-  html: string;
-};
 
 type SendSignupWelcomeEmailInput = {
   email: string;

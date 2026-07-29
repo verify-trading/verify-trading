@@ -37,8 +37,6 @@ function CardFrame({
   );
 }
 
-// Renders the score as an "X / 10" bar, or just the label when the score is
-// non-numeric (e.g. "Provisional"), which would otherwise parse to a NaN width.
 /** Compact review count, e.g. 21000 -> "21k". */
 function formatReviewCount(count: number): string {
   return count >= 1000 ? `${Math.round(count / 1000)}k` : String(count);
@@ -52,6 +50,7 @@ function formatAsOfDate(value: string): string {
     : date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
+/** A non-numeric score (e.g. "Provisional") shows the label only — a bar would render a NaN width. */
 function TrustScoreBar({ score, accent }: { score: string; accent: string }) {
   const numericScore = Number.parseFloat(score);
   const isNumeric = Number.isFinite(numericScore);
@@ -417,20 +416,60 @@ function chartConfidenceClass(confidence: string) {
   }
 }
 
+/** Bias chip + R:R, the level grid, and the confidence line — shared by the chart and setup cards. */
+function BiasAndRewardRow({ bias, rr }: { bias: string; rr: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <span
+        className={`inline-flex max-w-[min(100%,12rem)] items-center rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] sm:max-w-none sm:text-xs ${chartBiasChipClass(bias)}`}
+      >
+        {bias}
+      </span>
+      <span className="inline-flex shrink-0 items-center rounded-full border border-[color:var(--vt-border)] bg-[var(--vt-card-alt)] px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-white sm:text-xs">
+        R:R {rr}
+      </span>
+    </div>
+  );
+}
+
+function LevelGrid({ entry, stop, target }: { entry: string; stop: string; target: string }) {
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {(
+        [
+          ["Entry", entry],
+          ["Stop", stop],
+          ["Target", target],
+        ] as const
+      ).map(([label, value]) => (
+        <div
+          key={label}
+          className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-2 py-2 text-center sm:px-2.5"
+        >
+          <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[10px]">
+            {label}
+          </div>
+          <div className="mt-1 font-mono text-xs font-bold tabular-nums text-white sm:text-sm">{value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConfidenceRow({ confidence }: { confidence: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+      <span className="font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)]">Confidence</span>
+      <span className={`font-semibold ${chartConfidenceClass(confidence)}`}>{confidence}</span>
+    </div>
+  );
+}
+
 function ChartAnalysisCard({ card }: { card: Extract<AskCard, { type: "chart" }> }) {
   return (
     <CardFrame eyebrow="Chart Analysis" accentClassName="text-[var(--vt-blue)]">
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span
-            className={`inline-flex max-w-[min(100%,12rem)] items-center rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] sm:max-w-none sm:text-xs ${chartBiasChipClass(card.bias)}`}
-          >
-            {card.bias}
-          </span>
-          <span className="inline-flex shrink-0 items-center rounded-full border border-[color:var(--vt-border)] bg-[var(--vt-card-alt)] px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-white sm:text-xs">
-            R:R {card.rr}
-          </span>
-        </div>
+        <BiasAndRewardRow bias={card.bias} rr={card.rr} />
 
         <div className="rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2.5">
           <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">
@@ -439,30 +478,8 @@ function ChartAnalysisCard({ card }: { card: Extract<AskCard, { type: "chart" }>
           <p className="mt-1.5 text-sm font-semibold leading-snug text-white">{card.pattern}</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-1.5">
-          {(
-            [
-              ["Entry", card.entry],
-              ["Stop", card.stop],
-              ["Target", card.target],
-            ] as const
-          ).map(([label, value]) => (
-            <div
-              key={label}
-              className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-2 py-2 text-center sm:px-2.5"
-            >
-              <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[10px]">
-                {label}
-              </div>
-              <div className="mt-1 font-mono text-xs font-bold tabular-nums text-white sm:text-sm">{value}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2 text-[11px] sm:text-xs">
-          <span className="font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)]">Confidence</span>
-          <span className={`font-semibold ${chartConfidenceClass(card.confidence)}`}>{card.confidence}</span>
-        </div>
+        <LevelGrid entry={card.entry} stop={card.stop} target={card.target} />
+        <ConfidenceRow confidence={card.confidence} />
 
         <div className="border-t border-white/[0.06] pt-3">
           <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
@@ -478,41 +495,9 @@ function SetupCardView({ card }: { card: Extract<AskCard, { type: "setup" }> }) 
       <div className="space-y-3">
         <div className="text-lg font-black tracking-[-0.03em] text-white sm:text-xl">{card.asset}</div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span
-            className={`inline-flex max-w-[min(100%,12rem)] items-center rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] sm:max-w-none sm:text-xs ${chartBiasChipClass(card.bias)}`}
-          >
-            {card.bias}
-          </span>
-          <span className="inline-flex shrink-0 items-center rounded-full border border-[color:var(--vt-border)] bg-[var(--vt-card-alt)] px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-white sm:text-xs">
-            R:R {card.rr}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-3 gap-1.5">
-          {(
-            [
-              ["Entry", card.entry],
-              ["Stop", card.stop],
-              ["Target", card.target],
-            ] as const
-          ).map(([label, value]) => (
-            <div
-              key={label}
-              className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-2 py-2 text-center sm:px-2.5"
-            >
-              <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[10px]">
-                {label}
-              </div>
-              <div className="mt-1 font-mono text-xs font-bold tabular-nums text-white sm:text-sm">{value}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2 text-[11px] sm:text-xs">
-          <span className="font-bold uppercase tracking-[0.14em] text-[var(--vt-muted)]">Confidence</span>
-          <span className={`font-semibold ${chartConfidenceClass(card.confidence)}`}>{card.confidence}</span>
-        </div>
+        <BiasAndRewardRow bias={card.bias} rr={card.rr} />
+        <LevelGrid entry={card.entry} stop={card.stop} target={card.target} />
+        <ConfidenceRow confidence={card.confidence} />
 
         <div className="border-t border-white/[0.06] pt-3">
           <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--vt-muted)]">Context</div>
@@ -530,7 +515,7 @@ function SetupCardView({ card }: { card: Extract<AskCard, { type: "setup" }> }) 
 
 function planStatTile(label: string, value: string) {
   return (
-    <div className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-3 py-2.5">
+    <div key={label} className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-3 py-2.5">
       <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">{label}</div>
       <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
     </div>
@@ -596,17 +581,7 @@ function ProjectionCardView({
               ["Top Up", formatDisplayMoney(card.monthlyAdd, card.currencySymbol)],
               ["Months", `${card.months}`],
               ["Loss Events", `${card.lossEvents}`],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="min-w-0 rounded-xl border border-white/[0.06] bg-[var(--vt-card-alt)] px-3 py-2.5"
-              >
-                <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
-                  {label}
-                </div>
-                <div className="mt-1 break-words text-sm font-bold text-white">{value}</div>
-              </div>
-            ))}
+            ].map(([label, value]) => planStatTile(label, value))}
           </div>
         </div>
         <div className="rounded-xl border border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] px-3 py-2.5 text-xs font-semibold leading-snug text-[var(--vt-green)] sm:text-sm">
@@ -627,36 +602,24 @@ export function AskResponseCard({
   card: AskCard;
   uiMeta?: AskUiMeta;
 }) {
-  let content: React.ReactNode;
-
   switch (card.type) {
     case "broker":
-      content = <BrokerCard card={card} uiMeta={uiMeta} />;
-      break;
+      return <BrokerCard card={card} uiMeta={uiMeta} />;
     case "briefing":
-      content = <BriefingCard card={card} uiMeta={uiMeta} />;
-      break;
+      return <BriefingCard card={card} uiMeta={uiMeta} />;
     case "calc":
-      content = <CalcCard card={card} />;
-      break;
+      return <CalcCard card={card} />;
     case "guru":
-      content = <GuruCard card={card} />;
-      break;
+      return <GuruCard card={card} />;
     case "chart":
-      content = <ChartAnalysisCard card={card} />;
-      break;
+      return <ChartAnalysisCard card={card} />;
     case "setup":
-      content = <SetupCardView card={card} />;
-      break;
+      return <SetupCardView card={card} />;
     case "plan":
-      content = <PlanCardView card={card} />;
-      break;
+      return <PlanCardView card={card} />;
     case "projection":
-      content = <ProjectionCardView card={card} uiMeta={uiMeta} />;
-      break;
+      return <ProjectionCardView card={card} uiMeta={uiMeta} />;
     default:
-      content = <InsightCard card={card} />;
+      return <InsightCard card={card} />;
   }
-
-  return <div>{content}</div>;
 }

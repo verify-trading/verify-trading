@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getSessionUser } from "@/lib/auth/session";
-import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
+import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { verifyAgentContext } from "@/lib/psychology/agent-token";
 import {
@@ -99,10 +99,6 @@ async function storeConversationTranscript(
 
   await insertSessionMessages(supabase, rows);
 }
-
-const PRIVATE_CACHE_HEADERS = {
-  "Cache-Control": "private, no-store, max-age=0",
-} as const;
 
 export async function GET(
   _request: Request,

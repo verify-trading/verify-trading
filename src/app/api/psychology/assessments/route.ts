@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth/session";
-import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
+import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import {
   psychologyAssessmentCreateSchema,
@@ -10,10 +10,6 @@ import {
   toPsychologyAssessment,
   type PsychologyAssessmentRow,
 } from "@/lib/psychology/assessment";
-
-const PRIVATE_CACHE_HEADERS = {
-  "Cache-Control": "private, no-store, max-age=0",
-} as const;
 
 export async function GET(request: Request) {
   const parsedQuery = psychologyAssessmentsQuerySchema.safeParse(

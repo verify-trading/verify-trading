@@ -1,16 +1,8 @@
 import { formatBillingPlanLabel, type BillingPlanKey } from "@/lib/billing/config";
 import { getSubscriptionEmailFromAddress } from "@/lib/email/config";
-import { sendViaResend } from "@/lib/email/send-via-resend";
+import { sendViaResend, type EmailPayload } from "@/lib/email/send-via-resend";
 import { buildMarketingEmailHtml } from "@/lib/email/templates";
 import { getAppName } from "@/lib/site-config";
-
-type EmailPayload = {
-  from: string;
-  to: string;
-  subject: string;
-  text: string;
-  html: string;
-};
 
 type SendSubscriptionWelcomeEmailInput = {
   email: string;

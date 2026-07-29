@@ -23,7 +23,6 @@ import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data"
 import { LEGAL_LINKS } from "@/lib/legal/legal-links";
 import { trackAnalyticsEvent } from "@/lib/analytics/client";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
-import { trackMetaViewContent } from "@/lib/marketing/meta-pixel";
 import { getAppName } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 

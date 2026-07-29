@@ -198,9 +198,7 @@ export function MethodologyView() {
         </div>
 
         <div className="relative mx-auto w-full max-w-5xl px-5 pb-20 pt-10 sm:px-8 sm:pb-24 sm:pt-16">
-          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]">
-            Methodology · How we verify
-          </p>
+          <Eyebrow>Methodology · How we verify</Eyebrow>
           <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-[1.05] tracking-[-0.03em] sm:text-6xl">
             How every verdict is reached.
           </h1>

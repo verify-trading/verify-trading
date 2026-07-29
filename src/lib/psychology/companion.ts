@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 
 import { getAskSimpleModel } from "@/lib/ask/service/provider";
-import type { PsychologyAssessmentRow } from "@/lib/psychology/assessment";
+import { sectionLabels, type PsychologyAssessmentRow } from "@/lib/psychology/assessment";
 import type { ChallengeRules } from "@/lib/journal/challenge";
 import { ACCOUNT_TYPE_LABEL, money } from "@/lib/journal/format";
 
@@ -37,14 +37,6 @@ export type RecentEntry = {
   mood: string;
   note: string | null;
   lesson: string | null;
-};
-
-const sectionLabels: Record<string, string> = {
-  wrong: "Being Wrong",
-  fear: "Fear",
-  compulsion: "Chasing and Compulsion",
-  awareness: "Self-Awareness",
-  discipline: "Discipline and Process",
 };
 
 // Turn a scraped rule string ("10%", "$10,000", "$5k") into an amount for the account size.
@@ -109,7 +101,7 @@ export function buildPsychologyCoachInstructions(input: {
   realtime?: boolean;
 }) {
   const { assessment, journal } = input;
-  const section = sectionLabels[String(assessment.focus_area)] ?? String(assessment.focus_area);
+  const section = sectionLabels[assessment.focus_area] ?? String(assessment.focus_area);
   // ponytail: the realtime (ElevenLabs) path can't surface the UI break-nudge — that flag rode
   // the turn-based companion response, which the live call bypasses. Realtime v1 instead tells
   // the coach to voice the break aloud whenever it fits; the visual nudge card is dropped there.
@@ -151,26 +143,19 @@ export type PsychologyCoachContext = {
 };
 
 export async function generatePsychologyReply(input: PsychologyCoachContext & { transcript: string }) {
-  return runCoach(buildPsychologyCoachInstructions(input), input.transcript, 240);
-}
-
-async function runCoach(system: string, prompt: string, maxOutputTokens: number) {
   const result = await generateText({
     model: getAskSimpleModel(),
-    maxOutputTokens,
-    system,
-    prompt,
+    maxOutputTokens: 240,
+    system: buildPsychologyCoachInstructions(input),
+    prompt: input.transcript,
   });
 
   return speakable(result.text);
 }
 
-// The reply is read aloud on a live voice call, so strip any markdown glyphs the model
-// emits (they'd be spoken literally) while preserving sentence flow; newlines collapse to
-// spaces.
 // Markdown glyphs are read aloud by TTS ("star star right star star"), so strip them from
-// anything headed for a voice. Exported because the realtime path streams deltas and has to
-// apply the same cleanup per chunk.
+// anything headed for a voice; newlines collapse to spaces to preserve sentence flow.
+// Exported because the realtime path streams deltas and applies the same cleanup per chunk.
 export function speakable(text: string): string {
   return text.replace(/[*_`#>|~]/g, " ").replace(/\s+/g, " ").trim();
 }

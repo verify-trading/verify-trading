@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth/session";
 import { hasProAccess } from "@/lib/billing/require-pro";
-import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
+import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { generatePsychologyReply, shouldRecommendBreak } from "@/lib/psychology/companion";
 import { loadCoachContext } from "@/lib/psychology/context";
@@ -14,10 +14,6 @@ const companionRequestSchema = z.object({
   transcript: z.string().trim().min(1).max(2_000),
   sessionId: z.uuid().optional(),
 });
-
-const PRIVATE_CACHE_HEADERS = {
-  "Cache-Control": "private, no-store, max-age=0",
-} as const;
 
 export async function POST(request: Request) {
   let body: unknown;

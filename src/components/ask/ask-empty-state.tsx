@@ -85,6 +85,33 @@ function WelcomeBlock({ className = "" }: { className?: string }) {
   );
 }
 
+function PromptChips({
+  prompts,
+  onPromptClick,
+  className,
+}: {
+  prompts: string[];
+  onPromptClick: (prompt: string) => void;
+  className: string;
+}) {
+  return (
+    <ul className={`grid grid-cols-1 sm:grid-cols-2 ${className}`}>
+      {prompts.map((prompt) => (
+        <li key={prompt} className="min-w-0">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onPromptClick(prompt)}
+            className={askSuggestionChipClass}
+          >
+            <span className="min-w-0 break-words text-pretty">{prompt}</span>
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function AskEmptyState({
   isLoadingHistory,
   prompts,
@@ -104,20 +131,7 @@ export function AskEmptyState({
       <div className="hidden min-h-0 flex-1 flex-col items-center justify-center px-8 py-10 lg:flex">
         <div className="w-full max-w-2xl">
           <WelcomeBlock className="mb-10" />
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {prompts.map((prompt) => (
-              <li key={prompt} className="min-w-0">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => onPromptClick(prompt)}
-                  className={askSuggestionChipClass}
-                >
-                  <span className="min-w-0 break-words text-pretty">{prompt}</span>
-                </Button>
-              </li>
-            ))}
-          </ul>
+          <PromptChips prompts={prompts} onPromptClick={onPromptClick} className="gap-3" />
         </div>
       </div>
 
@@ -125,20 +139,7 @@ export function AskEmptyState({
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-4 lg:hidden sm:max-w-xl sm:px-8 sm:py-6">
         <div className="mx-auto w-full max-w-lg">
           <WelcomeBlock />
-          <ul className="mt-8 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {prompts.map((prompt) => (
-              <li key={prompt} className="min-w-0">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => onPromptClick(prompt)}
-                  className={askSuggestionChipClass}
-                >
-                  <span className="min-w-0 break-words text-pretty">{prompt}</span>
-                </Button>
-              </li>
-            ))}
-          </ul>
+          <PromptChips prompts={prompts} onPromptClick={onPromptClick} className="mt-8 gap-2.5" />
         </div>
       </div>
     </div>

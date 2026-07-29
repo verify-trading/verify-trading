@@ -2,8 +2,6 @@
 
 import dynamic from "next/dynamic";
 
-import type { HeroLiveBriefing } from "./types";
-
 /**
  * Defers the animated phone demo (framer-motion) out of the initial hydration
  * path so the hero <h1> — the mobile LCP element — isn't blocked by its JS.
@@ -11,7 +9,7 @@ import type { HeroLiveBriefing } from "./types";
  * aspect-[392/800] frame, so there is no layout shift) and swaps in the real
  * demo after mount.
  */
-const HeroAskDemo = dynamic(() => import("./index").then((m) => m.HeroAskDemo), {
+export const HeroAskDemoLazy = dynamic(() => import("./index").then((m) => m.HeroAskDemo), {
   ssr: false,
   loading: () => (
     <div className="mx-auto w-full max-w-[392px]" aria-hidden>
@@ -26,9 +24,3 @@ const HeroAskDemo = dynamic(() => import("./index").then((m) => m.HeroAskDemo), 
     </div>
   ),
 });
-
-export function HeroAskDemoLazy(props: {
-  liveBriefing?: HeroLiveBriefing | null;
-}) {
-  return <HeroAskDemo {...props} />;
-}

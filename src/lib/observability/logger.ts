@@ -21,19 +21,7 @@ function write(level: LogLevel, message: string, meta?: LogMeta) {
     timestamp: new Date().toISOString(),
     ...(meta ? { meta: serializeMeta(meta) } : {}),
   };
-  const serializedPayload = JSON.stringify(payload);
-
-  switch (level) {
-    case "info":
-      console.info(serializedPayload);
-      break;
-    case "warn":
-      console.warn(serializedPayload);
-      break;
-    case "error":
-      console.error(serializedPayload);
-      break;
-  }
+  console[level](JSON.stringify(payload));
 }
 
 export const logger = {

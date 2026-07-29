@@ -18,6 +18,7 @@ import {
 } from "@/lib/markets/daily-brief";
 import type { DailyMarketBrief, MarketIntelligenceSnapshot } from "@/lib/markets/market-intelligence";
 import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
+import { requireCronSecret } from "@/lib/http/cron-auth";
 import {
   ECONOMIC_CALENDAR_CACHE_KEY,
   getEconomicCalendarWeekSnapshot,
@@ -81,27 +82,13 @@ function hasAllRequestedQuotes(quotes: Record<string, unknown> | null | undefine
   return ALL_SYMBOLS.every((symbol) => Boolean(quotes[symbol]));
 }
 
-function withIndexQuoteAliases(quotes: Record<string, TwelveDataQuote>): Record<string, TwelveDataQuote> {
-  const next = { ...quotes };
+/** Republishes each ETF proxy row under its index display name (QQQ -> Nasdaq) so the UI can read either. */
+function withIndexAliases<T>(byKey: Record<string, T>, rename: (value: T, alias: string) => T): Record<string, T> {
+  const next = { ...byKey };
   for (const [source, alias] of Object.entries(INDEX_CACHE_ALIASES)) {
-    const quote = next[source];
-    if (quote) {
-      next[alias] = {
-        ...quote,
-        symbol: alias,
-        name: alias,
-      };
-    }
-  }
-  return next;
-}
-
-function withIndexSeriesAliases(series: Record<string, number[]>): Record<string, number[]> {
-  const next = { ...series };
-  for (const [source, alias] of Object.entries(INDEX_CACHE_ALIASES)) {
-    const values = next[source];
-    if (values) {
-      next[alias] = values;
+    const value = next[source];
+    if (value) {
+      next[alias] = rename(value, alias);
     }
   }
   return next;
@@ -161,14 +148,8 @@ async function writeRunLog(payload: MarketsCronRunPayload) {
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const expected = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
-  if (expected && authHeader !== expected) {
-    logger.warn("markets cron unauthorized", {
-      hasAuthorizationHeader: Boolean(authHeader),
-    });
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauthorized = requireCronSecret(request);
+  if (unauthorized) return unauthorized;
 
   const startedAt = new Date(Date.now());
   const run = getRunNumber();
@@ -226,10 +207,10 @@ export async function GET(request: Request) {
     // 2. Quotes
     const quotes = await fetchQuotes(ALL_SYMBOLS);
     const quotesMap = Object.fromEntries(quotes.map((q) => [q.symbol, q]));
-    const mergedQuotes = withIndexQuoteAliases({
-      ...(quotesCacheRow?.payload?.quotes ?? {}),
-      ...quotesMap,
-    });
+    const mergedQuotes = withIndexAliases<TwelveDataQuote>(
+      { ...(quotesCacheRow?.payload?.quotes ?? {}), ...quotesMap },
+      (quote, alias) => ({ ...quote, symbol: alias, name: alias }),
+    );
     await upsertCache("quotes:all", { quotes: mergedQuotes });
     recordAction(`quotes:${quotes.length}/${Object.keys(quotesMap).length}`, {
       requested: ALL_SYMBOLS.length,
@@ -263,7 +244,7 @@ export async function GET(request: Request) {
       ...series,
     };
     if (Object.keys(series).length > 0) {
-      const aliasedSeries = withIndexSeriesAliases(mergedSeries);
+      const aliasedSeries = withIndexAliases(mergedSeries, (values) => values);
       await upsertCache(`series:${detailTimeframe}`, { timeframe: detailTimeframe, series: aliasedSeries });
       if (detailTimeframe === "1D") {
         await upsertCache("sparklines:all", { sparklines: aliasedSeries });

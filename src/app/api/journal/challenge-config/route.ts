@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth/session";
-import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
+import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { challengeConfigSchema, challengeStartedAt, extractChallengeRules, reuseStoredRules, toChallengeConfig, type ChallengeConfigRow } from "@/lib/journal/challenge";
 import { UnsafeUrlError } from "@/lib/http/safe-fetch";
 import { logger } from "@/lib/observability/logger";
-
-const PRIVATE_CACHE_HEADERS = {
-  "Cache-Control": "private, no-store, max-age=0",
-} as const;
 
 export async function GET() {
   const session = await getSessionUser();

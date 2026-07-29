@@ -71,10 +71,6 @@ function parseUrlSessionId(value: string | null) {
     : null;
 }
 
-function getSearchValue(params: ReturnType<typeof useSearchParams>, key: string): string | null {
-  return params.get(key);
-}
-
 function subscribeToMobileLayout(onStoreChange: () => void) {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return () => {};
@@ -103,22 +99,18 @@ function mapPersistedMessages(messages: Parameters<typeof mapPersistedMessageToS
   return mappedMessages;
 }
 
-function inferSessionTitle(message: string) {
-  return message.trim().slice(0, 80) || "New Ask Session";
+/** Optimistic sidebar title; the server recomputes the stored one in ask/persistence. */
+function inferSessionTitleFromSubmission(message: string, attachmentFileName?: string | null) {
+  return (message.trim() || attachmentFileName?.trim() || "Chart Upload").slice(0, 80);
 }
 
-function inferSessionTitleFromSubmission(message: string, attachmentFileName?: string | null) {
-  const trimmedMessage = message.trim();
-  if (trimmedMessage) {
-    return inferSessionTitle(trimmedMessage);
+function scrollElementToBottom(viewport: HTMLElement, behavior: ScrollBehavior) {
+  const top = viewport.scrollHeight;
+  if (typeof viewport.scrollTo === "function") {
+    viewport.scrollTo({ top, behavior });
+  } else {
+    viewport.scrollTop = top;
   }
-
-  const trimmedAttachmentName = attachmentFileName?.trim();
-  if (trimmedAttachmentName) {
-    return inferSessionTitle(trimmedAttachmentName);
-  }
-
-  return "Chart Upload";
 }
 
 function buildInitialToolStatus(hasImage: boolean): AskToolStatus {
@@ -162,7 +154,7 @@ function isAskLimitError(error: unknown) {
   );
 }
 
-function useAskWorkspaceView() {
+function AskWorkspaceContent() {
   const { replace } = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -171,8 +163,7 @@ function useAskWorkspaceView() {
   const initialUrlSessionId = use(InitialAskSessionContext);
   const urlSessionId = useMemo(
     () =>
-      parseUrlSessionId(getSearchValue(searchParams, "session")) ??
-      parseUrlSessionId(initialUrlSessionId),
+      parseUrlSessionId(searchParams.get("session")) ?? parseUrlSessionId(initialUrlSessionId),
     [initialUrlSessionId, searchParams],
   );
   const [activeImagePreview, setActiveImagePreview] = useState<{
@@ -207,7 +198,6 @@ function useAskWorkspaceView() {
   const [isDeletingSession, setIsDeletingSession] = useState(false);
   const threadViewportRef = useRef<HTMLDivElement | null>(null);
   const threadBottomRef = useRef<HTMLDivElement | null>(null);
-  const hasSyncedUrlSessionRef = useRef(false);
   const pendingUrlSessionRef = useRef<string | null | undefined>(undefined);
   /** True while store is cleared to null but `?session=` may still be stale for a frame — avoid URL "resolving" skeleton. */
   const clearingAskUrlSessionRef = useRef(false);
@@ -376,7 +366,6 @@ function useAskWorkspaceView() {
           pendingSessionTitleRef.current = null;
           pendingAssistantAttachmentRef.current = undefined;
           logger.warn("Ask stream finished without a parseable card.", {
-            textPreviewLength: getAssistantTextPreview(message).length,
             textPreview: getAssistantTextPreview(message),
           });
           setError(ASK_USER_MESSAGE_INVALID_RESPONSE);
@@ -405,23 +394,9 @@ function useAskWorkspaceView() {
         scrollToLatest();
       },
       onError: (err) => {
-        if (!pendingRequestRef.current) {
-          return;
+        if (pendingRequestRef.current) {
+          failAskRequest(err, getUserMessageFromAskChatError(err));
         }
-
-        setLiveToolStatuses([]);
-        pendingSessionTitleRef.current = null;
-        pendingAssistantAttachmentRef.current = undefined;
-        pendingRequestRef.current = false;
-        clearTransportMessages([]);
-        if (isAskLimitError(err)) {
-          refreshUsageUi();
-          setError(null);
-          scrollToLatest();
-          return;
-        }
-        setError(getUserMessageFromAskChatError(err));
-        scrollToLatest();
       },
     });
 
@@ -432,7 +407,6 @@ function useAskWorkspaceView() {
   const urlCatchingUpToStore =
     sessionId !== null &&
     pendingUrlSessionRef.current === sessionId &&
-    pendingUrlSessionRef.current !== null &&
     urlSessionId !== sessionId;
   const isResolvingUrlSession =
     Boolean(urlSessionId) &&
@@ -532,11 +506,7 @@ function useAskWorkspaceView() {
     pendingRequestRef.current = false;
     clearTransportMessages([]);
     hydratedSessionRef.current = null;
-    if (nextSessionId === null) {
-      clearingAskUrlSessionRef.current = true;
-    } else {
-      clearingAskUrlSessionRef.current = false;
-    }
+    clearingAskUrlSessionRef.current = nextSessionId === null;
     openSession(nextSessionId);
     replaceSessionUrl(nextSessionId);
   }, [clearTransportMessages, openSession, replaceSessionUrl]);
@@ -568,6 +538,23 @@ function useAskWorkspaceView() {
     setActiveImagePreview({ src, alt });
   }
 
+  /** A hit limit is not an error banner — the usage refresh renders the limit card instead. */
+  function failAskRequest(error: unknown, message: string) {
+    setLiveToolStatuses([]);
+    pendingSessionTitleRef.current = null;
+    pendingAssistantAttachmentRef.current = undefined;
+    pendingRequestRef.current = false;
+    clearTransportMessages([]);
+
+    if (isAskLimitError(error)) {
+      refreshUsageUi();
+      setError(null);
+    } else {
+      setError(message);
+    }
+    scrollToLatest();
+  }
+
   function scrollToLatest(behavior: ScrollBehavior = "smooth") {
     requestAnimationFrame(() => {
       const viewport = threadViewportRef.current;
@@ -575,25 +562,12 @@ function useAskWorkspaceView() {
         return;
       }
 
-      const scrollToBottom = () => {
-        const top = viewport.scrollHeight;
-        if (typeof viewport.scrollTo === "function") {
-          viewport.scrollTo({ top, behavior });
-          return;
-        }
-
-        viewport.scrollTop = top;
-      };
-
-      scrollToBottom();
-      requestAnimationFrame(scrollToBottom);
+      scrollElementToBottom(viewport, behavior);
+      requestAnimationFrame(() => scrollElementToBottom(viewport, behavior));
     });
   }
 
-  /**
-   * Images used to call scroll on every decode, which yanked the viewport to the bottom
-   * even while reading older messages. Only nudge scroll if the user is already near the end.
-   */
+  /** Only nudge when already near the end — otherwise every image decode yanks the reader off older messages. */
   function scrollToLatestIfPinned(behavior: ScrollBehavior = "auto") {
     const viewport = threadViewportRef.current;
     if (!viewport || useAskStore.getState().messages.length === 0) {
@@ -604,19 +578,7 @@ function useAskWorkspaceView() {
       return;
     }
 
-    requestAnimationFrame(() => {
-      const v = threadViewportRef.current;
-      if (!v) {
-        return;
-      }
-
-      const top = v.scrollHeight;
-      if (typeof v.scrollTo === "function") {
-        v.scrollTo({ top, behavior });
-      } else {
-        v.scrollTop = top;
-      }
-    });
+    requestAnimationFrame(() => scrollElementToBottom(viewport, behavior));
   }
 
   async function loadOlderMessages() {
@@ -695,19 +657,7 @@ function useAskWorkspaceView() {
         },
       );
     } catch (error) {
-      setLiveToolStatuses([]);
-      pendingSessionTitleRef.current = null;
-      pendingAssistantAttachmentRef.current = undefined;
-      pendingRequestRef.current = false;
-      clearTransportMessages([]);
-      if (isAskLimitError(error)) {
-        refreshUsageUi();
-        setError(null);
-        scrollToLatest();
-        return;
-      }
-      setError("Could not send that message. Please try again.");
-      scrollToLatest();
+      failAskRequest(error, "Could not send that message. Please try again.");
     }
   }
 
@@ -764,14 +714,6 @@ function useAskWorkspaceView() {
       }
     }
 
-    if (!hasSyncedUrlSessionRef.current) {
-      hasSyncedUrlSessionRef.current = true;
-      if (urlSessionId !== sessionId) {
-        openSession(urlSessionId);
-      }
-      return;
-    }
-
     if (urlSessionId !== sessionId) {
       openSession(urlSessionId);
     }
@@ -779,7 +721,7 @@ function useAskWorkspaceView() {
 
   // Apply prefill after URL session sync, because opening a new session clears the draft.
   useEffect(() => {
-    const prefill = getSearchValue(searchParams, "prefill")?.trim();
+    const prefill = searchParams.get("prefill")?.trim();
     if (!prefill || handledPrefillRef.current === prefill) {
       return;
     }
@@ -1111,10 +1053,6 @@ function useAskWorkspaceView() {
       </Modal>
     </div>
   );
-}
-
-function AskWorkspaceContent() {
-  return useAskWorkspaceView();
 }
 
 export function AskWorkspace({ initialUrlSessionId = null }: { initialUrlSessionId?: string | null }) {

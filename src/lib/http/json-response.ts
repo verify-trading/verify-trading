@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 
+/** Every authenticated API answer is per-trader — nothing here may sit in a shared cache. */
+export const PRIVATE_CACHE_HEADERS = {
+  "Cache-Control": "private, no-store, max-age=0",
+} as const;
+
 export function jsonUnauthorized(message: string) {
   return NextResponse.json({ error: "unauthorized", message }, { status: 401 });
 }

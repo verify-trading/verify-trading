@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-const psychologySectionKeySchema = z.enum(["wrong", "fear", "compulsion", "awareness", "discipline"]);
-
 const psychologySectionScoresSchema = z.object({
   wrong: z.number().int().min(0).max(15),
   fear: z.number().int().min(0).max(15),
@@ -35,7 +33,6 @@ export const psychologyAssessmentsQuerySchema = z.object({
 });
 
 export type PsychologySectionScores = z.infer<typeof psychologySectionScoresSchema>;
-export type PsychologyAssessmentCreateInput = z.infer<typeof psychologyAssessmentCreateSchema>;
 
 export type PsychologyAssessmentRow = {
   id: string;
@@ -65,7 +62,9 @@ export type PsychologyAssessment = {
   updatedAt: string;
 };
 
-const sectionLabels: Record<keyof PsychologySectionScores, string> = {
+// The trader-facing name of each section, read back in the assessment summary and in the
+// coach's prompt (see companion.ts) — one table so the two can't say it differently.
+export const sectionLabels: Record<keyof PsychologySectionScores, string> = {
   wrong: "Being Wrong",
   fear: "Fear",
   compulsion: "Chasing and Compulsion",

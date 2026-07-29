@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { jsonApiError } from "@/lib/http/json-response";
+import { jsonApiError, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import type { MarketIntelligenceSnapshot } from "@/lib/markets/market-intelligence";
 import { DAILY_MARKET_BRIEF_CACHE_KEY } from "@/lib/markets/daily-brief";
-import { MARKETS_PRIVATE_CACHE_HEADERS, requireMarketsProSession } from "@/lib/markets/markets-api-auth";
+import { requireMarketsProSession } from "@/lib/markets/markets-api-auth";
 import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
 
 export async function GET() {
@@ -32,7 +32,7 @@ export async function GET() {
     };
 
     return NextResponse.json(snapshot, {
-      headers: MARKETS_PRIVATE_CACHE_HEADERS,
+      headers: PRIVATE_CACHE_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load market intelligence.";

@@ -3,7 +3,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { getAppName } from "@/lib/site-config";
-import { cn } from "@/lib/utils";
 
 import { AskCtaOverlay } from "./cta-overlay";
 import {
@@ -110,7 +109,7 @@ export function DeviceView({
                 <DemoThread state={state} onActivate={onActivate} />
 
                 {/* Composer + home indicator */}
-                <div className={cn("relative z-20 px-3 pb-2.5 pt-2")}>
+                <div className="relative z-20 px-3 pb-2.5 pt-2">
                   <DemoComposer onActivate={onActivate} />
                   <p className="mt-2 text-center text-[10px] text-white/30">
                     {APP_NAME} · AI can make mistakes

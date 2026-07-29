@@ -23,8 +23,6 @@ export const MARKET_CATEGORIES = {
   },
 } as const;
 
-export type MarketCategory = keyof typeof MARKET_CATEGORIES;
-
 export type TwelveDataQuote = {
   symbol: string;
   name: string;

@@ -300,10 +300,6 @@ function IntroBlock({
   );
 }
 
-function exchangeForQuestion(question: string): DemoExchange | undefined {
-  return DEMO_EXCHANGES.find((e) => e.question === question);
-}
-
 type ThreadItem = { key: string; node: ReactNode; intro?: boolean };
 
 /**
@@ -313,16 +309,14 @@ type ThreadItem = { key: string; node: ReactNode; intro?: boolean };
 export function DemoThread({
   state,
   onActivate,
-  className,
 }: {
   state: DemoState;
   onActivate: () => void;
-  className?: string;
 }) {
   const reduced = useReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingExchange = state.pendingQuestion
-    ? exchangeForQuestion(state.pendingQuestion)
+    ? DEMO_EXCHANGES.find((e) => e.question === state.pendingQuestion)
     : undefined;
   const isIntro =
     state.showIntro && state.thread.length === 0 && !pendingExchange;
@@ -371,10 +365,7 @@ export function DemoThread({
   return (
     <div
       ref={scrollRef}
-      className={cn(
-        "ask-scrollbar relative flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden px-3 py-3",
-        className,
-      )}
+      className="ask-scrollbar relative flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden px-3 py-3"
     >
       <AnimatePresence initial={false} mode="popLayout">
         {items.map((it) => (
@@ -406,19 +397,7 @@ export function DemoThread({
  * in the thread; this just invites the visitor. Any focus / keypress / submit
  * fires `onActivate` (opens the CTA); readOnly so no mobile keyboard appears.
  */
-export function DemoComposer({
-  onActivate,
-  className,
-  inputClassName,
-  sendClassName,
-  placeholder = "Ask anything…",
-}: {
-  onActivate: () => void;
-  className?: string;
-  inputClassName?: string;
-  sendClassName?: string;
-  placeholder?: string;
-}) {
+export function DemoComposer({ onActivate }: { onActivate: () => void }) {
   const reduced = useReducedMotion();
 
   return (
@@ -427,11 +406,7 @@ export function DemoComposer({
         e.preventDefault();
         onActivate();
       }}
-      className={cn(
-        "flex items-center gap-2 rounded-2xl border border-white/10 bg-[rgba(17,22,72,0.88)] px-2 py-1.5 backdrop-blur-xl",
-        "transition-shadow focus-within:shadow-[0_0_0_3px_rgba(76,110,245,0.14)]",
-        className,
-      )}
+      className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[rgba(17,22,72,0.88)] px-2 py-1.5 backdrop-blur-xl transition-shadow focus-within:shadow-[0_0_0_3px_rgba(76,110,245,0.14)]"
     >
       <span className="flex size-7 shrink-0 items-center justify-center text-white/35">
         <ImageIcon className="size-4" aria-hidden />
@@ -440,11 +415,8 @@ export function DemoComposer({
         type="text"
         readOnly
         aria-label="Ask anything"
-        placeholder={placeholder}
-        className={cn(
-          "min-w-0 flex-1 cursor-text bg-transparent text-[13px] text-white caret-transparent outline-none placeholder:text-white/40",
-          inputClassName,
-        )}
+        placeholder="Ask anything…"
+        className="min-w-0 flex-1 cursor-text bg-transparent text-[13px] text-white caret-transparent outline-none placeholder:text-white/40"
         onFocus={onActivate}
         onKeyDown={onActivate}
       />
@@ -453,10 +425,7 @@ export function DemoComposer({
         aria-label="Send"
         onClick={onActivate}
         whileTap={reduced ? undefined : { scale: 0.9 }}
-        className={cn(
-          "flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--vt-blue)] text-white shadow-[0_4px_16px_rgba(76,110,245,0.35)] transition hover:brightness-110",
-          sendClassName,
-        )}
+        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--vt-blue)] text-white shadow-[0_4px_16px_rgba(76,110,245,0.35)] transition hover:brightness-110"
       >
         <ArrowUp className="size-3.5" aria-hidden />
       </motion.button>

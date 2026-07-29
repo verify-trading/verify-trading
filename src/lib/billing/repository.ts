@@ -18,10 +18,6 @@ type BillingProfileRow = {
   stripe_customer_id: string | null;
 };
 
-type StripeWebhookEventRow = {
-  processed_at: string | null;
-};
-
 type BillingSubscriptionStatusRow = {
   status: string | null;
 };
@@ -420,21 +416,6 @@ export async function markBillingCheckoutSessionCompleted({
   if (error) {
     throw new Error(error.message);
   }
-}
-
-export async function hasProcessedStripeWebhookEvent(eventId: string): Promise<boolean> {
-  const supabase = requireSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("stripe_webhook_events")
-    .select("processed_at")
-    .eq("id", eventId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return Boolean((data as StripeWebhookEventRow | null)?.processed_at);
 }
 
 export async function claimStripeWebhookEvent(eventId: string, type: string): Promise<boolean> {

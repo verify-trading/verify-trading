@@ -161,7 +161,6 @@ runLive("extractChallengeRules (live)", () => {
         accountSize: 100_000,
         accountType: "2step",
       });
-      // eslint-disable-next-line no-console
       console.log("FundedNext ->", JSON.stringify(rules, null, 2));
       expect(rules.firm_name.toLowerCase()).toContain("fundednext");
       expect(rules.profit_target).not.toMatch(/^n\/?a$/i);
@@ -179,7 +178,6 @@ runLive("extractChallengeRules (live)", () => {
         accountSize: 100_000,
         accountType: "2step",
       });
-      // eslint-disable-next-line no-console
       console.log("The5ers ->", JSON.stringify(rules, null, 2));
       expect(rules.profit_target).not.toMatch(/^n\/?a$/i);
       expect(rules.max_drawdown).not.toMatch(/^n\/?a$/i);
@@ -195,7 +193,6 @@ runLive("extractChallengeRules (live)", () => {
         accountSize: 100_000,
         accountType: "2step",
       });
-      // eslint-disable-next-line no-console
       console.log("FTMO ->", JSON.stringify(rules, null, 2));
       expect(rules.firm_name.toLowerCase()).toContain("ftmo");
       expect(rules.profit_target).not.toMatch(/^n\/?a$/i);

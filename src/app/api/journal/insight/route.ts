@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth/session";
-import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
+import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { generateWeeklyInsight } from "@/lib/journal/ai";
-import type { JournalEntryRow } from "@/lib/journal/contracts";
+import { isImportedRow, type JournalEntryRow } from "@/lib/journal/contracts";
 import { logger } from "@/lib/observability/logger";
-
-const PRIVATE_CACHE_HEADERS = {
-  "Cache-Control": "private, no-store, max-age=0",
-} as const;
 
 export async function GET() {
   const session = await getSessionUser();
@@ -34,15 +30,22 @@ export async function POST() {
 
   const { data: rows, error } = await session.supabase
     .from("journal_entries")
-    .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, created_at, updated_at")
+    .select("id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, source, created_at, updated_at")
     .eq("user_id", session.user.id)
+    .is("deleted_at", null)
     .order("entry_date", { ascending: false })
     .limit(30);
   if (error || !rows) return jsonApiError(500, "journal_insight_failed", "Could not load journal insight.");
-  if (rows.length < 5) return NextResponse.json({ insight: "Add more sessions to unlock your AI insight.", generatedAt: null }, { headers: PRIVATE_CACHE_HEADERS });
+
+  // The insight reads the trader back to themselves, so it only reads days they actually
+  // wrote. An imported day is a P&L row wearing the importer's placeholder mood and no
+  // note — nothing to find a pattern in, and a feeling they never reported. It doesn't
+  // count toward the threshold either: five imported days is still nothing to reflect on.
+  const journaled = (rows as JournalEntryRow[]).filter((row) => !isImportedRow(row));
+  if (journaled.length < 5) return NextResponse.json({ insight: "Add more sessions to unlock your AI insight.", generatedAt: null }, { headers: PRIVATE_CACHE_HEADERS });
 
   // Bound the prompt: trim long free-text fields so cost/latency don't scale with content.
-  const trimmed = (rows as JournalEntryRow[]).map((row) => ({
+  const trimmed = journaled.map((row) => ({
     ...row,
     note: typeof row.note === "string" ? row.note.slice(0, 800) : row.note,
     lesson: typeof row.lesson === "string" ? row.lesson.slice(0, 400) : row.lesson,

@@ -28,148 +28,112 @@ function readStringArg(
   return undefined;
 }
 
+type ToolStatusArgs = {
+  asset?: string;
+  entity?: string;
+  timeframe?: string;
+  side?: string;
+  url?: string;
+};
+
+type ToolStatusSpec = {
+  label: string;
+  detail: (args: ToolStatusArgs) => string;
+  phase?: AskToolStatus["phase"];
+};
+
+const TOOL_STATUS: Record<string, ToolStatusSpec> = {
+  verify_entity: {
+    label: "Checking broker / firm",
+    detail: ({ entity }) => (entity ? `Reviewing ${entity}` : "Reviewing the entity details provided."),
+  },
+  get_market_briefing: {
+    label: "Fetching live market price",
+    detail: ({ asset, timeframe }) =>
+      asset
+        ? `Pulling live levels for ${asset}${timeframe ? ` on ${timeframe}` : ""}.`
+        : "Pulling live price and nearby levels.",
+  },
+  get_market_setup: {
+    label: "Building live setup",
+    detail: ({ asset, timeframe, side }) =>
+      asset
+        ? `Mapping ${side ?? "trade"} levels for ${asset}${timeframe ? ` on ${timeframe}` : ""}.`
+        : "Turning live market structure into an actionable setup.",
+  },
+  search_news: {
+    label: "Scanning headlines",
+    detail: ({ entity }) =>
+      entity ? `Searching recent news for ${entity}.` : "Searching for fresh market-moving headlines.",
+  },
+  web_search: {
+    label: "Searching the web",
+    detail: ({ entity }) =>
+      entity ? `Searching the web for ${entity}.` : "Searching the live web for the latest on this.",
+  },
+  web_fetch: {
+    label: "Reading a source",
+    detail: ({ url }) => (url ? `Reading ${url}.` : "Reading the full page for more detail."),
+  },
+  get_economic_calendar: {
+    label: "Checking economic calendar",
+    detail: () => "Reading scheduled macro events, impact, and release values.",
+  },
+  calculate_position_size: {
+    label: "Sizing the trade",
+    detail: ({ asset }) =>
+      asset ? `Calculating risk-based size for ${asset}.` : "Calculating a risk-based position size.",
+  },
+  calculate_risk_reward: {
+    label: "Checking risk-reward",
+    detail: () => "Measuring the reward multiple against the stop.",
+  },
+  calculate_pip_value: {
+    label: "Calculating pip value",
+    detail: ({ asset }) => (asset ? `Working out pip value for ${asset}.` : "Working out the pip value."),
+  },
+  calculate_margin_required: {
+    label: "Estimating margin",
+    detail: ({ asset }) =>
+      asset ? `Estimating required margin for ${asset}.` : "Estimating how much margin the trade needs.",
+  },
+  calculate_profit_loss: {
+    label: "Calculating profit / loss",
+    detail: () => "Running the trade outcome numbers.",
+  },
+  generate_projection: {
+    label: "Running projection",
+    detail: () => "Projecting account growth over time.",
+  },
+  generate_growth_plan: {
+    label: "Building growth plan",
+    detail: () => "Setting realistic daily, weekly, and monthly targets.",
+  },
+  submit_ask_card: {
+    label: "Formatting final answer",
+    detail: () => "Packaging the final card for display.",
+    phase: "finalizing",
+  },
+};
+
 function buildToolStatus(toolName: string, rawArgs: unknown): AskToolStatus {
   const args = rawArgs && typeof rawArgs === "object" ? (rawArgs as Record<string, unknown>) : {};
-  const asset = readStringArg(args, "asset", "pair", "symbol");
-  const entity = readStringArg(args, "name", "query");
-  const timeframe = readStringArg(args, "timeframe");
-  const side = readStringArg(args, "side", "direction");
-  const url = readStringArg(args, "url");
+  const spec = TOOL_STATUS[toolName];
 
-  switch (toolName) {
-    case "verify_entity":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Checking broker / firm",
-        detail: entity ? `Reviewing ${entity}` : "Reviewing the entity details provided.",
-      };
-    case "get_market_briefing":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Fetching live market price",
-        detail: asset
-          ? `Pulling live levels for ${asset}${timeframe ? ` on ${timeframe}` : ""}.`
-          : "Pulling live price and nearby levels.",
-      };
-    case "get_market_setup":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Building live setup",
-        detail: asset
-          ? `Mapping ${side ?? "trade"} levels for ${asset}${timeframe ? ` on ${timeframe}` : ""}.`
-          : "Turning live market structure into an actionable setup.",
-      };
-    case "search_news":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Scanning headlines",
-        detail: entity ? `Searching recent news for ${entity}.` : "Searching for fresh market-moving headlines.",
-      };
-    case "web_search":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Searching the web",
-        detail: entity ? `Searching the web for ${entity}.` : "Searching the live web for the latest on this.",
-      };
-    case "web_fetch":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Reading a source",
-        detail: url ? `Reading ${url}.` : "Reading the full page for more detail.",
-      };
-    case "get_economic_calendar":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Checking economic calendar",
-        detail: "Reading scheduled macro events, impact, and release values.",
-      };
-    case "calculate_position_size":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Sizing the trade",
-        detail: asset ? `Calculating risk-based size for ${asset}.` : "Calculating a risk-based position size.",
-      };
-    case "calculate_risk_reward":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Checking risk-reward",
-        detail: "Measuring the reward multiple against the stop.",
-      };
-    case "calculate_pip_value":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Calculating pip value",
-        detail: asset ? `Working out pip value for ${asset}.` : "Working out the pip value.",
-      };
-    case "calculate_margin_required":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Estimating margin",
-        detail: asset ? `Estimating required margin for ${asset}.` : "Estimating how much margin the trade needs.",
-      };
-    case "calculate_profit_loss":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Calculating profit / loss",
-        detail: "Running the trade outcome numbers.",
-      };
-    case "generate_projection":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Running projection",
-        detail: "Projecting account growth over time.",
-      };
-    case "generate_growth_plan":
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Building growth plan",
-        detail: "Setting realistic daily, weekly, and monthly targets.",
-      };
-    case "submit_ask_card":
-      return {
-        id: crypto.randomUUID(),
-        phase: "finalizing",
-        toolName,
-        label: "Formatting final answer",
-        detail: "Packaging the final card for display.",
-      };
-    default:
-      return {
-        id: crypto.randomUUID(),
-        phase: "working",
-        toolName,
-        label: "Working through your request",
-        detail: `Using ${toolName.replaceAll("_", " ")}.`,
-      };
-  }
+  return {
+    id: crypto.randomUUID(),
+    phase: spec?.phase ?? "working",
+    toolName,
+    label: spec?.label ?? "Working through your request",
+    detail:
+      spec?.detail({
+        asset: readStringArg(args, "asset", "pair", "symbol"),
+        entity: readStringArg(args, "name", "query"),
+        timeframe: readStringArg(args, "timeframe"),
+        side: readStringArg(args, "side", "direction"),
+        url: readStringArg(args, "url"),
+      }) ?? `Using ${toolName.replaceAll("_", " ")}.`,
+  };
 }
 
 function buildAskStreamResponse({

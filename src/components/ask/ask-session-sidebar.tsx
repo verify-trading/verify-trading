@@ -24,6 +24,8 @@ function formatSessionTime(updatedAt: string) {
   return SESSION_TIME_FORMATTER.format(date);
 }
 
+const GROUP_ORDER = ["Today", "Yesterday", "This Week", "This Month", "Older"];
+
 function groupLabel(updatedAt: string) {
   const date = new Date(updatedAt);
   if (Number.isNaN(date.getTime())) {
@@ -82,8 +84,6 @@ export function AskSessionSidebar({
     }
     return groups;
   }, [filteredSessions]);
-
-  const groupOrder = ["Today", "Yesterday", "This Week", "This Month", "Older"];
 
   const maybeLoadMore = useCallback(() => {
     const viewport = viewportRef.current;
@@ -209,12 +209,12 @@ export function AskSessionSidebar({
                 {searchQuery ? "No matches" : "No sessions yet"}
               </div>
             ) : (
-              groupOrder.flatMap((label) => {
+              GROUP_ORDER.map((label) => {
                 const groupSessions = grouped[label];
                 if (!groupSessions?.length) {
-                  return [];
+                  return null;
                 }
-                return [
+                return (
                   <div key={label} className="mb-3">
                     <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/25">
                       {label}
@@ -260,8 +260,8 @@ export function AskSessionSidebar({
                         </div>
                       );
                     })}
-                  </div>,
-                ];
+                  </div>
+                );
               })
             )}
             {state.loadingMore ? <AskSessionLoadMoreSkeleton /> : null}

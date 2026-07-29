@@ -10,7 +10,7 @@ export const ECONOMIC_CALENDAR_CACHE_KEY = "events:economic:week";
 // forex-api2's BASIC plan allows only 50 requests/month, so refresh at most
 // once a day (~30/month). The UTC day-rollover check below still forces a daily
 // refresh to advance the rolling window, which keeps actuals reasonably fresh.
-export const ECONOMIC_CALENDAR_REFRESH_MS = 24 * 60 * 60 * 1000;
+const ECONOMIC_CALENDAR_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 /** forex-api2 (RapidAPI) economic calendar event, as returned under `data`. */
 type RawEconomicEvent = {
@@ -68,7 +68,7 @@ function formatDateUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function getEconomicCalendarWindow(now = new Date()): EconomicCalendarWindow {
+function getEconomicCalendarWindow(now = new Date()): EconomicCalendarWindow {
   const utcToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const start = new Date(utcToday.getTime() - CACHE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const end = new Date(utcToday.getTime() + CACHE_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000);

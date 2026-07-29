@@ -2,7 +2,7 @@ import { Resend } from "resend";
 
 import { getResendApiKey } from "@/lib/email/config";
 
-let resendClient: Resend | null | undefined;
+let resendClient: Resend | null = null;
 
 export function getResendClient(): Resend | null {
   const apiKey = getResendApiKey();
@@ -10,9 +10,6 @@ export function getResendClient(): Resend | null {
     return null;
   }
 
-  if (resendClient === undefined) {
-    resendClient = new Resend(apiKey);
-  }
-
+  resendClient ??= new Resend(apiKey);
   return resendClient;
 }

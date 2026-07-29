@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
 import type { EconomicCalendarSnapshot } from "@/lib/markets/economic-calendar";
-import { jsonApiError } from "@/lib/http/json-response";
+import { jsonApiError, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { ECONOMIC_CALENDAR_CACHE_KEY } from "@/lib/markets/rapidapi-economic-calendar";
 import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
-import { MARKETS_PRIVATE_CACHE_HEADERS, requireMarketsProSession } from "@/lib/markets/markets-api-auth";
+import { requireMarketsProSession } from "@/lib/markets/markets-api-auth";
 
 export async function GET() {
   const access = await requireMarketsProSession();
@@ -21,7 +21,7 @@ export async function GET() {
     };
 
     return NextResponse.json(snapshot, {
-      headers: MARKETS_PRIVATE_CACHE_HEADERS,
+      headers: PRIVATE_CACHE_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load economic calendar.";

@@ -7,7 +7,7 @@ interface FetchWithRetryOptions {
   timeoutMs?: number;
 }
 
-function wait(delayMs: number) {
+export function wait(delayMs: number) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
@@ -15,7 +15,8 @@ function shouldRetryStatus(status: number) {
   return RETRYABLE_STATUS_CODES.has(status);
 }
 
-function parseRetryAfterMs(retryAfter: string | null) {
+/** Retry-After is either a delay in seconds or an HTTP date — upstreams send both. */
+export function parseRetryAfterMs(retryAfter: string | null) {
   if (!retryAfter) {
     return null;
   }

@@ -13,22 +13,17 @@ vi.mock("@/lib/observability/logger", () => ({
 import { GET, POST } from "@/app/api/psychology/assessments/route";
 import { getSessionUser } from "@/lib/auth/session";
 
-function createQueryBuilder(result: unknown) {
-  const builder = Promise.resolve(result) as Promise<unknown> & {
-    select: ReturnType<typeof vi.fn>;
-    eq: ReturnType<typeof vi.fn>;
-    order: ReturnType<typeof vi.fn>;
-    limit: ReturnType<typeof vi.fn>;
-    insert: ReturnType<typeof vi.fn>;
-    single: ReturnType<typeof vi.fn>;
-  };
+// Chainable thenable stand-in for a PostgREST query: every builder method returns the
+// builder, and awaiting it (or .single()) resolves the provided result. A filter method
+// added in src must be added here too, or the chain returns undefined mid-query.
+function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
+  const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
 
-  builder.select = vi.fn(() => builder);
-  builder.eq = vi.fn(() => builder);
-  builder.order = vi.fn(() => builder);
-  builder.limit = vi.fn(() => builder);
-  builder.insert = vi.fn(() => builder);
+  for (const method of ["select", "eq", "order", "limit", "insert"]) {
+    builder[method] = vi.fn(() => builder);
+  }
   builder.single = vi.fn().mockResolvedValue(result);
+  builder.then = (onFulfilled, onRejected) => Promise.resolve(result).then(onFulfilled, onRejected);
 
   return builder;
 }

@@ -39,16 +39,13 @@ run("firm rules seed generator", () => {
       try {
         const rules = await extractChallengeRules({ firmUrl: firm.url, accountSize: 100_000, accountType: "2step" });
         const core = [rules.daily_loss_limit, rules.max_drawdown, rules.profit_target].filter((v) => !na(v)).length;
-        // eslint-disable-next-line no-console
         console.log(`${firm.name}: core ${core}/3 — ${rules.daily_loss_limit} / ${rules.max_drawdown} / ${rules.profit_target}`);
         if (core >= 2) {
           entries.push({ domain: domainOf(firm.url), firmName: rules.firm_name, firmUrl: firm.url, accountSize: 100_000, accountType: "2step", rules });
         } else {
-          // eslint-disable-next-line no-console
           console.log(`  ↳ skipped (weak scrape — will live-scrape on demand)`);
         }
       } catch (error) {
-        // eslint-disable-next-line no-console
         console.log(`${firm.name}: ERROR ${error instanceof Error ? error.message : String(error)}`);
       }
     }
@@ -61,7 +58,6 @@ run("firm rules seed generator", () => {
       `export type FirmRulesSeed = { domain: string; firmName: string; firmUrl: string; accountSize: number; accountType: AccountType; rules: ChallengeRules };\n\n` +
       `export const FIRM_RULES_SEED: FirmRulesSeed[] = ${JSON.stringify(entries, null, 2)};\n`;
     writeFileSync(new URL("../../../src/lib/journal/firmRulesCache.ts", import.meta.url), file);
-    // eslint-disable-next-line no-console
     console.log(`\n✅ wrote ${entries.length}/${FIRMS.length} firms to src/lib/journal/firmRulesCache.ts`);
   }, 900_000);
 });

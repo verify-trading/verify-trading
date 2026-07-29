@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth/session";
 import { hasProAccess } from "@/lib/billing/require-pro";
-import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
+import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { signAgentContext } from "@/lib/psychology/agent-token";
 import { openCoachSession } from "@/lib/psychology/sessions";
@@ -17,10 +17,6 @@ import { openCoachSession } from "@/lib/psychology/sessions";
 const requestSchema = z.object({ assessmentId: z.uuid() });
 
 const CONTEXT_TTL_SECS = 3600; // covers the 1800s max call plus mint→connect slack
-
-const PRIVATE_CACHE_HEADERS = {
-  "Cache-Control": "private, no-store, max-age=0",
-} as const;
 
 export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));

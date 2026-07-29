@@ -54,11 +54,6 @@ const TIMING = {
   loopReset: 1500,
 } as const;
 
-/**
- * Expand the scripted exchanges into a flat list of timed frames. Pre-computing
- * frames makes pause/resume trivial (just stop advancing the index) and keeps
- * the loop perfectly deterministic between renders.
- */
 /** Merge real gold values over the scripted briefing card when available. */
 function resolveExchanges(liveBriefing: HeroLiveBriefing | null): DemoExchange[] {
   if (!liveBriefing) return DEMO_EXCHANGES;
@@ -69,6 +64,7 @@ function resolveExchanges(liveBriefing: HeroLiveBriefing | null): DemoExchange[]
   );
 }
 
+/** Pre-computed frames make pause/resume trivial (stop advancing the index) and the loop deterministic. */
 function buildFrames(exchanges: DemoExchange[]): Frame[] {
   const frames: Frame[] = [];
   const push = (patch: Partial<DemoState>, ms: number, base: DemoState) =>

@@ -61,7 +61,3 @@ export async function requireMarketsProSession(): Promise<MarketsAccess> {
 
   return { ok: true, userId: session.user.id };
 }
-
-export const MARKETS_PRIVATE_CACHE_HEADERS = {
-  "Cache-Control": "private, no-store, max-age=0",
-} as const;

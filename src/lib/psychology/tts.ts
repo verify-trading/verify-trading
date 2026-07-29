@@ -11,13 +11,11 @@ const ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech";
 // most of why the coach used to sound synthetic. Client asked for a female coach; Jessica
 // is the one that keeps the conversational read.
 const COACH_VOICE_ID = "cgSgspJ2msm6clMCkdW9";
-// Flash v2.5 — ElevenLabs' fastest multilingual model (~75ms inference, 32 languages ⊇ our
-// coverage, 50% cheaper). We moved off multilingual_v2 because the real bottleneck was never
-// ElevenLabs latency (~2s) but the client's time-to-*playable*: iOS AVPlayer was slow to
-// become ready, so the coach kept falling back to the device voice. Flash's smaller/faster
-// output plus the buffered Content-Length response (see the route) is what wins the client's
-// fallback window. Flash is marginally less expressive than multilingual_v2 on long emotional
-// reads; for short back-and-forth coach turns the difference is barely audible.
+// Flash v2.5 — fastest multilingual model (~75ms, 32 languages ⊇ our coverage, 50% cheaper).
+// The binding constraint is not ElevenLabs latency (~2s) but the client's time-to-*playable*:
+// iOS AVPlayer needs small, sized audio (see the route) to beat the app's fallback window, or
+// the coach comes out in the robotic device voice. multilingual_v2 is a little more expressive
+// on long emotional reads and barely different on short coach turns — not worth that window.
 const COACH_MODEL_ID = "eleven_flash_v2_5";
 
 export const TTS_MAX_CHARS = 800;

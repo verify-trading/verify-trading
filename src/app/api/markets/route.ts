@@ -1,28 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { jsonApiError } from "@/lib/http/json-response";
+import { jsonApiError, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
-import type { MarketSeriesTimeframe } from "@/lib/markets/twelve-data-adapter";
-import { MARKETS_PRIVATE_CACHE_HEADERS, requireMarketsSession } from "@/lib/markets/markets-api-auth";
-
-export type TwelveMarketsSnapshot = {
-  updatedAt: string | null;
-  quotes: Record<string, {
-    symbol: string;
-    name: string;
-    price: number;
-    change: number;
-    percent_change: number;
-    open: number;
-    high: number;
-    low: number;
-    previous_close: number;
-    is_market_open: boolean;
-    exchange: string;
-  }>;
-  sparklines: Record<string, number[]>;
-  seriesByTimeframe: Partial<Record<MarketSeriesTimeframe, Record<string, number[]>>>;
-};
+import { requireMarketsSession } from "@/lib/markets/markets-api-auth";
+import type { TwelveMarketsSnapshot } from "@/lib/markets/twelve-markets-data";
 
 export async function GET() {
   // Charts/price snapshot is the free teaser: any signed-in user. The Pro-only
@@ -59,7 +40,7 @@ export async function GET() {
     };
 
     return NextResponse.json(snapshot, {
-      headers: MARKETS_PRIVATE_CACHE_HEADERS,
+      headers: PRIVATE_CACHE_HEADERS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load market data.";

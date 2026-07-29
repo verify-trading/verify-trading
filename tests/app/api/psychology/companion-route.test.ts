@@ -40,7 +40,7 @@ const assessmentRow = {
 function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
   const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
 
-  for (const method of ["select", "eq", "gt", "order", "limit", "insert", "update"]) {
+  for (const method of ["select", "eq", "is", "gt", "order", "limit", "insert", "update"]) {
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn().mockResolvedValue(result);

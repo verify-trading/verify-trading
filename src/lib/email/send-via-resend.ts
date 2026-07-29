@@ -1,6 +1,6 @@
 import { getResendClient } from "@/lib/email/client";
 
-type SendViaResendInput = {
+export type EmailPayload = {
   from: string;
   to: string;
   subject: string;
@@ -8,7 +8,7 @@ type SendViaResendInput = {
   html: string;
 };
 
-export async function sendViaResend({ from, to, subject, text, html }: SendViaResendInput): Promise<void> {
+export async function sendViaResend({ from, to, subject, text, html }: EmailPayload): Promise<void> {
   const resend = getResendClient();
   if (!resend) {
     throw new Error("Transactional email is not configured.");
