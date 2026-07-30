@@ -68,12 +68,12 @@ describe("toBrokerDays", () => {
 describe("computeSyncWindow", () => {
   const now = new Date("2026-07-29T03:00:00.000Z");
 
-  it("reaches back 90 days on the first sync", () => {
+  it("reaches back 30 days on the first sync", () => {
     const { start, end } = computeSyncWindow({ last_synced_at: null, last_sync_error: null }, now);
 
     // Midnight, not the current time of day: the oldest day has to be whole, and it is
     // never re-read.
-    expect(start.toISOString()).toBe("2026-04-30T00:00:00.000Z");
+    expect(start.toISOString()).toBe("2026-06-29T00:00:00.000Z");
     expect(end.toISOString()).toBe("2026-07-30T03:00:00.000Z");
   });
 
@@ -94,7 +94,7 @@ describe("computeSyncWindow", () => {
       now,
     );
 
-    expect(start.toISOString()).toBe("2026-04-30T00:00:00.000Z");
+    expect(start.toISOString()).toBe("2026-06-29T00:00:00.000Z");
   });
 });
 

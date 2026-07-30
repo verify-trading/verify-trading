@@ -65,7 +65,17 @@ export class BrokerSyncError extends Error {
   }
 }
 
-const FIRST_SYNC_DAYS = 90;
+/**
+ * How far the FIRST sync reaches back. Thirty days fills exactly the month the journal's
+ * calendar shows, so the feature visibly works the moment a trader connects.
+ *
+ * Not longer: imported days count in P&L, win rate and streaks, so a quarter of them tells
+ * someone they are on a 14-day streak from days they never journaled — and a quarter of
+ * broker-currency days can outnumber everything they typed and flip which currency the
+ * header total claims. Not shorter either: the window is exclusive of nothing and a trader
+ * connecting on a quiet week would land on "Nothing new" after finishing the hosted page.
+ */
+const FIRST_SYNC_DAYS = 30;
 /** Re-syncs start a day before the last one so trades that closed on the boundary fold in. */
 const RESYNC_OVERLAP_DAYS = 1;
 /** A repeat tap inside this window reports "nothing new": re-importing a parked account re-pays the ~$0.0756 deploy fee. */
@@ -196,7 +206,7 @@ export function computeSyncWindow(
   const lastSyncedMs = account.last_sync_error ? NaN : Date.parse(account.last_synced_at ?? "");
   const dayMs = 24 * 60 * 60 * 1000;
   // Both branches floor to midnight UTC: starting the first sync at the current time of day would
-  // import the 90th day back with only its afternoon trades, and that day is never read again.
+  // import the oldest day with only its afternoon trades, and that day is never read again.
   const start = Number.isFinite(lastSyncedMs)
     ? new Date(new Date(lastSyncedMs).setUTCHours(0, 0, 0, 0) - RESYNC_OVERLAP_DAYS * dayMs)
     : new Date(new Date(now.getTime() - FIRST_SYNC_DAYS * dayMs).setUTCHours(0, 0, 0, 0));
