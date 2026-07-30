@@ -6,7 +6,7 @@ import { hasProAccess } from "@/lib/billing/require-pro";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { signAgentContext } from "@/lib/psychology/agent-token";
-import { openCoachSession } from "@/lib/psychology/sessions";
+import { countCallsToday, DAILY_CALL_LIMIT, DAILY_LIMIT_MESSAGE, openCoachSession } from "@/lib/psychology/sessions";
 
 // Mints a WebRTC conversation token for the ElevenLabs coach agent and opens the session row
 // the transcript will land in. Auth-gated exactly like the companion route (Pro-only), because
@@ -49,17 +49,30 @@ export async function POST(request: Request) {
     // proves the row exists, so a stale or foreign id used to mint a token, open a session and
     // connect a billed WebRTC call — which then failed on every turn (agent-llm 404s when
     // loadCoachContext finds nothing) and left the trader listening to silence.
-    const { data: ownsAssessment, error: assessmentError } = await session.supabase
-      .from("psychology_assessments")
-      .select("id")
-      .eq("user_id", session.user.id)
-      .eq("id", parsed.data.assessmentId)
-      .maybeSingle();
-    if (assessmentError) {
-      throw new Error(`psychology_assessments read failed: ${assessmentError.message}`);
+    //
+    // Today's allowance is counted alongside it — both are reads, and both have to answer
+    // before the session row is opened or ElevenLabs is billed, so a refused call costs
+    // nothing. A failed count throws into the catch below (500) instead of falling through.
+    const [assessment, callsToday] = await Promise.all([
+      session.supabase
+        .from("psychology_assessments")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .eq("id", parsed.data.assessmentId)
+        .maybeSingle(),
+      countCallsToday(session.supabase, session.user.id),
+    ]);
+    if (assessment.error) {
+      throw new Error(`psychology_assessments read failed: ${assessment.error.message}`);
     }
-    if (!ownsAssessment) {
+    if (!assessment.data) {
       return jsonApiError(404, "psychology_assessment_missing", "Complete the psychology assessment first.");
+    }
+    // Two mints racing can both pass this and land a 6th call for the day. Left alone on
+    // purpose: the overrun is one call, it self-corrects at the next mint, and row locking
+    // for it would cost more than the call it saves.
+    if (callsToday >= DAILY_CALL_LIMIT) {
+      return jsonApiError(429, "psychology_daily_limit", DAILY_LIMIT_MESSAGE);
     }
 
     // Open the session row and mint the token in parallel — neither depends on the other.

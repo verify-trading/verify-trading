@@ -5,6 +5,7 @@ import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/htt
 import { logger } from "@/lib/observability/logger";
 import {
   PSYCHOLOGY_SESSION_COLUMNS,
+  REAL_CALL_FILTER,
   toPsychologySession,
   type PsychologySessionRow,
 } from "@/lib/psychology/sessions";
@@ -29,7 +30,10 @@ export async function GET() {
       // no duration and no messages, and without this clause the trader could not open it —
       // which is also the only thing that triggers the transcript repair in GET [id].
       // A session that was minted but never connected has no pointer, so it stays hidden.
-      .or("message_count.gt.0,duration_secs.gt.0,elevenlabs_conversation_id.not.is.null")
+      //
+      // Shared with the daily-limit count so the history and the allowance can never disagree
+      // about which rows are calls (see REAL_CALL_FILTER).
+      .or(REAL_CALL_FILTER)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       // Explicit cap (PostgREST would silently apply ~1000 anyway); newest-first

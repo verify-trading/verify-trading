@@ -295,9 +295,18 @@ export async function GET(
             }
           }
           // A hang-up report that never landed leaves the call at 0:00 even once its words are
-          // recovered. ElevenLabs knows how long it ran, and it is bound to this caller here.
-          const ran = Math.round(conversation.metadata?.call_duration_secs ?? 0);
-          if (row.duration_secs === 0 && ran > 0) {
+          // recovered — and lifetime minutes short by that call forever. ElevenLabs knows how
+          // long it ran, and it is bound to this caller here, so take its clock.
+          //
+          // Bounded exactly like the client-reported duration (sessionPatchSchema): this is
+          // third-party input landing in the same column, and an absurd value would be read
+          // back as minutes. Only fills a call with no duration of its own — a real hang-up
+          // report is the trader's own clock and always wins.
+          const reported = conversation.metadata?.call_duration_secs;
+          const ran = typeof reported === "number" && Number.isFinite(reported)
+            ? Math.min(86_400, Math.max(0, Math.round(reported)))
+            : 0;
+          if (!row.duration_secs && ran > 0) {
             await session.supabase
               .from("psychology_sessions")
               .update({ duration_secs: ran })

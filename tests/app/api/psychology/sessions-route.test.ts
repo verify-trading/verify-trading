@@ -264,6 +264,78 @@ describe("Psychology sessions API", () => {
     process.env.ELEVENLABS_AGENT_LLM_SECRET = previousSecret;
   });
 
+  // Drives the GET [id] repair path against a stubbed ElevenLabs conversation, so the duration
+  // cases below differ only in the row they start from and the call clock ElevenLabs reports.
+  async function repairSession(row: Record<string, unknown>, metadata: Record<string, unknown>) {
+    process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = "test-agent-secret";
+    const vtCtx = signAgentContext(
+      { userId: "user-1", assessmentId: "assessment-1", sessionId: SESSION_ID, name: "Alex", exp: Math.floor(Date.now() / 1000) + 600 },
+      "test-agent-secret",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          metadata,
+          conversation_initiation_client_data: { custom_llm_extra_body: { vt_ctx: vtCtx } },
+          transcript: [{ role: "agent", message: "How are you landing today?" }],
+        }),
+      }),
+    );
+
+    const stored = [{ role: "coach", content: "How are you landing today?", created_at: "2026-07-17T09:00:01.000Z" }];
+    // In call order: the initial read (stranded), storeTurns' idempotency re-check, the insert,
+    // then the read-back after the repair.
+    const messageResults: Array<{ data: unknown; error: unknown }> = [
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: null, error: null },
+      { data: stored, error: null },
+    ];
+    const sessionBuilder = createQueryBuilder({ data: { ...sessionRow, message_count: 0, elevenlabs_conversation_id: "conv_abc", ...row }, error: null });
+    mockSession(vi.fn((table: string) =>
+      table === "psychology_sessions" ? sessionBuilder : createQueryBuilder(messageResults.shift() ?? { data: [], error: null }),
+    ));
+
+    const response = await getSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`),
+      paramsContext(SESSION_ID),
+    );
+    return { json: await response.json(), sessionBuilder };
+  }
+
+  it("backfills the call clock from ElevenLabs when the hang-up report never landed", async () => {
+    // duration_secs 0 is a call whose end report was lost (app killed, signal gone). Without
+    // this the call reads 0:00 forever and lifetime minutes stay short by the whole call.
+    const { json, sessionBuilder } = await repairSession({ duration_secs: 0 }, { call_duration_secs: 412.6 });
+
+    expect(sessionBuilder.update).toHaveBeenCalledWith({ duration_secs: 413 });
+    expect(json.session.durationSecs).toBe(413);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("clamps an absurd call clock to the same bound the client report is held to", async () => {
+    const { json } = await repairSession({ duration_secs: null }, { call_duration_secs: 999_999 });
+
+    expect(json.session.durationSecs).toBe(86_400);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("never overwrites a duration the trader's own hang-up already reported", async () => {
+    // The client clock is the call the trader actually sat through; ElevenLabs' view of the
+    // same call (dialling, teardown) must not silently replace it.
+    const { json, sessionBuilder } = await repairSession({ duration_secs: 320 }, { call_duration_secs: 999 });
+
+    expect(sessionBuilder.update).not.toHaveBeenCalledWith(expect.objectContaining({ duration_secs: expect.anything() }));
+    expect(json.session.durationSecs).toBe(320);
+
+    vi.unstubAllGlobals();
+  });
+
   it("404s when the session does not belong to the caller", async () => {
     const sessionBuilder = createQueryBuilder({ data: null, error: null });
     const messagesBuilder = createQueryBuilder({ data: [], error: null });
