@@ -315,21 +315,24 @@ export async function GET(
           !isLiveCall(conversation) &&
           bindsToCaller(conversation, secret, session.user.id, parsed.data)
         ) {
-          const stored = await storeTurns(
+          await storeTurns(
             session.supabase,
             session.user.id,
             parsed.data,
             conversation,
             Date.parse(row.created_at),
           );
-          if (stored > 0) {
-            const repaired = await readMessages(session.supabase, session.user.id, parsed.data);
-            if (!repaired.error && repaired.data) {
-              messages = repaired.data as unknown as PsychologySessionMessageRow[];
-              // storeTurns updated message_count in the database, but this row was read before
-              // that — without this the repaired call still renders as "0 messages".
-              row.message_count = messages.length;
-            }
+          // Re-read on ANY completed attempt, not only when this request did the writing. A
+          // storeTurns of 0 also covers losing the race to a concurrent repair (migration 31's
+          // unique index), where the transcript now exists but was stored by the other writer —
+          // gating on our own row count showed that trader "Nothing was said on this call." for
+          // a call that had just been fully recovered, until they refreshed.
+          const repaired = await readMessages(session.supabase, session.user.id, parsed.data);
+          if (!repaired.error && repaired.data && repaired.data.length > 0) {
+            messages = repaired.data as unknown as PsychologySessionMessageRow[];
+            // storeTurns updated message_count in the database, but this row was read before
+            // that — without this the repaired call still renders as "0 messages".
+            row.message_count = messages.length;
           }
           // A hang-up report that never landed leaves the call at 0:00 even once its words are
           // recovered — and lifetime minutes short by that call forever. ElevenLabs knows how
@@ -352,8 +355,10 @@ export async function GET(
             row.duration_secs = ran;
           }
           // Finished with nothing to store: the call really was silent, so this is as repaired
-          // as it will ever get. 0 stored turns is otherwise indistinguishable from "not ready".
-          if (stored === 0 && (conversation.status === "done" || conversation.status === "failed")) {
+          // as it will ever get. Read off the messages that now exist rather than off what THIS
+          // request wrote — a race loser wrote nothing but the transcript is there, and dropping
+          // the pointer for it would be wrong. Empty after a terminal status is genuinely empty.
+          if (messages.length === 0 && (conversation.status === "done" || conversation.status === "failed")) {
             await clearConversationLink(session.supabase, session.user.id, parsed.data);
           }
         }

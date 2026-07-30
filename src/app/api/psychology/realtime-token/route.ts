@@ -12,6 +12,7 @@ import {
   countMintsToday,
   DAILY_CALL_LIMIT,
   DAILY_LIMIT_MESSAGE,
+  MINT_LIMIT_MESSAGE,
   DAILY_MINT_LIMIT,
   openCoachSession,
 } from "@/lib/psychology/sessions";
@@ -83,10 +84,14 @@ export async function POST(request: Request) {
     //
     // The mint count is the backstop: a call only enters callsToday once the CLIENT reports
     // a duration or a conversation id, so that number alone is a spend limit a modified app
-    // can hold at zero forever. Tokens minted is server truth. Same message either way —
-    // a trader who has started 15 calls today has had their five.
-    if (callsToday >= DAILY_CALL_LIMIT || mintsToday >= DAILY_MINT_LIMIT) {
+    // can hold at zero forever. Tokens minted is server truth. The two get DIFFERENT messages:
+    // whoever trips the backstop is by definition someone whose calls were never reported, so
+    // their meter reads under the limit and "you've used your five" would contradict it.
+    if (callsToday >= DAILY_CALL_LIMIT) {
       return jsonApiError(429, "psychology_daily_limit", DAILY_LIMIT_MESSAGE);
+    }
+    if (mintsToday >= DAILY_MINT_LIMIT) {
+      return jsonApiError(429, "psychology_daily_limit", MINT_LIMIT_MESSAGE);
     }
 
     // Open the session row and mint the token in parallel — neither depends on the other.

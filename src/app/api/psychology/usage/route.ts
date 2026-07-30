@@ -3,7 +3,13 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
-import { countCallsToday, DAILY_CALL_LIMIT, loadCallTotals } from "@/lib/psychology/sessions";
+import {
+  countCallsToday,
+  countMintsToday,
+  DAILY_CALL_LIMIT,
+  DAILY_MINT_LIMIT,
+  loadCallTotals,
+} from "@/lib/psychology/sessions";
 
 // Every number the Mind header shows, computed where the limit is enforced.
 //
@@ -21,13 +27,24 @@ export async function GET() {
       return jsonUnauthorized("Sign in to load coaching usage.");
     }
 
-    const [callsToday, totals] = await Promise.all([
+    const [callsToday, mintsToday, totals] = await Promise.all([
       countCallsToday(session.supabase, session.user.id),
+      countMintsToday(session.supabase, session.user.id),
       loadCallTotals(session.supabase, session.user.id),
     ]);
 
+    // Report whichever limit will actually refuse the next call. The mint backstop can bind
+    // while callsToday is still low — that is exactly the trader whose calls go unreported —
+    // and reporting only the allowance would show them calls remaining that the mint then
+    // 429s, which is the disagreement this endpoint exists to prevent. Expressed as calls so
+    // the client keeps one meter: when the backstop is the tighter of the two, its remaining
+    // headroom is what the meter counts down.
+    const mintHeadroom = Math.max(0, DAILY_MINT_LIMIT - mintsToday);
+    const callHeadroom = Math.max(0, DAILY_CALL_LIMIT - callsToday);
+    const used = mintHeadroom < callHeadroom ? DAILY_CALL_LIMIT - mintHeadroom : callsToday;
+
     return NextResponse.json(
-      { callsToday, dailyLimit: DAILY_CALL_LIMIT, ...totals },
+      { callsToday: used, dailyLimit: DAILY_CALL_LIMIT, ...totals },
       { headers: PRIVATE_CACHE_HEADERS },
     );
   } catch (error) {

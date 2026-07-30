@@ -13,17 +13,29 @@ export const DAILY_CALL_LIMIT = 5;
 
 export const DAILY_LIMIT_MESSAGE = `You've used today's ${DAILY_CALL_LIMIT} coaching calls. They reset at midnight UTC.`;
 
+/** Said when the mint backstop is what refused, not the allowance. It must not claim the five
+ *  calls were used: the trader who hits this is precisely the one whose calls were never
+ *  reported, so their meter reads under the limit and the other message would contradict the
+ *  screen they are looking at. */
+export const MINT_LIMIT_MESSAGE = "Too many calls started today. Try again after midnight UTC.";
+
 /** Backstop on tokens minted per UTC day (see countMintsToday). A connected call is only
  *  counted once the client reports it, so this is the only ceiling that holds against a
  *  client that never does. Set well above DAILY_CALL_LIMIT so honest retries — a dropped
  *  connect, a backed-out screen — never reach it. */
 export const DAILY_MINT_LIMIT = 15;
 
-// What counts as a call that actually happened, as a PostgREST `or` filter. A session row is
-// opened at token mint, so without this a mint that never connected (screen backed out of, a
+// What counts as a VOICE call that actually happened, as a PostgREST `or` filter. A session row
+// is opened at token mint, so without this a mint that never connected (screen backed out of, a
 // dead network) would burn a call the trader never had. Deliberately the same predicate the
 // list route filters by: the meter, the history and the cap must agree on which rows are calls.
-export const REAL_CALL_FILTER = "message_count.gt.0,duration_secs.gt.0,elevenlabs_conversation_id.not.is.null";
+//
+// Both signals are voice-only. `message_count.gt.0` is deliberately NOT here: the turn-based
+// text companion opens its rows through this same table and then sets message_count, so
+// including it made five text conversations exhaust the five-a-day VOICE allowance — the
+// trader was refused a call they had never made. Only a hang-up duration or an ElevenLabs
+// conversation id can come from a voice call.
+export const REAL_CALL_FILTER = "duration_secs.gt.0,elevenlabs_conversation_id.not.is.null";
 
 /** Today's real calls, on the UTC day the limit resets on. One definition, two callers — the
  *  429 in realtime-token and the number /api/psychology/usage renders — so the UI can never
@@ -42,7 +54,14 @@ export async function countCallsToday(supabase: SupabaseClient, userId: string):
   return count;
 }
 
-/** Tokens minted today, connected or not — every row is one issued conversation token.
+/** Rows opened today, connected or not — one per issued conversation token.
+ *
+ *  Counted unfiltered on purpose, so it stays server truth (see below). The cost of that is
+ *  that a turn-based text conversation opens a row here too and is indistinguishable from a
+ *  mint at creation time, so it also spends this budget. That is tolerable where it is not for
+ *  DAILY_CALL_LIMIT: this is a loose backstop against a client that reports nothing, not the
+ *  allowance the trader is shown. Give the rows a `kind` if the text coach is ever used enough
+ *  for 15 a day to be reachable.
  *
  *  The cap above can only count calls the CLIENT told us about: a session row is opened at
  *  mint with no duration, no messages and no conversation id, so it matches none of

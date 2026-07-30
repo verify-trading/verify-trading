@@ -187,19 +187,21 @@ describe("Psychology usage API", () => {
   });
 
   it("reports today's calls, the limit, and lifetime totals", async () => {
-    // Read in call order: the head-count first, then the durations behind the totals.
+    // Read in call order: the real-call head-count, the mint head-count, then the durations.
     const count = createQueryBuilder({ count: 2, error: null });
+    const mints = createQueryBuilder({ count: 3, error: null });
     const totals = createQueryBuilder({
       // 5:30 + 4:30 + a call whose hang-up report was lost + a null column = 10 whole minutes.
       data: [{ duration_secs: 330 }, { duration_secs: 270 }, { duration_secs: 0 }, { duration_secs: null }],
       error: null,
     });
-    mockSession(createFrom({ psychology_sessions: [count, totals] }));
+    mockSession(createFrom({ psychology_sessions: [count, mints, totals] }));
 
     const response = await getUsage();
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
+      // Calls bind here (3 headroom) below the mint backstop's 12, so the allowance is reported.
       callsToday: 2,
       dailyLimit: DAILY_CALL_LIMIT,
       callsTotal: 4,
@@ -207,6 +209,22 @@ describe("Psychology usage API", () => {
     });
     // Lifetime totals are filtered the same way, so "Calls" and the history list agree.
     expect(totals.or).toHaveBeenCalledWith(REAL_CALL_FILTER);
+  });
+
+  it("reports the mint backstop when it, not the allowance, is what will refuse", async () => {
+    // The trader whose calls are never reported: countCallsToday sits at 1, but only one mint
+    // remains. Reporting 1/5 would leave the app offering four calls that all 429.
+    const count = createQueryBuilder({ count: 1, error: null });
+    const mints = createQueryBuilder({ count: DAILY_MINT_LIMIT - 1, error: null });
+    const totals = createQueryBuilder({ data: [], error: null });
+    mockSession(createFrom({ psychology_sessions: [count, mints, totals] }));
+
+    const response = await getUsage();
+    const json = await response.json();
+
+    // One mint left, so one call left — expressed against the limit the meter draws.
+    expect(json.callsToday).toBe(DAILY_CALL_LIMIT - 1);
+    expect(json.dailyLimit).toBe(DAILY_CALL_LIMIT);
   });
 
   it("500s rather than reporting a usage number it could not read", async () => {
