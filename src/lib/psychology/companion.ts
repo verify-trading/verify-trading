@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 
 import { getAskSimpleModel } from "@/lib/ask/service/provider";
+import { readUserDisplayName } from "@/lib/auth/read-user-display-name";
 import { sectionLabels, type PsychologyAssessmentRow } from "@/lib/psychology/assessment";
 import type { ChallengeRules } from "@/lib/journal/challenge";
 import { ACCOUNT_TYPE_LABEL, money } from "@/lib/journal/format";
@@ -86,6 +87,18 @@ function recentBlock(entries: RecentEntry[]): string {
     return `- ${entry.date}: ${pnl}, ${entry.mood}${note}${lesson}`;
   });
   return `RECENT SESSIONS (most recent first):\n${lines.join("\n")}`;
+}
+
+// The trader's own name is the one piece of free text that reaches the coach's system prompt
+// verbatim, and user_metadata is client-written JSON. readUserDisplayName already drops
+// non-strings (a name of {} rendered as "[object Object]" in the coach's opening line) and
+// trims; whitespace is flattened on top of it because a newline is what lets the value forge
+// prompt structure below, and the length is capped because the prompt is re-sent every turn.
+// One helper for both coach paths — realtime mint and turn-based companion — so neither can
+// drift into passing the raw value.
+export function coachDisplayName(user: { email?: string | null; user_metadata?: Record<string, unknown> | null }): string {
+  const name = readUserDisplayName(user.user_metadata) ?? user.email ?? "there";
+  return name.replace(/\s+/g, " ").slice(0, 80);
 }
 
 export function shouldRecommendBreak(journal: JournalContext) {

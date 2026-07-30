@@ -13,6 +13,12 @@ export const DAILY_CALL_LIMIT = 5;
 
 export const DAILY_LIMIT_MESSAGE = `You've used today's ${DAILY_CALL_LIMIT} coaching calls. They reset at midnight UTC.`;
 
+/** Backstop on tokens minted per UTC day (see countMintsToday). A connected call is only
+ *  counted once the client reports it, so this is the only ceiling that holds against a
+ *  client that never does. Set well above DAILY_CALL_LIMIT so honest retries — a dropped
+ *  connect, a backed-out screen — never reach it. */
+export const DAILY_MINT_LIMIT = 15;
+
 // What counts as a call that actually happened, as a PostgREST `or` filter. A session row is
 // opened at token mint, so without this a mint that never connected (screen backed out of, a
 // dead network) would burn a call the trader never had. Deliberately the same predicate the
@@ -32,6 +38,28 @@ export async function countCallsToday(supabase: SupabaseClient, userId: string):
     .or(REAL_CALL_FILTER);
   if (error || count === null || count === undefined) {
     throw new Error(`psychology_sessions count failed: ${error?.message ?? "no count"}`);
+  }
+  return count;
+}
+
+/** Tokens minted today, connected or not — every row is one issued conversation token.
+ *
+ *  The cap above can only count calls the CLIENT told us about: a session row is opened at
+ *  mint with no duration, no messages and no conversation id, so it matches none of
+ *  REAL_CALL_FILTER until a PATCH reports one. A client that simply never reports therefore
+ *  keeps countCallsToday at zero and can mint tokens — and bill connected voice minutes —
+ *  without limit. This is the same number measured where the client cannot reach it.
+ *
+ *  Deliberately a second, looser limit rather than a replacement: counting mints as calls
+ *  would charge a trader whose connection dropped before the call ever started. */
+export async function countMintsToday(supabase: SupabaseClient, userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("psychology_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", `${getTodayUtcDateString()}T00:00:00.000Z`);
+  if (error || count === null || count === undefined) {
+    throw new Error(`psychology_sessions mint count failed: ${error?.message ?? "no count"}`);
   }
   return count;
 }
@@ -86,8 +114,14 @@ export async function insertSessionMessages(
 ): Promise<void> {
   if (rows.length === 0) return;
   const { error } = await supabase.from("psychology_session_messages").insert(rows);
-  if (error) throw new Error(`psychology_session_messages insert failed: ${error.message}`);
+  // The SQLSTATE rides along on the thrown error: the transcript importer has to tell an
+  // expected unique violation (migration 31 — the other writer won the race) from a real
+  // write failure, and matching on message text is not a contract.
+  if (error) throw Object.assign(new Error(`psychology_session_messages insert failed: ${error.message}`), { code: error.code });
 }
+
+/** Postgres unique_violation — the transcript race's losing writer (migration 31). */
+export const UNIQUE_VIOLATION = "23505";
 
 export type PsychologySessionRow = {
   id: string;

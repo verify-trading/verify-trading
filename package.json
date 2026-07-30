@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "check:agent-config": "node scripts/check-agent-config.mjs",
     "seed:analysis-rules": "node scripts/data/sync-analysis-rules.mjs",
     "seed:verified-entities": "node scripts/data/sync-verified-entities.mjs",
     "seed:knowledge": "node scripts/data/backfill-knowledge.mjs",

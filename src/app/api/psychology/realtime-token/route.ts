@@ -6,7 +6,15 @@ import { hasProAccess } from "@/lib/billing/require-pro";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { signAgentContext } from "@/lib/psychology/agent-token";
-import { countCallsToday, DAILY_CALL_LIMIT, DAILY_LIMIT_MESSAGE, openCoachSession } from "@/lib/psychology/sessions";
+import { coachDisplayName } from "@/lib/psychology/companion";
+import {
+  countCallsToday,
+  countMintsToday,
+  DAILY_CALL_LIMIT,
+  DAILY_LIMIT_MESSAGE,
+  DAILY_MINT_LIMIT,
+  openCoachSession,
+} from "@/lib/psychology/sessions";
 
 // Mints a WebRTC conversation token for the ElevenLabs coach agent and opens the session row
 // the transcript will land in. Auth-gated exactly like the companion route (Pro-only), because
@@ -53,7 +61,7 @@ export async function POST(request: Request) {
     // Today's allowance is counted alongside it — both are reads, and both have to answer
     // before the session row is opened or ElevenLabs is billed, so a refused call costs
     // nothing. A failed count throws into the catch below (500) instead of falling through.
-    const [assessment, callsToday] = await Promise.all([
+    const [assessment, callsToday, mintsToday] = await Promise.all([
       session.supabase
         .from("psychology_assessments")
         .select("id")
@@ -61,6 +69,7 @@ export async function POST(request: Request) {
         .eq("id", parsed.data.assessmentId)
         .maybeSingle(),
       countCallsToday(session.supabase, session.user.id),
+      countMintsToday(session.supabase, session.user.id),
     ]);
     if (assessment.error) {
       throw new Error(`psychology_assessments read failed: ${assessment.error.message}`);
@@ -71,7 +80,12 @@ export async function POST(request: Request) {
     // Two mints racing can both pass this and land a 6th call for the day. Left alone on
     // purpose: the overrun is one call, it self-corrects at the next mint, and row locking
     // for it would cost more than the call it saves.
-    if (callsToday >= DAILY_CALL_LIMIT) {
+    //
+    // The mint count is the backstop: a call only enters callsToday once the CLIENT reports
+    // a duration or a conversation id, so that number alone is a spend limit a modified app
+    // can hold at zero forever. Tokens minted is server truth. Same message either way —
+    // a trader who has started 15 calls today has had their five.
+    if (callsToday >= DAILY_CALL_LIMIT || mintsToday >= DAILY_MINT_LIMIT) {
       return jsonApiError(429, "psychology_daily_limit", DAILY_LIMIT_MESSAGE);
     }
 
@@ -80,7 +94,10 @@ export async function POST(request: Request) {
       openCoachSession(session.supabase, session.user.id, parsed.data.assessmentId),
       fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`, {
         headers: { "xi-api-key": apiKey },
-        signal: AbortSignal.timeout(15_000),
+        // Must stay UNDER the platform's own function ceiling (15 s here — this route sets no
+        // maxDuration). At 15 s the abort could never win: the function was killed first and
+        // the trader got a platform 504 instead of our 502 and its log line.
+        signal: AbortSignal.timeout(10_000),
       }),
     ]);
 
@@ -95,11 +112,9 @@ export async function POST(request: Request) {
       return jsonApiError(502, "psychology_realtime_token_failed", "Could not start the live coach right now.");
     }
     const sessionId = callSession.id;
-    // user_metadata is arbitrary client-writable JSON: coerce it (a non-string rendered as
-    // "[object Object]" in the coach's opening line) and cap it, since it lands verbatim in
-    // the system prompt that gets re-sent on every turn.
-    const rawName = session.user.user_metadata?.name ?? session.user.email ?? "there";
-    const name = String(rawName).slice(0, 80);
+    // Sanitised in one shared place with the turn-based path — user_metadata is client-written
+    // JSON and this string lands verbatim in the coach's system prompt (see coachDisplayName).
+    const name = coachDisplayName(session.user);
 
     const vt_ctx = signAgentContext(
       { userId: session.user.id, assessmentId: parsed.data.assessmentId, sessionId, name, exp: Math.floor(Date.now() / 1000) + CONTEXT_TTL_SECS },

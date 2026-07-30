@@ -24,6 +24,13 @@ export const maxDuration = 60;
 // rather than the coach going mute.
 const COACH_FALLBACK_LINE = "Sorry — I lost my train of thought for a second there. Say that again?";
 
+// A hung provider (connection open, no bytes) must be cut off by US, well inside the
+// maxDuration above. Past that ceiling the platform kills the function mid-stream and
+// ElevenLabs is left with an SSE that never says [DONE] — which ends the trader's call. Here
+// the abort surfaces in the catch below, where the stream still closes cleanly and the coach
+// still says something.
+const TURN_BUDGET_MS = 25_000;
+
 type ChatMessage = { role: string; content: unknown };
 
 // customLlmExtraBody is echoed by ElevenLabs under `elevenlabs_extra_body`; read it defensively
@@ -134,6 +141,7 @@ export async function POST(request: Request) {
       maxOutputTokens: 240,
       system,
       messages,
+      abortSignal: AbortSignal.timeout(TURN_BUDGET_MS),
       // streamText does NOT reject when the provider fails — verified against ai@6: the step
       // promise enqueues an error part and closes the stream, so `textStream` finishes
       // normally with zero deltas and the catch below never runs. Without this hook an
@@ -182,7 +190,13 @@ export async function POST(request: Request) {
           finish();
         } catch (error) {
           logger.error("agent-llm stream failed.", { error: error instanceof Error ? error.message : "unknown" });
-          safe(finish);
+          // Same reason as the zero-delta case: a turn that dies before a single word is
+          // dead air, and dead air is indistinguishable from the coach ignoring the trader.
+          // Mid-sentence there is nothing useful left to say, so just close cleanly.
+          safe(() => {
+            if (!spoke) controller.enqueue(chunk({ content: COACH_FALLBACK_LINE }, null));
+            finish();
+          });
         } finally {
           safe(() => controller.close());
         }

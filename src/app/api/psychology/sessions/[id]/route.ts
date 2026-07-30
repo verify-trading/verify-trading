@@ -11,6 +11,7 @@ import {
   PSYCHOLOGY_SESSION_COLUMNS,
   toPsychologySession,
   toPsychologySessionMessage,
+  UNIQUE_VIOLATION,
   type PsychologySessionMessageRow,
   type PsychologySessionRow,
 } from "@/lib/psychology/sessions";
@@ -57,6 +58,19 @@ async function fetchConversation(conversationId: string, apiKey: string): Promis
   }
   return (await response.json()) as ConversationRecord;
 }
+
+// A call that is still running has a transcript that is only a PREFIX of what will be said.
+// ElevenLabs' status is one of initiated | in-progress | processing | done | failed (verified
+// against their OpenAPI schema, where status is required) — the first two mean the trader is
+// still on the call. Importing then would latch a truncated transcript in permanently: the
+// idempotency guards below all read "this session already has messages" as "done", so the rest
+// of the conversation is never stored. PATCH infers the call is over from the client's duration
+// report; ElevenLabs' own view is the authority, and it is the only one the GET repair has.
+//
+// Unknown or missing status still imports, so an enum ElevenLabs adds later cannot silently
+// stop every transcript from ever being stored.
+const isLiveCall = (conversation: ConversationRecord): boolean =>
+  conversation.status === "initiated" || conversation.status === "in-progress";
 
 // The stored conversation id is only a pointer, and it arrives from the client — so it is never
 // trusted on its own. Every path that turns it into stored messages proves the conversation is
@@ -116,6 +130,10 @@ async function storeTurns(
   // The session's own created_at. Deterministic on purpose — see the stamping note below.
   baseMs: number,
 ): Promise<number> {
+  // Guarded here rather than in each caller: both the hang-up PATCH and the GET repair import
+  // through this function, and a transcript stored mid-call can never be corrected.
+  if (isLiveCall(conversation)) return 0;
+
   // One multi-row insert shares a single now() default, so every turn would carry an identical
   // created_at and the GET's created_at ordering would be arbitrary. Stamp them a millisecond
   // apart to keep the conversation in the order it was spoken.
@@ -159,7 +177,18 @@ async function storeTurns(
     .eq("user_id", userId);
   if (updated.error) throw new Error(`message_count update failed: ${updated.error.message}`);
 
-  await insertSessionMessages(supabase, rows);
+  // The unique index (migration 31) is what actually closes the PATCH-store / GET-repair race
+  // the re-check above only narrows — so the losing writer's insert now ERRORS. That is an
+  // expected outcome, not a failure: the winner stored this exact transcript under the same
+  // deterministic timestamps, nothing was lost, and the next read serves their rows. Only a
+  // unique violation is swallowed; every other write error still throws.
+  try {
+    await insertSessionMessages(supabase, rows);
+  } catch (error) {
+    if ((error as { code?: string }).code !== UNIQUE_VIOLATION) throw error;
+    logger.info("Transcript was stored by a concurrent writer; keeping theirs.", { sessionId });
+    return 0;
+  }
   return rows.length;
 }
 
@@ -277,7 +306,15 @@ export async function GET(
           // The conversation does not exist any more (retention, or a junk id). Nothing will
           // ever come back from it, so stop paying for the same 404 on every open.
           await clearConversationLink(session.supabase, session.user.id, parsed.data);
-        } else if (conversation && secret && bindsToCaller(conversation, secret, session.user.id, parsed.data)) {
+        } else if (
+          conversation &&
+          secret &&
+          // Nothing about a call in flight is final — not the transcript (see isLiveCall) and
+          // not the clock below, which would otherwise store a mid-call duration that the
+          // "never overwrite a reported duration" rule then makes permanent.
+          !isLiveCall(conversation) &&
+          bindsToCaller(conversation, secret, session.user.id, parsed.data)
+        ) {
           const stored = await storeTurns(
             session.supabase,
             session.user.id,

@@ -18,7 +18,7 @@ vi.mock("@/lib/observability/logger", () => ({
 import { POST as mintToken } from "@/app/api/psychology/realtime-token/route";
 import { GET as getUsage } from "@/app/api/psychology/usage/route";
 import { getSessionUser } from "@/lib/auth/session";
-import { DAILY_CALL_LIMIT, REAL_CALL_FILTER } from "@/lib/psychology/sessions";
+import { DAILY_CALL_LIMIT, DAILY_MINT_LIMIT, REAL_CALL_FILTER } from "@/lib/psychology/sessions";
 import { getTodayUtcDateString } from "@/lib/rate-limit/usage";
 
 const ASSESSMENT_ID = "0b54c9de-2f7a-4d31-8f9e-6a1b2c3d4e5f";
@@ -135,6 +135,29 @@ describe("Psychology daily call limit", () => {
     // The server's own day, not the device's — a trader east of UTC must not get a second
     // allowance at their local midnight.
     expect(sessions.gte).toHaveBeenCalledWith("created_at", `${getTodayUtcDateString()}T00:00:00.000Z`);
+  });
+
+  it("refuses to keep minting tokens for a client that never reports its calls", async () => {
+    // The cap above can only see calls the CLIENT told us about — a session row is opened at
+    // mint with no duration, no messages and no conversation id, so it matches none of
+    // REAL_CALL_FILTER until a PATCH arrives. An app that simply never PATCHes therefore holds
+    // callsToday at zero forever and bills unlimited voice minutes. Tokens minted is the one
+    // number it cannot touch.
+    const assessments = createQueryBuilder({ data: { id: ASSESSMENT_ID }, error: null });
+    // Read in call order: the real-call count, then the mint count.
+    const calls = createQueryBuilder({ count: 0, error: null });
+    const mints = createQueryBuilder({ count: DAILY_MINT_LIMIT, error: null });
+    mockSession(createFrom({ psychology_assessments: [assessments], psychology_sessions: [calls, mints] }));
+
+    const response = await mintToken(mintRequest());
+
+    expect(response.status).toBe(429);
+    expect(mints.insert).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    // Counted unfiltered on purpose: filtering it by REAL_CALL_FILTER would put the number
+    // straight back under the client's control.
+    expect(mints.or).not.toHaveBeenCalled();
+    expect(mints.gte).toHaveBeenCalledWith("created_at", `${getTodayUtcDateString()}T00:00:00.000Z`);
   });
 
   it("fails the mint when the count cannot be read, rather than granting a free call", async () => {

@@ -5,7 +5,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { hasProAccess } from "@/lib/billing/require-pro";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
-import { generatePsychologyReply, shouldRecommendBreak } from "@/lib/psychology/companion";
+import { coachDisplayName, generatePsychologyReply, shouldRecommendBreak } from "@/lib/psychology/companion";
 import { loadCoachContext } from "@/lib/psychology/context";
 import { insertSessionMessages, openCoachSession } from "@/lib/psychology/sessions";
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     // The persona reads and the call-session read are independent — the live voice-call
     // path can't afford to wait for them serially, so run them together. The call-session
     // read (only when the client passed sessionId) doubles as the ownership check.
-    const name = session.user.user_metadata?.name ?? session.user.email ?? "there";
+    const name = coachDisplayName(session.user);
     const [coachContext, callSessionQuery] = await Promise.all([
       loadCoachContext(session.supabase, session.user.id, input.assessmentId, name),
       input.sessionId

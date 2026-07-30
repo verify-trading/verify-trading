@@ -6,6 +6,7 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/observability/logger", () => ({
   logger: {
+    info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
   },
@@ -14,6 +15,7 @@ vi.mock("@/lib/observability/logger", () => ({
 import { GET as listSessions } from "@/app/api/psychology/sessions/route";
 import { GET as getSession, PATCH as patchSession } from "@/app/api/psychology/sessions/[id]/route";
 import { getSessionUser } from "@/lib/auth/session";
+import { logger } from "@/lib/observability/logger";
 import { signAgentContext } from "@/lib/psychology/agent-token";
 
 const SESSION_ID = "3f9d2c1e-8a4b-4c6d-9e0f-1a2b3c4d5e6f";
@@ -332,6 +334,175 @@ describe("Psychology sessions API", () => {
 
     expect(sessionBuilder.update).not.toHaveBeenCalledWith(expect.objectContaining({ duration_secs: expect.anything() }));
     expect(json.session.durationSecs).toBe(320);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("refuses to import the transcript of a call that is still in progress", async () => {
+    // The killer ordering assumption: a live call's transcript is only a PREFIX. Importing it
+    // would latch the truncated version in forever, because every idempotency guard reads
+    // "this session has messages" as "this session is done" — the rest of the call is then
+    // never stored. Only reachable via GET: PATCH has the client's duration report to tell it
+    // the call ended, and this path has nothing but ElevenLabs' own status.
+    const previousKey = process.env.ELEVENLABS_API_KEY;
+    const previousSecret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
+    process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = "test-agent-secret";
+    const vtCtx = signAgentContext(
+      { userId: "user-1", assessmentId: "assessment-1", sessionId: SESSION_ID, name: "Alex", exp: Math.floor(Date.now() / 1000) + 600 },
+      "test-agent-secret",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: "in-progress",
+          // Binds to this caller and has words in it — everything except being over.
+          conversation_initiation_client_data: { custom_llm_extra_body: { vt_ctx: vtCtx } },
+          transcript: [{ role: "agent", message: "Hey, how are you landing today?" }],
+        }),
+      }),
+    );
+
+    const messageBuilders: ReturnType<typeof createQueryBuilder>[] = [];
+    const sessionBuilder = createQueryBuilder({
+      data: { ...sessionRow, message_count: 0, duration_secs: 0, elevenlabs_conversation_id: "conv_live" },
+      error: null,
+    });
+    mockSession(vi.fn((table: string) => {
+      if (table === "psychology_sessions") return sessionBuilder;
+      const builder = createQueryBuilder({ data: [], error: null });
+      messageBuilders.push(builder);
+      return builder;
+    }));
+
+    const response = await getSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`),
+      paramsContext(SESSION_ID),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.messages).toEqual([]);
+    // Nothing was written: no transcript rows, and no mid-call clock landing in the column a
+    // real hang-up report would then be refused from overwriting.
+    expect(messageBuilders.some((builder) => builder.insert.mock.calls.length > 0)).toBe(false);
+    expect(sessionBuilder.update).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+    process.env.ELEVENLABS_API_KEY = previousKey;
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = previousSecret;
+  });
+
+  it("keeps the winner's transcript when a concurrent writer got there first", async () => {
+    // Migration 31's unique index turns the losing side of the PATCH-store / GET-repair race
+    // into an insert error. Nothing was lost — the winner stored this exact transcript — so
+    // the read must answer 200, not hand the trader a 500 for a race they won either way.
+    const previousKey = process.env.ELEVENLABS_API_KEY;
+    const previousSecret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
+    process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = "test-agent-secret";
+    const vtCtx = signAgentContext(
+      { userId: "user-1", assessmentId: "assessment-1", sessionId: SESSION_ID, name: "Alex", exp: Math.floor(Date.now() / 1000) + 600 },
+      "test-agent-secret",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: "done",
+          conversation_initiation_client_data: { custom_llm_extra_body: { vt_ctx: vtCtx } },
+          transcript: [{ role: "agent", message: "How are you landing today?" }],
+        }),
+      }),
+    );
+
+    // In call order: the stranded read, storeTurns' re-check (still empty — the winner's
+    // insert lands between the two), then our own insert hitting the unique index.
+    const messageResults: Array<{ data: unknown; error: unknown }> = [
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "psychology_session_messages_session_created_key"' } },
+    ];
+    const sessionBuilder = createQueryBuilder({
+      data: { ...sessionRow, message_count: 0, elevenlabs_conversation_id: "conv_abc" },
+      error: null,
+    });
+    mockSession(vi.fn((table: string) =>
+      table === "psychology_sessions"
+        ? sessionBuilder
+        : createQueryBuilder(messageResults.shift() ?? { data: [], error: null }),
+    ));
+
+    const response = await getSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`),
+      paramsContext(SESSION_ID),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ messages: [] });
+    // Treated as an outcome, not a failure: the loser finishes the job by dropping the now
+    // pointless pointer, so no future open refetches this conversation. A thrown-and-swallowed
+    // duplicate would skip that and log the backfill as broken instead.
+    expect(sessionBuilder.update).toHaveBeenCalledWith({ elevenlabs_conversation_id: null });
+    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+    process.env.ELEVENLABS_API_KEY = previousKey;
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = previousSecret;
+  });
+
+  it("remembers the conversation id mid-call without importing the running transcript", async () => {
+    // The client reports the id the moment the call connects — that pointer is the only thing
+    // that makes the call repairable if the hang-up report never arrives. With no duration
+    // the call is not over, so this must not reach ElevenLabs at all.
+    process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    vi.stubGlobal("fetch", vi.fn());
+    const builder = createQueryBuilder({ data: sessionRow, error: null });
+    mockSession(vi.fn(() => builder));
+
+    const response = await patchSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ conversationId: "conv_abc123" }),
+      }),
+      paramsContext(SESSION_ID),
+    );
+
+    expect(response.status).toBe(200);
+    expect(builder.update).toHaveBeenCalledWith({ elevenlabs_conversation_id: "conv_abc123" });
+    // Never the call clock: a mid-call report must not roll back a hang-up report that landed.
+    expect(builder.update).not.toHaveBeenCalledWith(expect.objectContaining({ duration_secs: expect.anything() }));
+    expect(fetch).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("does not re-import the transcript when the hang-up report is retried", async () => {
+    // A client retry (or a second device) PATCHes the same finished call again. The session
+    // already has messages, so the retry must not fetch or write anything.
+    process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = "test-agent-secret";
+    vi.stubGlobal("fetch", vi.fn());
+    const sessionBuilder = createQueryBuilder({ data: sessionRow, error: null });
+    const messagesBuilder = createQueryBuilder({ data: [{ session_id: SESSION_ID }], error: null });
+    mockSession(vi.fn((table: string) =>
+      table === "psychology_sessions" ? sessionBuilder : messagesBuilder,
+    ));
+
+    const response = await patchSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ durationSecs: 415, conversationId: "conv_abc123" }),
+      }),
+      paramsContext(SESSION_ID),
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(messagesBuilder.insert).not.toHaveBeenCalled();
 
     vi.unstubAllGlobals();
   });

@@ -68,7 +68,11 @@ const payload = {
         custom_llm: {
           url: AGENT_LLM_URL,
           model_id: "verify-coach",
-          request_headers: { Authorization: `Bearer ${llmSecret}` },
+          // NOT `Authorization`: that name is reserved on ElevenLabs' outbound header map —
+          // it is accepted here, echoed back by their API, and then never actually sent, so
+          // every turn reached us unauthenticated and 401'd. The route accepts either name;
+          // this one is the one that arrives. `npm run check:agent-config` asserts it.
+          request_headers: { "x-vt-agent-secret": llmSecret },
         },
         // ponytail: no built_in_tools. System tools like language_detection are LLM-invoked —
         // ElevenLabs offers them in the OpenAI `tools` array and waits for a tool_call. Our
