@@ -43,6 +43,23 @@ async function fetchConversation(conversationId: string, apiKey: string): Promis
   return (await response.json()) as ConversationRecord;
 }
 
+// The stored conversation id is only a pointer, and it arrives from the client — so it is never
+// trusted on its own. Every path that turns it into stored messages proves the conversation is
+// this caller's first, via the signed vt_ctx ElevenLabs echoes back from token mint.
+function bindsToCaller(
+  conversation: ConversationRecord,
+  secret: string,
+  userId: string,
+  sessionId: string,
+): boolean {
+  const init = conversation.conversation_initiation_client_data;
+  const vtCtx = init?.custom_llm_extra_body?.vt_ctx ?? init?.dynamic_variables?.vt_ctx;
+  // Expiry ignored on purpose: a repair can run days after the call, and the signature — not
+  // freshness — is what proves whose transcript this is.
+  const ctx = typeof vtCtx === "string" ? verifyAgentContext(vtCtx, secret, { ignoreExpiry: true }) : null;
+  return Boolean(ctx && ctx.userId === userId && ctx.sessionId === sessionId);
+}
+
 const readMessages = (supabase: SupabaseClient, userId: string, sessionId: string) =>
   supabase
     .from("psychology_session_messages")
@@ -126,26 +143,14 @@ async function storeConversationTranscript(
   if (existing.error) throw new Error(`transcript idempotency check failed: ${existing.error.message}`);
   if ((existing.data?.length ?? 0) > 0) return; // already stored
 
-  const conversation = await fetchConversation(conversationId, apiKey);
-  if (!conversation) return;
-
-  // Bind the conversation to the caller via the signed context we planted at token mint.
-  const init = conversation.conversation_initiation_client_data;
-  const vtCtx = init?.custom_llm_extra_body?.vt_ctx ?? init?.dynamic_variables?.vt_ctx;
-  const ctx = typeof vtCtx === "string" ? verifyAgentContext(vtCtx, secret) : null;
-  if (!ctx || ctx.userId !== userId || ctx.sessionId !== sessionId) {
-    logger.warn("Conversation transcript rejected: context did not bind to the caller.", { sessionId });
-    return;
-  }
-
-  // Persist the id, and only now that the bind check has passed so a forged id can never be
-  // written. ElevenLabs usually has not finalised the transcript by hang-up; this id used to be
-  // discarded right here, which stranded the session at 0 messages forever because nothing
-  // remembered which conversation to ask about. GET refetches with it.
+  // Save the pointer FIRST, before anything that can fail. At hang-up ElevenLabs has usually not
+  // attached the conversation's initiation data yet — the very thing carrying vt_ctx — so the bind
+  // below simply cannot succeed on a fresh call. While this write sat after that check, every such
+  // call threw the id away and stranded the session at 0 messages with nothing to retry from.
+  // Storing it unverified is safe: bindsToCaller gates every path that turns it into messages.
   //
-  // Never fatal: the id only helps a LATER repair, so failing to save it must not cost us the
-  // transcript we are already holding. It also fails when migration 30 has not been applied yet,
-  // and dropping a transcript we already have is a far worse outcome than losing the retry aid.
+  // Never fatal either: the id only aids a LATER repair, so failing to save it must not cost us a
+  // transcript we are already holding.
   const linked = await supabase
     .from("psychology_sessions")
     .update({ elevenlabs_conversation_id: conversationId })
@@ -153,6 +158,15 @@ async function storeConversationTranscript(
     .eq("user_id", userId);
   if (linked.error) {
     logger.warn("Could not link the conversation for later repair.", { sessionId, error: linked.error.message });
+  }
+
+  const conversation = await fetchConversation(conversationId, apiKey);
+  if (!conversation) return;
+
+  if (!bindsToCaller(conversation, secret, userId, sessionId)) {
+    // Expected on a fresh hang-up rather than an error: the id is saved, so the next read repairs.
+    logger.warn("Conversation not bound yet; a later read will retry.", { sessionId });
+    return;
   }
 
   await storeTurns(supabase, userId, sessionId, conversation);
@@ -195,10 +209,10 @@ export async function GET(
       return jsonApiError(404, "psychology_session_missing", "That coaching session was not found.");
     }
 
-    // A hang-up regularly beats ElevenLabs to finalising the transcript, so the PATCH stored
-    // nothing and the call reads as "Nothing was said". The conversation id it saved lets us ask
-    // again here — bind already verified when it was stored, so no re-check is needed. Self-
-    // healing: a still-unfinalised conversation just stores 0 turns and the next read retries.
+    // A hang-up regularly beats ElevenLabs to attaching the conversation's initiation data, so the
+    // PATCH could not bind it and the call reads as "Nothing was said". It did save the id, so ask
+    // again here — and re-run the bind, because the id it saved was never verified. Self-healing:
+    // a conversation that still is not ready stores 0 turns and the next read retries.
     // ponytail: a genuinely silent call refetches on every open, since 0 turns is also the
     // "not ready" signal. One request per open of an empty session; add an attempted-at stamp
     // only if that ever shows up in the ElevenLabs bill.
@@ -217,8 +231,14 @@ export async function GET(
           .maybeSingle();
         const conversationId = (link.data as { elevenlabs_conversation_id?: string | null } | null)
           ?.elevenlabs_conversation_id;
-        const conversation = conversationId ? await fetchConversation(conversationId, apiKey) : null;
-        if (conversation && (await storeTurns(session.supabase, session.user.id, parsed.data, conversation)) > 0) {
+        const secret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
+        const conversation =
+          conversationId && secret ? await fetchConversation(conversationId, apiKey) : null;
+        const bound =
+          conversation !== null &&
+          secret !== undefined &&
+          bindsToCaller(conversation, secret, session.user.id, parsed.data);
+        if (bound && (await storeTurns(session.supabase, session.user.id, parsed.data, conversation)) > 0) {
           const repaired = await readMessages(session.supabase, session.user.id, parsed.data);
           if (!repaired.error && repaired.data) {
             messages = repaired.data as unknown as PsychologySessionMessageRow[];

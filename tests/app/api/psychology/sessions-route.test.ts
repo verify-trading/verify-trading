@@ -14,6 +14,7 @@ vi.mock("@/lib/observability/logger", () => ({
 import { GET as listSessions } from "@/app/api/psychology/sessions/route";
 import { GET as getSession, PATCH as patchSession } from "@/app/api/psychology/sessions/[id]/route";
 import { getSessionUser } from "@/lib/auth/session";
+import { signAgentContext } from "@/lib/psychology/agent-token";
 
 const SESSION_ID = "3f9d2c1e-8a4b-4c6d-9e0f-1a2b3c4d5e6f";
 
@@ -140,12 +141,27 @@ describe("Psychology sessions API", () => {
 
   it("repairs a transcript stranded at 0 messages using the stored conversation id", async () => {
     const previousKey = process.env.ELEVENLABS_API_KEY;
+    const previousSecret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
     process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = "test-agent-secret";
+    // The repair only stores turns it can prove belong to this caller, so the conversation has to
+    // echo a real signed context — the same one realtime-token plants at mint.
+    const vtCtx = signAgentContext(
+      {
+        userId: "user-1",
+        assessmentId: "assessment-1",
+        sessionId: SESSION_ID,
+        name: "Alex",
+        exp: Math.floor(Date.now() / 1000) - 60, // expired: a repair legitimately runs later
+      },
+      "test-agent-secret",
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
+          conversation_initiation_client_data: { custom_llm_extra_body: { vt_ctx: vtCtx } },
           transcript: [
             { role: "agent", message: "Hey, how are you landing today?" },
             { role: "user", message: "Rough morning, I chased a loss." },
@@ -192,6 +208,58 @@ describe("Psychology sessions API", () => {
 
     vi.unstubAllGlobals();
     process.env.ELEVENLABS_API_KEY = previousKey;
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = previousSecret;
+  });
+
+  it("refuses to repair a transcript whose signed context names a different session", async () => {
+    const previousKey = process.env.ELEVENLABS_API_KEY;
+    const previousSecret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
+    process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = "test-agent-secret";
+    // A conversation id is client-supplied and stored unverified, so pointing one at someone
+    // else's conversation must never pull their transcript in.
+    const foreign = signAgentContext(
+      {
+        userId: "user-1",
+        assessmentId: "assessment-1",
+        sessionId: "11111111-2222-3333-4444-555555555555",
+        name: "Alex",
+        exp: Math.floor(Date.now() / 1000) + 600,
+      },
+      "test-agent-secret",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          conversation_initiation_client_data: { custom_llm_extra_body: { vt_ctx: foreign } },
+          transcript: [{ role: "agent", message: "Someone else's private call." }],
+        }),
+      }),
+    );
+
+    const sessionBuilder = createQueryBuilder({
+      data: { ...sessionRow, message_count: 0, elevenlabs_conversation_id: "conv_stolen" },
+      error: null,
+    });
+    const from = vi.fn((table: string) =>
+      table === "psychology_sessions" ? sessionBuilder : createQueryBuilder({ data: [], error: null }),
+    );
+    mockSession(from);
+
+    const response = await getSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`),
+      paramsContext(SESSION_ID),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.messages).toEqual([]);
+
+    vi.unstubAllGlobals();
+    process.env.ELEVENLABS_API_KEY = previousKey;
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = previousSecret;
   });
 
   it("404s when the session does not belong to the caller", async () => {

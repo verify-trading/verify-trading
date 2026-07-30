@@ -24,7 +24,14 @@ export function signAgentContext(ctx: AgentContext, secret: string): string {
   return `${payload}.${sign(payload, secret)}`;
 }
 
-export function verifyAgentContext(token: string, secret: string): AgentContext | null {
+// `ignoreExpiry` is for matching a finished call's transcript back to its session, which can
+// legitimately happen days later. Expiry bounds who may START a call; deciding whose transcript
+// this is rests on the signature alone. Never pass it on the live turn path.
+export function verifyAgentContext(
+  token: string,
+  secret: string,
+  { ignoreExpiry = false }: { ignoreExpiry?: boolean } = {},
+): AgentContext | null {
   const [payload, signature] = token.split(".");
   if (!payload || !signature) return null;
 
@@ -47,7 +54,7 @@ export function verifyAgentContext(token: string, secret: string): AgentContext 
     ) {
       return null;
     }
-    if (ctx.exp < Date.now() / 1000) return null; // expired
+    if (!ignoreExpiry && ctx.exp < Date.now() / 1000) return null; // expired
     return ctx;
   } catch {
     return null;
