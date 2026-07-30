@@ -82,8 +82,12 @@ export async function POST(request: Request) {
   }
 
   // Bearer secret proves the request is from ElevenLabs (configured in the agent's request headers).
+  // `Authorization` is a reserved header on some platforms' outbound request-header maps — set in
+  // the agent config, echoed back by their API, silently not sent. Accept the same secret under a
+  // non-reserved name too, so the coach authenticates either way.
   const authorization = request.headers.get("authorization");
-  if (authorization !== `Bearer ${secret}`) {
+  const agentSecretHeader = request.headers.get("x-vt-agent-secret");
+  if (authorization !== `Bearer ${secret}` && agentSecretHeader !== secret) {
     // ponytail: temporary. ElevenLabs 401s here while its configured header matches this secret
     // byte for byte, so log the SHAPE of what actually arrives — length + hash prefix, never the
     // value — plus the header names, which reveal an absent header vs a wrong one. Delete once
