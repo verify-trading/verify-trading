@@ -150,12 +150,15 @@ export async function generatePsychologyReply(input: PsychologyCoachContext & { 
     prompt: input.transcript,
   });
 
-  return speakable(result.text);
+  return speakable(result.text).trim();
 }
 
 // Markdown glyphs are read aloud by TTS ("star star right star star"), so strip them from
 // anything headed for a voice; newlines collapse to spaces to preserve sentence flow.
-// Exported because the realtime path streams deltas and applies the same cleanup per chunk.
+// Exported because the realtime path streams deltas and applies the same cleanup per chunk —
+// which is why this must NOT trim. A model delta carries its own leading space (" the"), so
+// trimming per chunk welded the words together and TTS spoke "withthe sleep you've been
+// getting". Whole-text callers trim their own result instead.
 export function speakable(text: string): string {
-  return text.replace(/[*_`#>|~]/g, " ").replace(/\s+/g, " ").trim();
+  return text.replace(/[*_`#>|~]/g, " ").replace(/\s+/g, " ");
 }

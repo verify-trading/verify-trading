@@ -1,6 +1,6 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { generatePsychologyReply, type ChallengeContext, type RecentEntry } from "@/lib/psychology/companion";
+import { generatePsychologyReply, speakable, type ChallengeContext, type RecentEntry } from "@/lib/psychology/companion";
 
 // Live check that the coach now grounds its reply in the trader's actual challenge +
 // journal. Opt-in (model call):
@@ -57,4 +57,18 @@ run("generatePsychologyReply (live, enriched)", () => {
     const reply = await generatePsychologyReply({ name: "Alex", transcript, assessment, journal: { sessionCount: 6, weeklyPnl: 270, wins: 4, toughSessions: 2, winningStreak: 3, losingStreak: 0 }, challenge, recentEntries });
     console.log("\n=== COACH REPLY ===\n" + reply + "\n===================\n");
   }, 60_000);
+});
+
+// The realtime coach applies speakable() to each streamed delta, so trimming inside it welded
+// the chunks together and TTS spoke "withthe sleep you've been getting".
+describe("speakable", () => {
+  it("keeps the space between streamed deltas", () => {
+    expect(["Yeah, with", " the sleep", " you've had"].map(speakable).join("")).toBe(
+      "Yeah, with the sleep you've had",
+    );
+  });
+
+  it("still strips markdown glyphs and collapses newlines", () => {
+    expect(speakable("**Hey**\n\nthere").trim()).toBe("Hey there");
+  });
 });
