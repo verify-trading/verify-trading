@@ -174,7 +174,7 @@ export async function GET(
     const [sessionQuery, messagesQuery] = await Promise.all([
       session.supabase
         .from("psychology_sessions")
-        .select(`${PSYCHOLOGY_SESSION_COLUMNS}, elevenlabs_conversation_id`)
+        .select(PSYCHOLOGY_SESSION_COLUMNS)
         .eq("user_id", session.user.id)
         .eq("id", parsed.data)
         .maybeSingle(),
@@ -197,13 +197,21 @@ export async function GET(
     // "not ready" signal. One request per open of an empty session; add an attempted-at stamp
     // only if that ever shows up in the ElevenLabs bill.
     let messages = messagesQuery.data as unknown as PsychologySessionMessageRow[];
-    const { elevenlabs_conversation_id: conversationId } = sessionQuery.data as {
-      elevenlabs_conversation_id?: string | null;
-    };
     const apiKey = process.env.ELEVENLABS_API_KEY;
-    if (messages.length === 0 && conversationId && apiKey) {
+    if (messages.length === 0 && apiKey) {
       try {
-        const conversation = await fetchConversation(conversationId, apiKey);
+        // Read the conversation id only on the repair path. Selecting it in the main query above
+        // would make this route 500 for every session if the deploy landed before migration 30;
+        // here a missing column simply errors, leaves conversationId undefined, and skips repair.
+        const link = await session.supabase
+          .from("psychology_sessions")
+          .select("elevenlabs_conversation_id")
+          .eq("user_id", session.user.id)
+          .eq("id", parsed.data)
+          .maybeSingle();
+        const conversationId = (link.data as { elevenlabs_conversation_id?: string | null } | null)
+          ?.elevenlabs_conversation_id;
+        const conversation = conversationId ? await fetchConversation(conversationId, apiKey) : null;
         if (conversation && (await storeTurns(session.supabase, session.user.id, parsed.data, conversation)) > 0) {
           const repaired = await readMessages(session.supabase, session.user.id, parsed.data);
           if (!repaired.error && repaired.data) {
