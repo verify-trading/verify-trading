@@ -138,6 +138,62 @@ describe("Psychology sessions API", () => {
     });
   });
 
+  it("repairs a transcript stranded at 0 messages using the stored conversation id", async () => {
+    const previousKey = process.env.ELEVENLABS_API_KEY;
+    process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          transcript: [
+            { role: "agent", message: "Hey, how are you landing today?" },
+            { role: "user", message: "Rough morning, I chased a loss." },
+          ],
+        }),
+      }),
+    );
+
+    const repaired = [
+      { role: "coach", content: "Hey, how are you landing today?", created_at: "2026-07-17T09:00:01.000Z" },
+      { role: "user", content: "Rough morning, I chased a loss.", created_at: "2026-07-17T09:00:02.000Z" },
+    ];
+    // In call order: the initial read (stranded), storeTurns' idempotency re-check, the insert,
+    // then the read-back after the repair.
+    const messageResults: Array<{ data: unknown; error: unknown }> = [
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: null, error: null },
+      { data: repaired, error: null },
+    ];
+    const sessionBuilder = createQueryBuilder({
+      data: { ...sessionRow, message_count: 0, elevenlabs_conversation_id: "conv_abc" },
+      error: null,
+    });
+    const from = vi.fn((table: string) =>
+      table === "psychology_sessions"
+        ? sessionBuilder
+        : createQueryBuilder(messageResults.shift() ?? { data: [], error: null }),
+    );
+    mockSession(from);
+
+    const response = await getSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`),
+      paramsContext(SESSION_ID),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toContain("/convai/conversations/conv_abc");
+    // The transcript comes back, and the count is corrected so it no longer reads "0 messages".
+    expect(json.messages).toHaveLength(2);
+    expect(json.messages[0].content).toBe("Hey, how are you landing today?");
+    expect(json.session.messageCount).toBe(2);
+
+    vi.unstubAllGlobals();
+    process.env.ELEVENLABS_API_KEY = previousKey;
+  });
+
   it("404s when the session does not belong to the caller", async () => {
     const sessionBuilder = createQueryBuilder({ data: null, error: null });
     const messagesBuilder = createQueryBuilder({ data: [], error: null });

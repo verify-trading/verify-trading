@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { streamText, type ModelMessage } from "ai";
 
 import { getPsychologyCoachModel } from "@/lib/ask/service/provider";
@@ -88,17 +86,6 @@ export async function POST(request: Request) {
   const authorization = request.headers.get("authorization");
   const agentSecretHeader = request.headers.get("x-vt-agent-secret");
   if (authorization !== `Bearer ${secret}` && agentSecretHeader !== secret) {
-    // ponytail: temporary. ElevenLabs 401s here while its configured header matches this secret
-    // byte for byte, so log the SHAPE of what actually arrives — length + hash prefix, never the
-    // value — plus the header names, which reveal an absent header vs a wrong one. Delete once
-    // the mismatch is identified.
-    const shape = (value: string) =>
-      `len=${value.length} sha=${createHash("sha256").update(value).digest("hex").slice(0, 12)}`;
-    logger.error("agent-llm unauthorized", {
-      received: authorization === null ? "HEADER_ABSENT" : shape(authorization),
-      expected: shape(`Bearer ${secret}`),
-      headerNames: [...request.headers.keys()].sort().join(","),
-    });
     return jsonApiError(401, "agent_llm_unauthorized", "Unauthorized.");
   }
 

@@ -26,6 +26,83 @@ const sessionPatchSchema = z.object({
 
 type TranscriptTurn = { role?: string; message?: string | null };
 
+type ConversationRecord = {
+  transcript?: TranscriptTurn[];
+  conversation_initiation_client_data?: { custom_llm_extra_body?: { vt_ctx?: unknown }; dynamic_variables?: { vt_ctx?: unknown } };
+};
+
+async function fetchConversation(conversationId: string, apiKey: string): Promise<ConversationRecord | null> {
+  const response = await fetch(`https://api.elevenlabs.io/v1/convai/conversations/${encodeURIComponent(conversationId)}`, {
+    headers: { "xi-api-key": apiKey },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    logger.warn("ElevenLabs conversation fetch failed.", { status: response.status });
+    return null;
+  }
+  return (await response.json()) as ConversationRecord;
+}
+
+const readMessages = (supabase: SupabaseClient, userId: string, sessionId: string) =>
+  supabase
+    .from("psychology_session_messages")
+    .select("role, content, created_at")
+    .eq("user_id", userId)
+    .eq("session_id", sessionId)
+    .order("created_at", { ascending: true })
+    .limit(1000);
+
+// Store the spoken turns as message rows. The conversation must already be bound to this user +
+// session by the caller. Returns how many turns were stored — 0 means ElevenLabs has not
+// finalised the transcript yet, which the next read retries.
+async function storeTurns(
+  supabase: SupabaseClient,
+  userId: string,
+  sessionId: string,
+  conversation: ConversationRecord,
+): Promise<number> {
+  // One multi-row insert shares a single now() default, so every turn would carry an identical
+  // created_at and the GET's created_at ordering would be arbitrary. Stamp them a millisecond
+  // apart to keep the conversation in the order it was spoken.
+  const base = Date.now();
+  const rows = (conversation.transcript ?? [])
+    .filter((turn) => (turn.role === "user" || turn.role === "agent") && typeof turn.message === "string" && turn.message.trim())
+    .map((turn, index) => ({
+      session_id: sessionId,
+      user_id: userId,
+      role: (turn.role === "agent" ? "coach" : "user") as "user" | "coach",
+      content: (turn.message as string).trim(),
+      created_at: new Date(base + index).toISOString(),
+    }));
+  if (rows.length === 0) return 0;
+
+  // Re-check right before writing, not just in the PATCH caller: GET repairs too, and two
+  // overlapping reads of an empty session would otherwise both fetch and both insert, doubling
+  // the transcript. ponytail: narrows the window rather than closing it — a unique constraint on
+  // (session_id, created_at) is the real fix if duplicates ever appear.
+  const already = await supabase
+    .from("psychology_session_messages")
+    .select("session_id")
+    .eq("user_id", userId)
+    .eq("session_id", sessionId)
+    .limit(1);
+  if (already.error) throw new Error(`transcript idempotency check failed: ${already.error.message}`);
+  if ((already.data?.length ?? 0) > 0) return 0;
+
+  // Count first, then insert. The reverse order meant a failed count update left stored
+  // messages the list route couldn't see, which the idempotency check then refused to
+  // repair on retry. This way a failure leaves a visible row a retry can still fill in.
+  const updated = await supabase
+    .from("psychology_sessions")
+    .update({ message_count: rows.length })
+    .eq("id", sessionId)
+    .eq("user_id", userId);
+  if (updated.error) throw new Error(`message_count update failed: ${updated.error.message}`);
+
+  await insertSessionMessages(supabase, rows);
+  return rows.length;
+}
+
 // Pull an ElevenLabs conversation transcript and store it as the same message rows the
 // companion route writes. Idempotent (skips if the session already has messages) so a client
 // retry never duplicates, and bound to the caller: the conversation's echoed vt_ctx must verify
@@ -49,19 +126,8 @@ async function storeConversationTranscript(
   if (existing.error) throw new Error(`transcript idempotency check failed: ${existing.error.message}`);
   if ((existing.data?.length ?? 0) > 0) return; // already stored
 
-  const response = await fetch(`https://api.elevenlabs.io/v1/convai/conversations/${encodeURIComponent(conversationId)}`, {
-    headers: { "xi-api-key": apiKey },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) {
-    logger.warn("ElevenLabs conversation fetch failed.", { status: response.status });
-    return;
-  }
-
-  const conversation = (await response.json()) as {
-    transcript?: TranscriptTurn[];
-    conversation_initiation_client_data?: { custom_llm_extra_body?: { vt_ctx?: unknown }; dynamic_variables?: { vt_ctx?: unknown } };
-  };
+  const conversation = await fetchConversation(conversationId, apiKey);
+  if (!conversation) return;
 
   // Bind the conversation to the caller via the signed context we planted at token mint.
   const init = conversation.conversation_initiation_client_data;
@@ -72,32 +138,18 @@ async function storeConversationTranscript(
     return;
   }
 
-  // One multi-row insert shares a single now() default, so every turn would carry an identical
-  // created_at and the GET's created_at ordering would be arbitrary. Stamp them a millisecond
-  // apart to keep the conversation in the order it was spoken.
-  const base = Date.now();
-  const rows = (conversation.transcript ?? [])
-    .filter((turn) => (turn.role === "user" || turn.role === "agent") && typeof turn.message === "string" && turn.message.trim())
-    .map((turn, index) => ({
-      session_id: sessionId,
-      user_id: userId,
-      role: (turn.role === "agent" ? "coach" : "user") as "user" | "coach",
-      content: (turn.message as string).trim(),
-      created_at: new Date(base + index).toISOString(),
-    }));
-  if (rows.length === 0) return;
-
-  // Count first, then insert. The reverse order meant a failed count update left stored
-  // messages the list route couldn't see, which the idempotency check above then refused to
-  // repair on retry. This way a failure leaves a visible row a retry can still fill in.
-  const updated = await supabase
+  // Persist the id BEFORE storing turns, and only now that the bind check has passed so a forged
+  // id can never be written. ElevenLabs usually has not finalised the transcript by hang-up; this
+  // id used to be discarded right here, which stranded the session at 0 messages forever because
+  // nothing remembered which conversation to ask about. GET refetches with it.
+  const linked = await supabase
     .from("psychology_sessions")
-    .update({ message_count: rows.length })
+    .update({ elevenlabs_conversation_id: conversationId })
     .eq("id", sessionId)
     .eq("user_id", userId);
-  if (updated.error) throw new Error(`message_count update failed: ${updated.error.message}`);
+  if (linked.error) throw new Error(`conversation link failed: ${linked.error.message}`);
 
-  await insertSessionMessages(supabase, rows);
+  await storeTurns(supabase, userId, sessionId, conversation);
 }
 
 export async function GET(
@@ -122,17 +174,11 @@ export async function GET(
     const [sessionQuery, messagesQuery] = await Promise.all([
       session.supabase
         .from("psychology_sessions")
-        .select(PSYCHOLOGY_SESSION_COLUMNS)
+        .select(`${PSYCHOLOGY_SESSION_COLUMNS}, elevenlabs_conversation_id`)
         .eq("user_id", session.user.id)
         .eq("id", parsed.data)
         .maybeSingle(),
-      session.supabase
-        .from("psychology_session_messages")
-        .select("role, content, created_at")
-        .eq("user_id", session.user.id)
-        .eq("session_id", parsed.data)
-        .order("created_at", { ascending: true })
-        .limit(1000),
+      readMessages(session.supabase, session.user.id, parsed.data),
     ]);
 
     if (sessionQuery.error || messagesQuery.error || !messagesQuery.data) {
@@ -143,10 +189,42 @@ export async function GET(
       return jsonApiError(404, "psychology_session_missing", "That coaching session was not found.");
     }
 
+    // A hang-up regularly beats ElevenLabs to finalising the transcript, so the PATCH stored
+    // nothing and the call reads as "Nothing was said". The conversation id it saved lets us ask
+    // again here — bind already verified when it was stored, so no re-check is needed. Self-
+    // healing: a still-unfinalised conversation just stores 0 turns and the next read retries.
+    // ponytail: a genuinely silent call refetches on every open, since 0 turns is also the
+    // "not ready" signal. One request per open of an empty session; add an attempted-at stamp
+    // only if that ever shows up in the ElevenLabs bill.
+    let messages = messagesQuery.data as unknown as PsychologySessionMessageRow[];
+    const { elevenlabs_conversation_id: conversationId } = sessionQuery.data as {
+      elevenlabs_conversation_id?: string | null;
+    };
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (messages.length === 0 && conversationId && apiKey) {
+      try {
+        const conversation = await fetchConversation(conversationId, apiKey);
+        if (conversation && (await storeTurns(session.supabase, session.user.id, parsed.data, conversation)) > 0) {
+          const repaired = await readMessages(session.supabase, session.user.id, parsed.data);
+          if (!repaired.error && repaired.data) {
+            messages = repaired.data as unknown as PsychologySessionMessageRow[];
+            // storeTurns updated message_count in the database, but this row was read before
+            // that — without this the repaired call still renders as "0 messages".
+            (sessionQuery.data as { message_count: number }).message_count = messages.length;
+          }
+        }
+      } catch (error) {
+        // A failed repair must never break loading the session — it stays empty and retries.
+        logger.warn("Transcript backfill failed.", {
+          error: error instanceof Error ? error.message : "unknown",
+        });
+      }
+    }
+
     return NextResponse.json(
       {
         session: toPsychologySession(sessionQuery.data as unknown as PsychologySessionRow),
-        messages: (messagesQuery.data as unknown as PsychologySessionMessageRow[]).map(toPsychologySessionMessage),
+        messages: messages.map(toPsychologySessionMessage),
       },
       { headers: PRIVATE_CACHE_HEADERS },
     );
