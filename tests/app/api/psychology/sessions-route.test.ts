@@ -90,7 +90,9 @@ describe("Psychology sessions API", () => {
     expect(response.status).toBe(200);
     expect(from).toHaveBeenCalledWith("psychology_sessions");
     expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(builder.or).toHaveBeenCalledWith("message_count.gt.0,duration_secs.gt.0");
+    // A stored conversation id is proof a call happened even when the hang-up report was lost,
+    // and listing it is what lets the detail view repair its transcript.
+    expect(builder.or).toHaveBeenCalledWith("message_count.gt.0,duration_secs.gt.0,elevenlabs_conversation_id.not.is.null");
     expect(builder.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(json).toEqual([sessionShape]);
   });

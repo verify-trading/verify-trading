@@ -23,7 +23,13 @@ export async function GET() {
       // Hides the legacy contentless log rows, but a real call must still be listed even when
       // its transcript never stored (ElevenLabs slow to finalise, fetch failed, empty
       // transcript) — otherwise the trader's call silently disappears from their history.
-      .or("message_count.gt.0,duration_secs.gt.0")
+      //
+      // A stored conversation id counts as proof the call happened, and is the ONLY proof left
+      // when the hang-up report never arrives (app killed, signal gone): the row then carries
+      // no duration and no messages, and without this clause the trader could not open it —
+      // which is also the only thing that triggers the transcript repair in GET [id].
+      // A session that was minted but never connected has no pointer, so it stays hidden.
+      .or("message_count.gt.0,duration_secs.gt.0,elevenlabs_conversation_id.not.is.null")
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       // Explicit cap (PostgREST would silently apply ~1000 anyway); newest-first
