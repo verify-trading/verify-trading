@@ -138,16 +138,22 @@ async function storeConversationTranscript(
     return;
   }
 
-  // Persist the id BEFORE storing turns, and only now that the bind check has passed so a forged
-  // id can never be written. ElevenLabs usually has not finalised the transcript by hang-up; this
-  // id used to be discarded right here, which stranded the session at 0 messages forever because
-  // nothing remembered which conversation to ask about. GET refetches with it.
+  // Persist the id, and only now that the bind check has passed so a forged id can never be
+  // written. ElevenLabs usually has not finalised the transcript by hang-up; this id used to be
+  // discarded right here, which stranded the session at 0 messages forever because nothing
+  // remembered which conversation to ask about. GET refetches with it.
+  //
+  // Never fatal: the id only helps a LATER repair, so failing to save it must not cost us the
+  // transcript we are already holding. It also fails when migration 30 has not been applied yet,
+  // and dropping a transcript we already have is a far worse outcome than losing the retry aid.
   const linked = await supabase
     .from("psychology_sessions")
     .update({ elevenlabs_conversation_id: conversationId })
     .eq("id", sessionId)
     .eq("user_id", userId);
-  if (linked.error) throw new Error(`conversation link failed: ${linked.error.message}`);
+  if (linked.error) {
+    logger.warn("Could not link the conversation for later repair.", { sessionId, error: linked.error.message });
+  }
 
   await storeTurns(supabase, userId, sessionId, conversation);
 }
