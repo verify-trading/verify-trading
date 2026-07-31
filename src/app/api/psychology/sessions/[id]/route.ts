@@ -226,11 +226,28 @@ async function storeConversationTranscript(
   // transcript we are already holding.
   await linkConversation(supabase, userId, sessionId, conversationId);
 
-  const conversation = await fetchConversation(conversationId, apiKey);
+  // ElevenLabs attaches the conversation's initiation data — the thing carrying vt_ctx — a moment
+  // AFTER the call ends, so the first read at hang-up routinely cannot bind. Waiting a few seconds
+  // and asking again stores the transcript now, while the trader is still looking at the screen.
+  //
+  // Worth the wait because the fallback is bad: the lazy repair in GET only runs when someone
+  // OPENS that call, so until then the list says "0 messages" and the trader reasonably concludes
+  // their conversation was lost. Bounded well inside this route's maxDuration of 30s, and the
+  // whole thing stays best-effort — a call that still is not ready keeps its pointer and repairs
+  // on the next read exactly as before.
+  const deadline = Date.now() + 12_000;
+  let conversation = await fetchConversation(conversationId, apiKey);
+  for (const wait of [1_500, 3_000, 5_000]) {
+    if (conversation === "gone") return;
+    if (conversation && bindsToCaller(conversation, secret, userId, sessionId)) break;
+    if (Date.now() + wait > deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    conversation = await fetchConversation(conversationId, apiKey);
+  }
   if (!conversation || conversation === "gone") return;
 
   if (!bindsToCaller(conversation, secret, userId, sessionId)) {
-    // Expected on a fresh hang-up rather than an error: the id is saved, so the next read repairs.
+    // Still not ready after the retries. The pointer is saved, so the next read repairs it.
     logger.warn("Conversation not bound yet; a later read will retry.", { sessionId });
     return;
   }

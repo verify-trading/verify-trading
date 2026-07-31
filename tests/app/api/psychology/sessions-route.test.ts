@@ -483,6 +483,55 @@ describe("Psychology sessions API", () => {
     vi.unstubAllGlobals();
   });
 
+  it("waits for ElevenLabs to attach the context instead of giving up at hang-up", async () => {
+    // ElevenLabs attaches conversation_initiation_client_data a moment AFTER the call ends, so
+    // the first read cannot bind. Giving up there left the trader's list saying "0 messages"
+    // until they happened to open that call — which reads as the conversation being lost.
+    process.env.ELEVENLABS_API_KEY = "xi-test-key";
+    process.env.ELEVENLABS_AGENT_LLM_SECRET = "test-agent-secret";
+    const vtCtx = signAgentContext(
+      { userId: "user-1", assessmentId: "assessment-1", sessionId: SESSION_ID, name: "Alex", exp: Math.floor(Date.now() / 1000) + 600 },
+      "test-agent-secret",
+    );
+    const turns = [{ role: "agent", message: "Hey, how are you landing today?" }];
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        // First look: finished, but the context has not been attached yet.
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ status: "done", transcript: turns }) })
+        // Moments later it is there, and the transcript stores without the trader doing anything.
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            status: "done",
+            conversation_initiation_client_data: { custom_llm_extra_body: { vt_ctx: vtCtx } },
+            transcript: turns,
+          }),
+        }),
+    );
+    const sessionBuilder = createQueryBuilder({ data: sessionRow, error: null });
+    const messagesBuilder = createQueryBuilder({ data: [], error: null });
+    const from = vi.fn((table: string) => (table === "psychology_sessions" ? sessionBuilder : messagesBuilder));
+    mockSession(from);
+
+    const response = await patchSession(
+      new Request(`http://localhost/api/psychology/sessions/${SESSION_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ durationSecs: 38, conversationId: "conv_abc123" }),
+      }),
+      paramsContext(SESSION_ID),
+    );
+
+    expect(response.status).toBe(200);
+    // It asked again rather than settling for the unbound first answer...
+    expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(1);
+    // ...and the turn was stored on THIS request, with no read of the call required.
+    expect(messagesBuilder.insert).toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
   it("does not re-import the transcript when the hang-up report is retried", async () => {
     // A client retry (or a second device) PATCHes the same finished call again. The session
     // already has messages, so the retry must not fetch or write anything.
