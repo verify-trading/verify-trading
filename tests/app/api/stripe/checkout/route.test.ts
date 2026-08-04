@@ -53,6 +53,7 @@ function createProfilesQuery(data: unknown) {
 describe("POST /api/stripe/checkout", () => {
   const createCheckoutSession = vi.fn();
   const expireCheckoutSession = vi.fn();
+  const listSubscriptions = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -95,6 +96,7 @@ describe("POST /api/stripe/checkout", () => {
       expires_at: 1_700_000_000,
     });
     expireCheckoutSession.mockResolvedValue({});
+    listSubscriptions.mockResolvedValue({ data: [] });
 
     vi.mocked(getStripeServerClient).mockReturnValue({
       checkout: {
@@ -102,6 +104,9 @@ describe("POST /api/stripe/checkout", () => {
           create: createCheckoutSession,
           expire: expireCheckoutSession,
         },
+      },
+      subscriptions: {
+        list: listSubscriptions,
       },
     } as never);
   });
@@ -315,6 +320,140 @@ describe("POST /api/stripe/checkout", () => {
       url: "https://checkout.stripe.test/current",
       checkout: { plan: "monthly", currency: "GBP", value: 1900 },
     });
+    expect(expireCheckoutSession).toHaveBeenCalledWith("cs_123");
+  });
+
+  it("gives the promo link a free week and still collects the card", async () => {
+    vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
+      checkoutToken: "token-trial",
+      stripeCheckoutSessionId: null,
+      checkoutUrl: null,
+      expiresAt: new Date().toISOString(),
+      reused: false,
+      replacedCheckoutSessionId: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "weekly", trial: true }),
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "subscription",
+        subscription_data: expect.objectContaining({ trial_period_days: 7 }),
+      }),
+      {
+        idempotencyKey: "billing-checkout:token-trial:trial",
+      },
+    );
+    // Checkout's default payment_method_collection ("always") is what forces card entry.
+    expect(createCheckoutSession.mock.calls[0]?.[0]).not.toHaveProperty("payment_method_collection");
+  });
+
+  it("skips the trial for a customer who already subscribed before", async () => {
+    listSubscriptions.mockResolvedValue({ data: [{ id: "sub_old" }] });
+    vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
+      checkoutToken: "token-repeat",
+      stripeCheckoutSessionId: null,
+      checkoutUrl: null,
+      expiresAt: new Date().toISOString(),
+      reused: false,
+      replacedCheckoutSessionId: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "weekly", trial: true }),
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCheckoutSession.mock.calls[0]?.[0].subscription_data).not.toHaveProperty(
+      "trial_period_days",
+    );
+  });
+
+  it("replaces a reused checkout when the promo link asks for a trial", async () => {
+    vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
+      checkoutToken: "token-reused-trial",
+      stripeCheckoutSessionId: "cs_no_trial",
+      checkoutUrl: "https://checkout.stripe.test/no-trial",
+      expiresAt: new Date().toISOString(),
+      reused: true,
+      replacedCheckoutSessionId: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "weekly", trial: true }),
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(expireCheckoutSession).toHaveBeenCalledWith("cs_no_trial");
+    expect(createCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subscription_data: expect.objectContaining({ trial_period_days: 7 }),
+      }),
+      // The expired session's id is in the key. Without it a reused claim keeps its token, so
+      // Stripe replays the cached response and hands back the session just expired.
+      { idempotencyKey: "billing-checkout:token-reused-trial:trial:cs_no_trial" },
+    );
+  });
+
+  it("does not replay the first session's idempotency key when the promo link is clicked twice", async () => {
+    // Click 1: nothing claimed yet. Click 2: the claim is REUSED, so it comes back carrying the
+    // same token and the session from click 1 — which this request expires and replaces.
+    vi.mocked(claimBillingCheckoutSession)
+      .mockResolvedValueOnce({
+        checkoutToken: "token-promo",
+        stripeCheckoutSessionId: null,
+        checkoutUrl: null,
+        expiresAt: new Date().toISOString(),
+        reused: false,
+        replacedCheckoutSessionId: null,
+      })
+      .mockResolvedValueOnce({
+        checkoutToken: "token-promo",
+        stripeCheckoutSessionId: "cs_123",
+        checkoutUrl: "https://checkout.stripe.test/cs_123",
+        expiresAt: new Date().toISOString(),
+        reused: true,
+        replacedCheckoutSessionId: null,
+      });
+
+    const promoRequest = () =>
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "weekly", trial: true }),
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+
+    await POST(promoRequest());
+    await POST(promoRequest());
+
+    // Same key twice would make Stripe replay the stored response and hand back cs_123 — the
+    // session the second request just expired — leaving the trader on a dead Checkout page.
+    const keys = createCheckoutSession.mock.calls.map((call) => call[1].idempotencyKey);
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
     expect(expireCheckoutSession).toHaveBeenCalledWith("cs_123");
   });
 

@@ -148,13 +148,20 @@ export default async function BillingPage({
 }: {
   searchParams?: BillingPageSearchParams;
 }) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = await getSessionUser();
 
   if (!session) {
-    redirect(`/login?next=${encodeURIComponent("/billing")}`);
+    // Keep the promo-link params so checkout still resumes after signing in.
+    const planParam = readSearchParam(resolvedSearchParams, "plan");
+    const trialParam = readSearchParam(resolvedSearchParams, "trial");
+    const query = new URLSearchParams({
+      ...(planParam && { plan: planParam }),
+      ...(trialParam && { trial: trialParam }),
+    }).toString();
+    redirect(`/login?next=${encodeURIComponent(`/billing${query ? `?${query}` : ""}`)}`);
   }
 
-  const resolvedSearchParams = searchParams ? await searchParams : {};
   const checkoutState = readSearchParam(resolvedSearchParams, "checkout");
   const checkoutSessionId = readSearchParam(resolvedSearchParams, "session_id");
   if (checkoutState === "cancelled") {
@@ -229,7 +236,12 @@ export default async function BillingPage({
 
   return (
     <>
-      {resumeCheckoutPlan ? <CheckoutAutoStart plan={resumeCheckoutPlan} /> : null}
+      {resumeCheckoutPlan ? (
+        <CheckoutAutoStart
+          plan={resumeCheckoutPlan}
+          trial={readSearchParam(resolvedSearchParams, "trial") === "1"}
+        />
+      ) : null}
       <BillingPageView
       subscription={subscription}
       customerName={customerName}

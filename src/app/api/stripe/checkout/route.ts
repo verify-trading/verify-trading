@@ -1,3 +1,4 @@
+import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,11 +18,26 @@ type ProfileRow = {
   display_name: string | null;
 };
 
+const TRIAL_PERIOD_DAYS = 7;
+
 const checkoutRequestSchema = z.object({
   plan: z.enum(["weekly", "monthly", "annual"]).default("monthly"),
   rewardfulReferral: z.string().optional(),
   source: z.enum(["web", "mobile"]).default("web"),
+  /** Promo links (/billing?plan=weekly&trial=1) start with a free week. */
+  trial: z.boolean().default(false),
 });
+
+/** One trial per customer: someone who cancels and clicks the promo link again pays from day one. */
+async function isTrialEligible(stripe: Stripe, customerId: string): Promise<boolean> {
+  const previous = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 1,
+  });
+
+  return previous.data.length === 0;
+}
 
 function checkoutReturnUrls(origin: string, source: "web" | "mobile") {
   if (source === "mobile") {
@@ -85,7 +101,7 @@ export async function POST(request: Request) {
       plan: payload.plan,
     });
 
-    if (checkoutClaim.checkoutUrl && payload.source === "web") {
+    if (checkoutClaim.checkoutUrl && payload.source === "web" && !payload.trial) {
       const reusedOffer = getCheckoutBillingOffer(payload.plan);
       return NextResponse.json({
         url: checkoutClaim.checkoutUrl,
@@ -105,6 +121,8 @@ export async function POST(request: Request) {
     });
 
     const stripe = getStripeServerClient();
+    const trialPeriodDays =
+      payload.trial && (await isTrialEligible(stripe, customerId)) ? TRIAL_PERIOD_DAYS : null;
     const origin = new URL(request.url).origin;
     const returnUrls = checkoutReturnUrls(origin, payload.source);
     const metadata = {
@@ -116,7 +134,7 @@ export async function POST(request: Request) {
 
     const staleCheckoutSessionId =
       checkoutClaim.replacedCheckoutSessionId ??
-      (payload.source === "mobile" ? checkoutClaim.stripeCheckoutSessionId : null);
+      (payload.source === "mobile" || payload.trial ? checkoutClaim.stripeCheckoutSessionId : null);
 
     if (staleCheckoutSessionId) {
       await stripe.checkout.sessions.expire(staleCheckoutSessionId).catch(() => undefined);
@@ -140,10 +158,17 @@ export async function POST(request: Request) {
         metadata,
         subscription_data: {
           metadata,
+          // Checkout still collects the card up front, then bills the plan when the trial ends.
+          ...(trialPeriodDays && { trial_period_days: trialPeriodDays }),
         },
       },
       {
-        idempotencyKey: `billing-checkout:${checkoutClaim.checkoutToken}`,
+        // The expired session's id is part of the key: a reused claim keeps its token, so without
+        // it a forced recreate replays Stripe's cached response and hands back the session we
+        // just expired. A genuine duplicate request has the same stale id, so it still dedupes.
+        idempotencyKey: `billing-checkout:${checkoutClaim.checkoutToken}${payload.trial ? ":trial" : ""}${
+          staleCheckoutSessionId ? `:${staleCheckoutSessionId}` : ""
+        }`,
       },
     );
 
