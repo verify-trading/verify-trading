@@ -10,7 +10,9 @@ import {
   ensureStripeCustomerForUser,
   getBillingCheckoutSession,
   storeBillingCheckoutSession,
+  stripeErrorMeta,
 } from "@/lib/billing/repository";
+import { logger } from "@/lib/observability/logger";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
 import { MANAGEABLE_SUBSCRIPTION_STATUSES } from "@/lib/billing/subscription-status";
 
@@ -28,15 +30,24 @@ const checkoutRequestSchema = z.object({
   trial: z.boolean().default(false),
 });
 
-/** One trial per customer: someone who cancels and clicks the promo link again pays from day one. */
+/**
+ * One trial per customer: someone who cancels and clicks the promo link again pays from day one.
+ *
+ * `incomplete` / `incomplete_expired` do NOT count. Those are subscriptions whose very first
+ * payment never went through — a declined card on the promo link leaves one behind — and the
+ * customer got nothing for it. Treating them as a spent trial would silently charge a first-time
+ * trader from day one on their retry, which is the opposite of what the link they clicked said.
+ */
+const NEVER_STARTED: Stripe.Subscription.Status[] = ["incomplete", "incomplete_expired"];
+
 async function isTrialEligible(stripe: Stripe, customerId: string): Promise<boolean> {
   const previous = await stripe.subscriptions.list({
     customer: customerId,
     status: "all",
-    limit: 1,
+    limit: 100,
   });
 
-  return previous.data.length === 0;
+  return !previous.data.some((subscription) => !NEVER_STARTED.includes(subscription.status));
 }
 
 function checkoutReturnUrls(origin: string, source: "web" | "mobile") {
@@ -54,6 +65,11 @@ function checkoutReturnUrls(origin: string, source: "web" | "mobile") {
 }
 
 export async function POST(request: Request) {
+  // Filled in as the request learns who it is acting for. A checkout failure is otherwise an
+  // anonymous 500: the log carries a stack and no subject, so there is no way to tell which
+  // trader hit it, on which plan, or which Stripe call refused.
+  const context: Record<string, unknown> = {};
+
   try {
     const session = await getSessionUser();
 
@@ -61,7 +77,11 @@ export async function POST(request: Request) {
       return jsonUnauthorized("Sign in to start checkout.");
     }
 
+    context.userId = session.user.id;
     const payload = checkoutRequestSchema.parse(await request.json().catch(() => ({})));
+    context.plan = payload.plan;
+    context.trial = payload.trial;
+    context.source = payload.source;
 
     const [subscriptionResult, profileResult] = await Promise.all([
       session.supabase
@@ -119,6 +139,8 @@ export async function POST(request: Request) {
       email: session.user.email,
       displayName: (profileResult.data as ProfileRow | null)?.display_name ?? null,
     });
+    context.stripeCustomerId = customerId;
+    context.checkoutToken = checkoutClaim.checkoutToken;
 
     const stripe = getStripeServerClient();
     const trialPeriodDays =
@@ -218,7 +240,11 @@ export async function POST(request: Request) {
       return jsonInvalidRequest("The checkout request is invalid.");
     }
 
-    console.error("[api/stripe/checkout]", error);
+    logger.error("Stripe checkout failed.", {
+      ...context,
+      ...stripeErrorMeta(error),
+      error: error instanceof Error ? error.message : String(error),
+    });
     return jsonApiError(
       500,
       "stripe_checkout_failed",

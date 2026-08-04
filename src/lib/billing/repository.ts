@@ -10,7 +10,42 @@ import {
   PRO_ACCESS_SUBSCRIPTION_STATUSES,
 } from "@/lib/billing/subscription-status";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
+import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * The parts of a Stripe error worth keeping in a log line. `stripeRequestId` is the one that
+ * matters most: it opens the exact request in Stripe's dashboard logs, which carries the full
+ * response we never see. Without these, a billing failure reads as an anonymous 500 and the only
+ * way to diagnose it is to ask the trader what they did.
+ */
+export function stripeErrorMeta(error: unknown): Record<string, unknown> {
+  const { type, code, statusCode, requestId, param } = (error ?? {}) as Record<string, unknown>;
+
+  return Object.fromEntries(
+    Object.entries({
+      stripeType: type,
+      stripeCode: code,
+      stripeStatus: statusCode,
+      stripeRequestId: requestId,
+      stripeParam: param,
+    }).filter(([, value]) => value !== undefined),
+  );
+}
+
+/**
+ * Stripe no longer has the object we stored an id for. A customer id is OURS to keep but THEIRS
+ * to delete: switching from test to live keys leaves every test-mode id pointing at nothing, and
+ * so does deleting a customer in the dashboard or restoring a database from another environment.
+ * Callers treat this as "my copy is stale", never as a failure.
+ */
+export function isMissingStripeResource(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "resource_missing"
+  );
+}
 
 type BillingProfileRow = {
   id: string;
@@ -161,16 +196,30 @@ export async function ensureStripeCustomerForUser({
   const normalizedReferralId = referralId?.trim() || undefined;
 
   if (existingCustomerId) {
-    await stripe.customers.update(existingCustomerId, {
-      email: normalizedEmail,
-      name,
-      metadata: {
-        supabaseUserId: userId,
-        ...(normalizedReferralId && { referral: normalizedReferralId }),
-      },
-    });
+    try {
+      await stripe.customers.update(existingCustomerId, {
+        email: normalizedEmail,
+        name,
+        metadata: {
+          supabaseUserId: userId,
+          ...(normalizedReferralId && { referral: normalizedReferralId }),
+        },
+      });
 
-    return existingCustomerId;
+      return existingCustomerId;
+    } catch (error) {
+      // The stored id is stale, not the request. Falling through mints a fresh customer and
+      // rewrites the row below, so the next checkout works without anyone touching the database.
+      // Any other failure is real and must still stop the checkout.
+      if (!isMissingStripeResource(error)) {
+        throw error;
+      }
+
+      logger.warn("Stored Stripe customer no longer exists; replacing it.", {
+        userId,
+        stripeCustomerId: existingCustomerId,
+      });
+    }
   }
 
   const customer = await stripe.customers.create({

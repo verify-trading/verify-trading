@@ -4,7 +4,9 @@ import { z } from "zod";
 import { getSessionUser } from "@/lib/auth/session";
 import { jsonApiError, jsonInvalidRequest, jsonUnauthorized } from "@/lib/http/json-response";
 import { getStripePortalConfigurationId } from "@/lib/billing/config";
+import { isMissingStripeResource, stripeErrorMeta } from "@/lib/billing/repository";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
+import { logger } from "@/lib/observability/logger";
 import { MANAGEABLE_SUBSCRIPTION_STATUSES } from "@/lib/billing/subscription-status";
 
 type ProfileRow = {
@@ -20,6 +22,9 @@ const customerPortalRequestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // Same reason as checkout: without a subject, a portal failure is an unattributable 500.
+  const context: Record<string, unknown> = {};
+
   try {
     const session = await getSessionUser();
 
@@ -27,7 +32,9 @@ export async function POST(request: Request) {
       return jsonUnauthorized("Sign in to manage billing.");
     }
 
+    context.userId = session.user.id;
     const payload = customerPortalRequestSchema.parse(await request.json().catch(() => ({})));
+    context.flow = payload.flow ?? null;
     const { data, error } = await session.supabase
       .from("profiles")
       .select("stripe_customer_id")
@@ -39,6 +46,7 @@ export async function POST(request: Request) {
     }
 
     const profile = (data as ProfileRow | null) ?? null;
+    context.stripeCustomerId = profile?.stripe_customer_id ?? null;
     if (!profile?.stripe_customer_id) {
       return jsonApiError(
         400,
@@ -117,7 +125,21 @@ export async function POST(request: Request) {
       return jsonInvalidRequest("The billing portal request is invalid.");
     }
 
-    console.error("[api/stripe/customer-portal]", error);
+    // The stored customer is gone at Stripe, so there is nothing to open. Checkout replaces the
+    // id the next time they subscribe; answering 400 here keeps this off the 500 pile.
+    if (isMissingStripeResource(error)) {
+      return jsonApiError(
+        400,
+        "missing_customer",
+        "No Stripe customer exists for this account yet.",
+      );
+    }
+
+    logger.error("Stripe billing portal failed.", {
+      ...context,
+      ...stripeErrorMeta(error),
+      error: error instanceof Error ? error.message : String(error),
+    });
     return jsonApiError(
       500,
       "stripe_portal_failed",
