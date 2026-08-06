@@ -90,16 +90,25 @@ function journalContext(rows: JournalRow[]): JournalContext {
 const TAIL_CHARS = 600;
 
 // A coach that knows nothing about earlier calls INVENTS them, so hand it the real tail of the
-// last one. `.gt("message_count", 0)` skips rows with no stored messages, which also excludes
-// the in-progress call (opened at mint at 0), so this can never quote the call it is part of.
-// "error" is distinct from null: "no prior call" is a fact the prompt states, a failed read is
-// not, and it fails the whole context.
-async function loadLastCall(supabase: SupabaseClient, userId: string): Promise<LastCall | null | "error"> {
-  const { data, count, error } = await supabase
+// last one. "error" is distinct from null: "no prior call" is a fact the prompt states, a failed
+// read is not, and it fails the whole context.
+//
+// currentSessionId is excluded BY ID, not by message_count: the turn-based companion rebuilds
+// this context on every turn and raises message_count as it goes, so from turn 2 on the live
+// conversation was being handed back as its own "LAST CALL" — the coach recalling as history
+// something said a turn ago, which is the misattribution this whole block exists to prevent.
+async function loadLastCall(
+  supabase: SupabaseClient,
+  userId: string,
+  currentSessionId?: string | null,
+): Promise<LastCall | null | "error"> {
+  let query = supabase
     .from("psychology_sessions")
     .select("id, created_at", { count: "exact" })
     .eq("user_id", userId)
-    .gt("message_count", 0)
+    .gt("message_count", 0);
+  if (currentSessionId) query = query.neq("id", currentSessionId);
+  const { data, count, error } = await query
     .order("created_at", { ascending: false })
     .limit(1);
   if (error || !data) return "error";
@@ -133,6 +142,8 @@ export async function loadCoachContext(
   userId: string,
   assessmentId: string,
   name: string,
+  // The call this context is being built FOR, so it can't become its own memory. See loadLastCall.
+  currentSessionId?: string | null,
 ): Promise<PsychologyCoachContext | null> {
   const [assessmentQuery, journalQuery, configQuery, lastCall] = await Promise.all([
     supabase
@@ -159,7 +170,7 @@ export async function loadCoachContext(
       .select("firm_name, account_size, account_type, rules")
       .eq("user_id", userId)
       .maybeSingle(),
-    loadLastCall(supabase, userId),
+    loadLastCall(supabase, userId, currentSessionId),
   ]);
 
   // Every read must succeed or the whole context is null. Treating a failed journal read as

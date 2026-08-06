@@ -140,7 +140,7 @@ export async function POST(request: Request) {
     const nowSecs = Math.floor(Date.now() / 1000);
     let system = cachedSystem(ctx.sessionId, nowSecs);
     if (!system) {
-      const coachContext = await loadCoachContext(supabase, ctx.userId, ctx.assessmentId, ctx.name);
+      const coachContext = await loadCoachContext(supabase, ctx.userId, ctx.assessmentId, ctx.name, ctx.sessionId);
       if (!coachContext) {
         return jsonApiError(404, "agent_llm_assessment_missing", "Assessment not found.");
       }

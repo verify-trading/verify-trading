@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     // check.
     const name = coachDisplayName(session.user);
     const [coachContext, callSessionQuery] = await Promise.all([
-      loadCoachContext(session.supabase, session.user.id, input.assessmentId, name),
+      loadCoachContext(session.supabase, session.user.id, input.assessmentId, name, input.sessionId),
       input.sessionId
         ? session.supabase
             .from("psychology_sessions")

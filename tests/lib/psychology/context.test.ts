@@ -9,7 +9,7 @@ import { loadCoachContext } from "@/lib/psychology/context";
 function createQueryBuilder(result: { data?: unknown; count?: number; error?: unknown } = { data: null, error: null }) {
   const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
 
-  for (const method of ["select", "eq", "is", "gt", "order", "limit"]) {
+  for (const method of ["select", "eq", "neq", "is", "gt", "order", "limit"]) {
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn().mockResolvedValue(result);
@@ -235,5 +235,17 @@ describe("loadCoachContext", () => {
     // A failed read treated as "no data" built a coach that told a trader mid-challenge
     // they had never logged a session — and the realtime path then caches that persona.
     await expect(loadCoachContext({ from } as never, "user-1", "assessment-1", "Alex")).resolves.toBeNull();
+  });
+
+
+  it("never hands a live conversation back as its own last call", async () => {
+    // The turn-based companion rebuilds this context every turn while raising message_count, so
+    // without the id exclusion the session in progress became its own "LAST CALL" from turn 2 on.
+    const sessions = createQueryBuilder({ data: [], count: 0, error: null });
+    const from = vi.fn((table: string) =>
+      table === "psychology_sessions" ? sessions : createQueryBuilder({ data: null, error: null }),
+    );
+    await loadCoachContext({ from } as never, "user-1", "assessment-1", "Alex", "live-session-9");
+    expect(sessions.neq).toHaveBeenCalledWith("id", "live-session-9");
   });
 });
