@@ -133,8 +133,20 @@ export function getAskModel() {
   return askModel(getAskPrimaryModelId());
 }
 
+/**
+ * Chat-completions ON PURPOSE, unlike Ask: the gateway injects the entire Codex
+ * CLI system prompt (~4,400 tokens, measured, never cached) into every
+ * Responses-API call, and these writers — journal insight, challenge status —
+ * use no server tools, so they were paying that tax for nothing. The same
+ * route's /v1/chat/completions is measured injection-free. Ask itself must stay
+ * on Responses: server-side web_search only exists there. `max_tokens` is
+ * rejected on this route too, so the same strip applies.
+ */
 export function getAskSimpleModel() {
-  return askModel(getAskSimpleModelId());
+  return wrapLanguageModel({
+    model: codexProvider.chat(getAskSimpleModelId()),
+    middleware: process.env.OPENAI_BASE_URL?.trim() ? [dropUnsupportedParams] : [],
+  });
 }
 
 /**
@@ -149,6 +161,13 @@ export function getAskSimpleModel() {
  * IGNORED here (asked for 5, got 169). The spoken length is therefore bounded
  * only at the call site — see SPOKEN_CHAR_BUDGET in the agent-llm route, which
  * is the real cap and must stay.
+ *
+ * The gateway is prompt-hostile on this route too: it injects a ~400–460-token
+ * block asserting a coding-assistant identity "by platform policy", ranked
+ * above our system prompt and varying per call (so it also defeats prefix
+ * caching). Measured leak: 8/8 on "who am I talking to?" until the persona
+ * answered that question itself — the identity rule in
+ * buildPsychologyCoachInstructions is the counter and must stay.
  */
 export function getPsychologyCoachModel() {
   // Fail here rather than fall back to OPENAI_API_KEY, which createOpenAI would
