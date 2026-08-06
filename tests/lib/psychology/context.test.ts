@@ -31,6 +31,7 @@ type Row = {
   note?: string | null;
   lesson?: string | null;
   source?: "manual" | "mobile" | "broker";
+  tags?: string[] | null;
 };
 
 const journalRow = (row: Row) => ({
@@ -38,6 +39,7 @@ const journalRow = (row: Row) => ({
   note: null,
   lesson: null,
   source: "mobile" as const,
+  tags: null,
   ...row,
 });
 
@@ -72,6 +74,24 @@ describe("loadCoachContext", () => {
     expect(result?.journal.wins).toBe(2);
     // An imported day is a date, a number and a placeholder mood — nothing to reflect back.
     expect(result?.recentEntries?.map((entry) => entry.date)).toEqual([dayKey(2), dayKey(3)]);
+  });
+
+  it("hides a CSV-imported day too, which arrives stamped 'mobile' and tagged", async () => {
+    const { context } = load([
+      { entry_date: dayKey(0), mood: "okay", pnl_amount: 300, tags: ["csv", "csv:1754"] },
+      { entry_date: dayKey(1), mood: "tough", pnl_amount: -40, tags: ["csv", "csv:1754"] },
+      // Edited by the trader, so the mobile stripped the bare 'csv' tag: this day is theirs.
+      { entry_date: dayKey(2), mood: "tough", pnl_amount: -100, note: "Chased.", tags: ["csv:1754"] },
+    ]);
+    const result = await context;
+
+    // The fabricated 'okay'/'tough' placeholders are not sessions the trader journaled, and
+    // the imported tough day is not a feeling they reported.
+    expect(result?.journal.sessionCount).toBe(1);
+    expect(result?.journal.toughSessions).toBe(1);
+    expect(result?.recentEntries?.map((entry) => entry.date)).toEqual([dayKey(2)]);
+    // The trades happened either way.
+    expect(result?.journal.weeklyPnl).toBe(160);
   });
 
   it("speaks the weekly P&L in one currency, never a blend of two", async () => {

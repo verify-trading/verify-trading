@@ -173,6 +173,34 @@ describe("Journal entries API", () => {
     }), { onConflict: "user_id,entry_date" });
   });
 
+  it("stamps a CSV import as source 'csv' instead of leaving it to the tags", async () => {
+    // The CSV importer posts through this same route, so without this the only thing marking an
+    // imported day was a client-supplied tag — and every reader that must exclude imported days
+    // had to select the tags column to find out.
+    const savedBuilder = createQueryBuilder({ data: null, error: { message: "stop here" } });
+    vi.mocked(getSessionUser).mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: { from: vi.fn(() => savedBuilder) },
+    } as never);
+
+    await POST(
+      new Request("http://localhost/api/journal/entries", {
+        method: "POST",
+        body: JSON.stringify({
+          entryDate: "2026-05-26",
+          mood: "okay",
+          pnlAmount: 40,
+          tags: ["csv", "csv:1754"],
+        }),
+      }),
+    );
+
+    expect(savedBuilder.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ source: "csv", tags: ["csv", "csv:1754"] }),
+      { onConflict: "user_id,entry_date" },
+    );
+  });
+
   it("tells the coaching note only about the days inside the current challenge", async () => {
     vi.mocked(generateChallengeStatus).mockResolvedValue("Keep the size you traded today.");
     const saved = {

@@ -44,6 +44,23 @@ const EXPECTED = {
   "prompt.custom_llm.auth_connection": null,
 };
 
+// The turn-taking / noise tuning, pinned. Every value here is a deliberate move off a platform
+// default that scripts/tune-coach-agent.mjs sets (and justifies, one comment per value); this
+// is the half that CATCHES it going away. Recreating the agent, or a dashboard edit, silently
+// puts the call back on defaults — a 7s turn timeout that talks over a thinking trader, no
+// background-voice filtering, no hang-up on an abandoned call — and nothing else in the repo
+// would say so. Re-run the tune script to fix any drift reported here.
+const EXPECTED_TUNING = {
+  "agent.first_message":
+    "Hey, it's your Companion here. Good to have you on — take a breath, and tell me what's on your mind today.",
+  "turn.turn_timeout": 15,
+  "turn.turn_eagerness": "patient",
+  "turn.retranscribe_on_turn_timeout": true,
+  "turn.silence_end_call_timeout": 100,
+  "turn.soft_timeout_config.timeout_seconds": 4,
+  "vad.background_voice_detection": true,
+};
+
 const SECRET_HEADER = "x-vt-agent-secret";
 
 const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -92,9 +109,21 @@ if (agentId !== PRODUCTION_AGENT_ID) {
   drift.push(`ELEVENLABS_AGENT_ID: expected ${PRODUCTION_AGENT_ID}, env points at ${agentId}`);
 }
 
-for (const [field, expected] of Object.entries(EXPECTED)) {
-  if (actual[field] !== expected) {
-    drift.push(`${field}: expected ${JSON.stringify(expected)}, agent has ${JSON.stringify(actual[field])}`);
+const turn = agent?.conversation_config?.turn ?? {};
+const actualTuning = {
+  "agent.first_message": agent?.conversation_config?.agent?.first_message,
+  "turn.turn_timeout": turn.turn_timeout,
+  "turn.turn_eagerness": turn.turn_eagerness,
+  "turn.retranscribe_on_turn_timeout": turn.retranscribe_on_turn_timeout,
+  "turn.silence_end_call_timeout": turn.silence_end_call_timeout,
+  "turn.soft_timeout_config.timeout_seconds": turn.soft_timeout_config?.timeout_seconds,
+  "vad.background_voice_detection": agent?.conversation_config?.vad?.background_voice_detection,
+};
+
+for (const [field, expected] of Object.entries({ ...EXPECTED, ...EXPECTED_TUNING })) {
+  const value = field in actual ? actual[field] : actualTuning[field];
+  if (value !== expected) {
+    drift.push(`${field}: expected ${JSON.stringify(expected)}, agent has ${JSON.stringify(value)}`);
   }
 }
 
@@ -112,7 +141,8 @@ if (!secretHeader) {
 if (drift.length > 0) {
   console.error(`\n❌ ElevenLabs agent config has drifted (${agentId}):\n`);
   for (const line of drift) console.error(`  - ${line}`);
-  console.error("\nFix it in the ElevenLabs dashboard (or with a PATCH that also sends llm: \"custom-llm\").\n");
+  console.error("\nTuning drift: re-run npm run tune:agent-config. Wiring drift: fix it in the");
+  console.error("ElevenLabs dashboard (or with a PATCH that also sends llm: \"custom-llm\").\n");
   process.exit(1);
 }
 
@@ -121,3 +151,6 @@ console.log(`   llm=${actual["prompt.llm"]}  model_id=${actual["prompt.custom_ll
 console.log(`   url=${actual["prompt.custom_llm.url"]}`);
 console.log(`   api_key=null  auth_connection=null  ${SECRET_HEADER}=matches ELEVENLABS_AGENT_LLM_SECRET`);
 console.log(`   request headers on the agent: ${headerNames}`);
+console.log(
+  `   turn_timeout=${actualTuning["turn.turn_timeout"]}s  eagerness=${actualTuning["turn.turn_eagerness"]}  retranscribe=${actualTuning["turn.retranscribe_on_turn_timeout"]}  silence_end_call=${actualTuning["turn.silence_end_call_timeout"]}s  soft_timeout=${actualTuning["turn.soft_timeout_config.timeout_seconds"]}s  background_voice_detection=${actualTuning["vad.background_voice_detection"]}`,
+);

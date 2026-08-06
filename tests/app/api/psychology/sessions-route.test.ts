@@ -341,12 +341,14 @@ describe("Psychology sessions API", () => {
     vi.unstubAllGlobals();
   });
 
-  it("refuses to import the transcript of a call that is still in progress", async () => {
-    // The killer ordering assumption: a live call's transcript is only a PREFIX. Importing it
-    // would latch the truncated version in forever, because every idempotency guard reads
-    // "this session has messages" as "this session is done" — the rest of the call is then
-    // never stored. Only reachable via GET: PATCH has the client's duration report to tell it
-    // the call ended, and this path has nothing but ElevenLabs' own status.
+  // The killer ordering assumption: a transcript that is not final yet is only a PREFIX.
+  // Importing it would latch the truncated version in forever, because every idempotency guard
+  // reads "this session has messages" as "this session is done" — the rest of the call is then
+  // never stored. "processing" is the trap that looks safe: the call HAS ended, but ElevenLabs
+  // is still assembling the transcript and serves whatever it has so far. Only done/failed are
+  // final. Only reachable via GET: PATCH has the client's duration report to tell it the call
+  // ended, and this path has nothing but ElevenLabs' own status.
+  it.each(["in-progress", "processing"])("refuses to import the transcript of a %s call", async (status) => {
     const previousKey = process.env.ELEVENLABS_API_KEY;
     const previousSecret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
     process.env.ELEVENLABS_API_KEY = "xi-test-key";
@@ -360,8 +362,8 @@ describe("Psychology sessions API", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
-          status: "in-progress",
-          // Binds to this caller and has words in it — everything except being over.
+          status,
+          // Binds to this caller and has words in it — everything except being final.
           conversation_initiation_client_data: { custom_llm_extra_body: { vt_ctx: vtCtx } },
           transcript: [{ role: "agent", message: "Hey, how are you landing today?" }],
         }),
@@ -528,6 +530,10 @@ describe("Psychology sessions API", () => {
     expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(1);
     // ...and the turn was stored on THIS request, with no read of the call required.
     expect(messagesBuilder.insert).toHaveBeenCalled();
+    // ...and the response reflects the import. The row was read BEFORE it, so answering with it
+    // unchanged told the client "0 messages" for a call whose transcript had just landed — and
+    // that response is what the trader sees the instant they hang up.
+    await expect(response.json()).resolves.toMatchObject({ messageCount: 1 });
 
     vi.unstubAllGlobals();
   });

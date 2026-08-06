@@ -3,19 +3,33 @@ import { z } from "zod";
 const journalMoodSchema = z.enum(["good", "okay", "tough"]);
 
 // Who wrote the day. Mirrors journal_entries.source (check constraint in
-// supabase/migration_27_broker_sync.sql): 'manual' predates the mobile app, 'mobile' is the
-// trader typing in the app, 'broker' is the MetaApi importer. The importer may overwrite only
-// its own rows, and that test is a `source = 'broker'` predicate on its UPDATE rather than a
-// TypeScript check — read-then-decide leaves a gap for a manual save to land in and be clobbered.
-export type JournalSource = "manual" | "mobile" | "broker";
+// supabase/migration_27_broker_sync.sql, widened for 'csv' by migration 32): 'manual' predates
+// the mobile app, 'mobile' is the trader typing in the app, 'broker' is the MetaApi importer,
+// 'csv' is a statement the trader imported. The importer may overwrite only its own rows, and
+// that test is a `source = 'broker'` predicate on its UPDATE rather than a TypeScript check —
+// read-then-decide leaves a gap for a manual save to land in and be clobbered.
+export type JournalSource = "manual" | "mobile" | "broker" | "csv";
 
 /**
  * A day the importer wrote rather than one the trader logged. Its mood is the importer's
  * NOT-NULL placeholder and it carries no note or lesson, so anything that reads a day as the
  * trader's own account of it — coach context, weekly insight, mood strip — must leave it out.
  * The money on it is real and still counts. One definition per repo; every reader asks this.
+ *
+ * Two importers, one meaning. MetaApi sync writes `source = 'broker'`; a CSV import posts
+ * through the normal entries route carrying a bare `'csv'` tag (alongside a `csv:<ts>`
+ * attribution tag the mobile keeps), and the route now stamps `source = 'csv'` for it. The
+ * mobile predicate is the same set, and it STRIPS the bare 'csv' tag when the trader edits the
+ * day — that edit is what makes the day theirs, here as well as there.
+ *
+ * ponytail: the tags fallback is only for CSV rows written before the route stamped them, back
+ * when the server said 'mobile' and the tag was the only mark left. Drop it once migration 32
+ * is applied (its backfill rewrites those rows to 'csv'), at which point this stops needing
+ * `tags` at all — until then any row reaching this must carry them, since a query that skips
+ * the column reads every old CSV day as journaled.
  */
-export const isImportedRow = (row: { source: JournalSource }): boolean => row.source === "broker";
+export const isImportedRow = (row: { source: JournalSource; tags: string[] | null }): boolean =>
+  row.source === "broker" || row.source === "csv" || (row.tags?.includes("csv") ?? false);
 
 /**
  * The days that belong to the trader's CURRENT challenge — those logged on or after it

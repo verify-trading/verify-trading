@@ -112,6 +112,65 @@ describe("agent-llm custom LLM endpoint", () => {
     expect(streamText).not.toHaveBeenCalled();
   });
 
+  // A turn whose message list ends on the companion's own line (or is empty at the start of the
+  // call) means no new speech was transcribed.
+  function silentTurn(trailingAssistantLines: string[]) {
+    return new Request("http://localhost/api/psychology/agent-llm/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-vt-agent-secret": SECRET },
+      body: JSON.stringify({
+        messages: [
+          { role: "user", content: "I chased a loss this morning." },
+          ...trailingAssistantLines.map((content) => ({ role: "assistant", content })),
+        ],
+        elevenlabs_extra_body: { vt_ctx: ctxToken(nextSessionId()) },
+      }),
+    });
+  }
+
+  // When ElevenLabs' turn timeout fires it asks for another turn with NO new user message — the
+  // list ends on the companion's own last line (or is empty at the start of the call). The model
+  // then sees only itself talking and re-opens the conversation, which is what the trader hears
+  // as the companion replaying its greeting as if they had never spoken.
+  it("marks a turn that carries no new user speech instead of faking one", async () => {
+    modelStream(["Take your time."]);
+
+    await agentLlm(silentTurn(["So what pulled you back into that trade?"]));
+
+    const { messages } = vi.mocked(streamText).mock.calls[0][0] as { messages: Array<{ role: string; content: string }> };
+    const last = messages.at(-1);
+    expect(last?.role).toBe("user");
+    expect(last?.content).toContain("Nothing was transcribed this turn");
+    expect(last?.content).not.toBe("Hello.");
+    // The never-greet rule belongs to the persona (companion.ts midCallRule) and is already in
+    // the system prompt every realtime turn — restating it here was two owners for one rule.
+    expect(last?.content).not.toContain("Do NOT greet");
+  });
+
+  // The timeout fires again every turn_timeout seconds for as long as the trader stays quiet,
+  // so a nudge per silent turn is a loop: the companion talks at an empty room until the
+  // platform's silence_end_call_timeout hangs up. One steady line, then nothing.
+  it("says one steady line on the second silence in a row and stops asking the model", async () => {
+    const body = await readSse(await agentLlm(silentTurn(["So what pulled you back in?", "Take your time."])));
+
+    expect(streamText).not.toHaveBeenCalled();
+    expect(body).toContain("I'll stay on the line");
+    expect(body.trimEnd().endsWith("data: [DONE]")).toBe(true);
+  });
+
+  it("goes quiet from the third silence on, without substituting the provider-failure line", async () => {
+    const body = await readSse(
+      await agentLlm(silentTurn(["So what pulled you back in?", "Take your time.", "I'll stay on the line — say something when you're ready."])),
+    );
+
+    expect(streamText).not.toHaveBeenCalled();
+    // The fallback exists for a provider that broke on a REAL turn; spoken here it would just
+    // become the loop's new refrain.
+    expect(body).not.toContain(COACH_FALLBACK_LINE);
+    expect(body).toContain('"finish_reason":"stop"');
+    expect(body.trimEnd().endsWith("data: [DONE]")).toBe(true);
+  });
+
   it("bounds the turn so a hung provider cannot outlive the platform's function limit", async () => {
     // Past maxDuration the function is killed mid-stream and ElevenLabs is left holding an SSE
     // that never says [DONE] — which ends the trader's call. The turn has to be cut off here.
@@ -135,6 +194,20 @@ describe("agent-llm custom LLM endpoint", () => {
     expect(body).toContain(COACH_FALLBACK_LINE);
     expect(body).toContain('"finish_reason":"stop"');
     expect(body.trimEnd().endsWith("data: [DONE]")).toBe(true);
+  });
+
+  it("cuts an over-long answer at a word boundary rather than mid-word", async () => {
+    // Deltas are tokens, so the one that trips the 960-char budget routinely ends mid-word.
+    // Cutting there had TTS speak a fragment.
+    modelStream(["word ".repeat(191), "posi", "tion", " sizing", " matters", " a", " lot"]);
+
+    const body = await readSse(await agentLlm(turnRequest({ "x-vt-agent-secret": SECRET }, nextSessionId())));
+
+    const spoken = [...body.matchAll(/"content":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join("");
+    expect(spoken).toContain("position");
+    expect(spoken.endsWith("posi")).toBe(false);
+    // Bounded overshoot: it does not just read the whole answer out.
+    expect(spoken.length).toBeLessThan(960 + 80);
   });
 
   it("does not repeat itself when the turn dies mid-sentence", async () => {

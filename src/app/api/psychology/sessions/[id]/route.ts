@@ -59,18 +59,22 @@ async function fetchConversation(conversationId: string, apiKey: string): Promis
   return (await response.json()) as ConversationRecord;
 }
 
-// A call that is still running has a transcript that is only a PREFIX of what will be said.
-// ElevenLabs' status is one of initiated | in-progress | processing | done | failed (verified
-// against their OpenAPI schema, where status is required) — the first two mean the trader is
-// still on the call. Importing then would latch a truncated transcript in permanently: the
-// idempotency guards below all read "this session already has messages" as "done", so the rest
-// of the conversation is never stored. PATCH infers the call is over from the client's duration
-// report; ElevenLabs' own view is the authority, and it is the only one the GET repair has.
+// A call whose transcript is not final yet — importing it would latch a PREFIX of what was
+// said in permanently, because the idempotency guards below all read "this session already has
+// messages" as "done", so the rest of the conversation is never stored. ElevenLabs' status is
+// one of initiated | in-progress | processing | done | failed (verified against their OpenAPI
+// schema, where status is required). The first two mean the trader is still on the call;
+// "processing" means the call ended but ElevenLabs is still assembling the transcript, and what
+// it serves in that window is whatever it has so far — which is exactly the same trap. Only
+// done/failed are final. PATCH infers the call is over from the client's duration report;
+// ElevenLabs' own view is the authority, and it is the only one the GET repair has.
 //
 // Unknown or missing status still imports, so an enum ElevenLabs adds later cannot silently
 // stop every transcript from ever being stored.
 const isLiveCall = (conversation: ConversationRecord): boolean =>
-  conversation.status === "initiated" || conversation.status === "in-progress";
+  conversation.status === "initiated" ||
+  conversation.status === "in-progress" ||
+  conversation.status === "processing";
 
 // The stored conversation id is only a pointer, and it arrives from the client — so it is never
 // trusted on its own. Every path that turns it into stored messages proves the conversation is
@@ -196,16 +200,18 @@ async function storeTurns(
 // companion route writes. Idempotent (skips if the session already has messages) so a client
 // retry never duplicates, and bound to the caller: the conversation's echoed vt_ctx must verify
 // to this user + session, so a forged conversationId can't pull someone else's transcript in.
+// Returns how many turns this call stored, so the caller can answer with a session that
+// reflects the import instead of the row it read before it.
 async function storeConversationTranscript(
   supabase: SupabaseClient,
   userId: string,
   sessionId: string,
   conversationId: string,
   sessionCreatedAtMs: number,
-) {
+): Promise<number> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   const secret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
-  if (!apiKey || !secret) return;
+  if (!apiKey || !secret) return 0;
 
   const existing = await supabase
     .from("psychology_session_messages")
@@ -214,7 +220,7 @@ async function storeConversationTranscript(
     .eq("session_id", sessionId)
     .limit(1);
   if (existing.error) throw new Error(`transcript idempotency check failed: ${existing.error.message}`);
-  if ((existing.data?.length ?? 0) > 0) return; // already stored
+  if ((existing.data?.length ?? 0) > 0) return 0; // already stored
 
   // Save the pointer FIRST, before anything that can fail. At hang-up ElevenLabs has usually not
   // attached the conversation's initiation data yet — the very thing carrying vt_ctx — so the bind
@@ -235,24 +241,32 @@ async function storeConversationTranscript(
   // their conversation was lost. Bounded well inside this route's maxDuration of 30s, and the
   // whole thing stays best-effort — a call that still is not ready keeps its pointer and repairs
   // on the next read exactly as before.
+  //
+  // The ladder waits on BOTH conditions, not just the bind: a conversation still "processing"
+  // is one whose transcript is not final (see isLiveCall), so importing what it serves now
+  // would latch a prefix. Exhausting the ladder on a slow one is a fine outcome — the pointer
+  // is saved, the client polls, and the next GET repairs it against a finished conversation.
   const deadline = Date.now() + 12_000;
+  const ready = (record: ConversationRecord) =>
+    !isLiveCall(record) && bindsToCaller(record, secret, userId, sessionId);
   let conversation = await fetchConversation(conversationId, apiKey);
   for (const wait of [1_500, 3_000, 5_000]) {
-    if (conversation === "gone") return;
-    if (conversation && bindsToCaller(conversation, secret, userId, sessionId)) break;
+    if (conversation === "gone") return 0;
+    if (conversation && ready(conversation)) break;
     if (Date.now() + wait > deadline) break;
     await new Promise((resolve) => setTimeout(resolve, wait));
     conversation = await fetchConversation(conversationId, apiKey);
   }
-  if (!conversation || conversation === "gone") return;
+  if (!conversation || conversation === "gone") return 0;
 
-  if (!bindsToCaller(conversation, secret, userId, sessionId)) {
-    // Still not ready after the retries. The pointer is saved, so the next read repairs it.
-    logger.warn("Conversation not bound yet; a later read will retry.", { sessionId });
-    return;
+  if (!ready(conversation)) {
+    // Still not bound, or still not finished, after the retries. The pointer is saved, so the
+    // next read repairs it.
+    logger.warn("Conversation not ready yet; a later read will retry.", { sessionId });
+    return 0;
   }
 
-  await storeTurns(supabase, userId, sessionId, conversation, sessionCreatedAtMs);
+  return storeTurns(supabase, userId, sessionId, conversation, sessionCreatedAtMs);
 }
 
 export async function GET(
@@ -452,13 +466,14 @@ export async function PATCH(
     // A duration is what marks the call OVER. Without one this is a mid-call report, so it only
     // remembers the pointer: fetching a conversation that is still open returns a partial
     // transcript, and the idempotency guard would then latch that truncated version in forever.
+    const row = data as unknown as PsychologySessionRow;
+    let imported = 0;
     if (conversationId) {
       try {
-        const row = data as unknown as PsychologySessionRow;
         if (durationSecs === undefined) {
           await linkConversation(session.supabase, session.user.id, parsed.data, conversationId);
         } else {
-          await storeConversationTranscript(
+          imported = await storeConversationTranscript(
             session.supabase,
             session.user.id,
             parsed.data,
@@ -473,8 +488,13 @@ export async function PATCH(
       }
     }
 
+    // `row` was read BEFORE the import above, so on its own it still says the call had no
+    // messages — and this response is what the client renders the instant the trader hangs up.
+    // Answer with the count that just landed, the same in-memory patch the GET repair applies
+    // rather than paying for a second read. Importing 0 needs no patch: either nothing was
+    // stored, or a concurrent writer won the race and the next read shows their rows.
     return NextResponse.json(
-      toPsychologySession(data as unknown as PsychologySessionRow),
+      toPsychologySession(imported > 0 ? { ...row, message_count: imported } : row),
       { headers: PRIVATE_CACHE_HEADERS },
     );
   } catch (error) {

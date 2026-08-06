@@ -27,6 +27,9 @@ type JournalRow = {
   note: string | null;
   lesson: string | null;
   source: JournalSource;
+  // Read only by isImportedRow, and only for CSV days written before the entries route stamped
+  // source:'csv'. Droppable once migration 32 has run and backfilled those rows.
+  tags: string[] | null;
 };
 
 type ChallengeConfigRow = {
@@ -115,7 +118,7 @@ export async function loadCoachContext(
       .single(),
     supabase
       .from("journal_entries")
-      .select("entry_date, mood, pnl_amount, pnl_currency, note, lesson, source")
+      .select("entry_date, mood, pnl_amount, pnl_currency, note, lesson, source, tags")
       .eq("user_id", userId)
       .is("deleted_at", null)
       .order("entry_date", { ascending: false })

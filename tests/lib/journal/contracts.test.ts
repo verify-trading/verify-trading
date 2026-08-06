@@ -78,10 +78,25 @@ describe("computeJournalAggregates", () => {
 });
 
 describe("isImportedRow", () => {
-  it("is true only for the importer's own rows", () => {
+  it("is true only for an importer's own rows", () => {
     expect(isImportedRow(row({ source: "broker" }))).toBe(true);
+    expect(isImportedRow(row({ source: "csv" }))).toBe(true);
     expect(isImportedRow(row({ source: "mobile" }))).toBe(false);
     expect(isImportedRow(row({ source: "manual" }))).toBe(false);
+  });
+
+  it("answers a CSV day off the column alone, with no tags to consult", () => {
+    // The route stamps source:'csv' at write time, so a reader that never selected tags still
+    // gets the right answer.
+    expect(isImportedRow(row({ source: "csv", tags: null }))).toBe(true);
+  });
+
+  it("still catches CSV rows written before the column was stamped", () => {
+    expect(isImportedRow(row({ source: "mobile", tags: ["csv", "csv:1754"] }))).toBe(true);
+    // The mobile strips the bare 'csv' tag when the trader edits the day: that edit is what
+    // makes it their own account of it. The csv:<id> attribution tag stays and means nothing here.
+    expect(isImportedRow(row({ source: "mobile", tags: ["csv:1754"] }))).toBe(false);
+    expect(isImportedRow(row({ tags: null }))).toBe(false);
   });
 });
 

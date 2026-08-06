@@ -4,7 +4,7 @@ import { coachDisplayName, generatePsychologyReply, speakable, type ChallengeCon
 
 // Live check that the coach now grounds its reply in the trader's actual challenge +
 // journal. Opt-in (model call):
-//   set -a; source <(grep -E '^ANTHROPIC_(API_KEY|MODEL|BASE_URL)=' .env.local); set +a
+//   set -a; source <(grep -E '^(OPENAI_(API_KEY|BASE_URL)|ASK_COACH_MODEL)=' .env.local); set +a
 //   RUN_COACH_TEST=1 npx vitest run companion --disableConsoleIntercept
 const assessment = {
   total_score: 57,

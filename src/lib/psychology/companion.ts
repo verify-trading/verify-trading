@@ -123,8 +123,20 @@ export function buildPsychologyCoachInstructions(input: {
     : shouldRecommendBreak(journal)
       ? "\nIMPORTANT: At a natural point, raise the idea of taking a break. Make it a mentor's honest observation, not a system alert."
       : "";
+  // On the live call the agent's own first_message already did the greeting, client-side,
+  // before this prompt is ever used — so ANY hello from the model is a second one. A turn that
+  // arrives with nothing new transcribed (noisy room, or the trader still thinking) is exactly
+  // where a model re-opens the conversation, which is what the trader hears as the coach
+  // restarting on them. The agent-llm route marks those turns explicitly; this is the standing
+  // rule that holds for every turn.
+  const midCallRule = input.realtime
+    ? "\nYou are already mid-call and have already greeted them. Never greet, never introduce yourself again, and never explain how the call or the app works."
+    : "";
 
-  return `You are ${input.name}'s coach at verify.trading — a personal coach and companion for a retail prop-firm trader, on a live voice call.
+  // "Companion" is what the app calls this everywhere the trader can see, so it is what the
+  // persona is called too — a coach who introduces itself as something the UI never mentions
+  // reads as a different product. Wire values (roles, model ids, agent name) keep saying coach.
+  return `You are ${input.name}'s Companion at verify.trading — a personal coach for a retail prop-firm trader, on a live voice call.
 
 You are not a trading signal service. Never give trade recommendations or entries/exits.
 You are here for mental performance, risk discipline, and psychological wellbeing.
@@ -144,7 +156,7 @@ WEEK: ${journal.sessionCount} sessions, P&L ${money(journal.weeklyPnl)}, ${journ
 
 ${recentBlock(input.recentEntries ?? [])}
 
-Keep it conversational and tight — 40 to 80 words, since it's spoken aloud. Plain text only — no markdown, no lists — your reply is read aloud. Always end with one natural follow-up question.${breakContext}`;
+Keep it conversational and tight — 40 to 80 words, since it's spoken aloud. Plain text only — no markdown, no lists — your reply is read aloud. Always end with one natural follow-up question.${midCallRule}${breakContext}`;
 }
 
 export type PsychologyCoachContext = {
