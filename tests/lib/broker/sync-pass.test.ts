@@ -145,6 +145,24 @@ describe("runBrokerSyncPass", () => {
     expect(deployAccount).toHaveBeenCalledWith("meta-row-2");
   });
 
+  it("skips the legacy pre-migration rejection wording the same way", async () => {
+    // Rows stamped before the copy change carry "...Check the investor password and reconnect."
+    // Matching by equality misses them, and every wake would re-pay $0.0756 to prove a login
+    // the broker already refused.
+    const legacyRejection = "Your broker turned the login away. Check the investor password and reconnect.";
+    const supabase = fakeSupabase({
+      data: [accountRow("row-1", { last_sync_error: legacyRejection })],
+      error: null,
+    });
+    mockMetaApi({ "meta-row-1": { state: "UNDEPLOYED", connectionStatus: "DISCONNECTED" } });
+
+    const outcome = await runBrokerSyncPass(supabase, "wake");
+
+    expect(outcome.results).toEqual(["row-1:skipped_login_rejected"]);
+    expect(getAccount).not.toHaveBeenCalled();
+    expect(deployAccount).not.toHaveBeenCalled();
+  });
+
   // Wake is the pass that SPENDS, so an unreadable tier must stop it dead. Treating an
   // unknown tier as Pro would bill a deployment for every lapsed trader on the list.
   it("throws on the wake pass when the Pro read fails, and deploys nobody", async () => {

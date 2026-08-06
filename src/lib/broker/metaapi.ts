@@ -2,7 +2,7 @@ import { fetchWithRetry, parseRetryAfterMs, wait } from "@/lib/http/fetch-with-r
 import { logger } from "@/lib/observability/logger";
 
 /**
- * Thin typed wrapper over the MetaApi REST API (no SDK — we use six endpoints). Two things here
+ * Thin typed wrapper over the MetaApi REST API (no SDK — we use seven endpoints). Two things here
  * are load-bearing and easy to get wrong:
  *
  * 1. The domain suffix differs per service. Provisioning is the DOUBLED
@@ -12,6 +12,9 @@ import { logger } from "@/lib/observability/logger";
  * 2. MetaApi answers a write with `202` to mean "accepted, still working", and the poll is
  *    re-sending the IDENTICAL request with the SAME transaction-id. A fresh id would register as
  *    a second billable write, so the id is minted once per call.
+ *
+ * Credentials flow through createAccount / updateAccountPassword and are never stored or logged
+ * here — and MetaApi's error messages never echo them back, so the logging in this file is safe.
  */
 
 const PROVISIONING_BASE = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
@@ -27,6 +30,14 @@ export const DEFAULT_METAAPI_REGION = "london";
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_ACCEPTED_ATTEMPTS = 5;
 const ACCEPTED_BACKOFF_MS = 1_000;
+/**
+ * The most a single 202 poll may sleep, however generous the Retry-After. The credential-
+ * validating create runs inside a route whose maxDuration is 300 s (see CREATE_ACCEPTED_ATTEMPTS
+ * below), so an uncapped 60 s+ header times the poll count could outlive the function and surface
+ * as a killed invocation with the account half-created. Capped, the worst case stays inside the
+ * outer bound with room for the network time around it.
+ */
+const MAX_ACCEPTED_WAIT_MS = 60_000;
 
 export type BrokerPlatform = "mt4" | "mt5";
 
@@ -34,6 +45,10 @@ export class MetaApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** MetaApi's machine code from `details` (E_AUTH, E_SRV_NOT_FOUND, …) when it sent one. */
+    readonly code?: string,
+    /** E_SRV_NOT_FOUND lists the server names the trader probably meant. */
+    readonly suggestedServers?: string[],
   ) {
     super(message);
     this.name = "MetaApiError";
@@ -88,18 +103,52 @@ function transactionId() {
 /**
  * MetaApi's own message is the only useful part of a failure, and it is what ends up in
  * `stateDetail` / `last_sync_error` in front of the trader — so keep it rather than inventing our
- * own wording.
+ * own wording. The machine code rides along for the connect route, which rewrites credential
+ * rejections (E_AUTH) into shorter trader-facing copy keyed off it.
  */
-async function readErrorMessage(response: Response) {
+type MetaApiErrorBody = {
+  message?: unknown;
+  error?: unknown;
+  details?: unknown;
+};
+
+type MetaApiErrorDetailsResult = {
+  code?: string;
+  suggestedServers?: string[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function readErrorDetails(details: unknown): MetaApiErrorDetailsResult {
+  if (typeof details === "string") return { code: details };
+  if (!isRecord(details)) return {};
+
+  const serversByBrokers = details.serversByBrokers;
+  const suggestedServers = isRecord(serversByBrokers)
+    ? [...new Set(Object.values(serversByBrokers).flatMap((servers) =>
+        Array.isArray(servers) ? servers.filter((server): server is string => Boolean(stringValue(server))) : []))]
+    : undefined;
+  return { code: stringValue(details.code), suggestedServers };
+}
+
+async function readError(response: Response): Promise<{ message: string; code?: string; suggestedServers?: string[] }> {
   const body = await response.text().catch(() => "");
   try {
-    const parsed = JSON.parse(body) as { message?: unknown; error?: unknown };
-    if (typeof parsed.message === "string" && parsed.message) return parsed.message;
-    if (typeof parsed.error === "string" && parsed.error) return parsed.error;
+    const parsed = JSON.parse(body) as MetaApiErrorBody;
+    const message = stringValue(parsed.message) ?? stringValue(parsed.error);
+    // `details` is a plain string ("E_AUTH") on some errors and an object carrying `code` on
+    // others (E_SRV_NOT_FOUND). Both shapes are documented on the create-account page.
+    if (message) return { message, ...readErrorDetails(parsed.details) };
   } catch {
     // non-JSON body (gateway HTML) — fall through
   }
-  return body.slice(0, 300) || `MetaApi request failed with ${response.status}.`;
+  return { message: body.slice(0, 300) || `MetaApi request failed with ${response.status}.` };
 }
 
 type MetaApiRequestInit = {
@@ -107,12 +156,24 @@ type MetaApiRequestInit = {
   body?: unknown;
   /** POSTs carry a transaction-id; the same one is reused across 202 polls. */
   transactional?: boolean;
+  /**
+   * A transaction-id minted by the caller instead of here. Only the create needs it: it logs
+   * the id BEFORE the call, and that trail is worthless unless it is the id actually sent.
+   */
+  transactionId?: string;
+  /**
+   * How many 202 "still working" polls to allow. The credential-validating create is slower to
+   * settle than a deploy — broker settings detection can answer "retry in 60 seconds" — so it
+   * passes a larger budget. Retry-After is honoured either way.
+   */
+  acceptedAttempts?: number;
 };
 
 async function metaApiFetch(url: string, init: MetaApiRequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = { "auth-token": authToken() };
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
-  if (init.transactional) headers["transaction-id"] = transactionId();
+  if (init.transactional) headers["transaction-id"] = init.transactionId ?? transactionId();
+  const maxAccepted = init.acceptedAttempts ?? MAX_ACCEPTED_ATTEMPTS;
 
   for (let attempt = 1; ; attempt += 1) {
     const response = await fetchWithRetry(
@@ -127,9 +188,11 @@ async function metaApiFetch(url: string, init: MetaApiRequestInit = {}): Promise
     );
 
     // 202 = "still working, ask again". Provisioning wants the identical request back; MetaStats
-    // sends a retry-after. Bounded — a stuck job must surface, not spin.
-    if (response.status === 202 && attempt < MAX_ACCEPTED_ATTEMPTS) {
-      await wait(parseRetryAfterMs(response.headers.get("retry-after")) ?? ACCEPTED_BACKOFF_MS * attempt);
+    // sends a retry-after. Bounded — a stuck job must surface, not spin. The wait is capped so
+    // the whole poll fits inside the calling function's lifetime, Retry-After or not.
+    if (response.status === 202 && attempt < maxAccepted) {
+      const waitMs = parseRetryAfterMs(response.headers.get("retry-after")) ?? ACCEPTED_BACKOFF_MS * attempt;
+      await wait(Math.min(waitMs, MAX_ACCEPTED_WAIT_MS));
       continue;
     }
 
@@ -148,7 +211,8 @@ async function metaApiFetch(url: string, init: MetaApiRequestInit = {}): Promise
     }
 
     if (!response.ok) {
-      throw new MetaApiError(response.status, await readErrorMessage(response));
+      const error = await readError(response);
+      throw new MetaApiError(response.status, error.message, error.code, error.suggestedServers);
     }
     return response;
   }
@@ -160,62 +224,128 @@ async function metaApiJson<T>(url: string, init?: MetaApiRequestInit): Promise<T
 }
 
 /**
- * Creates the account WITHOUT credentials — the trader supplies those on MetaApi's hosted page
- * (see {@link createConfigurationLink}). `server` and `platform` must be known up front because
- * that page collects login + password only.
+ * Creates the account WITH the trader's credentials, typed in our app and forwarded here —
+ * never stored, never logged. MetaApi validates them synchronously during "automatic broker
+ * settings detection", so a bad login fails this call with a 400 (E_AUTH) instead of surfacing
+ * as a broken deploy minutes later. That validation is also why the 202 budget is larger than
+ * any other call's: detection answers "retry in 60 seconds" while it works, and a wrong
+ * password is only known at the end of it.
+ *
+ * The credentials live at MetaApi from here on; this service holds neither them nor a way to
+ * read them back.
  */
 export async function createAccount(input: {
   userId: string;
   platform: BrokerPlatform;
   server: string;
+  login: string;
+  password: string;
 }): Promise<{ id: string; state?: string }> {
+  // Minted and logged BEFORE the network call, because this is the $2.10 one. The route's
+  // compensating delete only runs if this function returns or throws — a slow create that
+  // outlives the invocation is killed, and then the id below is the only handle anyone has for
+  // finding the paid orphan in MetaApi's dashboard. The 202-exhausted log inside metaApiFetch
+  // covers a poll that runs out; it cannot cover being killed mid-poll.
+  const transaction = transactionId();
+  logger.info("MetaApi account create starting.", { transactionId: transaction, userId: input.userId });
+
   return metaApiJson<{ id: string; state?: string }>(`${PROVISIONING_BASE}/users/current/accounts`, {
     method: "POST",
     transactional: true,
+    transactionId: transaction,
+    // Settings detection + auth validation can take a couple of minutes of 202 polling.
+    acceptedAttempts: CREATE_ACCEPTED_ATTEMPTS,
     body: {
-      name: `verify.trading — ${input.userId}`,
+      name: accountName(input.userId),
+      login: input.login,
+      password: input.password,
       server: input.server,
       platform: input.platform,
-      // magic must be 0 alongside manualTrades; we only ever read closed trades.
-      magic: 0,
-      // cloud-g2 + high reliability: g2 is ~3x cheaper per hour and MetaApi does not
-      // sell "regular" reliability on g2 anyway, so asking for it only forces g1.
-      type: "cloud-g2",
-      reliability: "high",
-      manualTrades: true,
-      // Defaults to false, and historical-trades 403s without it. Enabling it later
-      // stops the account and is billed, so it has to be set at creation.
-      metastatsApiEnabled: true,
-      riskManagementApiEnabled: false,
-      tags: ["verify-trading"],
+      ...ACCOUNT_SETTINGS,
       metadata: { verifyUserId: input.userId },
     },
   });
 }
 
+/**
+ * The settings that define what an account IS at MetaApi, shared by the two writes that send
+ * them. They live here rather than inline because the create and the password PUT drifting
+ * apart is a silent, expensive bug — see updateAccountPassword.
+ */
+const ACCOUNT_SETTINGS = {
+  // magic must be 0 alongside manualTrades; we only ever read closed trades.
+  magic: 0,
+  // cloud-g2 + high reliability: g2 is ~3x cheaper per hour and MetaApi does not
+  // sell "regular" reliability on g2 anyway, so asking for it only forces g1.
+  type: "cloud-g2",
+  reliability: "high",
+  manualTrades: true,
+  // Defaults to false, and historical-trades 403s without it. Enabling it later
+  // stops the account and is billed, so it has to be set at creation.
+  metastatsApiEnabled: true,
+  riskManagementApiEnabled: false,
+  tags: ["verify-trading"],
+} as const;
+
+/** One name everywhere an account needs one — create requires it, and so does the update. */
+function accountName(userId: string) {
+  return `verify.trading — ${userId}`;
+}
+
+// Broker settings detection answers 202 with up to a 60 s Retry-After while it validates the
+// credentials, and the route's maxDuration (300 s) is the outer bound this budget has to fit in.
+// A poll is NOT one 15 s request: fetchWithRetry sends each one twice before giving up and may
+// sleep a capped MAX_RETRY_DELAY_MS (15 s) between them on a retryable status, so one poll costs
+// up to ~45 s. At 4 polls the worst case (3 × 60 s capped waits + 4 × 45 s) is past 300 s on its
+// own, before the route's session read, dormant read and Supabase writes — and a function killed
+// mid-poll never runs the compensating delete, leaving a paid orphan. Three polls (2 × 60 s +
+// 3 × 45 s ≈ 255 s) is what fits, and only because the retry sleep is capped: an honoured 120 s
+// Retry-After on a single 503 used to blow the whole budget by itself.
+const CREATE_ACCEPTED_ATTEMPTS = 3;
+
 export async function getAccount(accountId: string): Promise<MetaApiAccount> {
   return metaApiJson<MetaApiAccount>(`${PROVISIONING_BASE}/users/current/accounts/${accountId}`);
 }
 
-// getConfigurationInformation is deliberately absent. GET .../configuration-information
-// authenticates with the short-lived CONFIGURATION token minted next to the hosted page, not the
-// account-management token this service holds, so it always fails with "Configuration token does
-// not match the account id". Whether an account has credentials is read off its own state instead
-// — see UNCONFIGURED_STATE in sync.ts.
-
 /**
- * Hosted page where the trader enters login + investor password. Re-issuable — that is also how a
- * password change is handled — and MetaApi never discloses what was typed, including to us.
+ * Replaces the investor password on an existing account — the recovery path when the broker
+ * starts turning the login away (password changed at the broker, typo at connect). MetaApi
+ * re-validates synchronously, so a bad new password fails here with E_AUTH, not at the next
+ * deploy. `password`, `name` and `server` are all required by the PUT; login cannot change
+ * (a different login IS a different trading account — that is the create path).
+ *
+ * Answers 204 No Content, so this reads the response for its status only. The new password
+ * takes effect on the next deploy — MetaApi documents "redeploy for settings to take effect",
+ * and our accounts are parked between syncs, so the caller just parks it.
+ *
+ * It sends every setting the create chose, not just the changed password. MetaApi does not
+ * document whether this PUT merges into the account or replaces it, and the two readings differ
+ * expensively: under replace semantics a partial body drops the g2 tier the whole cost model is
+ * quoted against, the metadata tying the account back to a user, and metastatsApiEnabled — which
+ * cannot be turned back on without stopping and re-billing the account. Re-sending values
+ * identical to what is already stored is a no-op under merge semantics, so the full body is the
+ * only one that is safe under both.
  */
-export async function createConfigurationLink(accountId: string, ttlInDays = 7): Promise<string> {
-  const { configurationLink } = await metaApiJson<{ configurationLink?: string }>(
-    `${PROVISIONING_BASE}/users/current/accounts/${accountId}/configuration-link?ttlInDays=${ttlInDays}`,
-    { method: "PUT" },
-  );
-  if (!configurationLink) {
-    throw new MetaApiError(502, "MetaApi returned no configuration link.");
-  }
-  return configurationLink;
+export async function updateAccountPassword(input: {
+  accountId: string;
+  userId: string;
+  server: string;
+  password: string;
+}): Promise<void> {
+  await metaApiFetch(`${PROVISIONING_BASE}/users/current/accounts/${input.accountId}`, {
+    method: "PUT",
+    transactional: true,
+    acceptedAttempts: CREATE_ACCEPTED_ATTEMPTS,
+    body: {
+      name: accountName(input.userId),
+      password: input.password,
+      server: input.server,
+      // platform and login are deliberately absent: MetaApi fixes both at creation and a
+      // different login IS a different account, which is the create path.
+      ...ACCOUNT_SETTINGS,
+      metadata: { verifyUserId: input.userId },
+    },
+  });
 }
 
 /** Idempotent at MetaApi — ignored when already deployed. Billed per deployment. */

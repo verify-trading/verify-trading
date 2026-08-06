@@ -34,13 +34,23 @@ export function parseRetryAfterMs(retryAfter: string | null) {
   return null;
 }
 
+/**
+ * The most one retry may sleep, however generous the Retry-After. Upstreams send minutes on a
+ * 429 or a maintenance 503, and every caller here sits inside a serverless invocation with a
+ * budget — the broker create is the tight one at 300 s, where a single honoured 120 s header
+ * eats the poll budget and the function is killed mid-create, leaving a paid MetaApi account
+ * nothing points at. Capped, one call costs at most timeout + 15 s + timeout (~45 s at the
+ * broker's 15 s timeout), which the create's three-poll budget is sized against.
+ *
+ * The cap is not a refusal to wait: a shorter header is honoured verbatim. It only stops an
+ * upstream from setting our function's lifetime.
+ */
+const MAX_RETRY_DELAY_MS = 15_000;
+
 function getRetryDelayMs(response: Response, attempt: number, baseDelayMs: number) {
   const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
-  if (retryAfterMs !== null) {
-    return retryAfterMs;
-  }
 
-  return baseDelayMs * attempt;
+  return Math.min(retryAfterMs ?? baseDelayMs * attempt, MAX_RETRY_DELAY_MS);
 }
 
 export async function fetchWithRetry(

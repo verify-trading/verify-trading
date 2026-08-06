@@ -43,16 +43,22 @@ export type BrokerAccountPayload = {
   stateDetail: string | null;
   lastSyncedAt: string | null;
   lastSyncError: string | null;
+  /**
+   * The broker refused the credentials — the mobile client renders its password form off this
+   * rather than string-matching the copy. True while either the live state or the last sync
+   * says so.
+   */
+  credentialsRejected: boolean;
 };
 
 export type BrokerSyncResult =
   | { status: "linking" }
   | { status: "imported"; importedDays: number; skippedDays: number };
 
-/** Raised while the trader still has to enter their credentials — the 409 path. */
+/** Raised while a legacy account still waits on credentials the hosted page used to collect. */
 export class BrokerNotConfiguredError extends Error {
   constructor() {
-    super("Finish connecting your account first — open the link we gave you.");
+    super("Finish connecting your account first — disconnect it and connect again.");
     this.name = "BrokerNotConfiguredError";
   }
 }
@@ -73,7 +79,7 @@ export class BrokerSyncError extends Error {
  * someone they are on a 14-day streak from days they never journaled — and a quarter of
  * broker-currency days can outnumber everything they typed and flip which currency the
  * header total claims. Not shorter either: the window is exclusive of nothing and a trader
- * connecting on a quiet week would land on "Nothing new" after finishing the hosted page.
+ * connecting on a quiet week would land on "Nothing new" after the first sync.
  */
 const FIRST_SYNC_DAYS = 30;
 /** Re-syncs start a day before the last one so trades that closed on the boundary fold in. */
@@ -101,9 +107,21 @@ const FAILED_STATE_DETAIL: Record<string, string> = {
 };
 
 // Stamped when the broker refuses the login, and read back by the wake pass to skip the account.
-// A constant because those two sites have to agree on the exact string.
+// A constant because those two sites have to agree on the exact string — and because the mobile
+// client renders its password-update form off the payload flag this drives.
 export const LOGIN_REJECTED_DETAIL =
-  "Your broker turned the login away. Check the investor password and reconnect.";
+  "Your broker turned the login away. Update the investor password and sync again.";
+
+// Rows stamped before this copy settled carry the older wording ("…Check the investor password
+// and reconnect."). Matching the constant by equality misses them: credentialsRejected reads
+// false and the wake-pass skip never fires, so every wake re-pays $0.0756 to re-prove a login
+// the broker already refused. The prefix is the stable part every variant shares.
+const LOGIN_REJECTED_PREFIX = "Your broker turned the login away";
+
+/** True for ANY wording a login rejection has ever been stamped with, current or legacy. */
+export function isLoginRejectedDetail(detail: string | null): boolean {
+  return detail?.startsWith(LOGIN_REJECTED_PREFIX) ?? false;
+}
 
 const UNREACHABLE_STATE_DETAIL = "We couldn't check your connection just now. Try again in a minute.";
 
@@ -225,20 +243,24 @@ export function toBrokerAccountPayload(
     stateDetail: derived.stateDetail,
     lastSyncedAt: row.last_synced_at,
     lastSyncError: row.last_sync_error,
+    credentialsRejected:
+      isLoginRejectedDetail(derived.stateDetail) || isLoginRejectedDetail(row.last_sync_error),
   };
 }
 
-// What `POST /users/current/accounts` leaves behind when we create an account with no login, and
-// how we know the trader still has the hosted page to finish.
-const UNCONFIGURED_STATE = "DRAFT";
+// What `POST /users/current/accounts` used to leave behind when accounts were created with no
+// login and the trader finished on MetaApi's hosted page. Credentials are collected in-app now,
+// so only rows created before that change can still sit in DRAFT — kept so they read
+// `awaiting_config` (and are told to reconnect) rather than pretending to be configured.
+export const UNCONFIGURED_STATE = "DRAFT";
 
 /**
  * Live MetaApi view of an account: what it is doing, and whether it has credentials yet.
  *
- * `configured` is read off the account itself, NOT from GET .../configuration-information, which
- * only accepts the hosted page's own short-lived token (see metaapi.ts). Two independent signals,
- * because DRAFT is undocumented in MetaApi's state enum: not DRAFT, or a `login` present. An
- * unknown state errs toward configured — recoverable, unlike stranding the trader on setup.
+ * Two independent signals for `configured`, because DRAFT is undocumented in MetaApi's state
+ * enum: not DRAFT, or a `login` present. Accounts created since credentials moved in-app are
+ * configured from birth; DRAFT only survives on pre-migration rows. An unknown state errs
+ * toward configured — recoverable, unlike stranding the trader on setup.
  */
 export async function readBrokerSnapshot(row: Pick<BrokerAccountRow, "metaapi_account_id">) {
   const account = await getAccount(row.metaapi_account_id);
@@ -410,7 +432,7 @@ export async function advanceBrokerSync(
     // $0.0756 to prove it. The guard lives HERE, beside the spend, rather than in one caller, so
     // no pass can reach the deploy without it. A manual "Sync now" still goes through, so a
     // trader who fixed things at the broker can retry on demand.
-    if (!options.manual && row.last_sync_error === LOGIN_REJECTED_DETAIL) {
+    if (!options.manual && isLoginRejectedDetail(row.last_sync_error)) {
       return { status: "linking" };
     }
     // Deployments are billed individually and MetaApi has no idempotency for them, so the claim —
@@ -528,7 +550,7 @@ export async function runBrokerSyncPass(
 
       // Refused inside advanceBrokerSync as well, beside the deployment it would pay for — that
       // is the real guard; skipping here only saves the state read.
-      if (row.last_sync_error === LOGIN_REJECTED_DETAIL) {
+      if (isLoginRejectedDetail(row.last_sync_error)) {
         results.push(`${row.id}:skipped_login_rejected`);
         continue;
       }

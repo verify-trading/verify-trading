@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/observability/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+import { logger } from "@/lib/observability/logger";
 import {
   createAccount,
   deleteAccount,
@@ -8,6 +13,7 @@ import {
   formatMetaStatsTime,
   MetaApiError,
   searchServers,
+  updateAccountPassword,
 } from "@/lib/broker/metaapi";
 
 /**
@@ -51,7 +57,8 @@ function stubSequence(replies: Array<{ status: number; body?: unknown }>) {
       });
       const reply = replies[Math.min(index, replies.length - 1)];
       index += 1;
-      return new Response(reply.body === undefined ? "" : JSON.stringify(reply.body), {
+      // null, not "": bodyless statuses (204 on the password PUT) reject any body at all.
+      return new Response(reply.body === undefined ? null : JSON.stringify(reply.body), {
         status: reply.status,
         headers: { "Content-Type": "application/json", "retry-after": "0" },
       });
@@ -153,7 +160,7 @@ describe("MetaApi transport", () => {
   it("re-sends a 202 with the SAME transaction-id, so the poll is not a second billable write", async () => {
     const calls = stubSequence([{ status: 202 }, { status: 202 }, { status: 200, body: { id: "meta-1" } }]);
 
-    const created = await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5" });
+    const created = await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw" });
 
     expect(created).toEqual({ id: "meta-1" });
     expect(calls).toHaveLength(3);
@@ -169,28 +176,112 @@ describe("MetaApi transport", () => {
     // 202 satisfies response.ok. Waving it through hands the caller an object with no `id`,
     // and account/route.ts then aims its compensating delete at `undefined` while the real
     // account bills on. So the transport has to refuse it.
-    stubSequence([{ status: 202 }]);
+    const calls = stubSequence([{ status: 202 }]);
 
     await expect(
-      createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5" }),
+      createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw" }),
     ).rejects.toMatchObject({ status: 202 });
+    // And it gives up after THREE polls. The budget is bounded by the route's 300 s maxDuration,
+    // not by patience: each poll can wait a capped 60 s and costs up to ~30 s of its own (the
+    // transport sends every request twice before giving up), so a fourth reaches the ceiling —
+    // where the function is killed mid-poll and the compensating delete never runs.
+    expect(calls).toHaveLength(3);
   });
 
-  it("sends the create payload the cost model depends on", async () => {
+  it("sends the create payload the cost model depends on, credentials included", async () => {
     const calls = stubSequence([{ status: 200, body: { id: "meta-1" } }]);
 
-    await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5" });
+    await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "investor-pw" });
 
     const body = JSON.parse(calls[0].body);
+    // The credentials ARE the point of this create: MetaApi validates them synchronously, so
+    // a wrong investor password fails the request (E_AUTH) instead of the next deploy. They
+    // are forwarded here and nowhere else — never stored, never logged.
+    expect(body.login).toBe("123456");
+    expect(body.password).toBe("investor-pw");
     // metastatsApiEnabled cannot be turned on later without stopping and re-billing the
     // account, and historical-trades 403s without it — so it has to be right at creation.
     expect(body.metastatsApiEnabled).toBe(true);
     // cloud-g2 + high is the tier the whole cost model is quoted against.
     expect(body).toMatchObject({ type: "cloud-g2", reliability: "high", manualTrades: true, magic: 0 });
-    // No credentials, ever: that is the entire security posture of this feature.
-    expect(body).not.toHaveProperty("password");
-    expect(body).not.toHaveProperty("login");
     expect(body.metadata).toEqual({ verifyUserId: "user-1" });
+  });
+
+  it("logs the create's transaction-id BEFORE the call, so a killed invocation still leaves a trail", async () => {
+    const calls = stubSequence([{ status: 200, body: { id: "meta-1" } }]);
+
+    await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw" });
+
+    // The id logged is the id sent — a different one would be useless for finding the account.
+    expect(logger.info).toHaveBeenCalledWith("MetaApi account create starting.", {
+      transactionId: calls[0].transactionId,
+      userId: "user-1",
+    });
+    // And it is on the record before the network call. This create can outlive its 300 s
+    // invocation while polling; a killed function returns nothing, throws nothing and runs no
+    // compensating delete, so the only trace of a paid $2.10 orphan is what was logged first.
+    expect(vi.mocked(logger.info).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(fetch).mock.invocationCallOrder[0],
+    );
+  });
+
+  it("reads MetaApi's validation code and server suggestions out of a failed create", async () => {
+    // The account route rewrites E_AUTH/E_SRV_NOT_FOUND into short trader copy keyed off
+    // `code` — losing it here would turn a wrong password into an anonymous 502.
+    stubSequence([{
+      status: 400,
+      body: {
+        error: "ValidationError",
+        message: ".dat file for server ICMarkets-Demo not found…",
+        details: { code: "E_SRV_NOT_FOUND", serversByBrokers: { "Raw Trading Ltd": ["ICMarketsSC-Demo", "ICMarketsSC-MT5"] } },
+      },
+    }]);
+
+    const failure = await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarkets-Demo", login: "1", password: "pw" }).catch((error) => error);
+    expect(failure).toMatchObject({
+      status: 400,
+      code: "E_SRV_NOT_FOUND",
+      suggestedServers: ["ICMarketsSC-Demo", "ICMarketsSC-MT5"],
+    });
+
+    // …and the other documented shape, `details` as a plain string (E_AUTH).
+    stubSequence([{ status: 400, body: { error: "ValidationError", message: "We failed to authenticate…", details: "E_AUTH" } }]);
+
+    await expect(
+      createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "1", password: "wrong" }),
+    ).rejects.toMatchObject({ status: 400, code: "E_AUTH" });
+  });
+
+  it("puts a new password on the account with the fields the update requires", async () => {
+    // 204 No Content on success — and the PUT re-validates synchronously, so this call is
+    // where a bad replacement password surfaces, not the next deploy.
+    const calls = stubSequence([{ status: 204 }]);
+
+    await updateAccountPassword({ accountId: "meta-1", userId: "user-1", server: "ICMarketsSC-MT5", password: "new-pw" });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain("/users/current/accounts/meta-1");
+    const body = JSON.parse(calls[0].body);
+    // password, name and server are the required PUT fields; login is not in the schema
+    // because it cannot change — a different login is a different account, created fresh.
+    expect(body).toMatchObject({ password: "new-pw", server: "ICMarketsSC-MT5" });
+    expect(body.name).toContain("user-1");
+    expect(body).not.toHaveProperty("login");
+    // Every setting the create chose rides along, unchanged. MetaApi does not document whether
+    // this PUT merges or replaces, and under replace semantics a partial body silently drops
+    // the g2 tier the cost model is quoted against, the metadata tying the account to a user,
+    // and metastatsApiEnabled — which cannot be turned back on without re-billing the account.
+    // Re-sending what is already stored is a no-op under merge, so this body is safe under both.
+    expect(body).toMatchObject({
+      type: "cloud-g2",
+      reliability: "high",
+      manualTrades: true,
+      magic: 0,
+      metastatsApiEnabled: true,
+      riskManagementApiEnabled: false,
+      tags: ["verify-trading"],
+      metadata: { verifyUserId: "user-1" },
+    });
   });
 
   it("surfaces MetaApi's own message, because the trader reads it", async () => {
