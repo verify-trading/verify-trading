@@ -2,7 +2,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { hasProAccess } from "@/lib/billing/require-pro";
 import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
-import { synthesizeCoachSpeech, TTS_MAX_CHARS } from "@/lib/psychology/tts";
+import { claimTtsChars, synthesizeCoachSpeech, TTS_MAX_CHARS } from "@/lib/psychology/tts";
 
 // Proxies ElevenLabs so the API key never reaches the client. The app plays this URL directly
 // (expo-audio) with its Bearer token as a header.
@@ -17,8 +17,16 @@ export async function GET(request: Request) {
   const text = new URL(request.url).searchParams.get("text")?.trim();
   if (!text) return jsonApiError(400, "tts_invalid", "Missing text to speak.");
 
+  const spoken = text.slice(0, TTS_MAX_CHARS);
+  // Pro entitlement alone bounds nothing here: the subscription is flat and this route bills per
+  // character on every request. A stuck client would otherwise spend without limit.
+  if (!claimTtsChars(session.user.id, spoken.length)) {
+    logger.warn("Psychology TTS daily character budget exhausted.", { userId: session.user.id });
+    return jsonApiError(429, "tts_rate_limited", "You've reached today's voice limit. Try again tomorrow.");
+  }
+
   try {
-    const speech = await synthesizeCoachSpeech(text.slice(0, TTS_MAX_CHARS), AbortSignal.timeout(20_000));
+    const speech = await synthesizeCoachSpeech(spoken, AbortSignal.timeout(20_000));
     if (!speech.ok) {
       logger.error("ElevenLabs TTS request failed.", { status: speech.status });
       return jsonApiError(502, "tts_failed", "The coach's voice is unavailable right now.");

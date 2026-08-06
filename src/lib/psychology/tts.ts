@@ -8,6 +8,36 @@ const COACH_MODEL_ID = "eleven_flash_v2_5";
 
 export const TTS_MAX_CHARS = 800;
 
+// Every request bills ElevenLabs per character against a fixed-price subscription, and unlike a
+// voice call nothing else bounds this route — the call cap is enforced at token mint, which this
+// path never touches. A day of ordinary coaching is nowhere near this; a client stuck in a retry
+// loop passes it in seconds.
+const TTS_DAILY_CHARS = 60_000;
+
+// userId -> characters spoken today, and the UTC day that count belongs to.
+const spend = new Map<string, { day: number; chars: number }>();
+
+/**
+ * Books `chars` against today's allowance, or refuses. Charged BEFORE synthesis: a request that
+ * fails at ElevenLabs may still have been billed, so refunding on error would let a failing loop
+ * run free.
+ *
+ * ponytail: module memory, so on serverless this is per warm instance rather than global — it
+ * bounds a runaway client, not a determined attacker spraying cold starts. Move the counter to a
+ * table (as the $2.10 broker create budget does) if the spend ever justifies it.
+ */
+export function claimTtsChars(userId: string, chars: number): boolean {
+  const day = Math.floor(Date.now() / 86_400_000);
+  const current = spend.get(userId);
+  const used = current?.day === day ? current.chars : 0;
+  if (used + chars > TTS_DAILY_CHARS) {
+    spend.set(userId, { day, chars: used });
+    return false;
+  }
+  spend.set(userId, { day, chars: used + chars });
+  return true;
+}
+
 export async function synthesizeCoachSpeech(text: string, signal?: AbortSignal): Promise<Response> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY is not configured.");

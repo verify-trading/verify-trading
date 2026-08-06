@@ -41,13 +41,15 @@ const checkoutRequestSchema = z.object({
 const NEVER_STARTED: Stripe.Subscription.Status[] = ["incomplete", "incomplete_expired"];
 
 async function isTrialEligible(stripe: Stripe, customerId: string): Promise<boolean> {
-  const previous = await stripe.subscriptions.list({
-    customer: customerId,
-    status: "all",
-    limit: 100,
-  });
+  // Auto-paginated and short-circuited on the first disqualifying subscription. A single page of
+  // 100 was not enough to be sure: every declined card on the promo link leaves an
+  // incomplete_expired behind, so a customer's newest 100 can be all retries while the real
+  // subscription that spends their trial sits on the next page.
+  for await (const subscription of stripe.subscriptions.list({ customer: customerId, status: "all", limit: 100 })) {
+    if (!NEVER_STARTED.includes(subscription.status)) return false;
+  }
 
-  return !previous.data.some((subscription) => !NEVER_STARTED.includes(subscription.status));
+  return true;
 }
 
 function checkoutReturnUrls(origin: string, source: "web" | "mobile") {
@@ -159,7 +161,16 @@ export async function POST(request: Request) {
       (payload.source === "mobile" || payload.trial ? checkoutClaim.stripeCheckoutSessionId : null);
 
     if (staleCheckoutSessionId) {
-      await stripe.checkout.sessions.expire(staleCheckoutSessionId).catch(() => undefined);
+      // Swallowed so a Stripe hiccup can't block checkout, but never silently: a session that
+      // outlives its replacement stays payable, and paying through it buys the OLD terms — a free
+      // week granted or withheld against what we stored.
+      await stripe.checkout.sessions.expire(staleCheckoutSessionId).catch((error: unknown) =>
+        logger.warn("Stale checkout session left live; expiry failed.", {
+          ...context,
+          staleCheckoutSessionId,
+          ...stripeErrorMeta(error),
+        }),
+      );
     }
 
     const checkoutSession = await stripe.checkout.sessions.create(
@@ -202,7 +213,10 @@ export async function POST(request: Request) {
       userId: session.user.id,
       checkoutToken: checkoutClaim.checkoutToken,
       stripeCheckoutSessionId: checkoutSession.id,
-      checkoutUrl: checkoutSession.url,
+      // A trial session is never offered back to a later request: the stored row cannot say
+      // whether it carried a free week, so the reuse branch above would hand this URL to a plain
+      // checkout. Trial requests always build a fresh session anyway, so nothing is lost.
+      checkoutUrl: trialPeriodDays ? null : checkoutSession.url,
       expiresAt:
         typeof checkoutSession.expires_at === "number"
           ? new Date(checkoutSession.expires_at * 1000).toISOString()
