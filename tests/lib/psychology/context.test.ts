@@ -245,7 +245,19 @@ describe("loadCoachContext", () => {
     const from = vi.fn((table: string) =>
       table === "psychology_sessions" ? sessions : createQueryBuilder({ data: null, error: null }),
     );
-    await loadCoachContext({ from } as never, "user-1", "assessment-1", "Alex", "live-session-9");
-    expect(sessions.neq).toHaveBeenCalledWith("id", "live-session-9");
+    await loadCoachContext({ from } as never, "user-1", "assessment-1", "Alex", "11111111-2222-3333-4444-555555555555");
+    expect(sessions.neq).toHaveBeenCalledWith("id", "11111111-2222-3333-4444-555555555555");
+  });
+
+  it("skips the exclusion for a malformed session id instead of failing the read", () => {
+    // `id` is a uuid column: comparing it to anything else is a Postgres type error, which used
+    // to fail this read, null the whole context and end the call as "assessment not found".
+    const sessions = createQueryBuilder({ data: [], count: 0, error: null });
+    const from = vi.fn((table: string) =>
+      table === "psychology_sessions" ? sessions : createQueryBuilder({ data: null, error: null }),
+    );
+    return loadCoachContext({ from } as never, "user-1", "assessment-1", "Alex", "not-a-uuid").then(() => {
+      expect(sessions.neq).not.toHaveBeenCalled();
+    });
   });
 });

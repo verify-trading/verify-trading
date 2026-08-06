@@ -88,6 +88,7 @@ function journalContext(rows: JournalRow[]): JournalContext {
 }
 
 const TAIL_CHARS = 600;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // A coach that knows nothing about earlier calls INVENTS them, so hand it the real tail of the
 // last one. "error" is distinct from null: "no prior call" is a fact the prompt states, a failed
@@ -107,7 +108,10 @@ async function loadLastCall(
     .select("id, created_at", { count: "exact" })
     .eq("user_id", userId)
     .gt("message_count", 0);
-  if (currentSessionId) query = query.neq("id", currentSessionId);
+  // Only a well-formed id is worth excluding: `id` is a uuid column, so comparing it against
+  // anything else is a Postgres type error, which fails this read, nulls the whole context and
+  // ends the call as "assessment not found". A malformed id matches no row anyway.
+  if (currentSessionId && UUID.test(currentSessionId)) query = query.neq("id", currentSessionId);
   const { data, count, error } = await query
     .order("created_at", { ascending: false })
     .limit(1);
