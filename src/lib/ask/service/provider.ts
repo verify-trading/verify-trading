@@ -43,13 +43,26 @@ export const DEFAULT_ASK_MODEL = "gpt-5.6-terra";
 /** Cheaper tier for the non-conversational writers (journal insight, challenge status). */
 export const DEFAULT_ASK_SIMPLE_MODEL = "gpt-5.4-mini";
 
-/** The live MIND coach. On a voice call, time to first token is what the trader
- *  hears, so the coach gets its own setting rather than riding ASK_SIMPLE_MODEL,
+/**
+ * The gateway's Claude route, which the Mind coach — and only the Mind coach —
+ * runs on. It answers the OpenAI-shaped /v1/chat/completions endpoint but is a
+ * different KEY GROUP: with OPENAI_API_KEY every claude model returns "Upstream
+ * service temporarily unavailable", so this instance carries ANTHROPIC_API_KEY.
+ * Ask and the simple writers stay on codexProvider above — see its note on why
+ * the server-side search tools only work over there.
+ */
+const coachProvider = createOpenAI({
+  baseURL: resolveOpenAIBaseURL(),
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+/** The live MIND coach. Its own setting rather than riding ASK_SIMPLE_MODEL,
  *  which the journal insight and challenge-status writers also read; those are
- *  not voice and should not follow the coach's latency tradeoff. Measured on the
- *  coach's own prompt: sol answers in 1.4-1.9s to first token, where 5.4-mini
- *  ranged 5.5-18s on identical input. */
-export const DEFAULT_COACH_MODEL = "gpt-5.6-sol";
+ *  not voice and should not follow the coach's tradeoffs. Sonnet is the warmest
+ *  of the gateway's models on this persona and holds the conversational rules
+ *  (no invented memories, no forced question on a goodbye) that a smaller model
+ *  drifts off; measured TTFB on the coach's own prompt is 2.9-4.5s streaming. */
+export const DEFAULT_COACH_MODEL = "claude-sonnet-5";
 
 export function getAskPrimaryModelId() {
   return process.env.ASK_MODEL ?? DEFAULT_ASK_MODEL;
@@ -124,16 +137,27 @@ export function getAskSimpleModel() {
   return askModel(getAskSimpleModelId());
 }
 
+/**
+ * `.chat()` is load-bearing: the SDK's default for this provider is the
+ * Responses API, and the gateway does not serve claude models there at all
+ * (/v1/messages is blocked for our group too). Only OpenAI-shaped
+ * /v1/chat/completions works, which is what the chat accessor targets.
+ *
+ * Deliberately raw, with none of askModel's middleware: `store` and
+ * `reasoningEffort` are OpenAI-isms the Claude route has no use for, and
+ * stripping maxOutputTokens is pointless because `max_tokens` is silently
+ * IGNORED here (asked for 5, got 169). The spoken length is therefore bounded
+ * only at the call site — see SPOKEN_CHAR_BUDGET in the agent-llm route, which
+ * is the real cap and must stay.
+ */
 export function getPsychologyCoachModel() {
-  // These are reasoning models: they think before they speak, and on a voice
-  // call that thinking is dead air. "low" roughly halves it (2.4-3.0s end to
-  // end vs 4.3s at the default) and the coach's replies are short and
-  // empathetic rather than analytical, so little is lost.
-  //
-  // NOT "minimal": on this gateway that returns an EMPTY text stream — the call
-  // succeeds, streams no chunks, and the trader hears silence. Any change here
-  // must be checked for actual output, not just latency.
-  return askModel(getPsychologyCoachModelId(), { reasoningEffort: "low" });
+  // Fail here rather than fall back to OPENAI_API_KEY, which createOpenAI would
+  // do silently — and that key's group answers every claude model with an
+  // upstream error, i.e. a coach that greets the trader and then dies.
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is not set; the Mind coach cannot reach the gateway's Claude route.");
+  }
+  return coachProvider.chat(getPsychologyCoachModelId());
 }
 
 /**

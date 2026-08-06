@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 
-import { getAskSimpleModel } from "@/lib/ask/service/provider";
+import { getPsychologyCoachModel } from "@/lib/ask/service/provider";
 import { readUserDisplayName } from "@/lib/auth/read-user-display-name";
 import { sectionLabels, type PsychologyAssessmentRow } from "@/lib/psychology/assessment";
 import type { ChallengeRules } from "@/lib/journal/challenge";
@@ -40,6 +40,23 @@ export type RecentEntry = {
   lesson: string | null;
 };
 
+// The tail of the trader's previous conversation (labelled + char-capped by loadCoachContext).
+// Knowing nothing about earlier calls is what made the coach FABRICATE one ("you told me...").
+export type LastCall = {
+  createdAt: string;
+  transcript: string;
+  priorCalls: number;
+};
+
+// Age of a stored timestamp in whole UTC days — the same day keys the journal window uses. Null
+// for a missing/unparseable value, so the prompt drops the phrase instead of saying "NaN days ago".
+export function daysAgoPhrase(iso: string | undefined | null): string | null {
+  const at = new Date(iso ?? "").getTime();
+  if (Number.isNaN(at)) return null;
+  const days = Math.floor(Date.now() / 86_400_000) - Math.floor(at / 86_400_000);
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+}
+
 // Turn a scraped rule string ("10%", "$10,000", "$5k") into an amount for the account size.
 export function ruleToAmount(rule: string | null | undefined, accountSize: number): number | null {
   if (!rule) return null;
@@ -61,6 +78,15 @@ function flagLines(assessment: Record<string, unknown>) {
   ].filter(Boolean);
 
   return flags.length > 0 ? flags.join("\n") : "No critical flags.";
+}
+
+function lastCallBlock(last: LastCall | null): string {
+  // Stated, not left absent: with no line here a model still reaches for a memory it never had.
+  if (!last) return "PREVIOUS CALLS:\nThis is your first conversation together — never imply you have spoken before.";
+  const age = daysAgoPhrase(last.createdAt);
+  const calls = `${last.priorCalls} conversation${last.priorCalls === 1 ? "" : "s"} so far`;
+  return `LAST CALL (${last.createdAt.slice(0, 10)}${age ? `, ${age}` : ""}; ${calls}) — the end of it, verbatim. This IS shared history you may refer to; nothing outside it is:
+${last.transcript}`;
 }
 
 function challengeBlock(challenge: ChallengeContext | null): string {
@@ -111,10 +137,18 @@ export function buildPsychologyCoachInstructions(input: {
   journal: JournalContext;
   challenge?: ChallengeContext | null;
   recentEntries?: RecentEntry[];
+  lastCall?: LastCall | null;
   realtime?: boolean;
 }) {
   const { assessment, journal } = input;
   const section = sectionLabels[assessment.focus_area] ?? String(assessment.focus_area);
+  // The check-in is a FORM from some earlier day. Undated and in bare present tense it read to the
+  // model as things just said — the coach told a trader "you said you were tired" when they hadn't.
+  const checkIn = daysAgoPhrase(assessment.created_at);
+  const staleRule = checkIn === "today"
+    ? ""
+    : " That check-in is not from today, so their sleep, energy and stress may have changed since —" +
+      " ask how they are now rather than assuming, and never advise them to trade or not trade off those old answers.";
   // ponytail: the realtime (ElevenLabs) path can't surface the UI break-nudge — that flag rode
   // the turn-based companion response, which the live call bypasses. Realtime v1 instead tells
   // the coach to voice the break aloud whenever it fits; the visual nudge card is dropped there.
@@ -142,13 +176,18 @@ You are not a trading signal service. Never give trade recommendations or entrie
 You are here for mental performance, risk discipline, and psychological wellbeing.
 You are warm but honest — tell them what they need to hear. Speak naturally, like a real call.
 
-You know their full situation below. USE IT: reference their firm's actual rules, how close they are to the target, the daily-loss/drawdown limits they must respect, and their recent sessions — concretely and naturally, without announcing that you're reading data.
+Answer what they just said, first and directly. The blocks below are background that supports the conversation — they never replace it. Lean on them for grounded specifics (their firm's actual rules, how close they are to target, the daily-loss and drawdown limits, their recent sessions) without announcing that you're reading data.
+Never invent a memory. If it is not in this conversation or in the blocks below, they never said it — ask instead of recalling. Never claim they "said", "told you" or "mentioned" anything you cannot point to, and call the self-assessment "your last check-in", never something they told you.${staleRule}
+Follow the thread: build on what they have already said on this call instead of starting a fresh topic every turn.
+If a message is garbled or you cannot tell what they meant, ask them to say it again rather than guessing.
 
-ASSESSMENT:
+SELF-ASSESSMENT (a questionnaire ${input.name} filled in${checkIn ? ` ${checkIn}` : ""} — NOT things said on this call):
 Score: ${assessment.total_score}/75 — ${assessment.zone_label}. Dominant pattern: ${section}. Focus: ${assessment.q29_focus}.
 Situation: ${assessment.q1_trading_situation}. Stress: ${assessment.q2_stress_level}. Financial: ${assessment.q3_financial_situation}. Sleep: ${assessment.q4_sleep_quality}. Energy: ${assessment.q5_energy_level}.
-FLAGS:
+FLAGS (scored from that same check-in):
 ${flagLines(assessment)}
+
+${lastCallBlock(input.lastCall ?? null)}
 
 ${challengeBlock(input.challenge ?? null)}
 
@@ -156,7 +195,7 @@ WEEK: ${journal.sessionCount} sessions, P&L ${money(journal.weeklyPnl)}, ${journ
 
 ${recentBlock(input.recentEntries ?? [])}
 
-Keep it conversational and tight — 40 to 80 words, since it's spoken aloud. Plain text only — no markdown, no lists — your reply is read aloud. Always end with one natural follow-up question.${midCallRule}${breakContext}`;
+Keep it conversational and tight — 40 to 80 words, since it's spoken aloud. Plain text only — no markdown, no lists — your reply is read aloud. Usually end with one natural follow-up question, and never more than one; when they are wrapping up (thanks, goodbye, got to go), ask nothing and close warmly in one short line.${midCallRule}${breakContext}`;
 }
 
 export type PsychologyCoachContext = {
@@ -165,11 +204,14 @@ export type PsychologyCoachContext = {
   journal: JournalContext;
   challenge?: ChallengeContext | null;
   recentEntries?: RecentEntry[];
+  lastCall?: LastCall | null;
 };
 
 export async function generatePsychologyReply(input: PsychologyCoachContext & { transcript: string }) {
   const result = await generateText({
-    model: getAskSimpleModel(),
+    // The same model the live call runs on: one persona built here, one brain
+    // answering it, so the text coach can never drift from what the voice does.
+    model: getPsychologyCoachModel(),
     maxOutputTokens: 240,
     system: buildPsychologyCoachInstructions(input),
     prompt: input.transcript,

@@ -6,10 +6,10 @@ import { loadCoachContext } from "@/lib/psychology/context";
 // builder, and awaiting it (or .single()/.maybeSingle()) resolves the provided result.
 // If src ever adds a filter method (.not(), .gte(), ...) it must be added here too —
 // otherwise the chain returns undefined and the failure surfaces as a bare null context.
-function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
+function createQueryBuilder(result: { data?: unknown; count?: number; error?: unknown } = { data: null, error: null }) {
   const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
 
-  for (const method of ["select", "eq", "is", "order", "limit"]) {
+  for (const method of ["select", "eq", "is", "gt", "order", "limit"]) {
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn().mockResolvedValue(result);
@@ -43,16 +43,30 @@ const journalRow = (row: Row) => ({
   ...row,
 });
 
-const assessmentRow = { total_score: 40, zone_label: "Reactive Trader", focus_area: "compulsion", q29_focus: "stop revenge trading" };
+const assessmentRow = {
+  created_at: new Date().toISOString(),
+  total_score: 40,
+  zone_label: "Reactive Trader",
+  focus_area: "compulsion",
+  q29_focus: "stop revenge trading",
+};
 
-function load(rows: Row[], config: unknown = null) {
+// The coach's memory of earlier calls: the most recent session that has stored messages, plus
+// how many such conversations there are. Empty by default — most tests are about the journal.
+type Calls = { sessions?: unknown[]; count?: number; messages?: unknown[] };
+
+function load(rows: Row[], config: unknown = null, calls: Calls = {}) {
   const journal = createQueryBuilder({ data: rows.map(journalRow), error: null });
+  const sessions = createQueryBuilder({ data: calls.sessions ?? [], count: calls.count ?? 0, error: null });
+  const assessments = createQueryBuilder({ data: assessmentRow, error: null });
   const from = vi.fn((table: string) => {
-    if (table === "psychology_assessments") return createQueryBuilder({ data: assessmentRow, error: null });
+    if (table === "psychology_assessments") return assessments;
     if (table === "journal_entries") return journal;
+    if (table === "psychology_sessions") return sessions;
+    if (table === "psychology_session_messages") return createQueryBuilder({ data: calls.messages ?? [], error: null });
     return createQueryBuilder({ data: config, error: null });
   });
-  return { journal, from, context: loadCoachContext({ from } as never, "user-1", "assessment-1", "Alex") };
+  return { journal, sessions, assessments, from, context: loadCoachContext({ from } as never, "user-1", "assessment-1", "Alex") };
 }
 
 describe("loadCoachContext", () => {
@@ -150,6 +164,65 @@ describe("loadCoachContext", () => {
     expect(challenge?.daysTraded).toBe(1);
     expect(challenge?.amountToGo).toBe(900);
     expect(challenge?.daysLeft).toBe(29);
+  });
+
+  // The prompt dates the self-assessment ("filled in 5 days ago"). Without the column the coach
+  // spoke a days-old sleep answer as the trader's state right now.
+  it("reads the check-in's own timestamp, not just its answers", async () => {
+    const { assessments, context } = load([]);
+    await context;
+
+    expect(assessments.select.mock.calls[0][0]).toContain("created_at");
+  });
+
+  it("carries the tail of the last call, in the order it was spoken", async () => {
+    const { sessions, context } = load([], null, {
+      // The read is newest-first, so the fixture is too — the tail is what must survive.
+      sessions: [{ id: "session-9", created_at: "2026-08-01T10:00:00.000Z" }],
+      count: 4,
+      messages: [
+        { role: "coach", content: "Talk to me before you size up next time." },
+        { role: "user", content: "I went\nback in\ttoo big." },
+      ],
+    });
+    const lastCall = (await context)?.lastCall;
+
+    expect(lastCall?.createdAt).toBe("2026-08-01T10:00:00.000Z");
+    expect(lastCall?.priorCalls).toBe(4);
+    // Spoken order, labelled, and the trader's own newlines flattened — a newline in there is
+    // what would let a transcript forge a block header in the system prompt.
+    expect(lastCall?.transcript).toBe(
+      "Them: I went back in too big.\nYou: Talk to me before you size up next time.",
+    );
+    // Sessions with no stored messages are skipped, which is also what keeps the call in
+    // progress (opened at mint with message_count 0) out of its own memory block.
+    expect(sessions.gt).toHaveBeenCalledWith("message_count", 0);
+  });
+
+  it("caps the tail so an hour-long call cannot crowd out the live one", async () => {
+    const { context } = load([], null, {
+      sessions: [{ id: "session-9", created_at: "2026-08-01T10:00:00.000Z" }],
+      count: 1,
+      messages: [{ role: "user", content: "a".repeat(2000) }],
+    });
+
+    expect((await context)?.lastCall?.transcript).toHaveLength(601); // 600 + the "…" marker
+  });
+
+  it("says there is no prior call rather than leaving the coach to guess", async () => {
+    expect((await load([]).context)?.lastCall).toBeNull();
+  });
+
+  it("refuses to build a persona when the call-history read fails", async () => {
+    const from = vi.fn((table: string) =>
+      table === "psychology_sessions"
+        ? createQueryBuilder({ data: null, error: { message: "boom" } })
+        : createQueryBuilder({ data: table === "psychology_assessments" ? assessmentRow : [], error: null }),
+    );
+
+    // Same policy as every other read here: a failed history read is not "you have never
+    // spoken" — and on the realtime path that wrong persona is cached for the whole call.
+    await expect(loadCoachContext({ from } as never, "user-1", "assessment-1", "Alex")).resolves.toBeNull();
   });
 
   it("refuses to build a persona when the journal read fails", async () => {

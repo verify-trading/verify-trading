@@ -7,6 +7,7 @@ import {
   ruleToAmount,
   type ChallengeContext,
   type JournalContext,
+  type LastCall,
   type PsychologyCoachContext,
   type RecentEntry,
 } from "@/lib/psychology/companion";
@@ -94,6 +95,48 @@ function journalContext(rows: JournalRow[]): JournalContext {
   };
 }
 
+// Enough of the last call to pick the thread up, small enough not to crowd out the live one.
+const TAIL_CHARS = 600;
+
+// A coach that knows nothing about earlier calls is the coach that INVENTS them — the reported
+// bug — so hand it the real tail of the last one. Rows with no stored messages are skipped, which
+// also excludes the call in progress (opened at mint with message_count 0), so this can never
+// quote the conversation it is part of. "error" is distinct from null: "no prior call" is a fact
+// the prompt states, a failed read is not, and it fails the context like every other read here.
+async function loadLastCall(supabase: SupabaseClient, userId: string): Promise<LastCall | null | "error"> {
+  const { data, count, error } = await supabase
+    .from("psychology_sessions")
+    .select("id, created_at", { count: "exact" })
+    .eq("user_id", userId)
+    .gt("message_count", 0)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error || !data) return "error";
+  const session = (data as unknown as Array<{ id: string; created_at: string }>)[0];
+  if (!session) return null;
+
+  // Read newest-first so the cap keeps the END of the call — where the thread they left off
+  // actually is — then flip back into spoken order.
+  const messages = await supabase
+    .from("psychology_session_messages")
+    .select("role, content")
+    .eq("user_id", userId)
+    .eq("session_id", session.id)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  if (messages.error || !messages.data) return "error";
+
+  const spoken = (messages.data as unknown as Array<{ role: string; content: string }>)
+    // Whitespace flattened: spoken turns are trader-written text landing in a structured system
+    // prompt, and a newline is what would let one forge a block header.
+    .map((row) => `${row.role === "coach" ? "You" : "Them"}: ${row.content.replace(/\s+/g, " ").trim()}`)
+    .reverse()
+    .join("\n");
+  const transcript = spoken.length > TAIL_CHARS ? `…${spoken.slice(-TAIL_CHARS)}` : spoken;
+
+  return { createdAt: session.created_at, transcript, priorCalls: count ?? 1 };
+}
+
 // Loads everything the coach persona needs for one user + assessment. Returns null when the
 // assessment isn't found (missing or not the caller's). The turn-based path reads
 // `.journal` off the result for shouldRecommendBreak.
@@ -103,13 +146,15 @@ export async function loadCoachContext(
   assessmentId: string,
   name: string,
 ): Promise<PsychologyCoachContext | null> {
-  const [assessmentQuery, journalQuery, configQuery] = await Promise.all([
+  const [assessmentQuery, journalQuery, configQuery, lastCall] = await Promise.all([
     supabase
       .from("psychology_assessments")
       // Only the fields the prompt actually reads (see buildPsychologyCoachInstructions): the
-      // scores/labels, the q1–q5 + q29 situation answers, and the flag_* signals.
+      // scores/labels, the q1–q5 + q29 situation answers, and the flag_* signals. created_at
+      // rides along because the prompt dates the check-in — undated, the coach spoke a
+      // days-old sleep/energy answer as the trader's state today.
       .select(
-        "total_score, zone_label, focus_area, q29_focus, " +
+        "created_at, total_score, zone_label, focus_area, q29_focus, " +
           "q1_trading_situation, q2_stress_level, q3_financial_situation, q4_sleep_quality, q5_energy_level, " +
           "flag_chasing, flag_compulsive, flag_financial_pressure, flag_sleep_poor, flag_rebuilding",
       )
@@ -128,13 +173,14 @@ export async function loadCoachContext(
       .select("firm_name, account_size, account_type, rules")
       .eq("user_id", userId)
       .maybeSingle(),
+    loadLastCall(supabase, userId),
   ]);
 
   // Every read must succeed. Treating a failed journal or challenge read as "no data" built a
   // coach that told a trader mid-challenge they had never logged a session — and on the
   // realtime path that wrong persona is then cached for the rest of the call.
   if (assessmentQuery.error || !assessmentQuery.data) return null;
-  if (journalQuery.error || configQuery.error) return null;
+  if (journalQuery.error || configQuery.error || lastCall === "error") return null;
 
   const rows = (journalQuery.data ?? []) as JournalRow[];
   const journal = journalContext(rows);
@@ -155,5 +201,6 @@ export async function loadCoachContext(
     journal,
     challenge,
     recentEntries,
+    lastCall,
   };
 }
