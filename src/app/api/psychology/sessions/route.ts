@@ -21,23 +21,15 @@ export async function GET() {
       .from("psychology_sessions")
       .select(PSYCHOLOGY_SESSION_COLUMNS)
       .eq("user_id", session.user.id)
-      // Hides the legacy contentless log rows, but a real call must still be listed even when
-      // its transcript never stored (ElevenLabs slow to finalise, fetch failed, empty
-      // transcript) — otherwise the trader's call silently disappears from their history.
-      //
-      // A stored conversation id counts as proof the call happened, and is the ONLY proof left
-      // when the hang-up report never arrives (app killed, signal gone): the row then carries
-      // no duration and no messages, and without this clause the trader could not open it —
-      // which is also the only thing that triggers the transcript repair in GET [id].
-      // A session that was minted but never connected has no pointer, so it stays hidden.
-      //
-      // Shared with the daily-limit count so the history and the allowance can never disagree
-      // about which rows are calls (see REAL_CALL_FILTER).
+      // A real call must stay listed even when its transcript never stored, so a stored
+      // conversation id counts as proof it happened — the only proof left when the hang-up
+      // report never arrives, and opening the call is what triggers the repair in GET [id].
+      // Shared with the daily-limit count so history and allowance agree on which rows are
+      // calls. A session minted but never connected has no pointer, so it stays hidden.
       .or(REAL_CALL_FILTER)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      // Explicit cap (PostgREST would silently apply ~1000 anyway); newest-first
-      // ordering means it's the oldest calls that fall off.
+      // Explicit cap; newest-first ordering means the oldest calls fall off.
       .limit(200);
 
     if (error || !data) {

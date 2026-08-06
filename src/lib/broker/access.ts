@@ -10,14 +10,9 @@ type BrokerAccess =
   | { ok: true; userId: string; admin: SupabaseClient }
   | { ok: false; response: NextResponse };
 
-/**
- * Broker API access: signed-in Pro users only, mirroring requireMarketsProSession. Every connected
- * account costs real money per month, so this gate is the budget.
- *
- * Hands back the service-role client too: broker_accounts is service-role-write (RLS lets the
- * owner read their row and nothing more) and the importer writes journal rows on the trader's
- * behalf. Every query is scoped by the userId returned here.
- */
+// Signed-in Pro only: every connected account costs money per month, so this gate is the budget.
+// Hands back the service-role client because broker_accounts is service-role-write (RLS lets the
+// owner read their own row and nothing more). Every query must be scoped by the userId returned.
 export async function requireBrokerProSession(): Promise<BrokerAccess> {
   const session = await getSessionUser();
   if (!session) {
@@ -34,11 +29,8 @@ export async function requireBrokerProSession(): Promise<BrokerAccess> {
   return withAdmin(session.user.id);
 }
 
-/**
- * Signed in, Pro or not — for the broker actions that must not require Pro: reading the connection
- * and disconnecting it. Gating those behind Pro trapped a trader whose plan lapsed, leaving their
- * account at MetaApi costing us money with no way to switch it off short of resubscribing.
- */
+// Signed in, Pro or not. Reading and disconnecting must not require Pro, or a lapsed trader has no
+// way to switch off an account that keeps costing us money.
 export async function requireBrokerSession(): Promise<BrokerAccess> {
   const session = await getSessionUser();
   if (!session) {

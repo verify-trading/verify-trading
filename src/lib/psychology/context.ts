@@ -12,14 +12,11 @@ import {
   type RecentEntry,
 } from "@/lib/psychology/companion";
 
-// Persona-data assembly shared by the two coach brains: the turn-based companion route
-// (user-scoped Supabase client) and the realtime custom-LLM endpoint (service-role client
-// scoped by an explicit userId). Reads and derivations must stay identical so the coach's
-// grounding is byte-for-byte the same on both paths.
+// Shared by both coach brains: the companion route (user-scoped client) and the realtime
+// custom-LLM endpoint (service-role client scoped by an explicit userId).
 
-// The coach may reason about the money — that part is real — but must never read an
-// imported day's mood as the trader's own, or count it as evidence they journaled. That
-// test is `isImportedRow`, called directly so a grep for it finds every enforcement site.
+// The coach may reason about imported money, but never about an imported day's mood, and
+// never counts one as evidence they journaled. That test is `isImportedRow`.
 type JournalRow = {
   entry_date: string;
   mood: "good" | "okay" | "tough";
@@ -28,8 +25,8 @@ type JournalRow = {
   note: string | null;
   lesson: string | null;
   source: JournalSource;
-  // Read only by isImportedRow, and only for CSV days written before the entries route stamped
-  // source:'csv'. Droppable once migration 32 has run and backfilled those rows.
+  // Read only by isImportedRow, for CSV days predating the source:'csv' stamp.
+  // Droppable once migration 32 has backfilled those rows.
   tags: string[] | null;
 };
 
@@ -40,18 +37,15 @@ type ChallengeConfigRow = {
   rules: ChallengeRules;
 };
 
-// The trader's standing in their challenge, computed the same way the app's cockpit does:
-// cumulative P&L and days over the sessions logged since the challenge STARTED, measured
-// against the firm's scraped rules. Reading all-time history here is what had the coach say
-// "you're 140% to target" out loud over a screen showing a fresh challenge at zero.
+// Scoped to sessions logged since the challenge STARTED. Reading all-time history here had
+// the coach say "you're 140% to target" over a screen showing a fresh challenge at zero.
 function buildChallengeContext(config: ChallengeConfigRow | null, allRows: JournalRow[]): ChallengeContext | null {
   if (!config) return null;
   const rows = scopeToChallengeStart(allRows, challengeStartedAt(config.rules));
   const withPnl = rows.filter((row) => row.pnl_amount !== null);
-  // The coach says this number out loud against the firm's target, so it has to be an
-  // amount in one currency rather than a blend of every account the trader has logged.
+  // One currency: this is spoken aloud against the firm's target, not a blend of accounts.
   const { totalPnl: cumulativePnl } = currencyTotals(withPnl);
-  // Days traded counts sessions, not money, so it spans every currency.
+  // Sessions, not money, so it spans every currency.
   const daysTraded = withPnl.length;
   const accountSize = Number(config.account_size);
   const targetAmount = ruleToAmount(config.rules.profit_target, accountSize);
@@ -71,9 +65,8 @@ function buildChallengeContext(config: ChallengeConfigRow | null, allRows: Journ
 }
 
 function journalContext(rows: JournalRow[]): JournalContext {
-  // Today and the six days before it — seven CALENDAR days, compared as day keys the way
-  // entry_date is stored. Subtracting timestamps instead measured age from the row's UTC
-  // midnight, so the seventh day fell out of "this week" at every hour except midnight.
+  // Seven CALENDAR days, compared as day keys. Subtracting timestamps instead dropped the
+  // seventh day out of "this week" at every hour except midnight.
   const weekStart = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
   const weeklyRows = rows.filter((row) => row.entry_date >= weekStart);
   const streakRows = rows.filter((row) => row.pnl_amount !== null);
@@ -84,8 +77,7 @@ function journalContext(rows: JournalRow[]): JournalContext {
   });
 
   return {
-    // Journaled sessions only. The P&L lines below stay over every row, imported included —
-    // the trades happened either way, and the coach reasoning about the money is right.
+    // Journaled sessions only; the P&L lines below stay over every row, imported included.
     sessionCount: weeklyRows.filter((row) => !isImportedRow(row)).length,
     weeklyPnl: currencyTotals(weeklyRows).totalPnl,
     wins: weeklyRows.filter((row) => Number(row.pnl_amount ?? 0) > 0).length,
@@ -95,14 +87,13 @@ function journalContext(rows: JournalRow[]): JournalContext {
   };
 }
 
-// Enough of the last call to pick the thread up, small enough not to crowd out the live one.
 const TAIL_CHARS = 600;
 
-// A coach that knows nothing about earlier calls is the coach that INVENTS them — the reported
-// bug — so hand it the real tail of the last one. Rows with no stored messages are skipped, which
-// also excludes the call in progress (opened at mint with message_count 0), so this can never
-// quote the conversation it is part of. "error" is distinct from null: "no prior call" is a fact
-// the prompt states, a failed read is not, and it fails the context like every other read here.
+// A coach that knows nothing about earlier calls INVENTS them, so hand it the real tail of the
+// last one. `.gt("message_count", 0)` skips rows with no stored messages, which also excludes
+// the in-progress call (opened at mint at 0), so this can never quote the call it is part of.
+// "error" is distinct from null: "no prior call" is a fact the prompt states, a failed read is
+// not, and it fails the whole context.
 async function loadLastCall(supabase: SupabaseClient, userId: string): Promise<LastCall | null | "error"> {
   const { data, count, error } = await supabase
     .from("psychology_sessions")
@@ -115,8 +106,7 @@ async function loadLastCall(supabase: SupabaseClient, userId: string): Promise<L
   const session = (data as unknown as Array<{ id: string; created_at: string }>)[0];
   if (!session) return null;
 
-  // Read newest-first so the cap keeps the END of the call — where the thread they left off
-  // actually is — then flip back into spoken order.
+  // Newest-first so the cap keeps the END of the call, then flipped back into spoken order.
   const messages = await supabase
     .from("psychology_session_messages")
     .select("role, content")
@@ -127,8 +117,8 @@ async function loadLastCall(supabase: SupabaseClient, userId: string): Promise<L
   if (messages.error || !messages.data) return "error";
 
   const spoken = (messages.data as unknown as Array<{ role: string; content: string }>)
-    // Whitespace flattened: spoken turns are trader-written text landing in a structured system
-    // prompt, and a newline is what would let one forge a block header.
+    // Whitespace flattened: trader-written text lands in a structured system prompt, and a
+    // newline is what would let one forge a block header.
     .map((row) => `${row.role === "coach" ? "You" : "Them"}: ${row.content.replace(/\s+/g, " ").trim()}`)
     .reverse()
     .join("\n");
@@ -137,9 +127,7 @@ async function loadLastCall(supabase: SupabaseClient, userId: string): Promise<L
   return { createdAt: session.created_at, transcript, priorCalls: count ?? 1 };
 }
 
-// Loads everything the coach persona needs for one user + assessment. Returns null when the
-// assessment isn't found (missing or not the caller's). The turn-based path reads
-// `.journal` off the result for shouldRecommendBreak.
+// Returns null when the assessment isn't found (missing, or not the caller's).
 export async function loadCoachContext(
   supabase: SupabaseClient,
   userId: string,
@@ -149,10 +137,8 @@ export async function loadCoachContext(
   const [assessmentQuery, journalQuery, configQuery, lastCall] = await Promise.all([
     supabase
       .from("psychology_assessments")
-      // Only the fields the prompt actually reads (see buildPsychologyCoachInstructions): the
-      // scores/labels, the q1–q5 + q29 situation answers, and the flag_* signals. created_at
-      // rides along because the prompt dates the check-in — undated, the coach spoke a
-      // days-old sleep/energy answer as the trader's state today.
+      // Only the fields the prompt reads. created_at rides along because the prompt dates the
+      // check-in: undated, the coach spoke a days-old sleep answer as the trader's state today.
       .select(
         "created_at, total_score, zone_label, focus_area, q29_focus, " +
           "q1_trading_situation, q2_stress_level, q3_financial_situation, q4_sleep_quality, q5_energy_level, " +
@@ -176,17 +162,16 @@ export async function loadCoachContext(
     loadLastCall(supabase, userId),
   ]);
 
-  // Every read must succeed. Treating a failed journal or challenge read as "no data" built a
-  // coach that told a trader mid-challenge they had never logged a session — and on the
-  // realtime path that wrong persona is then cached for the rest of the call.
+  // Every read must succeed or the whole context is null. Treating a failed journal read as
+  // "no data" built a coach that told a mid-challenge trader they had never logged a session,
+  // and the realtime path then caches that wrong persona for the rest of the call.
   if (assessmentQuery.error || !assessmentQuery.data) return null;
   if (journalQuery.error || configQuery.error || lastCall === "error") return null;
 
   const rows = (journalQuery.data ?? []) as JournalRow[];
   const journal = journalContext(rows);
   const challenge = buildChallengeContext((configQuery.data as ChallengeConfigRow | null) ?? null, rows);
-  // Imported days would arrive here as a date, a number, a placeholder mood and two nulls —
-  // nothing for the coach to reflect back, and a feeling the trader never reported.
+  // Imported days carry a placeholder mood the trader never reported, so they are dropped.
   const recentEntries: RecentEntry[] = rows.filter((row) => !isImportedRow(row)).slice(0, 5).map((row) => ({
     date: row.entry_date,
     pnl: row.pnl_amount == null ? null : Number(row.pnl_amount),

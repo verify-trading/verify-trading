@@ -36,15 +36,13 @@ export async function POST(request: Request) {
     if (!session) {
       return jsonUnauthorized("Sign in to use the psychology coach.");
     }
-    // Pro-only: each turn is a billed model call, so entitlement is enforced server
-    // side — hiding the button in the client is not a control.
+    // Pro-only: each turn is a billed model call, so entitlement is enforced server-side.
     if (!(await hasProAccess(session))) {
       return jsonApiError(403, "psychology_pro_required", "Voice coaching is a Pro feature.");
     }
 
-    // The persona reads and the call-session read are independent — the live voice-call
-    // path can't afford to wait for them serially, so run them together. The call-session
-    // read (only when the client passed sessionId) doubles as the ownership check.
+    // The call-session read (only when the client passed sessionId) doubles as the ownership
+    // check.
     const name = coachDisplayName(session.user);
     const [coachContext, callSessionQuery] = await Promise.all([
       loadCoachContext(session.supabase, session.user.id, input.assessmentId, name),
@@ -64,11 +62,8 @@ export async function POST(request: Request) {
 
     const transcript = input.transcript;
 
-    // Resolve the call's session: reuse the one the client threaded (turns 2+), else
-    // open a fresh row now (the first turn). Opening it here — rather than logging a
-    // contentless row — means the very first exchange is stored and message_count always
-    // equals the messages actually written (2 per turn), never drifting off by the
-    // un-stored opener. The client reuses the returned sessionId for every later turn.
+    // Reuse the session the client threaded (turns 2+), else open a fresh row (first turn), so
+    // message_count always equals the messages actually written — 2 per turn.
     let callSession: { id: string; message_count: number } | null = null;
     if (input.sessionId) {
       if (callSessionQuery?.error) {
@@ -81,9 +76,8 @@ export async function POST(request: Request) {
       callSession = existing;
     }
 
-    // Generation doesn't need the session id, so it starts first and the first turn's
-    // session insert (plus the user-message write, which does need the id) overlaps
-    // the model call — keeping the voice call snappy without giving up durability.
+    // Generation doesn't need the session id, so it starts first and the session insert plus
+    // user-message write overlap the model call.
     const replyPromise = generatePsychologyReply({ ...coachContext, transcript });
     if (!callSession) {
       callSession = await openCoachSession(session.supabase, session.user.id, input.assessmentId);
@@ -99,8 +93,8 @@ export async function POST(request: Request) {
     ]);
     const breakRecommended = shouldRecommendBreak(coachContext.journal);
 
-    // Coach message + counters are independent writes; both must land before we respond.
-    // Turns are sequential on a live call, so the read-then-write increment is race-free.
+    // Both writes must land before responding. Turns are sequential on a live call, so the
+    // read-then-write increment is race-free.
     const [, sessionUpdate] = await Promise.all([
       insertSessionMessages(session.supabase, [{
         session_id: callSession.id,

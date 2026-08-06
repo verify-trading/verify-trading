@@ -71,9 +71,7 @@ export async function POST(request: Request) {
     if (!session) {
       return jsonUnauthorized("Sign in to save psychology assessments.");
     }
-    // Mind is Pro (v1.5). The WRITE is gated, not the read: an assessment is what the coach
-    // reads before a call, so a free trader taking one walks into a 403 they can do nothing
-    // about — while a lapsed Pro keeps reading the ones they already paid for.
+    // The WRITE is gated, not the read, so a lapsed Pro keeps reading assessments they paid for.
     if (!(await hasProAccess(session))) {
       return jsonApiError(403, "psychology_pro_required", "The Mind assessment is a Pro feature.");
     }

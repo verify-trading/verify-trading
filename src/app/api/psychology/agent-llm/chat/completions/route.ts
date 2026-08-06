@@ -24,37 +24,22 @@ export const maxDuration = 60;
 // rather than the coach going mute.
 const COACH_FALLBACK_LINE = "Sorry — I lost my train of thought for a second there. Say that again?";
 
-// A hung provider (connection open, no bytes) must be cut off by US, well inside the
-// maxDuration above. Past that ceiling the platform kills the function mid-stream and
-// ElevenLabs is left with an SSE that never says [DONE] — which ends the trader's call. Here
-// the abort surfaces in the catch below, where the stream still closes cleanly and the coach
-// still says something.
-//
-// Margin note: measured on gpt-5.6-sol through the gateway, a warm turn reaches first token in
-// ~2.4s (worst warm 8.5s) but the FIRST call after a cold start took 20.9s. That is inside this
-// budget with little to spare — if the coach starts opening calls with COACH_FALLBACK_LINE,
-// this is the number to look at before blaming the model.
+// A hung provider must be cut off by US, inside maxDuration: past that the platform kills the
+// function mid-stream, ElevenLabs never sees [DONE], and the trader's call ends. Aborting here
+// surfaces in the catch below, which still closes cleanly and still says something.
+// Measured margin: warm turns reach first token in ~2.4-8.5s, but a cold start took 20.9s — if
+// the coach starts opening calls with COACH_FALLBACK_LINE, check this before blaming the model.
 const TURN_BUDGET_MS = 25_000;
 
-// What the coach may speak in one turn. streamText declares maxOutputTokens: 240 below for any
-// provider that honours it, but the current gateway rejects that field outright (see
-// provider.ts), so the ceiling has to be enforced on this side too — every token here is read
-// aloud by TTS, and an unbounded answer is a monologue the trader cannot interrupt. ~4 chars
-// per token, matching the 240 the request asks for.
+// The real cap on one spoken turn: the gateway ignores/rejects maxOutputTokens (see
+// provider.ts), and an unbounded answer is a monologue the trader cannot interrupt.
+// ~4 chars per token, matching the 240 the request asks for.
 const SPOKEN_CHAR_BUDGET = 960;
 
-// ElevenLabs asks for a fresh turn when its turn timeout fires, with NO new user message — so
-// the list arrives either empty or ending on the companion's own last line. Left alone the model
-// sees only itself talking and opens the conversation again; that is what the trader hears as
-// the companion "replaying the greeting as if we hadn't spoken", and it is the loudest symptom of
-// a noisy room, where their speech reaches us as nothing at all. The old placeholder here was
-// a fake "Hello." — the single worst thing to hand a model that is deciding whether the call
-// has started yet. The agent's turn_timeout is raised alongside this (scripts/tune-coach-agent.mjs);
-// this is the half that holds when the timeout fires anyway.
-//
-// Only the NEW fact lives here. The standing "you are mid-call, never greet, never re-introduce
-// yourself" rule is the persona's (buildPsychologyCoachInstructions' midCallRule) and is already
-// in the system prompt on every realtime turn — restating it here was two owners for one rule.
+// ElevenLabs asks for a fresh turn when its turn timeout fires with NO new user message, so the
+// list arrives empty or ending on the companion's own line. Left alone the model sees only
+// itself talking and re-opens the conversation — what the trader hears as the greeting replaying.
+// The agent's turn_timeout is raised alongside this (scripts/tune-coach-agent.mjs).
 const SILENT_TURN_DIRECTIVE =
   "[Nothing was transcribed this turn — the line just went quiet. Your standing rules still " +
   "apply. Reply with one short, warm nudge to take their time — under fifteen words — and " +
@@ -87,10 +72,9 @@ function messageText(content: unknown): string {
   return "";
 }
 
-// ElevenLabs calls this endpoint once per spoken turn, but the trader's context (assessment +
-// journal + challenge) is static for the call — so build the system prompt once per session and
-// cache it, keyed by sessionId and expired with the signed token. Saves 3 Supabase reads + a
-// persona rebuild on every turn after the first.
+// Called once per spoken turn, but the trader's context is static for the call: build the
+// system prompt once per session, keyed by sessionId and expired with the signed token.
+// Saves 3 Supabase reads + a persona rebuild on every turn after the first.
 // ponytail: context is frozen for the call — a trade logged mid-call won't reflect until the
 // next call. Fine for a short voice session; drop the cache if live mid-call updates ever matter.
 const systemCache = new Map<string, { system: string; exp: number }>();
@@ -234,15 +218,11 @@ export async function POST(request: Request) {
           let spokenChars = 0;
           for await (const delta of textStream) {
             if (!delta) continue;
-            // Land the cut where a word ends — which is the delta BEFORE one that starts a new
-            // word, since deltas are tokens (" the", "posi", "tion"). Stopping the instant the
-            // budget tripped left TTS speaking a fragment ("...cut your position siz"). The cap
-            // on the overshoot is what stops an answer with no whitespace in it running on.
-            //
-            // Leaving the loop does NOT stop the provider generating, whatever the old comment
-            // here claimed: cancelling this tee branch only stops us reading it, and ai@6
-            // exposes no abort handle on the streamText result. TURN_BUDGET_MS above is the real
-            // ceiling on a runaway answer; this budget bounds what the trader sits through.
+            // Cut on a word boundary: deltas are tokens (" the", "posi", "tion"), so stopping
+            // the instant the budget tripped left TTS speaking a fragment ("...position siz").
+            // The overshoot cap stops an answer with no whitespace running on forever.
+            // Leaving the loop does not stop the provider generating (ai@6 exposes no abort
+            // handle here) — TURN_BUDGET_MS is that ceiling; this bounds what the trader hears.
             if (spokenChars >= SPOKEN_CHAR_BUDGET && (/^\s/.test(delta) || spokenChars - SPOKEN_CHAR_BUDGET >= 80)) break;
             spoke = true;
             controller.enqueue(chunk({ content: speakable(delta) }, null));

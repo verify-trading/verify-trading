@@ -15,10 +15,6 @@ export type JournalContext = {
   losingStreak: number;
 };
 
-// The trader's live prop-firm challenge — firm, rules, and where they stand against the
-// target and the loss limits. This is what lets the coach give grounded, firm-specific
-// guidance ("you're 12% to target with 22 days left, stay inside the 5% daily limit")
-// instead of generic mindset talk.
 export type ChallengeContext = {
   firmName: string;
   accountType: string;
@@ -40,16 +36,14 @@ export type RecentEntry = {
   lesson: string | null;
 };
 
-// The tail of the trader's previous conversation (labelled + char-capped by loadCoachContext).
-// Knowing nothing about earlier calls is what made the coach FABRICATE one ("you told me...").
+// Tail of the previous conversation, labelled and char-capped by loadCoachContext.
 export type LastCall = {
   createdAt: string;
   transcript: string;
   priorCalls: number;
 };
 
-// Age of a stored timestamp in whole UTC days — the same day keys the journal window uses. Null
-// for a missing/unparseable value, so the prompt drops the phrase instead of saying "NaN days ago".
+// Null on an unparseable value, so the prompt drops the phrase instead of "NaN days ago".
 export function daysAgoPhrase(iso: string | undefined | null): string | null {
   const at = new Date(iso ?? "").getTime();
   if (Number.isNaN(at)) return null;
@@ -81,7 +75,7 @@ function flagLines(assessment: Record<string, unknown>) {
 }
 
 function lastCallBlock(last: LastCall | null): string {
-  // Stated, not left absent: with no line here a model still reaches for a memory it never had.
+  // Stated, not left absent: with no line here the model reaches for a memory it never had.
   if (!last) return "PREVIOUS CALLS:\nThis is your first conversation together — never imply you have spoken before.";
   const age = daysAgoPhrase(last.createdAt);
   const calls = `${last.priorCalls} conversation${last.priorCalls === 1 ? "" : "s"} so far`;
@@ -115,13 +109,9 @@ function recentBlock(entries: RecentEntry[]): string {
   return `RECENT SESSIONS (most recent first):\n${lines.join("\n")}`;
 }
 
-// The trader's own name is the one piece of free text that reaches the coach's system prompt
-// verbatim, and user_metadata is client-written JSON. readUserDisplayName already drops
-// non-strings (a name of {} rendered as "[object Object]" in the coach's opening line) and
-// trims; whitespace is flattened on top of it because a newline is what lets the value forge
-// prompt structure below, and the length is capped because the prompt is re-sent every turn.
-// One helper for both coach paths — realtime mint and turn-based companion — so neither can
-// drift into passing the raw value.
+// user_metadata is client-written JSON and this name lands verbatim in the system prompt.
+// Whitespace is flattened because a newline would let the value forge prompt structure.
+// One helper for both coach paths so neither can drift into passing the raw value.
 export function coachDisplayName(user: { email?: string | null; user_metadata?: Record<string, unknown> | null }): string {
   const name = readUserDisplayName(user.user_metadata) ?? user.email ?? "there";
   return name.replace(/\s+/g, " ").slice(0, 80);
@@ -142,8 +132,8 @@ export function buildPsychologyCoachInstructions(input: {
 }) {
   const { assessment, journal } = input;
   const section = sectionLabels[assessment.focus_area] ?? String(assessment.focus_area);
-  // The check-in is a FORM from some earlier day. Undated and in bare present tense it read to the
-  // model as things just said — the coach told a trader "you said you were tired" when they hadn't.
+  // The check-in is a FORM from an earlier day. Undated, the model read it as things just said
+  // and the coach told a trader "you said you were tired" when they hadn't.
   const checkIn = daysAgoPhrase(assessment.created_at);
   const staleRule = checkIn === "today"
     ? ""
@@ -157,19 +147,14 @@ export function buildPsychologyCoachInstructions(input: {
     : shouldRecommendBreak(journal)
       ? "\nIMPORTANT: At a natural point, raise the idea of taking a break. Make it a mentor's honest observation, not a system alert."
       : "";
-  // On the live call the agent's own first_message already did the greeting, client-side,
-  // before this prompt is ever used — so ANY hello from the model is a second one. A turn that
-  // arrives with nothing new transcribed (noisy room, or the trader still thinking) is exactly
-  // where a model re-opens the conversation, which is what the trader hears as the coach
-  // restarting on them. The agent-llm route marks those turns explicitly; this is the standing
-  // rule that holds for every turn.
+  // The agent's own first_message already greeted them client-side, so ANY hello from the model
+  // is a second one — which the trader hears as the coach restarting on them.
   const midCallRule = input.realtime
     ? "\nYou are already mid-call and have already greeted them. Never greet, never introduce yourself again, and never explain how the call or the app works."
     : "";
 
-  // "Companion" is what the app calls this everywhere the trader can see, so it is what the
-  // persona is called too — a coach who introduces itself as something the UI never mentions
-  // reads as a different product. Wire values (roles, model ids, agent name) keep saying coach.
+  // The persona is called "Companion" to match the UI; wire values still say coach.
+  // The identity paragraph below counters the gateway's injected block — 8/8 leaks before it.
   return `You are ${input.name}'s Companion at verify.trading — a personal coach for a retail prop-firm trader, on a live voice call.
 
 You are not a trading signal service. Never give trade recommendations or entries/exits.
@@ -210,8 +195,7 @@ export type PsychologyCoachContext = {
 
 export async function generatePsychologyReply(input: PsychologyCoachContext & { transcript: string }) {
   const result = await generateText({
-    // The same model the live call runs on: one persona built here, one brain
-    // answering it, so the text coach can never drift from what the voice does.
+    // The same model the live call runs on, so the text coach can't drift from the voice.
     model: getPsychologyCoachModel(),
     maxOutputTokens: 240,
     system: buildPsychologyCoachInstructions(input),
@@ -221,12 +205,10 @@ export async function generatePsychologyReply(input: PsychologyCoachContext & { 
   return speakable(result.text).trim();
 }
 
-// Markdown glyphs are read aloud by TTS ("star star right star star"), so strip them from
-// anything headed for a voice; newlines collapse to spaces to preserve sentence flow.
-// Exported because the realtime path streams deltas and applies the same cleanup per chunk —
-// which is why this must NOT trim. A model delta carries its own leading space (" the"), so
-// trimming per chunk welded the words together and TTS spoke "withthe sleep you've been
-// getting". Whole-text callers trim their own result instead.
+// Markdown glyphs are read aloud by TTS ("star star"), so strip them from anything voiced.
+// Must NOT trim: the realtime path applies this per streamed chunk, and a delta carries its
+// own leading space (" the") — trimming welded words together ("withthe"). Whole-text callers
+// trim their own result.
 export function speakable(text: string): string {
   return text.replace(/[*_`#>|~]/g, " ").replace(/\s+/g, " ");
 }
