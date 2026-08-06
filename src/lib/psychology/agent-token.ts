@@ -1,11 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-// The custom-LLM endpoint is reached ElevenLabs -> our server, never by the app directly, so
-// the static bearer secret proves the request came from ElevenLabs. But the request BODY
-// (customLlmExtraBody, echoed verbatim by ElevenLabs) is client-controlled — trusting a raw
-// userId in it would let one Pro user pull another's assessment/journal into their call. So
-// realtime-token mints this HMAC-signed context at auth time; agent-llm verifies the signature
-// before trusting whose persona to build. Same secret (ELEVENLABS_AGENT_LLM_SECRET) both ways.
+// Binds a call to one user + session + assessment. The bearer secret proves a request came
+// from ElevenLabs, but the BODY (customLlmExtraBody, echoed verbatim) is client-controlled:
+// a raw userId in it would let one Pro user pull another's assessment/journal into their call.
+// realtime-token signs this at auth time, agent-llm verifies it before building a persona.
+// Same secret (ELEVENLABS_AGENT_LLM_SECRET) both ways.
 
 export type AgentContext = {
   userId: string;
@@ -24,9 +23,9 @@ export function signAgentContext(ctx: AgentContext, secret: string): string {
   return `${payload}.${sign(payload, secret)}`;
 }
 
-// `ignoreExpiry` is for matching a finished call's transcript back to its session, which can
-// legitimately happen days later. Expiry bounds who may START a call; deciding whose transcript
-// this is rests on the signature alone. Never pass it on the live turn path.
+// `ignoreExpiry` is for matching a finished call's transcript back to its session, days later.
+// Expiry bounds who may START a call; whose transcript this is rests on the signature alone.
+// Never pass it on the live turn path.
 export function verifyAgentContext(
   token: string,
   secret: string,
@@ -42,9 +41,8 @@ export function verifyAgentContext(
 
   try {
     const ctx = JSON.parse(Buffer.from(payload, "base64url").toString()) as AgentContext;
-    // Every field is checked for type, not just truthiness: sessionId keys the per-session
-    // prompt cache downstream, and `typeof NaN === "number"` — with NaN every comparison is
-    // false, so `exp: NaN` sailed past the expiry check below and never expired.
+    // Typed, not just truthy: `typeof NaN === "number"`, so `exp: NaN` sailed past the expiry
+    // check below and never expired.
     if (
       typeof ctx.userId !== "string" || !ctx.userId ||
       typeof ctx.assessmentId !== "string" || !ctx.assessmentId ||

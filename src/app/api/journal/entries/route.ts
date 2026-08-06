@@ -123,7 +123,12 @@ export async function POST(request: Request) {
         lesson: input.lesson?.trim() || null,
         tags: input.tags,
         trade_details: input.tradeDetails ?? null,
-        source: "mobile" satisfies JournalSource,
+        // A CSV import posts through this same route, so the only thing separating it from a
+        // day the trader typed is the bare 'csv' tag the importer sends. Stamp that difference
+        // into the column at write time: every reader then asks `source`, and a tag the client
+        // is free to drop stops being what decides whether a day is the trader's own account
+        // of it (see isImportedRow).
+        source: (input.tags.includes("csv") ? "csv" : "mobile") satisfies JournalSource,
         // Logging a day you previously deleted brings it back — and hands the date back to
         // the importer, which skips any date whose row is flagged deleted.
         deleted_at: null,

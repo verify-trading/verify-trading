@@ -24,12 +24,33 @@ export const maxDuration = 60;
 // rather than the coach going mute.
 const COACH_FALLBACK_LINE = "Sorry — I lost my train of thought for a second there. Say that again?";
 
-// A hung provider (connection open, no bytes) must be cut off by US, well inside the
-// maxDuration above. Past that ceiling the platform kills the function mid-stream and
-// ElevenLabs is left with an SSE that never says [DONE] — which ends the trader's call. Here
-// the abort surfaces in the catch below, where the stream still closes cleanly and the coach
-// still says something.
+// A hung provider must be cut off by US, inside maxDuration: past that the platform kills the
+// function mid-stream, ElevenLabs never sees [DONE], and the trader's call ends. Aborting here
+// surfaces in the catch below, which still closes cleanly and still says something.
+// Measured margin: warm turns reach first token in ~2.4-8.5s, but a cold start took 20.9s — if
+// the coach starts opening calls with COACH_FALLBACK_LINE, check this before blaming the model.
 const TURN_BUDGET_MS = 25_000;
+
+// The real cap on one spoken turn: the gateway ignores/rejects maxOutputTokens (see
+// provider.ts), and an unbounded answer is a monologue the trader cannot interrupt.
+// ~4 chars per token, matching the 240 the request asks for.
+const SPOKEN_CHAR_BUDGET = 960;
+
+// ElevenLabs asks for a fresh turn when its turn timeout fires with NO new user message, so the
+// list arrives empty or ending on the companion's own line. Left alone the model sees only
+// itself talking and re-opens the conversation — what the trader hears as the greeting replaying.
+// The agent's turn_timeout is raised alongside this (scripts/tune-coach-agent.mjs).
+const SILENT_TURN_DIRECTIVE =
+  "[Nothing was transcribed this turn — the line just went quiet. Your standing rules still " +
+  "apply. Reply with one short, warm nudge to take their time — under fifteen words — and " +
+  "nothing else.]";
+
+// Said ONCE on the second silence in a row, then nothing. The turn timeout fires every
+// turn_timeout seconds for as long as the trader stays quiet, so a nudge per silent turn is a
+// loop: the companion talks at an empty room until the platform's silence_end_call_timeout
+// finally hangs up. One steady line tells them the line is still open; after that, silence is
+// the correct answer to silence.
+const STILL_HERE_LINE = "I'll stay on the line — say something when you're ready.";
 
 type ChatMessage = { role: string; content: unknown };
 
@@ -51,10 +72,9 @@ function messageText(content: unknown): string {
   return "";
 }
 
-// ElevenLabs calls this endpoint once per spoken turn, but the trader's context (assessment +
-// journal + challenge) is static for the call — so build the system prompt once per session and
-// cache it, keyed by sessionId and expired with the signed token. Saves 3 Supabase reads + a
-// persona rebuild on every turn after the first.
+// Called once per spoken turn, but the trader's context is static for the call: build the
+// system prompt once per session, keyed by sessionId and expired with the signed token.
+// Saves 3 Supabase reads + a persona rebuild on every turn after the first.
 // ponytail: context is frozen for the call — a trade logged mid-call won't reflect until the
 // next call. Fine for a short voice session; drop the cache if live mid-call updates ever matter.
 const systemCache = new Map<string, { system: string; exp: number }>();
@@ -120,7 +140,7 @@ export async function POST(request: Request) {
     const nowSecs = Math.floor(Date.now() / 1000);
     let system = cachedSystem(ctx.sessionId, nowSecs);
     if (!system) {
-      const coachContext = await loadCoachContext(supabase, ctx.userId, ctx.assessmentId, ctx.name);
+      const coachContext = await loadCoachContext(supabase, ctx.userId, ctx.assessmentId, ctx.name, ctx.sessionId);
       if (!coachContext) {
         return jsonApiError(404, "agent_llm_assessment_missing", "Assessment not found.");
       }
@@ -134,24 +154,40 @@ export async function POST(request: Request) {
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map((m) => ({ role: m.role as "user" | "assistant", content: messageText(m.content) }))
       .filter((m) => m.content.length > 0);
-    if (messages.length === 0) messages.push({ role: "user", content: "Hello." });
+    // How many turns in a row have brought no new speech. Each silent turn appends only our own
+    // reply, so the run of assistant messages at the tail IS that count; an empty list is the
+    // same situation at the very start of the call. Covers both shapes of a no-new-input turn.
+    let silentTurns = messages.length === 0 ? 1 : 0;
+    while (messages.at(-1 - silentTurns)?.role === "assistant") silentTurns += 1;
+    if (silentTurns === 1) messages.push({ role: "user", content: SILENT_TURN_DIRECTIVE });
 
-    const result = streamText({
-      model: getPsychologyCoachModel(),
-      maxOutputTokens: 240,
-      system,
-      messages,
-      abortSignal: AbortSignal.timeout(TURN_BUDGET_MS),
-      // streamText does NOT reject when the provider fails — verified against ai@6: the step
-      // promise enqueues an error part and closes the stream, so `textStream` finishes
-      // normally with zero deltas and the catch below never runs. Without this hook an
-      // Anthropic outage is invisible in our logs and silent in the trader's ear.
-      onError: ({ error }) =>
-        logger.error("agent-llm model stream failed.", {
-          sessionId: ctx.sessionId,
-          error: error instanceof Error ? error.message : String(error),
-        }),
-    });
+    // From the second silence on, answer without the model at all: one steady line, then
+    // nothing. `null` means "ask the model" — an empty string is a deliberate silent turn and
+    // must NOT fall through to COACH_FALLBACK_LINE, which exists for a provider that broke on a
+    // real turn and would otherwise become the loop's new refrain.
+    const held = silentTurns < 2 ? null : silentTurns === 2 ? STILL_HERE_LINE : "";
+
+    const textStream =
+      held === null
+        ? streamText({
+            model: getPsychologyCoachModel(),
+            maxOutputTokens: 240,
+            system,
+            messages,
+            abortSignal: AbortSignal.timeout(TURN_BUDGET_MS),
+            // streamText does NOT reject when the provider fails — verified against ai@6: the step
+            // promise enqueues an error part and closes the stream, so `textStream` finishes
+            // normally with zero deltas and the catch below never runs. Without this hook an
+            // Anthropic outage is invisible in our logs and silent in the trader's ear.
+            onError: ({ error }) =>
+              logger.error("agent-llm model stream failed.", {
+                sessionId: ctx.sessionId,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+          }).textStream
+        : held
+          ? [held]
+          : [];
 
     const encoder = new TextEncoder();
     const id = `chatcmpl-${ctx.sessionId}`;
@@ -179,22 +215,31 @@ export async function POST(request: Request) {
         let spoke = false;
         try {
           controller.enqueue(chunk({ role: "assistant" }, null));
-          for await (const delta of result.textStream) {
+          let spokenChars = 0;
+          for await (const delta of textStream) {
             if (!delta) continue;
+            // Cut on a word boundary: deltas are tokens (" the", "posi", "tion"), so stopping
+            // the instant the budget tripped left TTS speaking a fragment ("...position siz").
+            // The overshoot cap stops an answer with no whitespace running on forever.
+            // Leaving the loop does not stop the provider generating (ai@6 exposes no abort
+            // handle here) — TURN_BUDGET_MS is that ceiling; this bounds what the trader hears.
+            if (spokenChars >= SPOKEN_CHAR_BUDGET && (/^\s/.test(delta) || spokenChars - SPOKEN_CHAR_BUDGET >= 80)) break;
             spoke = true;
             controller.enqueue(chunk({ content: speakable(delta) }, null));
+            spokenChars += delta.length;
           }
           // Zero deltas means the provider failed (see onError above). Say something — dead
-          // air on a voice call is indistinguishable from the coach ignoring the trader.
-          if (!spoke) controller.enqueue(chunk({ content: COACH_FALLBACK_LINE }, null));
+          // air on a voice call is indistinguishable from the companion ignoring the trader.
+          // Never on the held-silence path: there the silence is the answer (see STILL_HERE_LINE).
+          if (!spoke && held === null) controller.enqueue(chunk({ content: COACH_FALLBACK_LINE }, null));
           finish();
         } catch (error) {
           logger.error("agent-llm stream failed.", { error: error instanceof Error ? error.message : "unknown" });
           // Same reason as the zero-delta case: a turn that dies before a single word is
-          // dead air, and dead air is indistinguishable from the coach ignoring the trader.
+          // dead air, and dead air is indistinguishable from the companion ignoring the trader.
           // Mid-sentence there is nothing useful left to say, so just close cleanly.
           safe(() => {
-            if (!spoke) controller.enqueue(chunk({ content: COACH_FALLBACK_LINE }, null));
+            if (!spoke && held === null) controller.enqueue(chunk({ content: COACH_FALLBACK_LINE }, null));
             finish();
           });
         } finally {

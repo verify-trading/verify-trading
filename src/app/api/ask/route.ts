@@ -68,12 +68,12 @@ const TOOL_STATUS: Record<string, ToolStatusSpec> = {
   },
   web_search: {
     label: "Searching the web",
-    detail: ({ entity }) =>
-      entity ? `Searching the web for ${entity}.` : "Searching the live web for the latest on this.",
-  },
-  web_fetch: {
-    label: "Reading a source",
-    detail: ({ url }) => (url ? `Reading ${url}.` : "Reading the full page for more detail."),
+    detail: ({ entity, url }) =>
+      url
+        ? `Reading ${url}.`
+        : entity
+          ? `Searching the web for ${entity}.`
+          : "Searching the live web for the latest on this.",
   },
   get_economic_calendar: {
     label: "Checking economic calendar",

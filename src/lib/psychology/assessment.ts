@@ -62,8 +62,7 @@ export type PsychologyAssessment = {
   updatedAt: string;
 };
 
-// The trader-facing name of each section, read back in the assessment summary and in the
-// coach's prompt (see companion.ts) — one table so the two can't say it differently.
+// Read back in the assessment summary and in the coach's prompt — one table so they agree.
 export const sectionLabels: Record<keyof PsychologySectionScores, string> = {
   wrong: "Being Wrong",
   fear: "Fear",

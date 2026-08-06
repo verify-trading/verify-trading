@@ -423,7 +423,11 @@ export async function storeBillingCheckoutSession({
   userId: string;
   checkoutToken: string;
   stripeCheckoutSessionId: string;
-  checkoutUrl: string;
+  // Null deliberately withholds the session from the reuse branch in the checkout route while
+  // still recording its id, which is what a later request needs in order to expire it. Trial
+  // sessions store null: nothing here records that a session carried a free week, so a reusable
+  // trial URL would be handed to the next plain checkout as a week nobody asked for.
+  checkoutUrl: string | null;
   expiresAt: string | null;
 }) {
   const supabase = requireSupabaseAdminClient();

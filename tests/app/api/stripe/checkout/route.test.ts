@@ -54,6 +54,13 @@ describe("POST /api/stripe/checkout", () => {
   const createCheckoutSession = vi.fn();
   const expireCheckoutSession = vi.fn();
   const listSubscriptions = vi.fn();
+  // isTrialEligible auto-paginates, so the mock has to be the async-iterable Stripe list returns,
+  // not a resolved page — a plain object iterates as nothing and every customer looks eligible.
+  const asyncList = (subscriptions: Array<Record<string, unknown>>) => ({
+    async *[Symbol.asyncIterator]() {
+      for (const subscription of subscriptions) yield subscription;
+    },
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -96,7 +103,7 @@ describe("POST /api/stripe/checkout", () => {
       expires_at: 1_700_000_000,
     });
     expireCheckoutSession.mockResolvedValue({});
-    listSubscriptions.mockResolvedValue({ data: [] });
+    listSubscriptions.mockReturnValue(asyncList([]));
 
     vi.mocked(getStripeServerClient).mockReturnValue({
       checkout: {
@@ -357,8 +364,33 @@ describe("POST /api/stripe/checkout", () => {
     expect(createCheckoutSession.mock.calls[0]?.[0]).not.toHaveProperty("payment_method_collection");
   });
 
+  it("never stores a trial checkout URL for later reuse", async () => {
+    // Nothing in the stored row records that a session carried a free week, so a reusable trial
+    // URL would be handed to the next plain checkout as a week nobody asked for.
+    vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
+      checkoutToken: "token-trial-store",
+      stripeCheckoutSessionId: null,
+      checkoutUrl: null,
+      expiresAt: new Date().toISOString(),
+      reused: false,
+      replacedCheckoutSessionId: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "weekly", trial: true }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(storeBillingCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({ stripeCheckoutSessionId: "cs_123", checkoutUrl: null }),
+    );
+  });
+
   it("skips the trial for a customer who already subscribed before", async () => {
-    listSubscriptions.mockResolvedValue({ data: [{ id: "sub_old" }] });
+    listSubscriptions.mockReturnValue(asyncList([{ id: "sub_old", status: "canceled" }]));
     vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
       checkoutToken: "token-repeat",
       stripeCheckoutSessionId: null,

@@ -16,22 +16,19 @@ import {
   type PsychologySessionRow,
 } from "@/lib/psychology/sessions";
 
-// Both verbs can call out to ElevenLabs for a transcript, which the platform default (15 s)
-// would kill mid-flight — taking the abort below with it, so the fetch never even times out
-// cleanly. 30 s leaves the 10 s fetch room to fail on its own terms.
+// Both verbs fetch transcripts from ElevenLabs; the platform default (15 s) killed the
+// function before the 10 s fetch could abort cleanly.
 export const maxDuration = 30;
 
 const sessionIdParamSchema = z.uuid();
 
 const sessionPatchSchema = z
   .object({
-    // Optional so the client can report the conversation id the moment the call connects,
-    // without a mid-call report overwriting the call clock a hang-up report already stored.
+    // Optional so a mid-call report can send only the conversation id, without overwriting a
+    // call clock a hang-up report already stored.
     durationSecs: z.number().int().min(0).max(86_400).optional(),
-    // Realtime (ElevenLabs) calls report the conversation id so we can pull the transcript
-    // server-side — there are no post-call webhooks in this design. Charset-bound, not just
-    // length-bound: this value is client-supplied, is stored, and ends up in an ElevenLabs
-    // URL, so nothing that could be a path segment or a percent-escape belongs in it.
+    // Charset-bound, not just length-bound: client-supplied, stored, and interpolated into an
+    // ElevenLabs URL, so nothing that could be a path segment or percent-escape belongs in it.
     conversationId: z.string().trim().regex(/^[A-Za-z0-9_-]{8,100}$/).optional(),
   })
   .refine((body) => body.durationSecs !== undefined || body.conversationId !== undefined);
@@ -45,8 +42,8 @@ type ConversationRecord = {
   conversation_initiation_client_data?: { custom_llm_extra_body?: { vt_ctx?: unknown }; dynamic_variables?: { vt_ctx?: unknown } };
 };
 
-// "gone" (404) is kept distinct from a transient failure: it is the one answer that will never
-// change, so it is the only one a caller may act on by dropping the stored pointer.
+// "gone" (404) is distinct from a transient failure: it is the only answer that will never
+// change, so the only one a caller may act on by dropping the stored pointer.
 async function fetchConversation(conversationId: string, apiKey: string): Promise<ConversationRecord | "gone" | null> {
   const response = await fetch(`https://api.elevenlabs.io/v1/convai/conversations/${encodeURIComponent(conversationId)}`, {
     headers: { "xi-api-key": apiKey },
@@ -59,22 +56,20 @@ async function fetchConversation(conversationId: string, apiKey: string): Promis
   return (await response.json()) as ConversationRecord;
 }
 
-// A call that is still running has a transcript that is only a PREFIX of what will be said.
-// ElevenLabs' status is one of initiated | in-progress | processing | done | failed (verified
-// against their OpenAPI schema, where status is required) — the first two mean the trader is
-// still on the call. Importing then would latch a truncated transcript in permanently: the
-// idempotency guards below all read "this session already has messages" as "done", so the rest
-// of the conversation is never stored. PATCH infers the call is over from the client's duration
-// report; ElevenLabs' own view is the authority, and it is the only one the GET repair has.
-//
-// Unknown or missing status still imports, so an enum ElevenLabs adds later cannot silently
-// stop every transcript from ever being stored.
+// A call whose transcript is not final. Importing one latches a PREFIX in permanently, because
+// the idempotency guards below read "already has messages" as "done". ElevenLabs status is
+// initiated | in-progress | processing | done | failed; "processing" still serves a partial
+// transcript, so only done/failed are final.
+// Unknown or missing status still imports, so a new ElevenLabs enum value cannot silently stop
+// every transcript from being stored.
 const isLiveCall = (conversation: ConversationRecord): boolean =>
-  conversation.status === "initiated" || conversation.status === "in-progress";
+  conversation.status === "initiated" ||
+  conversation.status === "in-progress" ||
+  conversation.status === "processing";
 
-// The stored conversation id is only a pointer, and it arrives from the client — so it is never
-// trusted on its own. Every path that turns it into stored messages proves the conversation is
-// this caller's first, via the signed vt_ctx ElevenLabs echoes back from token mint.
+// The conversation id arrives from the client, so it is never trusted on its own: every path
+// that turns it into stored messages first proves the conversation is this caller's, via the
+// signed vt_ctx ElevenLabs echoes back from token mint.
 function bindsToCaller(
   conversation: ConversationRecord,
   secret: string,
@@ -83,15 +78,14 @@ function bindsToCaller(
 ): boolean {
   const init = conversation.conversation_initiation_client_data;
   const vtCtx = init?.custom_llm_extra_body?.vt_ctx ?? init?.dynamic_variables?.vt_ctx;
-  // Expiry ignored on purpose: a repair can run days after the call, and the signature — not
-  // freshness — is what proves whose transcript this is.
+  // Expiry ignored: a repair can run days later, and the signature proves whose transcript
+  // this is, not freshness.
   const ctx = typeof vtCtx === "string" ? verifyAgentContext(vtCtx, secret, { ignoreExpiry: true }) : null;
   return Boolean(ctx && ctx.userId === userId && ctx.sessionId === sessionId);
 }
 
-// Remember which ElevenLabs conversation this session is, as early as we hear it. Never fatal
-// and never behind a network call: this pointer is the only thing that makes a call repairable
-// when the hang-up report is lost (app killed, signal gone), so it must land on its own.
+// Never fatal and never behind a network call: this pointer is the only thing that makes a
+// call repairable when the hang-up report is lost (app killed, signal gone).
 async function linkConversation(supabase: SupabaseClient, userId: string, sessionId: string, conversationId: string) {
   const { error } = await supabase
     .from("psychology_sessions")
@@ -101,8 +95,7 @@ async function linkConversation(supabase: SupabaseClient, userId: string, sessio
   if (error) logger.warn("Could not link the conversation for later repair.", { sessionId, error: error.message });
 }
 
-// Drop the pointer once the answer is final, so the repair below stops asking ElevenLabs the
-// same question on every single open of the same call.
+// Dropped once the answer is final, so the repair stops re-asking ElevenLabs on every open.
 const clearConversationLink = (supabase: SupabaseClient, userId: string, sessionId: string) =>
   supabase
     .from("psychology_sessions")
@@ -119,29 +112,23 @@ const readMessages = (supabase: SupabaseClient, userId: string, sessionId: strin
     .order("created_at", { ascending: true })
     .limit(1000);
 
-// Store the spoken turns as message rows. The conversation must already be bound to this user +
-// session by the caller. Returns how many turns were stored — 0 means ElevenLabs has not
-// finalised the transcript yet, which the next read retries.
+// Caller must have bound the conversation to this user + session. Returns turns stored; 0
+// means ElevenLabs has not finalised the transcript, which the next read retries.
 async function storeTurns(
   supabase: SupabaseClient,
   userId: string,
   sessionId: string,
   conversation: ConversationRecord,
-  // The session's own created_at. Deterministic on purpose — see the stamping note below.
   baseMs: number,
 ): Promise<number> {
-  // Guarded here rather than in each caller: both the hang-up PATCH and the GET repair import
-  // through this function, and a transcript stored mid-call can never be corrected.
+  // Guarded here, not per caller: both the PATCH and the GET repair import through this, and a
+  // transcript stored mid-call can never be corrected.
   if (isLiveCall(conversation)) return 0;
 
-  // One multi-row insert shares a single now() default, so every turn would carry an identical
-  // created_at and the GET's created_at ordering would be arbitrary. Stamp them a millisecond
-  // apart to keep the conversation in the order it was spoken.
-  //
-  // Stamped from the SESSION's created_at rather than Date.now() so the same transcript always
-  // produces the same timestamps whoever stores it: that is what lets a unique index on
-  // (session_id, created_at) actually catch the PATCH-store / GET-repair race below, which
-  // check-then-insert alone can only narrow.
+  // One multi-row insert shares a single now(), leaving created_at ordering arbitrary — so
+  // stamp turns a millisecond apart. Based on the SESSION's created_at, not Date.now(), so the
+  // same transcript yields the same timestamps whoever stores it; that is what lets the unique
+  // index on (session_id, created_at) catch the PATCH/GET race below.
   const base = Number.isFinite(baseMs) ? baseMs : Date.now();
   const rows = (conversation.transcript ?? [])
     .filter((turn) => (turn.role === "user" || turn.role === "agent") && typeof turn.message === "string" && turn.message.trim())
@@ -154,10 +141,9 @@ async function storeTurns(
     }));
   if (rows.length === 0) return 0;
 
-  // Re-check right before writing, not just in the PATCH caller: GET repairs too, and two
-  // overlapping reads of an empty session would otherwise both fetch and both insert, doubling
-  // the transcript. This only narrows the window; the unique index in migration 31 closes it,
-  // at which point the loser's insert simply errors and the next read shows the winner's rows.
+  // Re-checked right before writing, not just in the PATCH caller: GET repairs too, and two
+  // overlapping reads would both insert. Only narrows the window; migration 31's unique index
+  // closes it.
   const already = await supabase
     .from("psychology_session_messages")
     .select("session_id")
@@ -167,9 +153,8 @@ async function storeTurns(
   if (already.error) throw new Error(`transcript idempotency check failed: ${already.error.message}`);
   if ((already.data?.length ?? 0) > 0) return 0;
 
-  // Count first, then insert. The reverse order meant a failed count update left stored
-  // messages the list route couldn't see, which the idempotency check then refused to
-  // repair on retry. This way a failure leaves a visible row a retry can still fill in.
+  // Count first, then insert. The reverse order left stored messages the list route couldn't
+  // see, which the idempotency check then refused to repair on retry.
   const updated = await supabase
     .from("psychology_sessions")
     .update({ message_count: rows.length })
@@ -177,11 +162,8 @@ async function storeTurns(
     .eq("user_id", userId);
   if (updated.error) throw new Error(`message_count update failed: ${updated.error.message}`);
 
-  // The unique index (migration 31) is what actually closes the PATCH-store / GET-repair race
-  // the re-check above only narrows — so the losing writer's insert now ERRORS. That is an
-  // expected outcome, not a failure: the winner stored this exact transcript under the same
-  // deterministic timestamps, nothing was lost, and the next read serves their rows. Only a
-  // unique violation is swallowed; every other write error still throws.
+  // Losing the migration-31 race is expected, not a failure: the winner stored this exact
+  // transcript under the same deterministic timestamps. Only a unique violation is swallowed.
   try {
     await insertSessionMessages(supabase, rows);
   } catch (error) {
@@ -192,20 +174,19 @@ async function storeTurns(
   return rows.length;
 }
 
-// Pull an ElevenLabs conversation transcript and store it as the same message rows the
-// companion route writes. Idempotent (skips if the session already has messages) so a client
-// retry never duplicates, and bound to the caller: the conversation's echoed vt_ctx must verify
-// to this user + session, so a forged conversationId can't pull someone else's transcript in.
+// Idempotent, so a client retry never duplicates. Bound to the caller: the echoed vt_ctx must
+// verify to this user + session, so a forged conversationId can't pull in someone else's
+// transcript. Returns turns stored this call.
 async function storeConversationTranscript(
   supabase: SupabaseClient,
   userId: string,
   sessionId: string,
   conversationId: string,
   sessionCreatedAtMs: number,
-) {
+): Promise<number> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   const secret = process.env.ELEVENLABS_AGENT_LLM_SECRET;
-  if (!apiKey || !secret) return;
+  if (!apiKey || !secret) return 0;
 
   const existing = await supabase
     .from("psychology_session_messages")
@@ -214,45 +195,40 @@ async function storeConversationTranscript(
     .eq("session_id", sessionId)
     .limit(1);
   if (existing.error) throw new Error(`transcript idempotency check failed: ${existing.error.message}`);
-  if ((existing.data?.length ?? 0) > 0) return; // already stored
+  if ((existing.data?.length ?? 0) > 0) return 0; // already stored
 
-  // Save the pointer FIRST, before anything that can fail. At hang-up ElevenLabs has usually not
-  // attached the conversation's initiation data yet — the very thing carrying vt_ctx — so the bind
-  // below simply cannot succeed on a fresh call. While this write sat after that check, every such
-  // call threw the id away and stranded the session at 0 messages with nothing to retry from.
-  // Storing it unverified is safe: bindsToCaller gates every path that turns it into messages.
-  //
-  // Never fatal either: the id only aids a LATER repair, so failing to save it must not cost us a
-  // transcript we are already holding.
+  // Save the pointer FIRST, before anything that can fail. At hang-up ElevenLabs usually has
+  // not attached the initiation data carrying vt_ctx, so the bind below cannot succeed yet;
+  // while this write sat after that check, every such call discarded the id and stranded the
+  // session at 0 messages with nothing to retry from. Storing it unverified is safe —
+  // bindsToCaller gates every path that turns it into messages. Never fatal.
   await linkConversation(supabase, userId, sessionId, conversationId);
 
-  // ElevenLabs attaches the conversation's initiation data — the thing carrying vt_ctx — a moment
-  // AFTER the call ends, so the first read at hang-up routinely cannot bind. Waiting a few seconds
-  // and asking again stores the transcript now, while the trader is still looking at the screen.
-  //
-  // Worth the wait because the fallback is bad: the lazy repair in GET only runs when someone
-  // OPENS that call, so until then the list says "0 messages" and the trader reasonably concludes
-  // their conversation was lost. Bounded well inside this route's maxDuration of 30s, and the
-  // whole thing stays best-effort — a call that still is not ready keeps its pointer and repairs
-  // on the next read exactly as before.
+  // The initiation data carrying vt_ctx lands a moment AFTER the call ends, so the first read
+  // at hang-up routinely cannot bind. Retrying stores the transcript while the trader is still
+  // on the screen; otherwise the list says "0 messages" until someone opens that call.
+  // Waits on BOTH conditions, not just the bind: a still-"processing" conversation would latch
+  // a prefix. Exhausting the ladder is fine — the pointer is saved and the next GET repairs.
   const deadline = Date.now() + 12_000;
+  const ready = (record: ConversationRecord) =>
+    !isLiveCall(record) && bindsToCaller(record, secret, userId, sessionId);
   let conversation = await fetchConversation(conversationId, apiKey);
   for (const wait of [1_500, 3_000, 5_000]) {
-    if (conversation === "gone") return;
-    if (conversation && bindsToCaller(conversation, secret, userId, sessionId)) break;
+    if (conversation === "gone") return 0;
+    if (conversation && ready(conversation)) break;
     if (Date.now() + wait > deadline) break;
     await new Promise((resolve) => setTimeout(resolve, wait));
     conversation = await fetchConversation(conversationId, apiKey);
   }
-  if (!conversation || conversation === "gone") return;
+  if (!conversation || conversation === "gone") return 0;
 
-  if (!bindsToCaller(conversation, secret, userId, sessionId)) {
-    // Still not ready after the retries. The pointer is saved, so the next read repairs it.
-    logger.warn("Conversation not bound yet; a later read will retry.", { sessionId });
-    return;
+  if (!ready(conversation)) {
+    // The pointer is saved, so the next read repairs it.
+    logger.warn("Conversation not ready yet; a later read will retry.", { sessionId });
+    return 0;
   }
 
-  await storeTurns(supabase, userId, sessionId, conversation, sessionCreatedAtMs);
+  return storeTurns(supabase, userId, sessionId, conversation, sessionCreatedAtMs);
 }
 
 export async function GET(
@@ -272,8 +248,7 @@ export async function GET(
       return jsonUnauthorized("Sign in to load coaching sessions.");
     }
 
-    // Session row + its transcript are independent reads — fan them out. RLS scopes
-    // both to the caller; the explicit user_id filters keep it explicit.
+    // RLS scopes both reads to the caller; the user_id filters keep it explicit.
     const [sessionQuery, messagesQuery] = await Promise.all([
       session.supabase
         .from("psychology_sessions")
@@ -292,20 +267,16 @@ export async function GET(
       return jsonApiError(404, "psychology_session_missing", "That coaching session was not found.");
     }
 
-    // A hang-up regularly beats ElevenLabs to attaching the conversation's initiation data, so the
-    // PATCH could not bind it and the call reads as "Nothing was said". It did save the id, so ask
-    // again here — and re-run the bind, because the id it saved was never verified. Self-healing:
-    // a conversation that still is not ready stores 0 turns and the next read retries.
-    // Terminal answers end the retry rather than repeating forever: a conversation ElevenLabs
-    // no longer has, and a finished call that bound but had nothing to store, both drop the
-    // stored pointer — after which this block never runs again for that session.
+    // Lazy repair for a call the PATCH could not bind, which otherwise reads as "Nothing was
+    // said". The bind is re-run here because the saved id was never verified. A conversation
+    // that still is not ready stores 0 turns and the next read retries; terminal answers drop
+    // the pointer so this block never runs again for that session.
     let messages = messagesQuery.data as unknown as PsychologySessionMessageRow[];
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (messages.length === 0 && apiKey) {
       try {
-        // Read the conversation id only on the repair path. Selecting it in the main query above
-        // would make this route 500 for every session if the deploy landed before migration 30;
-        // here a missing column simply errors, leaves conversationId undefined, and skips repair.
+        // Read only on the repair path: selecting it in the main query would 500 every session
+        // if the deploy landed before migration 30. Here a missing column just skips repair.
         const link = await session.supabase
           .from("psychology_sessions")
           .select("elevenlabs_conversation_id")
@@ -320,15 +291,13 @@ export async function GET(
         const row = sessionQuery.data as unknown as PsychologySessionRow;
 
         if (conversation === "gone") {
-          // The conversation does not exist any more (retention, or a junk id). Nothing will
-          // ever come back from it, so stop paying for the same 404 on every open.
+          // Gone for good (retention, or a junk id) — stop paying for the same 404 every open.
           await clearConversationLink(session.supabase, session.user.id, parsed.data);
         } else if (
           conversation &&
           secret &&
-          // Nothing about a call in flight is final — not the transcript (see isLiveCall) and
-          // not the clock below, which would otherwise store a mid-call duration that the
-          // "never overwrite a reported duration" rule then makes permanent.
+          // Neither the transcript nor the clock below is final mid-call, and a stored mid-call
+          // duration is made permanent by the "never overwrite a reported duration" rule.
           !isLiveCall(conversation) &&
           bindsToCaller(conversation, secret, session.user.id, parsed.data)
         ) {
@@ -339,26 +308,19 @@ export async function GET(
             conversation,
             Date.parse(row.created_at),
           );
-          // Re-read on ANY completed attempt, not only when this request did the writing. A
-          // storeTurns of 0 also covers losing the race to a concurrent repair (migration 31's
-          // unique index), where the transcript now exists but was stored by the other writer —
-          // gating on our own row count showed that trader "Nothing was said on this call." for
-          // a call that had just been fully recovered, until they refreshed.
+          // Re-read on ANY completed attempt, not only when this request did the writing: a
+          // storeTurns of 0 also means a concurrent repair won the race. Gating on our own row
+          // count showed "Nothing was said on this call." for a fully recovered call.
           const repaired = await readMessages(session.supabase, session.user.id, parsed.data);
           if (!repaired.error && repaired.data && repaired.data.length > 0) {
             messages = repaired.data as unknown as PsychologySessionMessageRow[];
-            // storeTurns updated message_count in the database, but this row was read before
-            // that — without this the repaired call still renders as "0 messages".
+            // This row was read before storeTurns updated message_count; without the patch the
+            // repaired call still renders as "0 messages".
             row.message_count = messages.length;
           }
-          // A hang-up report that never landed leaves the call at 0:00 even once its words are
-          // recovered — and lifetime minutes short by that call forever. ElevenLabs knows how
-          // long it ran, and it is bound to this caller here, so take its clock.
-          //
-          // Bounded exactly like the client-reported duration (sessionPatchSchema): this is
-          // third-party input landing in the same column, and an absurd value would be read
-          // back as minutes. Only fills a call with no duration of its own — a real hang-up
-          // report is the trader's own clock and always wins.
+          // A hang-up report that never landed leaves the call at 0:00 forever, so take
+          // ElevenLabs' clock. Bounded like the client-reported duration (sessionPatchSchema):
+          // third-party input, same column. Only fills a call with no duration of its own.
           const reported = conversation.metadata?.call_duration_secs;
           const ran = typeof reported === "number" && Number.isFinite(reported)
             ? Math.min(86_400, Math.max(0, Math.round(reported)))
@@ -371,10 +333,9 @@ export async function GET(
               .eq("user_id", session.user.id);
             row.duration_secs = ran;
           }
-          // Finished with nothing to store: the call really was silent, so this is as repaired
-          // as it will ever get. Read off the messages that now exist rather than off what THIS
-          // request wrote — a race loser wrote nothing but the transcript is there, and dropping
-          // the pointer for it would be wrong. Empty after a terminal status is genuinely empty.
+          // Finished with nothing to store: the call really was silent. Keyed off the messages
+          // that now exist, not what THIS request wrote — a race loser wrote nothing but the
+          // transcript is there, and dropping the pointer for it would be wrong.
           if (messages.length === 0 && (conversation.status === "done" || conversation.status === "failed")) {
             await clearConversationLink(session.supabase, session.user.id, parsed.data);
           }
@@ -425,10 +386,9 @@ export async function PATCH(
       return jsonUnauthorized("Sign in to update coaching sessions.");
     }
 
-    // The user_id filter + RLS (psychology_sessions_update_own) make updating someone
-    // else's session indistinguishable from a missing one: zero rows -> 404. A report that
-    // carries only the conversation id reads the row instead of writing it, so a mid-call
-    // report can never roll the call clock back over a hang-up report that already landed.
+    // The user_id filter + RLS (psychology_sessions_update_own) make updating someone else's
+    // session indistinguishable from a missing one: zero rows -> 404. A report carrying only
+    // the conversation id reads instead of writes, so it can't roll back a reported clock.
     const { durationSecs, conversationId } = parsedBody.data;
     const table = session.supabase.from("psychology_sessions");
     const { data, error } = await (durationSecs === undefined
@@ -446,19 +406,17 @@ export async function PATCH(
       return jsonApiError(404, "psychology_session_missing", "That coaching session was not found.");
     }
 
-    // Duration is saved; now (realtime calls only) pull and store the transcript. Failures here
-    // are logged but don't fail the hang-up — the duration report already landed.
-    //
-    // A duration is what marks the call OVER. Without one this is a mid-call report, so it only
-    // remembers the pointer: fetching a conversation that is still open returns a partial
-    // transcript, and the idempotency guard would then latch that truncated version in forever.
+    // Transcript failures are logged but don't fail the hang-up; the duration already landed.
+    // A duration marks the call OVER — without one this is a mid-call report, which only
+    // remembers the pointer, since importing an open conversation latches a partial transcript.
+    const row = data as unknown as PsychologySessionRow;
+    let imported = 0;
     if (conversationId) {
       try {
-        const row = data as unknown as PsychologySessionRow;
         if (durationSecs === undefined) {
           await linkConversation(session.supabase, session.user.id, parsed.data, conversationId);
         } else {
-          await storeConversationTranscript(
+          imported = await storeConversationTranscript(
             session.supabase,
             session.user.id,
             parsed.data,
@@ -473,8 +431,12 @@ export async function PATCH(
       }
     }
 
+    // `row` was read BEFORE the import, so it still says 0 messages — and this response is what
+    // the client renders the instant the trader hangs up. Patch in the count that just landed
+    // rather than paying for a second read. Importing 0 needs no patch: nothing was stored, or
+    // a concurrent writer won the race and the next read shows their rows.
     return NextResponse.json(
-      toPsychologySession(data as unknown as PsychologySessionRow),
+      toPsychologySession(imported > 0 ? { ...row, message_count: imported } : row),
       { headers: PRIVATE_CACHE_HEADERS },
     );
   } catch (error) {

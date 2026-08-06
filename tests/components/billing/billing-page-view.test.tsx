@@ -14,6 +14,8 @@ vi.mock("@/components/billing/billing-actions", () => ({
 }));
 
 import { BillingPageView } from "@/components/billing/billing-page-view";
+import { getPublicBillingPricing } from "@/lib/billing/config";
+import { PRO_PLAN_FEATURES } from "@/lib/marketing/pro-plan-features";
 
 describe("BillingPageView", () => {
   afterEach(() => {
@@ -82,6 +84,15 @@ describe("BillingPageView", () => {
     expect(screen.getByText("4/5")).toBeInTheDocument();
     expect(screen.getByText(/1 free message left today/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /View pricing & upgrade/i })).toHaveAttribute("href", "/pricing");
+
+    // Someone deciding whether to pay has to be able to see what they get. This card used to
+    // sell Pro as "Stripe-managed billing" and 15 more Ask messages, which reads as no reason
+    // at all — every Pro feature is listed here now, from the same source as the pricing page.
+    for (const feature of PRO_PLAN_FEATURES) {
+      expect(screen.getByText(feature)).toBeInTheDocument();
+    }
+    expect(screen.getByText(getPublicBillingPricing().monthly.headline)).toBeInTheDocument();
+    expect(screen.queryByText(/Stripe-managed billing/i)).not.toBeInTheDocument();
   });
 
   it("shows subscription details for Pro users even when portal actions are unavailable", () => {

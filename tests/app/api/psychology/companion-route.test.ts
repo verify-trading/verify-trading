@@ -37,10 +37,10 @@ const assessmentRow = {
 
 // Chainable thenable stand-in for a PostgREST query: every builder method returns the
 // builder, awaiting it (or .single()/.maybeSingle()) resolves the provided result.
-function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
+function createQueryBuilder(result: { data?: unknown; count?: number; error?: unknown } = { data: null, error: null }) {
   const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
 
-  for (const method of ["select", "eq", "is", "gt", "order", "limit", "insert", "update"]) {
+  for (const method of ["select", "eq", "neq", "is", "gt", "order", "limit", "insert", "update"]) {
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn().mockResolvedValue(result);
@@ -51,6 +51,11 @@ function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data
 }
 
 type Builder = ReturnType<typeof createQueryBuilder>;
+
+// Building the persona now reads psychology_sessions FIRST, for the tail of the trader's last
+// call — so this is the first builder out of that table's queue on every turn, before the
+// route's own session select/insert. A trader with no earlier calls: no rows, count 0.
+const noPriorCalls = () => createQueryBuilder({ data: [], count: 0, error: null });
 
 // from() dispatcher: hands out per-table builders in order, reusing the last one once
 // the queue runs dry (psychology_sessions is hit twice on a session-aware turn).
@@ -78,6 +83,7 @@ function baseTables(): Record<string, Builder[]> {
     psychology_assessments: [createQueryBuilder({ data: assessmentRow, error: null })],
     journal_entries: [createQueryBuilder({ data: [], error: null })],
     challenge_config: [createQueryBuilder({ data: null, error: null })],
+    psychology_sessions: [noPriorCalls()],
   };
 }
 
@@ -110,7 +116,7 @@ describe("Psychology companion API", () => {
     const messageInsert = createQueryBuilder({ error: null });
     const from = createFrom({
       ...baseTables(),
-      psychology_sessions: [sessionSelect, sessionUpdate],
+      psychology_sessions: [noPriorCalls(), sessionSelect, sessionUpdate],
       psychology_session_messages: [messageInsert],
     });
     mockSession(from);
@@ -160,7 +166,7 @@ describe("Psychology companion API", () => {
   it("404s a turn against a session the caller does not own", async () => {
     const from = createFrom({
       ...baseTables(),
-      psychology_sessions: [createQueryBuilder({ data: null, error: null })],
+      psychology_sessions: [noPriorCalls(), createQueryBuilder({ data: null, error: null })],
     });
     mockSession(from);
 
@@ -183,7 +189,7 @@ describe("Psychology companion API", () => {
     const messageInsert = createQueryBuilder({ error: null });
     const from = createFrom({
       ...baseTables(),
-      psychology_sessions: [sessionInsert, sessionUpdate],
+      psychology_sessions: [noPriorCalls(), sessionInsert, sessionUpdate],
       psychology_session_messages: [messageInsert],
     });
     mockSession(from);

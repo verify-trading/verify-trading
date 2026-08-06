@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth/session";
+import { hasProAccess } from "@/lib/billing/require-pro";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import {
@@ -69,6 +70,10 @@ export async function POST(request: Request) {
     const session = await getSessionUser();
     if (!session) {
       return jsonUnauthorized("Sign in to save psychology assessments.");
+    }
+    // The WRITE is gated, not the read, so a lapsed Pro keeps reading assessments they paid for.
+    if (!(await hasProAccess(session))) {
+      return jsonApiError(403, "psychology_pro_required", "The Mind assessment is a Pro feature.");
     }
 
     const result = scorePsychologyAssessment(parsedBody.data.sectionScores);

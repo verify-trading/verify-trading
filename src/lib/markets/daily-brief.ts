@@ -1,13 +1,10 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
 
+import { getAskModel } from "@/lib/ask/service/provider";
 import type { DailyMarketBrief } from "@/lib/markets/market-intelligence";
 
 export const DAILY_MARKET_BRIEF_CACHE_KEY = "intelligence:daily-brief";
-// Env-overridable so it tracks the same model as Ask (provider.ts) and can't rot
-// to a retired snapshot. claude-sonnet-4-20250514 was retired 2026-06-15.
-const DAILY_MARKET_BRIEF_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
 
 const dailyMarketBriefSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -135,7 +132,8 @@ export async function generateDailyMarketBrief(
     ? `\nToday's market headlines (your ONLY source for events and named figures):\n${headlines.map((h) => `- ${h}`).join("\n")}\n`
     : "";
   const { object } = await generateObject({
-    model: anthropic(DAILY_MARKET_BRIEF_MODEL),
+    // Tracks Ask's model (ASK_MODEL) so the brief can never rot to a retired snapshot.
+    model: getAskModel(),
     maxOutputTokens: 1000,
     schema: dailyMarketBriefSchema,
     system: "You are verify.trading's market intelligence engine.",

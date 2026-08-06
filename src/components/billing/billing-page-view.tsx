@@ -1,11 +1,16 @@
 import Link from "next/link";
-import { ArrowLeft, CreditCard } from "lucide-react";
+import { ArrowLeft, Check, CreditCard } from "lucide-react";
 
 import {
   BillingActionButton,
   BillingCheckoutSync,
 } from "@/components/billing/billing-actions";
-import { getBillingPlanAmountGbp, readBillingPlanKeyFromStripeInterval } from "@/lib/billing/config";
+import {
+  getBillingPlanAmountGbp,
+  getPublicBillingPricing,
+  readBillingPlanKeyFromStripeInterval,
+} from "@/lib/billing/config";
+import { PRO_PLAN_FEATURES } from "@/lib/marketing/pro-plan-features";
 import { getBillingStatusLabel } from "@/lib/billing/subscription-status";
 import {
   FREE_DAILY_ASK_LIMIT,
@@ -56,6 +61,38 @@ function subscriptionStatusPillClass(status: string | null | undefined) {
     default:
       return "border-[rgba(76,110,245,0.28)] bg-[rgba(76,110,245,0.12)] text-[var(--vt-blue)]";
   }
+}
+
+/**
+ * What Pro actually buys, on the page where someone decides whether to buy it. The features come
+ * from PRO_PLAN_FEATURES so this can never drift from the pricing page, and the prices from the
+ * same config Stripe checkout reads.
+ */
+function ProUpgradeCard() {
+  const pricing = getPublicBillingPricing();
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
+      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--vt-coral)]">Pro</p>
+      <p className="mt-3 text-lg font-semibold tracking-[-0.02em] text-white sm:text-xl">
+        {pricing.monthly.headline}
+      </p>
+      <p className="mt-1 text-sm text-[var(--vt-muted)]">
+        or {pricing.weekly.headline} · {pricing.annual.headline}
+      </p>
+      <ul className="mt-5 space-y-3">
+        {PRO_PLAN_FEATURES.map((feature) => (
+          <li key={feature} className="flex items-start gap-2.5 text-sm text-white/85">
+            <Check className="mt-0.5 size-4 shrink-0 text-[var(--vt-coral)]" aria-hidden />
+            {feature}
+          </li>
+        ))}
+      </ul>
+      <Button asChild variant="default" size="pill" className="mt-6">
+        <Link href="/pricing">View pricing & upgrade</Link>
+      </Button>
+    </div>
+  );
 }
 
 export function BillingPageView({
@@ -132,8 +169,8 @@ export function BillingPageView({
                   </div>
                   <p className="mt-3 text-lg font-semibold tracking-[-0.02em] text-white sm:text-xl">Free</p>
                   <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--vt-muted)]">
-                    {FREE_DAILY_ASK_LIMIT} Ask messages per day, full access to core tools. Upgrade for{" "}
-                    {PRO_DAILY_ASK_LIMIT} Ask messages per day and Stripe-managed billing.
+                    {FREE_DAILY_ASK_LIMIT} Ask messages a day, with broker verification, trade analysis and
+                    the risk calculators.
                   </p>
                 </div>
 
@@ -157,18 +194,10 @@ export function BillingPageView({
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
-                  <Button asChild variant="default" size="pill">
-                    <Link href="/pricing">View pricing & upgrade</Link>
-                  </Button>
-                </div>
+                <ProUpgradeCard />
               </div>
             ) : (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
-                <Button asChild variant="default" size="pill">
-                  <Link href="/pricing">View pricing & upgrade</Link>
-                </Button>
-              </div>
+              <ProUpgradeCard />
             )
           ) : (
             <div className="w-full space-y-10">

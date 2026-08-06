@@ -54,3 +54,6 @@ GEMINI.md
 verify-trading-architecture.docx
 .vercel
 tsconfig.tsbuildinfo
+
+# ElevenLabs agent snapshots (carry the agent LLM secret)
+scripts/agent-config-backup-*.json

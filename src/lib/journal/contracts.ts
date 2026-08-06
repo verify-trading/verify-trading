@@ -3,27 +3,33 @@ import { z } from "zod";
 const journalMoodSchema = z.enum(["good", "okay", "tough"]);
 
 // Who wrote the day. Mirrors journal_entries.source (check constraint in
-// supabase/migration_27_broker_sync.sql): 'manual' predates the mobile app, 'mobile' is the
-// trader typing in the app, 'broker' is the MetaApi importer. The importer may overwrite only
-// its own rows, and that test is a `source = 'broker'` predicate on its UPDATE rather than a
-// TypeScript check — read-then-decide leaves a gap for a manual save to land in and be clobbered.
-export type JournalSource = "manual" | "mobile" | "broker";
+// supabase/migration_27_broker_sync.sql, widened for 'csv' by migration 32).
+// The importer may overwrite only its own rows, and that test is a `source = 'broker'` predicate
+// on its UPDATE, never a TypeScript check: read-then-decide can clobber a manual save.
+export type JournalSource = "manual" | "mobile" | "broker" | "csv";
 
 /**
- * A day the importer wrote rather than one the trader logged. Its mood is the importer's
- * NOT-NULL placeholder and it carries no note or lesson, so anything that reads a day as the
- * trader's own account of it — coach context, weekly insight, mood strip — must leave it out.
- * The money on it is real and still counts. One definition per repo; every reader asks this.
+ * A day the importer wrote rather than one the trader logged. Its mood is a NOT-NULL placeholder
+ * and it carries no note or lesson, so anything reading a day as the trader's own account of it
+ * (coach context, weekly insight, mood strip) must leave it out. The money on it still counts.
+ *
+ * Two importers: MetaApi sync writes `source = 'broker'`, and a CSV import posts through the
+ * normal entries route, which stamps `source = 'csv'`. The mobile predicate is the same set and
+ * strips the bare 'csv' tag when the trader edits the day, which is what makes the day theirs.
+ *
+ * ponytail: the tags fallback is only for CSV rows written before the route stamped them, back
+ * when the server said 'mobile' and the tag was the only mark left. Drop it once migration 32
+ * is applied (its backfill rewrites those rows to 'csv'), at which point this stops needing
+ * `tags` at all — until then any row reaching this must carry them, since a query that skips
+ * the column reads every old CSV day as journaled.
  */
-export const isImportedRow = (row: { source: JournalSource }): boolean => row.source === "broker";
+export const isImportedRow = (row: { source: JournalSource; tags: string[] | null }): boolean =>
+  row.source === "broker" || row.source === "csv" || (row.tags?.includes("csv") ?? false);
 
 /**
- * The days that belong to the trader's CURRENT challenge — those logged on or after it
- * started. Anything traded before signing up for this evaluation is not progress toward its
- * target: counting it pre-filled the target bar and told the coach they were further along
- * than the app showed them. Three surfaces ask this (challenge cockpit, the coach's spoken
- * standing, the per-entry note), so one definition. Pass `challengeStartedAt(rules)`; a config
- * saved before start tracking existed has no start, and is grandfathered to all-time.
+ * The days that belong to the trader's CURRENT challenge — those logged on or after it started.
+ * Anything traded before signing up is not progress toward its target. Pass
+ * `challengeStartedAt(rules)`; a config with no start is grandfathered to all-time.
  *
  * ponytail: the start is compared as its UTC day against entry_date, which the client writes
  * as a LOCAL day key — so a challenge started within hours of midnight can differ from the
@@ -38,8 +44,7 @@ export function scopeToChallengeStart<T extends { entry_date: string }>(
   return rows.filter((row) => row.entry_date >= startDay);
 }
 
-// Optional structured trade details, stored as a jsonb blob. Every field is optional:
-// the trader can save a session outcome with none, some, or all of them filled in.
+// Stored as a jsonb blob. Every field is optional — a session can be saved with none of them.
 export const tradeDetailsSchema = z
   .object({
     asset: z.string().trim().max(40).optional(),
@@ -56,11 +61,9 @@ export const tradeDetailsSchema = z
 
 export type TradeDetails = NonNullable<z.infer<typeof tradeDetailsSchema>>;
 
-// A session can't be logged before it happens. Aggregates read entry_date descending, so
-// a future row lands at index 0 and is treated as the latest session: the header reports
-// the wrong streak direction, and overheatTrigger's breakIndex of 0 means a real streak
-// after it never fires the warning. One day of slack keeps traders in timezones ahead of
-// UTC from being rejected while logging their own "today".
+// Aggregates read entry_date descending, so a future row lands at index 0 and is read as the
+// latest session, breaking the streak direction and overheatTrigger's breakIndex. One day of
+// slack keeps traders in timezones ahead of UTC from being rejected on their own "today".
 const notFutureDated = (value: string) => {
   const limit = new Date();
   limit.setUTCDate(limit.getUTCDate() + 1);
@@ -89,11 +92,9 @@ export const journalEntryDeleteSchema = z.object({
 });
 
 export const journalEntriesQuerySchema = z.object({
-  // Capped at a year of daily sessions. The client pages the calendar back month by month by
-  // WIDENING this window (never by cursor), because it must always hold every row down to the
-  // month being viewed — a day left unloaded reads as unlogged, and logging it again upserts
-  // over the stored row. The per-request aggregates scan already reads far more rows than
-  // this, so one wide page costs materially less than a run of cursor requests would.
+  // Capped at a year of daily sessions. The client pages the calendar by WIDENING this window,
+  // never by cursor: a day left unloaded reads as unlogged, and logging it again upserts over
+  // the stored row.
   limit: z.coerce.number().int().min(1).max(366).optional().default(31),
 });
 
@@ -124,7 +125,7 @@ export type JournalEntry = {
   challengeStatusNote: string | null;
   tags: string[];
   tradeDetails: TradeDetails | null;
-  // Who wrote the day, so the client can tell an imported one from a logged one (isImportedRow).
+  // Lets the client tell an imported day from a logged one (isImportedRow).
   source: JournalSource;
   createdAt: string;
   updatedAt: string;
@@ -139,25 +140,20 @@ export type JournalAggregates = {
   lessonCount: number;
   winRate: number;
   streak: JournalStreak;
-  // Most frequent non-null pnl currency across the scanned history, so the header total's
-  // currency label reflects the full history rather than just the rendered page.
+  // Most frequent non-null pnl currency across the scanned history, not just the rendered page.
   dominantCurrency: string;
-  // Every date the trader has logged, across the WHOLE history — not just the page. Without
-  // it a day outside the loaded window reads as unlogged, and opening it offers a blank "new
-  // session" form whose save upserts over the stored row.
+  // Every logged date across the WHOLE history: a day outside the loaded window would otherwise
+  // read as unlogged and offer a blank form whose save upserts over the stored row.
   loggedDates: string[];
 };
 
 /**
- * A money figure for a set of days, and the currency it is actually in. Anything that turns
- * days into a single amount goes through here — four figures are shown or spoken to the trader
- * (journal header, challenge standing, the coach's weekly P&L, the per-entry note).
+ * A money figure for a set of days, and the currency it is actually in. Anything that turns days
+ * into a single amount goes through here.
  *
- * Days are never converted between currencies, so adding £ to $ yields a total in neither.
- * Every headline figure takes the currency most of the scored days settled in and sums only
- * those. Broker sync makes mixing ordinary rather than freak: a first import writes up to 90
- * days in the account's base currency, which can outnumber what the trader typed and flip
- * which currency the label claims.
+ * Days are never converted, so adding £ to $ yields a total in neither. Every headline figure
+ * takes the currency most of the scored days settled in and sums only those. Broker sync makes
+ * mixing ordinary: a first import writes days in the account's base currency.
  *
  * ponytail: the minority currency's days are left out rather than converted. Upgrade path
  * when it matters: convert at the day's rate on import and store a normalised figure too.
@@ -184,9 +180,8 @@ export function currencyTotals(
   return { dominantCurrency, totalPnl: sums.get(dominantCurrency) ?? 0 };
 }
 
-// Lifetime header metrics over the trader's ENTIRE history, not the page the client renders,
-// so they stay correct past one page. Rows must arrive newest-first (entry_date desc) so the
-// streak reads from the most recent session backwards.
+// Lifetime metrics over the ENTIRE history, not the rendered page. Rows must arrive newest-first
+// (entry_date desc) so the streak reads from the most recent session backwards.
 export function computeJournalAggregates(rows: JournalEntryRow[]): JournalAggregates {
   const withPnl = rows.filter((row) => row.pnl_amount !== null);
   const wins = withPnl.filter((row) => Number(row.pnl_amount) > 0).length;
@@ -203,8 +198,7 @@ export function computeJournalAggregates(rows: JournalEntryRow[]): JournalAggreg
   const { dominantCurrency, totalPnl } = currencyTotals(withPnl);
   return {
     totalPnl,
-    // Sign-based, so currency-independent: a winning day is a winning day whatever it
-    // settled in. These stay across the whole history.
+    // Sign-based, so currency-independent, and counted across the whole history.
     wins,
     scored,
     lessonCount: rows.filter((row) => Boolean(row.lesson)).length,

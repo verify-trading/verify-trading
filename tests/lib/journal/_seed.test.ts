@@ -7,7 +7,7 @@ import { extractChallengeRules } from "@/lib/journal/challenge";
 // running the live scraper across the top firms. Skipped by default; run it to refresh the
 // cache when a firm changes its rules. Keep this list in sync with the mobile picker
 // (verify-trading-mobile/src/features/journal/propFirms.ts). Opt-in:
-//   set -a; source <(grep -E '^(ANTHROPIC_(API_KEY|MODEL|BASE_URL)|FIRECRAWL_API_KEY)=' .env.local); set +a
+//   set -a; source <(grep -E '^(OPENAI_(API_KEY|BASE_URL)|ASK_MODEL|FIRECRAWL_API_KEY)=' .env.local); set +a
 //   RUN_SEED=1 npx vitest run _seed --disableConsoleIntercept
 const FIRMS: Array<{ name: string; url: string }> = [
   { name: "FTMO", url: "https://ftmo.com" },

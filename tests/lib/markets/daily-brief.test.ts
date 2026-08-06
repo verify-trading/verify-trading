@@ -6,7 +6,7 @@ import {
 } from "@/lib/markets/daily-brief";
 import type { DailyMarketBrief } from "@/lib/markets/market-intelligence";
 
-vi.mock("@ai-sdk/anthropic", () => ({ anthropic: () => "mock-model" }));
+vi.mock("@/lib/ask/service/provider", () => ({ getAskModel: () => "mock-model" }));
 
 // Model returns deliberately wrong levels; the live-price override must win.
 vi.mock("ai", () => ({

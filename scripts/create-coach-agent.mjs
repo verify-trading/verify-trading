@@ -51,8 +51,11 @@ const payload = {
   name: "Psychology Coach",
   conversation_config: {
     agent: {
+      // "Companion" is what every screen in the app calls this, so it is what the agent says
+      // out loud. Kept in step with FIRST_MESSAGE in tune-coach-agent.mjs, which is what a
+      // recreated or dashboard-edited agent gets put back to.
       first_message:
-        "Hey, it's your coach here. Good to have you on — take a breath, and tell me what's on your mind today.",
+        "Hey, it's your Companion here. Good to have you on — take a breath, and tell me what's on your mind today.",
       // English base on flash v2. The rejection that prompted the old "Spanish base + English
       // preset" workaround was ElevenLabs enforcing its model mapping — English uses v2,
       // additional languages use v2.5 — not a ban on English as the base. That workaround

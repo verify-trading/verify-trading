@@ -10,7 +10,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/broker/metaapi", () => ({
   createAccount: vi.fn(),
-  createConfigurationLink: vi.fn(),
+  updateAccountPassword: vi.fn(),
   deleteAccount: vi.fn(),
   getAccount: vi.fn(),
   deployAccount: vi.fn(),

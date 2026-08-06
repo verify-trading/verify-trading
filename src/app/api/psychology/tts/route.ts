@@ -2,16 +2,14 @@ import { getSessionUser } from "@/lib/auth/session";
 import { hasProAccess } from "@/lib/billing/require-pro";
 import { jsonApiError, jsonUnauthorized } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
-import { synthesizeCoachSpeech, TTS_MAX_CHARS } from "@/lib/psychology/tts";
+import { claimTtsChars, synthesizeCoachSpeech, TTS_MAX_CHARS } from "@/lib/psychology/tts";
 
-// Streams the coach's reply as speech. Auth-gated (so it can't be used to burn TTS
-// credits), and it proxies ElevenLabs so the API key never reaches the client. The app
-// plays this URL directly (expo-audio) with its Bearer token as a header.
+// Proxies ElevenLabs so the API key never reaches the client. The app plays this URL directly
+// (expo-audio) with its Bearer token as a header.
 export async function GET(request: Request) {
   const session = await getSessionUser();
   if (!session) return jsonUnauthorized("Sign in to use the psychology coach.");
-  // Pro-only: every call bills ElevenLabs per character, so entitlement is checked
-  // here rather than trusting the client to hide the entry point.
+  // Pro-only: every call bills ElevenLabs per character.
   if (!(await hasProAccess(session))) {
     return jsonApiError(403, "psychology_pro_required", "Voice coaching is a Pro feature.");
   }
@@ -19,18 +17,23 @@ export async function GET(request: Request) {
   const text = new URL(request.url).searchParams.get("text")?.trim();
   if (!text) return jsonApiError(400, "tts_invalid", "Missing text to speak.");
 
+  const spoken = text.slice(0, TTS_MAX_CHARS);
+  // Pro entitlement alone bounds nothing here: the subscription is flat and this route bills per
+  // character on every request. A stuck client would otherwise spend without limit.
+  if (!claimTtsChars(session.user.id, spoken.length)) {
+    logger.warn("Psychology TTS daily character budget exhausted.", { userId: session.user.id });
+    return jsonApiError(429, "tts_rate_limited", "You've reached today's voice limit. Try again tomorrow.");
+  }
+
   try {
-    const speech = await synthesizeCoachSpeech(text.slice(0, TTS_MAX_CHARS), AbortSignal.timeout(20_000));
+    const speech = await synthesizeCoachSpeech(spoken, AbortSignal.timeout(20_000));
     if (!speech.ok) {
       logger.error("ElevenLabs TTS request failed.", { status: speech.status });
       return jsonApiError(502, "tts_failed", "The coach's voice is unavailable right now.");
     }
-    // Buffer the whole clip and return it with a Content-Length rather than piping the
-    // chunked stream through. The clip is tiny (~30–60 KB) and iOS AVPlayer was slow to
-    // become playable on a chunked, unsized response (~6–7s — past the app's fallback
-    // window, so the coach fell back to the robotic device voice). A sized response plays
-    // near-instantly. Costs a little first-byte latency (we await the full generation) for
-    // a much faster, reliable time-to-playable on the client.
+    // Buffered and returned with a Content-Length rather than piped through chunked. iOS
+    // AVPlayer took ~6-7s to become playable on an unsized response, past the app's fallback
+    // window, so the coach came out in the robotic device voice. Costs first-byte latency.
     const audio = await speech.arrayBuffer();
     return new Response(audio, {
       status: 200,

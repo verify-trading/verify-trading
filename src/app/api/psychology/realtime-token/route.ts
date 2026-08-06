@@ -17,11 +17,9 @@ import {
   openCoachSession,
 } from "@/lib/psychology/sessions";
 
-// Mints a WebRTC conversation token for the ElevenLabs coach agent and opens the session row
-// the transcript will land in. Auth-gated exactly like the companion route (Pro-only), because
-// each connected call bills ElevenLabs + our LLM. The signed context returned here rides the
-// call as customLlmExtraBody so the agent-llm endpoint can rebuild this user's persona (and
-// trust whose it is — see agent-token.ts).
+// Mints a WebRTC conversation token and opens the session row the transcript lands in.
+// Pro-only: each connected call bills ElevenLabs + our LLM. The signed context returned here
+// rides the call as customLlmExtraBody so agent-llm can trust whose persona to build.
 
 const requestSchema = z.object({ assessmentId: z.uuid() });
 
@@ -54,14 +52,11 @@ export async function POST(request: Request) {
       return jsonApiError(503, "psychology_realtime_unconfigured", "The live coach is not available right now.");
     }
 
-    // The assessment must exist AND belong to the caller before anything is spent. The FK only
-    // proves the row exists, so a stale or foreign id used to mint a token, open a session and
-    // connect a billed WebRTC call — which then failed on every turn (agent-llm 404s when
-    // loadCoachContext finds nothing) and left the trader listening to silence.
-    //
-    // Today's allowance is counted alongside it — both are reads, and both have to answer
-    // before the session row is opened or ElevenLabs is billed, so a refused call costs
-    // nothing. A failed count throws into the catch below (500) instead of falling through.
+    // The assessment must exist AND belong to the caller before anything is spent — the FK only
+    // proves the row exists, so a foreign id used to mint a token and connect a billed call
+    // that then failed on every turn. Today's allowance is read alongside it, both before the
+    // session row is opened or ElevenLabs is billed. A failed count throws (500), never falls
+    // through.
     const [assessment, callsToday, mintsToday] = await Promise.all([
       session.supabase
         .from("psychology_assessments")
@@ -78,15 +73,12 @@ export async function POST(request: Request) {
     if (!assessment.data) {
       return jsonApiError(404, "psychology_assessment_missing", "Complete the psychology assessment first.");
     }
-    // Two mints racing can both pass this and land a 6th call for the day. Left alone on
-    // purpose: the overrun is one call, it self-corrects at the next mint, and row locking
-    // for it would cost more than the call it saves.
-    //
-    // The mint count is the backstop: a call only enters callsToday once the CLIENT reports
-    // a duration or a conversation id, so that number alone is a spend limit a modified app
-    // can hold at zero forever. Tokens minted is server truth. The two get DIFFERENT messages:
-    // whoever trips the backstop is by definition someone whose calls were never reported, so
-    // their meter reads under the limit and "you've used your five" would contradict it.
+    // The daily cap is enforced HERE, at mint, before anything is billed; the counts throw
+    // rather than default, so it fails closed. mintsToday is the backstop: callsToday only
+    // rises once the CLIENT reports a call, so a modified app can hold it at zero forever.
+    // Different messages on purpose — whoever trips the backstop has a meter reading under the
+    // limit, which "you've used your five" would contradict.
+    // Two mints racing can both pass and land a 6th call; left alone, it self-corrects.
     if (callsToday >= DAILY_CALL_LIMIT) {
       return jsonApiError(429, "psychology_daily_limit", DAILY_LIMIT_MESSAGE);
     }
@@ -94,14 +86,12 @@ export async function POST(request: Request) {
       return jsonApiError(429, "psychology_daily_limit", MINT_LIMIT_MESSAGE);
     }
 
-    // Open the session row and mint the token in parallel — neither depends on the other.
     const [callSession, tokenResponse] = await Promise.all([
       openCoachSession(session.supabase, session.user.id, parsed.data.assessmentId),
       fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`, {
         headers: { "xi-api-key": apiKey },
-        // Must stay UNDER the platform's own function ceiling (15 s here — this route sets no
-        // maxDuration). At 15 s the abort could never win: the function was killed first and
-        // the trader got a platform 504 instead of our 502 and its log line.
+        // Must stay under the platform function ceiling (15 s; this route sets no maxDuration),
+        // or the function is killed first and the trader gets a platform 504 instead of our 502.
         signal: AbortSignal.timeout(10_000),
       }),
     ]);
@@ -117,8 +107,7 @@ export async function POST(request: Request) {
       return jsonApiError(502, "psychology_realtime_token_failed", "Could not start the live coach right now.");
     }
     const sessionId = callSession.id;
-    // Sanitised in one shared place with the turn-based path — user_metadata is client-written
-    // JSON and this string lands verbatim in the coach's system prompt (see coachDisplayName).
+    // client-written user_metadata landing verbatim in the system prompt; see coachDisplayName.
     const name = coachDisplayName(session.user);
 
     const vt_ctx = signAgentContext(

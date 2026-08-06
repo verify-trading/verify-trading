@@ -34,9 +34,9 @@ function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data
   return builder;
 }
 
-type Row = { entry_date: string; source: "manual" | "mobile" | "broker" };
+type Row = { entry_date: string; source: "manual" | "mobile" | "broker"; tags?: string[] };
 
-const row = ({ entry_date, source }: Row) => ({
+const row = ({ entry_date, source, tags = [] }: Row) => ({
   id: entry_date,
   entry_date,
   mood: "good",
@@ -45,7 +45,7 @@ const row = ({ entry_date, source }: Row) => ({
   note: "Held the plan.",
   lesson: null,
   challenge_status_note: null,
-  tags: [],
+  tags,
   source,
   created_at: `${entry_date}T09:00:00.000Z`,
   updated_at: `${entry_date}T09:00:00.000Z`,
@@ -125,6 +125,24 @@ describe("Journal insight API", () => {
     expect(entries).toHaveLength(5);
     expect(entries.some((entry) => entry.source === "broker")).toBe(false);
     expect(insights.insert).toHaveBeenCalledWith({ user_id: "user-1", insight_text: "You cut winners short after a loss." });
+  });
+
+  it("does not let CSV-imported days reach the threshold or the prompt", async () => {
+    mockSession([
+      { entry_date: day(10), source: "mobile", tags: ["csv", "csv:1754"] },
+      { entry_date: day(9), source: "mobile", tags: ["csv", "csv:1754"] },
+      { entry_date: day(8), source: "mobile", tags: ["csv", "csv:1754"] },
+      { entry_date: day(7), source: "mobile", tags: ["csv", "csv:1754"] },
+      { entry_date: day(6), source: "mobile" },
+    ]);
+
+    // Five rows, but four are a spreadsheet the server stamped 'mobile'. Generating over them
+    // reads a placeholder mood and "Imported from CSV" back to the trader as their own week.
+    await expect((await POST()).json()).resolves.toEqual({
+      insight: "Add more sessions to unlock your AI insight.",
+      generatedAt: null,
+    });
+    expect(generateWeeklyInsight).not.toHaveBeenCalled();
   });
 
   it("leaves soft-deleted days out of the count and out of the prompt", async () => {

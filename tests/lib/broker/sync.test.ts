@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { computeSyncWindow, deriveBrokerState, toBrokerDays } from "@/lib/broker/sync";
+import {
+  computeSyncWindow,
+  deriveBrokerState,
+  toBrokerAccountPayload,
+  toBrokerDays,
+  type BrokerAccountRow,
+} from "@/lib/broker/sync";
 import type { MetaStatsTrade } from "@/lib/broker/metaapi";
 
 function trade(overrides: Partial<MetaStatsTrade>): MetaStatsTrade {
@@ -168,5 +174,50 @@ describe("deriveBrokerState", () => {
 
     expect(derived.state).toBe("error");
     expect(derived.stateDetail).toBeTruthy();
+  });
+});
+
+describe("toBrokerAccountPayload", () => {
+  // Stamped before the copy change; the new wording is "...Update the investor password and
+  // sync again." Matching the constant by equality would read this as "not rejected", and the
+  // wake pass would re-pay to prove a login the broker already refused.
+  const LEGACY_REJECTION = "Your broker turned the login away. Check the investor password and reconnect.";
+
+  function rowWith(last_sync_error: string | null): BrokerAccountRow {
+    return {
+      id: "row-1",
+      user_id: "user-1",
+      metaapi_account_id: "meta-1",
+      platform: "mt5",
+      region: "london",
+      last_synced_at: null,
+      last_sync_error,
+      created_at: "2026-07-01T00:00:00.000Z",
+    };
+  }
+
+  it("reads credentialsRejected from the legacy wording, wherever the stamp lives", () => {
+    // The stamp reaches the payload two ways: the sync-failure field on the row, or the
+    // derived state detail from a live snapshot. Both have to match legacy text.
+    expect(
+      toBrokerAccountPayload(rowWith(LEGACY_REJECTION), { state: "ready", stateDetail: null }).credentialsRejected,
+    ).toBe(true);
+    expect(
+      toBrokerAccountPayload(rowWith(null), { state: "error", stateDetail: LEGACY_REJECTION }).credentialsRejected,
+    ).toBe(true);
+  });
+
+  it("reads credentialsRejected from the current wording too", () => {
+    const current = "Your broker turned the login away. Update the investor password and sync again.";
+    expect(toBrokerAccountPayload(rowWith(current), { state: "ready", stateDetail: null }).credentialsRejected).toBe(
+      true,
+    );
+  });
+
+  it("reads an unrelated sync error as not rejected", () => {
+    expect(
+      toBrokerAccountPayload(rowWith("broker said no"), { state: "error", stateDetail: "broker said no" })
+        .credentialsRejected,
+    ).toBe(false);
   });
 });
