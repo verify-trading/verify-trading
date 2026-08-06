@@ -11,7 +11,7 @@ import type { BillingPlanKey } from "@/lib/billing/config";
  * here authenticated, this starts checkout and redirects to Stripe. On failure it
  * steps aside so the billing page's plan buttons are usable.
  */
-export function CheckoutAutoStart({ plan }: { plan: BillingPlanKey }) {
+export function CheckoutAutoStart({ plan, trial = false }: { plan: BillingPlanKey; trial?: boolean }) {
   const started = useRef(false);
   const [failed, setFailed] = useState(false);
 
@@ -27,7 +27,7 @@ export function CheckoutAutoStart({ plan }: { plan: BillingPlanKey }) {
         const response = await fetch("/api/stripe/checkout", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ plan, ...(rewardfulReferral ? { rewardfulReferral } : {}) }),
+          body: JSON.stringify({ plan, trial, ...(rewardfulReferral ? { rewardfulReferral } : {}) }),
         });
         const payload = (await response.json().catch(() => null)) as
           | { url?: string; message?: string }
@@ -45,7 +45,7 @@ export function CheckoutAutoStart({ plan }: { plan: BillingPlanKey }) {
         setFailed(true);
       }
     })();
-  }, [plan]);
+  }, [plan, trial]);
 
   if (failed) {
     return null;

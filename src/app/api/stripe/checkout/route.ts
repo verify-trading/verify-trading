@@ -1,3 +1,4 @@
+import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -9,7 +10,9 @@ import {
   ensureStripeCustomerForUser,
   getBillingCheckoutSession,
   storeBillingCheckoutSession,
+  stripeErrorMeta,
 } from "@/lib/billing/repository";
+import { logger } from "@/lib/observability/logger";
 import { getStripeServerClient } from "@/lib/billing/stripe-server";
 import { MANAGEABLE_SUBSCRIPTION_STATUSES } from "@/lib/billing/subscription-status";
 
@@ -17,11 +20,35 @@ type ProfileRow = {
   display_name: string | null;
 };
 
+const TRIAL_PERIOD_DAYS = 7;
+
 const checkoutRequestSchema = z.object({
   plan: z.enum(["weekly", "monthly", "annual"]).default("monthly"),
   rewardfulReferral: z.string().optional(),
   source: z.enum(["web", "mobile"]).default("web"),
+  /** Promo links (/billing?plan=weekly&trial=1) start with a free week. */
+  trial: z.boolean().default(false),
 });
+
+/**
+ * One trial per customer: someone who cancels and clicks the promo link again pays from day one.
+ *
+ * `incomplete` / `incomplete_expired` do NOT count. Those are subscriptions whose very first
+ * payment never went through — a declined card on the promo link leaves one behind — and the
+ * customer got nothing for it. Treating them as a spent trial would silently charge a first-time
+ * trader from day one on their retry, which is the opposite of what the link they clicked said.
+ */
+const NEVER_STARTED: Stripe.Subscription.Status[] = ["incomplete", "incomplete_expired"];
+
+async function isTrialEligible(stripe: Stripe, customerId: string): Promise<boolean> {
+  const previous = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 100,
+  });
+
+  return !previous.data.some((subscription) => !NEVER_STARTED.includes(subscription.status));
+}
 
 function checkoutReturnUrls(origin: string, source: "web" | "mobile") {
   if (source === "mobile") {
@@ -38,6 +65,11 @@ function checkoutReturnUrls(origin: string, source: "web" | "mobile") {
 }
 
 export async function POST(request: Request) {
+  // Filled in as the request learns who it is acting for. A checkout failure is otherwise an
+  // anonymous 500: the log carries a stack and no subject, so there is no way to tell which
+  // trader hit it, on which plan, or which Stripe call refused.
+  const context: Record<string, unknown> = {};
+
   try {
     const session = await getSessionUser();
 
@@ -45,7 +77,11 @@ export async function POST(request: Request) {
       return jsonUnauthorized("Sign in to start checkout.");
     }
 
+    context.userId = session.user.id;
     const payload = checkoutRequestSchema.parse(await request.json().catch(() => ({})));
+    context.plan = payload.plan;
+    context.trial = payload.trial;
+    context.source = payload.source;
 
     const [subscriptionResult, profileResult] = await Promise.all([
       session.supabase
@@ -85,7 +121,7 @@ export async function POST(request: Request) {
       plan: payload.plan,
     });
 
-    if (checkoutClaim.checkoutUrl && payload.source === "web") {
+    if (checkoutClaim.checkoutUrl && payload.source === "web" && !payload.trial) {
       const reusedOffer = getCheckoutBillingOffer(payload.plan);
       return NextResponse.json({
         url: checkoutClaim.checkoutUrl,
@@ -103,8 +139,12 @@ export async function POST(request: Request) {
       email: session.user.email,
       displayName: (profileResult.data as ProfileRow | null)?.display_name ?? null,
     });
+    context.stripeCustomerId = customerId;
+    context.checkoutToken = checkoutClaim.checkoutToken;
 
     const stripe = getStripeServerClient();
+    const trialPeriodDays =
+      payload.trial && (await isTrialEligible(stripe, customerId)) ? TRIAL_PERIOD_DAYS : null;
     const origin = new URL(request.url).origin;
     const returnUrls = checkoutReturnUrls(origin, payload.source);
     const metadata = {
@@ -116,7 +156,7 @@ export async function POST(request: Request) {
 
     const staleCheckoutSessionId =
       checkoutClaim.replacedCheckoutSessionId ??
-      (payload.source === "mobile" ? checkoutClaim.stripeCheckoutSessionId : null);
+      (payload.source === "mobile" || payload.trial ? checkoutClaim.stripeCheckoutSessionId : null);
 
     if (staleCheckoutSessionId) {
       await stripe.checkout.sessions.expire(staleCheckoutSessionId).catch(() => undefined);
@@ -140,10 +180,17 @@ export async function POST(request: Request) {
         metadata,
         subscription_data: {
           metadata,
+          // Checkout still collects the card up front, then bills the plan when the trial ends.
+          ...(trialPeriodDays && { trial_period_days: trialPeriodDays }),
         },
       },
       {
-        idempotencyKey: `billing-checkout:${checkoutClaim.checkoutToken}`,
+        // The expired session's id is part of the key: a reused claim keeps its token, so without
+        // it a forced recreate replays Stripe's cached response and hands back the session we
+        // just expired. A genuine duplicate request has the same stale id, so it still dedupes.
+        idempotencyKey: `billing-checkout:${checkoutClaim.checkoutToken}${payload.trial ? ":trial" : ""}${
+          staleCheckoutSessionId ? `:${staleCheckoutSessionId}` : ""
+        }`,
       },
     );
 
@@ -193,7 +240,11 @@ export async function POST(request: Request) {
       return jsonInvalidRequest("The checkout request is invalid.");
     }
 
-    console.error("[api/stripe/checkout]", error);
+    logger.error("Stripe checkout failed.", {
+      ...context,
+      ...stripeErrorMeta(error),
+      error: error instanceof Error ? error.message : String(error),
+    });
     return jsonApiError(
       500,
       "stripe_checkout_failed",

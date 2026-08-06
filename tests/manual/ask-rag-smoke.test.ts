@@ -8,30 +8,14 @@
  * through generateAskResponse and prints the final card + tool calls so
  * the answers can be validated against the BTS/entity ground truth.
  */
-import { appendFileSync, readFileSync } from "node:fs";
-import path from "node:path";
+import { appendFileSync } from "node:fs";
 
 import { describe, it } from "vitest";
 
 import { generateAskResponse } from "@/lib/ask/pipeline";
 
-// @next/env skips .env.local when NODE_ENV=test (which vitest sets), so the real
-// API keys never load through the normal path. Parse .env.local directly.
-function loadDotEnvLocal() {
-  try {
-    const raw = readFileSync(path.join(process.cwd(), ".env.local"), "utf8");
-    for (const line of raw.split(/\r?\n/)) {
-      const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (!match) continue;
-      const [, key, value] = match;
-      if (!process.env[key]) {
-        process.env[key] = value.trim().replace(/^["']|["']$/g, "");
-      }
-    }
-  } catch {
-    // no .env.local — rely on whatever is already in the environment
-  }
-}
+import { loadDotEnvLocal } from "./env-local";
+
 loadDotEnvLocal();
 
 const RUN = process.env.RUN_ASK_SMOKE === "1";

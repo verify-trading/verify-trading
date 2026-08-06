@@ -7,22 +7,17 @@ import {
 } from "@/lib/ask/service/provider";
 
 describe("ask provider helpers", () => {
-  it("adds anthropic cache control to system messages", () => {
-    expect(createSystemMessage("prompt")).toMatchObject({
-      role: "system",
-      providerOptions: {
-        anthropic: {
-          cacheControl: { type: "ephemeral" },
-        },
-      },
-    });
+  it("builds a plain system message", () => {
+    // The Responses API caches long prefixes on its own — no explicit cache
+    // breakpoint to set, so the message must stay byte-stable and nothing else.
+    expect(createSystemMessage("prompt")).toEqual({ role: "system", content: "prompt" });
   });
 
-  it("creates the anthropic model instance", () => {
+  it("creates the ask model instance", () => {
     expect(getAskModel()).toBeTruthy();
   });
 
-  it("creates the simple anthropic model instance", () => {
+  it("creates the simple model instance", () => {
     expect(getAskSimpleModel()).toBeTruthy();
   });
 });

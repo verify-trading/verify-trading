@@ -9,13 +9,14 @@
     "lint": "eslint",
     "test": "vitest run",
     "check:agent-config": "node scripts/check-agent-config.mjs",
+    "tune:agent-config": "node scripts/tune-coach-agent.mjs",
     "seed:analysis-rules": "node scripts/data/sync-analysis-rules.mjs",
     "seed:verified-entities": "node scripts/data/sync-verified-entities.mjs",
     "seed:knowledge": "node scripts/data/backfill-knowledge.mjs",
     "eval:ask": "node scripts/evals/run-ask-evals.mjs"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.66",
+    "@ai-sdk/openai": "^3.0.90",
     "@ai-sdk/react": "^3.0.148",
     "@hookform/resolvers": "^5.2.2",
     "@marsidev/react-turnstile": "^1.5.2",

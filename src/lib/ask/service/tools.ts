@@ -1,6 +1,7 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { tool } from "ai";
 import { z } from "zod";
+
+import { codexProvider } from "@/lib/ask/service/provider";
 
 import {
   httpUrlSchema,
@@ -90,7 +91,7 @@ const listVerifiedEntitiesInputSchema = z.object({
     .describe("How many to return, highest trust first (default 8)."),
 });
 
-/** Anthropic requires a plain object JSON Schema; z.discriminatedUnion breaks tool registration. */
+/** Tool registration requires a plain object JSON Schema; z.discriminatedUnion breaks it. */
 const submitAskCardInputSchema = z.object({
   card_json: z
     .string()
@@ -776,7 +777,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     persist_discovered_prop_firm: tool({
       description:
-        "Persist a newly discovered prop firm immediately after web_search or web_fetch returns at least one direct source URL. Use only for a prop firm that verify_entity did not find. Put only official, regulator, or independent-tracker facts in confirmed; Trustpilot, Reddit, review-site, and forum allegations MUST go in unconfirmed. Leave the score unfinalized, and include Trustpilot only when the source explicitly shows both rating and review count. After saving, call verify_entity again so the final card comes from the stored developing record.",
+        "Persist a newly discovered prop firm immediately after web_search returns at least one direct source URL. Use only for a prop firm that verify_entity did not find. Put only official, regulator, or independent-tracker facts in confirmed; Trustpilot, Reddit, review-site, and forum allegations MUST go in unconfirmed. Leave the score unfinalized, and include Trustpilot only when the source explicitly shows both rating and review count. After saving, call verify_entity again so the final card comes from the stored developing record.",
       inputSchema: persistDiscoveredPropFirmInputSchema,
       execute: async (input) => upsertDevelopingPropFirm(input),
     }),
@@ -848,17 +849,13 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         }
       },
     }),
-    // Server-side Claude web tools: live web, no key or quota, for anything our own data doesn't cover.
-    // Basic (single-round) variants, capped at one use each — the _20260209 dynamic-filtering variants
-    // run multiple server-side code-execution rounds and pushed one entity lookup to ~35s+. One search
-    // returns in ~5-8s and is enough to answer; the cap keeps every turn fast and cheap.
-    web_search: anthropic.tools.webSearch_20250305({
-      maxUses: 1,
+    // Server-side web tool: live web, no key or quota of our own, for anything our data
+    // doesn't cover. The provider runs it and decides per turn whether to search, open a
+    // page, or find text within one — so this single tool covers what used to be
+    // web_search + web_fetch. Typical turn lands in 4-12s.
+    web_search: codexProvider.tools.webSearch({
+      searchContextSize: "medium",
       userLocation: { type: "approximate", country: "GB" },
-    }),
-    web_fetch: anthropic.tools.webFetch_20250910({
-      maxUses: 1,
-      citations: { enabled: true },
     }),
     get_economic_calendar: tool({
       description:

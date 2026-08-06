@@ -13,7 +13,7 @@ import {
   stopAfterFinalToolResult,
 } from "@/lib/ask/pipeline";
 import { fallbackInsightCard, imageFallbackInsightCard } from "@/lib/ask/contracts";
-import { DEFAULT_ANTHROPIC_MODEL } from "@/lib/ask/service/provider";
+import { DEFAULT_ASK_MODEL } from "@/lib/ask/service/provider";
 
 const insightCard = {
   type: "insight" as const,
@@ -128,7 +128,7 @@ describe("generateAskResponse", () => {
     });
 
     expect(generateTextImpl).toHaveBeenCalledTimes(1);
-    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_MODEL);
+    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ASK_MODEL);
     expect(getCallTools(generateTextImpl)).not.toContain("escalate");
     expect(response.data).toEqual(insightCard);
   });
@@ -147,7 +147,7 @@ describe("generateAskResponse", () => {
     );
 
     expect(generateTextImpl).toHaveBeenCalledTimes(1);
-    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_MODEL);
+    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ASK_MODEL);
     expect(response.data).toEqual(setupCard);
   });
 
@@ -168,7 +168,7 @@ describe("generateAskResponse", () => {
     });
 
     expect(generateTextImpl).toHaveBeenCalledTimes(1);
-    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_MODEL);
+    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ASK_MODEL);
     expect(response.data).toMatchObject({ type: "setup", verdict: "Sonnet verdict." });
   });
 
@@ -265,7 +265,7 @@ describe("generateAskResponse", () => {
 
     // Images skip the Haiku tier and go straight to Sonnet.
     expect(generateTextImpl).toHaveBeenCalledTimes(1);
-    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ANTHROPIC_MODEL);
+    expect(getCallModelId(generateTextImpl)).toBe(DEFAULT_ASK_MODEL);
     expect(response.data).toMatchObject({
       type: "chart",
       pattern: "Descending channel",
@@ -300,7 +300,7 @@ describe("generateAskResponse", () => {
     expect(String((response.data as { body?: string }).body)).toContain("Gold is heavy");
   });
 
-  it("limits the static cached prefix to one system breakpoint", async () => {
+  it("keeps the static system prompt first and volatile context in later messages", async () => {
     const generateTextImpl = vi
       .fn()
       .mockResolvedValue(textResult([submitResult(insightCard)])) as never;
@@ -319,14 +319,22 @@ describe("generateAskResponse", () => {
       },
     );
 
+    // The Responses API caches long prefixes automatically, so there is no
+    // explicit breakpoint to count. What still matters is the shape that makes
+    // the cache hit: the big static prompt first and byte-stable, with the
+    // volatile per-turn context appended as separate messages after it.
     const messages = getCallMessages(generateTextImpl) as Array<{
       role: string;
-      providerOptions?: unknown;
+      content: unknown;
     }>;
-    const cachedSystemMessages = messages.filter(
-      (message) => message.role === "system" && message.providerOptions,
+    expect(messages[0].role).toBe("system");
+    expect(String(messages[0].content)).toContain("verify.trading");
+
+    const memoryIndex = messages.findIndex(
+      (message) =>
+        message.role === "system" && String(message.content).startsWith("SESSION MEMORY"),
     );
-    expect(cachedSystemMessages).toHaveLength(1);
+    expect(memoryIndex).toBeGreaterThan(0);
   });
 });
 
