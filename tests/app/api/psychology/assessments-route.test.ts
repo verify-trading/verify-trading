@@ -23,6 +23,7 @@ function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn().mockResolvedValue(result);
+  builder.maybeSingle = vi.fn().mockResolvedValue(result);
   builder.then = (onFulfilled, onRejected) => Promise.resolve(result).then(onFulfilled, onRejected);
 
   return builder;
@@ -131,7 +132,9 @@ describe("Psychology assessments API", () => {
       updated_at: "2026-05-26T12:00:00.000Z",
     };
     const builder = createQueryBuilder({ data: row, error: null });
-    const from = vi.fn(() => builder);
+    // The POST is Pro-gated, and hasProAccess reads profiles.tier off the same client.
+    const profiles = createQueryBuilder({ data: { tier: "pro" }, error: null });
+    const from = vi.fn((table: string) => (table === "profiles" ? profiles : builder));
 
     vi.mocked(getSessionUser).mockResolvedValue({
       user: { id: "user-1" },
@@ -176,5 +179,37 @@ describe("Psychology assessments API", () => {
       answers: { q14: "Very frustrated" },
       q29_focus: "My tendency to overtrade",
     }));
+  });
+
+  it("refuses to store an assessment for a free trader", async () => {
+    // Mind is Pro (v1.5). The client gates it too, but the client is not the enforcement.
+    const builder = createQueryBuilder({ data: null, error: null });
+    const profiles = createQueryBuilder({ data: { tier: "free" }, error: null });
+    const from = vi.fn((table: string) => (table === "profiles" ? profiles : builder));
+
+    vi.mocked(getSessionUser).mockResolvedValue({
+      user: { id: "user-1" },
+      supabase: { from },
+    } as never);
+
+    const response = await POST(
+      new Request("http://localhost/api/psychology/assessments", {
+        method: "POST",
+        body: JSON.stringify({
+          sectionScores: { wrong: 6, fear: 9, compulsion: 12, awareness: 8, discipline: 7 },
+          answers: { q14: "Very frustrated" },
+          q1TradingSituation: "I trade alongside a job or studies",
+          q2StressLevel: "Moderate",
+          q3FinancialSituation: "Some pressure but manageable",
+          q4SleepQuality: "Variable",
+          q5EnergyLevel: "Moderate",
+          q29Focus: "My tendency to overtrade",
+          flags: { chasing: false, compulsive: true, financialPressure: false, sleepPoor: false, rebuilding: false },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(builder.insert).not.toHaveBeenCalled();
   });
 });
