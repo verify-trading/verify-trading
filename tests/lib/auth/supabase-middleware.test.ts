@@ -25,27 +25,27 @@ describe("updateSession", () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
   });
 
-  it("skips auth entirely for anonymous requests (no sb- cookie)", async () => {
+  it("skips the auth round-trip for anonymous requests (no sb- cookie)", async () => {
     const { user } = await updateSession(requestWithCookies({ theme: "dark" }));
 
     expect(user).toBeNull();
-    expect(getSession).not.toHaveBeenCalled();
+    expect(getUser).not.toHaveBeenCalled();
   });
 
-  it("returns the cookie session user without calling the auth server", async () => {
-    getSession.mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
+  it("returns the user authenticated against the auth server", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
 
     const { user } = await updateSession(
       requestWithCookies({ "sb-proj-auth-token": "token" }),
     );
 
     expect(user).toEqual({ id: "user-1" });
-    expect(getSession).toHaveBeenCalledOnce();
-    expect(getUser).not.toHaveBeenCalled();
+    expect(getUser).toHaveBeenCalledOnce();
+    expect(getSession).not.toHaveBeenCalled();
   });
 
-  it("returns null when the cookie holds no session", async () => {
-    getSession.mockResolvedValue({ data: { session: null } });
+  it("returns null when the auth server rejects the cookie", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
 
     const { user } = await updateSession(
       requestWithCookies({ "sb-proj-auth-token": "stale" }),
@@ -54,9 +54,9 @@ describe("updateSession", () => {
     expect(user).toBeNull();
   });
 
-  it("degrades to logged-out instead of hanging when a token refresh stalls", async () => {
+  it("degrades to logged-out instead of hanging when the auth server stalls", async () => {
     vi.useFakeTimers();
-    getSession.mockReturnValue(new Promise(() => {}));
+    getUser.mockReturnValue(new Promise(() => {}));
 
     const pending = updateSession(requestWithCookies({ "sb-proj-auth-token": "token" }));
     await vi.advanceTimersByTimeAsync(3000);
