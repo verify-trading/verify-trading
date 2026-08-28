@@ -179,7 +179,7 @@ export async function POST(request: Request) {
         customer: customerId,
         client_reference_id: payload.rewardfulReferral || session.user.id,
         billing_address_collection: "auto",
-
+        allow_promotion_codes: true,
         line_items: [
           {
             price: offer.checkoutPriceId,
