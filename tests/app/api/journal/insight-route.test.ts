@@ -29,6 +29,7 @@ function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn().mockResolvedValue(result);
+  builder.maybeSingle = vi.fn().mockResolvedValue(result);
   builder.then = (onFulfilled, onRejected) => Promise.resolve(result).then(onFulfilled, onRejected);
 
   return builder;
@@ -53,10 +54,16 @@ const row = ({ entry_date, source, tags = [] }: Row) => ({
 
 const day = (index: number) => `2026-07-${String(index).padStart(2, "0")}`;
 
-function mockSession(entries: Row[]) {
+function mockSession(entries: Row[], { aiConsent = true }: { aiConsent?: boolean } = {}) {
   const journal = createQueryBuilder({ data: entries.map(row), error: null });
   const insights = createQueryBuilder({ data: { generated_at: "2026-07-30T10:00:00.000Z" }, error: null });
-  const from = vi.fn((table: string) => (table === "journal_entries" ? journal : insights));
+  // The AI consent gate reads profiles.preferences before anything is generated.
+  const profiles = createQueryBuilder({ data: { preferences: aiConsent ? { ai_consent_v1: true } : {} }, error: null });
+  const from = vi.fn((table: string) => {
+    if (table === "journal_entries") return journal;
+    if (table === "profiles") return profiles;
+    return insights;
+  });
 
   vi.mocked(getSessionUser).mockResolvedValue({
     user: { id: "user-1", email: "alex@example.com" },
@@ -178,5 +185,17 @@ describe("Journal insight API", () => {
       generatedAt: null,
       status: "needs_generation",
     });
+  });
+
+  // Apple 5.1.1(i): the insight sends journal entries and the trader's name to a third party
+  // AI, so no consent means no generation and no call out.
+  it("refuses to generate, and calls no AI, when consent has not been given", async () => {
+    mockSession(Array.from({ length: 6 }, (_, i) => ({ entry_date: day(i + 1), source: "manual" as const })), { aiConsent: false });
+
+    const response = await POST();
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "ai_consent_required" });
+    expect(generateWeeklyInsight).not.toHaveBeenCalled();
   });
 });

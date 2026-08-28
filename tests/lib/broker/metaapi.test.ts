@@ -7,6 +7,7 @@ vi.mock("@/lib/observability/logger", () => ({
 import { logger } from "@/lib/observability/logger";
 import {
   createAccount,
+  createPollBudget,
   deleteAccount,
   deployAccount,
   fetchHistoricalTrades,
@@ -160,7 +161,7 @@ describe("MetaApi transport", () => {
   it("re-sends a 202 with the SAME transaction-id, so the poll is not a second billable write", async () => {
     const calls = stubSequence([{ status: 202 }, { status: 202 }, { status: 200, body: { id: "meta-1" } }]);
 
-    const created = await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw" });
+    const created = await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw", resourceSlots: 1, acceptedAttempts: 3 });
 
     expect(created).toEqual({ id: "meta-1" });
     expect(calls).toHaveLength(3);
@@ -179,7 +180,7 @@ describe("MetaApi transport", () => {
     const calls = stubSequence([{ status: 202 }]);
 
     await expect(
-      createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw" }),
+      createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw", resourceSlots: 1, acceptedAttempts: 3 }),
     ).rejects.toMatchObject({ status: 202 });
     // And it gives up after THREE polls. The budget is bounded by the route's 300 s maxDuration,
     // not by patience: each poll can wait a capped 60 s and costs up to ~30 s of its own (the
@@ -191,7 +192,7 @@ describe("MetaApi transport", () => {
   it("sends the create payload the cost model depends on, credentials included", async () => {
     const calls = stubSequence([{ status: 200, body: { id: "meta-1" } }]);
 
-    await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "investor-pw" });
+    await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "investor-pw", resourceSlots: 1, acceptedAttempts: 3 });
 
     const body = JSON.parse(calls[0].body);
     // The credentials ARE the point of this create: MetaApi validates them synchronously, so
@@ -202,15 +203,17 @@ describe("MetaApi transport", () => {
     // metastatsApiEnabled cannot be turned on later without stopping and re-billing the
     // account, and historical-trades 403s without it — so it has to be right at creation.
     expect(body.metastatsApiEnabled).toBe(true);
-    // cloud-g2 + high is the tier the whole cost model is quoted against.
-    expect(body).toMatchObject({ type: "cloud-g2", reliability: "high", manualTrades: true, magic: 0 });
+    // cloud-g2 + high is the tier the whole cost model is quoted against, and resourceSlots is
+    // the multiplier on it — sent explicitly at the default rather than left to MetaApi, so the
+    // number is always on the wire for the PUT to echo back.
+    expect(body).toMatchObject({ type: "cloud-g2", reliability: "high", manualTrades: true, magic: 0, resourceSlots: 1 });
     expect(body.metadata).toEqual({ verifyUserId: "user-1" });
   });
 
   it("logs the create's transaction-id BEFORE the call, so a killed invocation still leaves a trail", async () => {
     const calls = stubSequence([{ status: 200, body: { id: "meta-1" } }]);
 
-    await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw" });
+    await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "123456", password: "pw", resourceSlots: 1, acceptedAttempts: 3 });
 
     // The id logged is the id sent — a different one would be useless for finding the account.
     expect(logger.info).toHaveBeenCalledWith("MetaApi account create starting.", {
@@ -237,7 +240,7 @@ describe("MetaApi transport", () => {
       },
     }]);
 
-    const failure = await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarkets-Demo", login: "1", password: "pw" }).catch((error) => error);
+    const failure = await createAccount({ userId: "user-1", platform: "mt5", server: "ICMarkets-Demo", login: "1", password: "pw", resourceSlots: 1, acceptedAttempts: 3 }).catch((error) => error);
     expect(failure).toMatchObject({
       status: 400,
       code: "E_SRV_NOT_FOUND",
@@ -248,8 +251,43 @@ describe("MetaApi transport", () => {
     stubSequence([{ status: 400, body: { error: "ValidationError", message: "We failed to authenticate…", details: "E_AUTH" } }]);
 
     await expect(
-      createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "1", password: "wrong" }),
+      createAccount({ userId: "user-1", platform: "mt5", server: "ICMarketsSC-MT5", login: "1", password: "wrong", resourceSlots: 1, acceptedAttempts: 3 }),
     ).rejects.toMatchObject({ status: 400, code: "E_AUTH" });
+  });
+
+  it("sizes the create's poll budget from the time actually left", () => {
+    // The account route re-sends a refused create inside the SAME invocation and caps it to this.
+    // Derived from CREATE_ACCEPTED_ATTEMPTS and the two timeouts rather than a written-down 255 s,
+    // so raising any of them moves it: a stale copy authorises a create that outlives the
+    // function, and a create killed mid-poll leaves a $2.10 account billing with no row on it.
+    expect(createPollBudget(300_000)).toBe(3);
+    // 255 s is exactly three polls — one second less is two.
+    expect(createPollBudget(255_000)).toBe(3);
+    expect(createPollBudget(254_000)).toBe(2);
+    expect(createPollBudget(150_000)).toBe(2);
+    expect(createPollBudget(45_000)).toBe(1);
+    // Below one poll there is nothing worth starting, and an overrun invocation must not go
+    // negative into a truthy budget.
+    expect(createPollBudget(44_000)).toBe(0);
+    expect(createPollBudget(-90_000)).toBe(0);
+  });
+
+  it("reads the slot count MetaApi wants off an E_RESOURCE_SLOTS refusal", async () => {
+    // This one number is the difference between connecting a busy broker and telling a paying
+    // trader to email support: the route re-sends the create with it. Dropped here, the retry
+    // has nothing to ask for and the account is unreachable however many times they try.
+    stubSequence([{
+      status: 400,
+      body: {
+        error: "ValidationError",
+        message: "Account resource slots should be equal or above estimated",
+        details: { code: "E_RESOURCE_SLOTS", recommendedResourceSlots: 2 },
+      },
+    }]);
+
+    await expect(
+      createAccount({ userId: "user-1", platform: "mt5", server: "PUPrime-Live2", login: "1", password: "pw", resourceSlots: 1, acceptedAttempts: 3 }),
+    ).rejects.toMatchObject({ status: 400, code: "E_RESOURCE_SLOTS", recommendedResourceSlots: 2 });
   });
 
   it("puts a new password on the account with the fields the update requires", async () => {
@@ -257,14 +295,17 @@ describe("MetaApi transport", () => {
     // where a bad replacement password surfaces, not the next deploy.
     const calls = stubSequence([{ status: 204 }]);
 
-    await updateAccountPassword({ accountId: "meta-1", userId: "user-1", server: "ICMarketsSC-MT5", password: "new-pw" });
+    await updateAccountPassword({ accountId: "meta-1", userId: "user-1", server: "ICMarketsSC-MT5", password: "new-pw", resourceSlots: 2 });
 
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain("/users/current/accounts/meta-1");
     const body = JSON.parse(calls[0].body);
     // password, name and server are the required PUT fields; login is not in the schema
     // because it cannot change — a different login is a different account, created fresh.
-    expect(body).toMatchObject({ password: "new-pw", server: "ICMarketsSC-MT5" });
+    // resourceSlots rides along because this PUT REPLACES the account's settings: omit it and an
+    // account created with extra capacity is silently cut back to the default, and the next
+    // deploy fails the way its create originally did.
+    expect(body).toMatchObject({ password: "new-pw", server: "ICMarketsSC-MT5", resourceSlots: 2 });
     expect(body.name).toContain("user-1");
     expect(body).not.toHaveProperty("login");
     // Every setting the create chose rides along, unchanged. MetaApi does not document whether

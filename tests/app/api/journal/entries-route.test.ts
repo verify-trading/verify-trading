@@ -244,6 +244,8 @@ describe("Journal entries API", () => {
     let journalCallCount = 0;
     const from = vi.fn((table: string) => {
       if (table === "challenge_config") return configBuilder;
+      // The AI consent gate reads this before the coaching line is generated.
+      if (table === "profiles") return createQueryBuilder({ data: { preferences: { ai_consent_v1: true } }, error: null });
       if (table !== "journal_entries") return createQueryBuilder({ data: null, error: null });
       journalCallCount += 1;
       if (journalCallCount === 1) return savedBuilder; // the upsert

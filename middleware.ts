@@ -64,7 +64,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Scanner probes (`wp-*`, `*.php`) are excluded so they never cost an updateSession getUser round-trip.
+    // Scanner probes (`wp-*`, `*.php`) are excluded so they never cost an updateSession pass.
     "/((?!_next/static|_next/image|favicon.ico|wp-|.*\\.php$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

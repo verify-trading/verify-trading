@@ -12,11 +12,14 @@ import {
 import {
   type BrokerPlatform,
   createAccount,
+  createPollBudget,
+  DEFAULT_RESOURCE_SLOTS,
   deleteAccount,
   getAccount,
   type MetaApiAccount,
   MetaApiError,
   platformOfVersion,
+  POLL_COST_MS,
   undeployAccount,
   updateAccountPassword,
 } from "@/lib/broker/metaapi";
@@ -58,7 +61,7 @@ const passwordSchema = z.object({
 
 // MetaApi's validation codes rewritten into trader-facing copy. All input problems, so a 400 the
 // form shows inline rather than a 502.
-function credentialErrorResponse(error: MetaApiError): NextResponse | null {
+function credentialErrorResponse(error: MetaApiError, userId: string): NextResponse | null {
   if (error.status !== 400) return null;
   switch (error.code) {
     case "E_AUTH":
@@ -81,11 +84,112 @@ function credentialErrorResponse(error: MetaApiError): NextResponse | null {
     case "E_SERVER_TIMEZONE":
       return jsonApiError(400, "broker_settings_unavailable",
         "We couldn't read that broker's settings just now. Try again shortly.");
+    // Logged here rather than per-caller because every path funnels through it: the create's
+    // declines, a re-send MetaApi refuses again, and PUT and reconnect, which never go near
+    // createWithCapacity and would otherwise leave no record at all.
     case "E_RESOURCE_SLOTS":
+      logger.error("Broker call refused on capacity.", {
+        userId,
+        recommendedResourceSlots: error.recommendedResourceSlots ?? null,
+      });
       return jsonApiError(400, "broker_capacity",
         "This account needs more capacity than usual to run. Get in touch with us and we'll set it up.");
     default:
       return null;
+  }
+}
+
+// MetaApi sizes the broker's server before it will run an account and refuses one it estimates
+// above the slots the create asked for — busy retail brokers routinely land above the default of 1,
+// so "get in touch with us" was the answer to an ordinary broker rather than an exotic one. The
+// recommendation rides on the 400, so the create is re-sent with it. A create MetaApi refused on
+// validation bought nothing: this costs one more credential validation ($0.105) and no join fee.
+// Capped, because slots are billed — each one roughly doubles the account's running cost, and
+// "whatever MetaApi asked for" is an unbounded bill on a $5/mo trader.
+const MAX_RESOURCE_SLOTS = 2;
+
+// Every create is capped to the 202 polls that still fit in the REQUEST — measured from the top
+// of POST, because the session read, the dormant read and the row claim all spend from the same
+// maxDuration, and a create the platform kills mid-poll never reaches the compensating delete
+// below: a $2.10 account deployed and billing with no row pointing at it. POLL_COST_MS is held
+// back so that delete still has time to run after a create that used its whole budget.
+function pollsLeft(startedAt: number): number {
+  const remainingMs = maxDuration * 1_000 - (Date.now() - startedAt);
+  return createPollBudget(remainingMs - POLL_COST_MS);
+}
+
+/** Exactly one re-send: MetaApi answers with the number it wants, so a second refusal is not a
+ *  sizing problem and belongs to the trader-facing message. */
+async function createWithCapacity(
+  input: {
+    userId: string;
+    platform: BrokerPlatform;
+    server: string;
+    login: string;
+    password: string;
+  },
+  /** When the REQUEST started, not this call — both creates are budgeted against the invocation. */
+  startedAt: number,
+): Promise<{ id: string }> {
+  try {
+    return await createAccount({
+      ...input,
+      resourceSlots: DEFAULT_RESOURCE_SLOTS,
+      acceptedAttempts: pollsLeft(startedAt),
+    });
+  } catch (error) {
+    // Every other failure belongs to the route's error mapping untouched.
+    if (!(error instanceof MetaApiError) || error.status !== 400 || error.code !== "E_RESOURCE_SLOTS") {
+      throw error;
+    }
+
+    const recommended = error.recommendedResourceSlots;
+    const polls = pollsLeft(startedAt);
+    // The refusal itself is logged once at the response boundary, by credentialErrorResponse.
+    // This is the other half: which gate stopped us fixing it, and on which broker's server —
+    // the fields that boundary cannot see. Together they are the record that a capacity refusal
+    // used to reach us without, as a screenshot with nothing behind it.
+    const decline = (declined: string) => {
+      logger.warn("Broker capacity re-send declined.", {
+        userId: input.userId,
+        server: input.server,
+        recommendedResourceSlots: recommended ?? null,
+        cap: MAX_RESOURCE_SLOTS,
+        declined,
+        pollsLeft: polls,
+      });
+    };
+
+    // "No number we can act on" and "a number we priced out of" are different problems and get
+    // different reasons: this field is what tells them apart afterwards, and reporting the cap
+    // for a refusal that named nothing would point diagnosis at a ceiling that was never hit.
+    if (recommended === undefined || !Number.isInteger(recommended) || recommended <= DEFAULT_RESOURCE_SLOTS) {
+      decline("no_recommendation");
+      throw error;
+    }
+    if (recommended > MAX_RESOURCE_SLOTS) {
+      decline("past_cap");
+      throw error;
+    }
+    if (polls === 0) {
+      decline("no_time_left");
+      throw error;
+    }
+    // Claimed LAST because it consumes: the re-send is a second billable validation, so it takes
+    // a second attempt off the budget or the limiter's ceiling is half the real spend it caps.
+    // Its own 429 too — "wait a few minutes" is the true answer here, not "contact support".
+    if (!checkCredentialAttempt(input.userId)) {
+      decline("attempt_budget");
+      throw new CredentialAttemptsError();
+    }
+    // Logged as a standing cost increase for this trader, not as a retry that will be forgotten.
+    logger.warn("Broker account needs extra capacity; re-sending the create with MetaApi's number.", {
+      userId: input.userId,
+      server: input.server,
+      resourceSlots: recommended,
+      polls,
+    });
+    return await createAccount({ ...input, resourceSlots: recommended, acceptedAttempts: polls });
   }
 }
 
@@ -120,6 +224,9 @@ function isLegacyCreateBody(body: unknown): boolean {
 }
 
 export async function POST(request: Request) {
+  // The whole invocation's clock. Every create is budgeted against this rather than against its
+  // own entry, because everything below spends from the same maxDuration.
+  const startedAt = Date.now();
   const body = await request.json().catch(() => null);
   if (isLegacyCreateBody(body)) {
     return jsonApiError(400, "broker_app_update_required",
@@ -135,9 +242,10 @@ export async function POST(request: Request) {
   if (!access.ok) return access.response;
 
   // MetaApi bills $0.105 for EVERY credential validation, failed ones included, so the attempt
-  // budget is spent before anything else.
+  // budget is spent before anything else. One attempt buys one validation: a capacity re-send is
+  // a second one and claims its own inside createWithCapacity.
   if (!checkCredentialAttempt(access.userId)) {
-    return jsonApiError(429, "broker_credential_attempts", "Too many attempts. Wait a few minutes and try again.");
+    return tooManyCredentialAttempts();
   }
 
   // Kept separate on purpose — conflating any two is a money bug.
@@ -209,6 +317,14 @@ export async function POST(request: Request) {
       targetRowId = claimedRowId;
     }
 
+    // createPollBudget's contract, honoured before anything is spent: zero polls means do not
+    // start a create at all. Checked ahead of the $2.10 claim so a request with no invocation left
+    // costs nothing, and answered by the generic 502 below — which invites the retry that gets a
+    // fresh 300 s. Needs a ~210 s prologue to reach, so it is a floor, not a path traders see.
+    if (pollsLeft(startedAt) === 0) {
+      throw new Error("no invocation time left to start a broker create");
+    }
+
     // The durable $2.10 budget, spent HERE: after the row claim, before the only call that costs
     // anything. Ahead of the claim it would also count requests that answer "already connected".
     if (!(await claimBrokerCreate(access.admin, access.userId))) throw new CreateBudgetError();
@@ -217,13 +333,16 @@ export async function POST(request: Request) {
     // Create BEFORE releasing the old account, never the reverse: a create that failed after the
     // delete leaves the trader with no connection and the $2.10 spent. Worst case here is one
     // extra account for a moment. A bad login throws as an E_AUTH 400 before any account exists.
-    created = await createAccount({
-      userId: access.userId,
-      platform: parsed.data.platform,
-      server: parsed.data.server,
-      login: parsed.data.login,
-      password: parsed.data.password,
-    });
+    created = await createWithCapacity(
+      {
+        userId: access.userId,
+        platform: parsed.data.platform,
+        server: parsed.data.server,
+        login: parsed.data.login,
+        password: parsed.data.password,
+      },
+      startedAt,
+    );
 
     const { data, error } = await access.admin
       .from("broker_accounts")
@@ -288,6 +407,13 @@ export async function POST(request: Request) {
     }
     // Answered here, not at the check, so the claim taken just before it is handed back above.
     if (error instanceof CreateBudgetError) return createBudgetSpent(access.userId);
+    // The re-send, not the request, ran out of attempts. "Wait a few minutes" is the true answer;
+    // the capacity copy would send them to support over something that clears on its own. It
+    // stands for a validation 400, so it refunds the create on the same terms as one.
+    if (error instanceof CredentialAttemptsError) {
+      if (createRecorded) await refundBrokerCreate(access.admin, access.userId);
+      return tooManyCredentialAttempts();
+    }
     // A validation 400 is MetaApi refusing credentials BEFORE any account exists. That costs
     // $0.105, so it goes back to the attempt budget rather than the three-a-day create budget.
     if (createRecorded && error instanceof MetaApiError && error.status === 400) {
@@ -296,7 +422,7 @@ export async function POST(request: Request) {
     // Trader-fixable failures get their own 400s. Fires AFTER the claim release, so the retry the
     // message invites actually works.
     if (error instanceof MetaApiError) {
-      const traderError = credentialErrorResponse(error);
+      const traderError = credentialErrorResponse(error, access.userId);
       if (traderError) return traderError;
     }
     logger.error("Broker account create failed.", {
@@ -410,6 +536,15 @@ function unverifiableParkedAccount(userId: string) {
 /** Thrown rather than returned so the claim already taken goes through the normal cleanup. */
 class CreateBudgetError extends Error {}
 
+/** The capacity re-send had no attempt left to spend. Thrown from inside the create's own catch,
+ *  so by construction it stands for a validation 400 that created nothing. */
+class CredentialAttemptsError extends Error {}
+
+/** The rate-limit answer, shared by the two gates and the re-send that runs out mid-request. */
+function tooManyCredentialAttempts() {
+  return jsonApiError(429, "broker_credential_attempts", "Too many attempts. Wait a few minutes and try again.");
+}
+
 /** Three paid creates inside a day (claimBrokerCreate). Nothing was spent on THIS request. */
 function createBudgetSpent(userId: string) {
   refundCredentialAttempt(userId);
@@ -510,6 +645,7 @@ async function reconnect(
       userId: row.user_id,
       server: live.server,
       password,
+      resourceSlots: live.resourceSlots ?? DEFAULT_RESOURCE_SLOTS,
     });
 
     await clearRejectionStamp(admin, row.id, "reconnect");
@@ -540,7 +676,7 @@ export async function PUT(request: Request) {
   // Same attempt budget as POST: this re-validates credentials at MetaApi, and a failed validation
   // bills $0.105 whether a trader typed the password or a script sprayed it.
   if (!checkCredentialAttempt(access.userId)) {
-    return jsonApiError(429, "broker_credential_attempts", "Too many attempts. Wait a few minutes and try again.");
+    return tooManyCredentialAttempts();
   }
 
   // Only the password PUT below is billable, so nothing failing before it may cost an attempt.
@@ -567,6 +703,9 @@ export async function PUT(request: Request) {
       userId: access.userId,
       server: live.server,
       password: parsed.data.password,
+      // Off the live account, so an upsized one keeps its slots. Nothing stores this by design:
+      // MetaApi is the only place it can't drift from what the account actually runs on.
+      resourceSlots: live.resourceSlots ?? DEFAULT_RESOURCE_SLOTS,
     });
 
     // Park it: a deployed terminal keeps hammering the broker with the OLD password, and the new
@@ -588,7 +727,7 @@ export async function PUT(request: Request) {
   } catch (error) {
     if (!validated) refundCredentialAttempt(access.userId);
     if (error instanceof MetaApiError) {
-      const traderError = credentialErrorResponse(error);
+      const traderError = credentialErrorResponse(error, access.userId);
       if (traderError) return traderError;
     }
     logger.error("Broker password update failed.", {

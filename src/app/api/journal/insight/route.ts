@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth/session";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
+import { hasAiConsent, AI_CONSENT_KEY } from "@/lib/ai/consent";
 import { generateWeeklyInsight } from "@/lib/journal/ai";
 import { isImportedRow, type JournalEntryRow } from "@/lib/journal/contracts";
 import { logger } from "@/lib/observability/logger";
@@ -27,6 +28,12 @@ export async function GET() {
 export async function POST() {
   const session = await getSessionUser();
   if (!session) return jsonUnauthorized("Sign in to generate journal insights.");
+
+  // Apple 5.1.1(i): the insight sends journal entries and the trader's name to a third-party
+  // AI, so it must not run before they have agreed in the app.
+  if (!(await hasAiConsent(session.supabase, session.user.id, AI_CONSENT_KEY))) {
+    return jsonApiError(403, "ai_consent_required", "Turn on AI insights to generate this.");
+  }
 
   const { data: rows, error } = await session.supabase
     .from("journal_entries")

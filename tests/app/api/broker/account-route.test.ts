@@ -8,7 +8,13 @@ vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdminClient: vi.fn(),
 }));
 
-vi.mock("@/lib/broker/metaapi", () => ({
+// Only the network calls are stubbed; everything else is the REAL module. MetaApiError has to be
+// the real class or the route's `instanceof` checks miss, and DEFAULT_RESOURCE_SLOTS, POLL_COST_MS,
+// createPollBudget and platformOfVersion have to be the real values or a change to one of them
+// leaves this suite green while production sends something else. Safe to import for real: the
+// module reads METAAPI_TOKEN lazily inside authToken(), so there is no import-time side effect.
+vi.mock("@/lib/broker/metaapi", async (importActual) => ({
+  ...(await importActual<typeof import("@/lib/broker/metaapi")>()),
   createAccount: vi.fn(),
   updateAccountPassword: vi.fn(),
   deleteAccount: vi.fn(),
@@ -16,24 +22,9 @@ vi.mock("@/lib/broker/metaapi", () => ({
   deployAccount: vi.fn(),
   undeployAccount: vi.fn(),
   fetchHistoricalTrades: vi.fn(),
-  DEFAULT_METAAPI_REGION: "london",
-  // Real class, not a stub: the 404 branch below is an `instanceof` check, and the
-  // credential-error mapping reads `code` / `suggestedServers` off it.
-  MetaApiError: class MetaApiError extends Error {
-    constructor(
-      readonly status: number,
-      message: string,
-      readonly code?: string,
-      readonly suggestedServers?: string[],
-    ) {
-      super(message);
-      this.name = "MetaApiError";
-    }
-  },
-  // Pure, and the replace-vs-wake decision turns on it — so the mock carries the real
-  // behaviour rather than a stub that could quietly disagree with the module.
-  platformOfVersion: (version: number | undefined) =>
-    version === 4 ? "mt4" : version === 5 ? "mt5" : undefined,
+  // Not reached from this route, but every network export is stubbed anyway: with the spread
+  // above, one left out is the REAL transport, so a future test could call MetaApi for real.
+  searchServers: vi.fn(),
 }));
 
 vi.mock("@/lib/observability/logger", () => ({
@@ -67,6 +58,7 @@ import {
   updateAccountPassword,
 } from "@/lib/broker/metaapi";
 import { computeSyncWindow } from "@/lib/broker/sync";
+import { logger } from "@/lib/observability/logger";
 
 import { createQueryBuilder, mockAdmin, mockSession } from "./harness";
 
@@ -228,6 +220,12 @@ describe("Broker account API", () => {
       server: "ICMarketsSC-MT5",
       login: "123456",
       password: "investor-pw",
+      // Every account asks for one slot. MetaApi's default, sent explicitly so the password PUT
+      // — which replaces rather than merges — has something honest to send back.
+      resourceSlots: 1,
+      // Whatever of the invocation is left; the two clock tests below pin the arithmetic. Not a
+      // fixed number here, because the reserve puts it on a boundary that real elapsed ms crosses.
+      acceptedAttempts: expect.any(Number),
     });
     // The row is claimed with a placeholder id BEFORE the billed create, then patched with
     // the real one — that ordering is what stops two requests each paying $2.10.
@@ -281,6 +279,197 @@ describe("Broker account API", () => {
     expect(json.message).toContain("ICMarketsSC-Demo");
   });
 
+  // MetaApi sizes the broker's server before it will run the account. Busy retail brokers
+  // (PUPrime-Live2 was the live report) come back E_RESOURCE_SLOTS on the default of 1 — an
+  // ordinary broker, not an exotic one, so the old behaviour sent a paying trader to support
+  // over a number MetaApi had already handed us.
+  describe("an account MetaApi wants extra capacity for", () => {
+    const slotsError = (recommended?: number) =>
+      new MetaApiError(
+        400,
+        "Account resource slots should be equal or above estimated",
+        "E_RESOURCE_SLOTS",
+        undefined,
+        recommended,
+      );
+
+    /** The fresh-connect sequence: no dormant row, the claim insert, then the row write. Only the
+     *  last builder differs between a create that lands and one the catch has to release. */
+    function mockFreshConnect(last = createQueryBuilder({ error: null })) {
+      mockSession();
+      mockAdmin({
+        broker_accounts: [
+          createQueryBuilder({ data: null, error: null }),
+          createQueryBuilder({ data: { id: "row-1" }, error: null }),
+          last,
+        ],
+      });
+      return last;
+    }
+
+    const patched = () => createQueryBuilder({ data: { ...ACCOUNT_ROW, last_synced_at: null }, error: null });
+
+    it("re-sends the create with the number MetaApi asked for", async () => {
+      mockFreshConnect(patched());
+      vi.mocked(createAccount)
+        .mockRejectedValueOnce(slotsError(2))
+        .mockResolvedValue({ id: "meta-1", state: "DEPLOYED" });
+      vi.mocked(getAccount).mockResolvedValue({ _id: "meta-1", state: "DEPLOYED", connectionStatus: "DISCONNECTED" });
+
+      const response = await POST(createRequest(CONNECT));
+
+      expect(response.status).toBe(200);
+      expect(createAccount).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(createAccount).mock.calls[0][0]).toMatchObject({ resourceSlots: 1 });
+      expect(vi.mocked(createAccount).mock.calls[1][0]).toMatchObject({ resourceSlots: 2 });
+      // The first attempt was refused on validation, so it bought nothing there is to clean up.
+      expect(deleteAccount).not.toHaveBeenCalled();
+    });
+
+    it("stops at the cap rather than buying whatever MetaApi asks for", async () => {
+      // Slots are billed, so an unbounded retry is an unbounded bill on a $5/mo trader. Past the
+      // cap the trader gets the support message — which is the honest answer at that size.
+      const releaseBuilder = mockFreshConnect();
+      vi.mocked(createAccount).mockRejectedValue(slotsError(8));
+
+      const response = await POST(createRequest(CONNECT));
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({ error: "broker_capacity" });
+      expect(createAccount).toHaveBeenCalledTimes(1);
+      // Nothing was created, so the $2.10 budget goes back and the claim is released for a retry.
+      expect(refundBrokerCreate).toHaveBeenCalledWith(expect.anything(), "user-1");
+      expect(releaseBuilder.delete).toHaveBeenCalled();
+      // And it is on the record: the trader-facing 400 returns before the route's failure log,
+      // so this is the ONLY trace of which broker wanted what — the thing missing when the
+      // first capacity refusal reached us as a screenshot and nothing else.
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Broker capacity re-send declined.",
+        expect.objectContaining({ server: "ICMarketsSC-MT5", recommendedResourceSlots: 8, declined: "past_cap" }),
+      );
+    });
+
+    it("keeps the support message when MetaApi names no number, and says so in the log", async () => {
+      // This log line is the ONLY record of a capacity refusal, so the reason has to be true:
+      // "past_cap" beside recommendedResourceSlots: null points diagnosis at a ceiling when the
+      // real problem is a refusal shape we could not read.
+      mockFreshConnect();
+      vi.mocked(createAccount).mockRejectedValue(slotsError(undefined));
+
+      const response = await POST(createRequest(CONNECT));
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({ error: "broker_capacity" });
+      expect(createAccount).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Broker capacity re-send declined.",
+        expect.objectContaining({ declined: "no_recommendation", recommendedResourceSlots: null }),
+      );
+    });
+
+    it("takes a second attempt off the budget for the re-send, and skips it when there is none", async () => {
+      // The re-send is a SECOND billable validation at $0.105. Riding on the attempt claimed at
+      // the top of POST would make the limiter's ceiling half the real spend, which is the whole
+      // thing it exists to cap — so it claims its own, and a refused claim means no re-send.
+      mockFreshConnect();
+      // The route's own gate opens; the claim the re-send asks for does not.
+      vi.mocked(checkCredentialAttempt).mockReturnValueOnce(true).mockReturnValue(false);
+      vi.mocked(createAccount).mockRejectedValue(slotsError(2));
+
+      const response = await POST(createRequest(CONNECT));
+
+      // 429, not the capacity 400: waiting ten minutes fixes this, so telling them to contact
+      // support would send a trader to us over a condition that clears itself.
+      expect(response.status).toBe(429);
+      await expect(response.json()).resolves.toMatchObject({ error: "broker_credential_attempts" });
+      expect(createAccount).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Broker capacity re-send declined.",
+        expect.objectContaining({ declined: "attempt_budget" }),
+      );
+      // Nothing was created, so the $2.10 budget still goes back: the marker is thrown from inside
+      // the create's own catch, so it stands for a validation 400 by construction.
+      expect(refundBrokerCreate).toHaveBeenCalledWith(expect.anything(), "user-1");
+    });
+
+    /** A clock that only moves when the first create "spends" `costMs", so every other Date.now()
+     *  reader in the route sees something consistent. Returns the spy for the caller to restore. */
+    function firstCreateTakes(costMs: number) {
+      let clock = 1_800_000_000_000;
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => clock);
+      vi.mocked(createAccount).mockImplementationOnce(async () => {
+        clock += costMs;
+        throw slotsError(2);
+      });
+      return nowSpy;
+    }
+
+    it("re-sends on only the polls that still fit", async () => {
+      // Left on the full budget the re-send can be killed mid-poll, which skips the compensating
+      // delete and leaves a $2.10 account billing with nothing pointing at it.
+      mockFreshConnect(patched());
+      const nowSpy = firstCreateTakes(160_000);
+      try {
+        vi.mocked(createAccount).mockResolvedValue({ id: "meta-1", state: "DEPLOYED" });
+        vi.mocked(getAccount).mockResolvedValue({ _id: "meta-1", state: "DEPLOYED", connectionStatus: "DISCONNECTED" });
+
+        const response = await POST(createRequest(CONNECT));
+
+        expect(response.status).toBe(200);
+        // ~95 s left once a poll is reserved for the compensating delete: one poll fits, two do
+        // not. The old whole-create window refused this outright.
+        expect(vi.mocked(createAccount).mock.calls[1][0]).toMatchObject({ resourceSlots: 2, acceptedAttempts: 1 });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it("does not start a create at all, or claim the $2.10, with no invocation left", async () => {
+      // createPollBudget's contract is "zero polls means do not start one". Reached only by a
+      // pathological prologue, but the failure it prevents is the expensive one: a create the
+      // platform kills mid-poll never runs the compensating delete.
+      const releaseBuilder = mockFreshConnect();
+      let clock = 1_800_000_000_000;
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => clock);
+      try {
+        // The gate the route consults just before the row claim — a convenient point to burn the
+        // invocation, since the real prologue's cost is spread across mocked calls here.
+        vi.mocked(checkCredentialAttempt).mockImplementation(() => {
+          clock += 260_000;
+          return true;
+        });
+
+        const response = await POST(createRequest(CONNECT));
+
+        expect(response.status).toBe(502);
+        expect(createAccount).not.toHaveBeenCalled();
+        // Nothing is charged and nothing is left claimed, so the retry lands on a fresh 300 s.
+        expect(claimBrokerCreate).not.toHaveBeenCalled();
+        expect(releaseBuilder.delete).toHaveBeenCalled();
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it("refuses the re-send outright when no poll still fits", async () => {
+      mockFreshConnect();
+      const nowSpy = firstCreateTakes(280_000);
+      try {
+        const response = await POST(createRequest(CONNECT));
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({ error: "broker_capacity" });
+        expect(createAccount).toHaveBeenCalledTimes(1);
+        expect(logger.warn).toHaveBeenCalledWith(
+          "Broker capacity re-send declined.",
+          expect.objectContaining({ declined: "no_time_left", pollsLeft: 0 }),
+        );
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+  });
+
   it("deletes the account it just paid for when the rest of the create fails", async () => {
     mockSession();
     const releaseBuilder = createQueryBuilder({ error: null });
@@ -329,6 +518,7 @@ describe("Broker account API", () => {
       userId: "user-1",
       server: "ICMarketsSC-MT5",
       password: "investor-pw",
+      resourceSlots: 1,
     });
     // The claim is the conditional wake: it must land BEFORE the password PUT, or two
     // concurrent reconnects both validate a password and the second silently wins.
@@ -474,6 +664,8 @@ describe("Broker account API", () => {
         server: "FTMO-Server",
         login: "123456",
         password: "investor-pw",
+        resourceSlots: 1,
+        acceptedAttempts: expect.any(Number),
       });
       expect(deleteAccount).toHaveBeenCalledWith("meta-1");
       // The row is re-pointed and everything it remembered about the old account is cleared.
@@ -924,12 +1116,28 @@ describe("Broker account API", () => {
         userId: "user-1",
         server: "ICMarketsSC-MT5",
         password: "new-investor-pw",
+        resourceSlots: 1,
       });
       // Parked so a deployed terminal stops hammering the broker with the OLD password; the
       // new one takes effect on the next deploy anyway.
       expect(undeployAccount).toHaveBeenCalledWith("meta-1");
       // Clearing the stamp is what lets the wake pass deploy this account again.
       expect(stampBuilder.update).toHaveBeenCalledWith({ last_sync_error: null, last_synced_at: null });
+    });
+
+    it("sends the account's live slot count back, so an upsized account is not cut to 1", async () => {
+      // The PUT replaces the account's settings rather than merging them, so a body that assumed
+      // the default would quietly halve the capacity an upsized account was created with — and
+      // the next deploy would fail exactly the way that create originally did. Read from MetaApi
+      // rather than stored: it is the only copy that cannot drift from what the account runs on.
+      mockSession();
+      mockConnected();
+      vi.mocked(getAccount).mockResolvedValue({ ...LIVE_PARKED, resourceSlots: 2 });
+
+      const response = await PUT(putRequest({ password: "new-investor-pw" }));
+
+      expect(response.status).toBe(200);
+      expect(updateAccountPassword).toHaveBeenCalledWith(expect.objectContaining({ resourceSlots: 2 }));
     });
 
     it("400s a password the broker refuses, without parking or stamping", async () => {

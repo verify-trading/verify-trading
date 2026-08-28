@@ -1,4 +1,4 @@
-import { fetchWithRetry, parseRetryAfterMs, wait } from "@/lib/http/fetch-with-retry";
+import { fetchWithRetry, MAX_RETRY_DELAY_MS, parseRetryAfterMs, wait } from "@/lib/http/fetch-with-retry";
 import { logger } from "@/lib/observability/logger";
 
 // Provisioning uses the DOUBLED domain `agiliumtrade.agiliumtrade.ai`; MetaStats uses the single
@@ -18,11 +18,16 @@ function metastatsBase(region: string) {
 export const DEFAULT_METAAPI_REGION = "london";
 
 const REQUEST_TIMEOUT_MS = 15_000;
+/** How many times fetchWithRetry sends each request before giving up. Feeds POLL_COST_MS. */
+const FETCH_ATTEMPTS = 2;
 const MAX_ACCEPTED_ATTEMPTS = 5;
 const ACCEPTED_BACKOFF_MS = 1_000;
 // Ceiling on one 202 sleep, however generous the Retry-After: the create runs in a route with
 // maxDuration 300 s, and an uncapped wait outlives it, leaving the account half-created.
 const MAX_ACCEPTED_WAIT_MS = 60_000;
+
+/** What MetaApi gives an account unasked, and all any account gets until MetaApi refuses it. */
+export const DEFAULT_RESOURCE_SLOTS = 1;
 
 export type BrokerPlatform = "mt4" | "mt5";
 
@@ -34,6 +39,8 @@ export class MetaApiError extends Error {
     readonly code?: string,
     /** E_SRV_NOT_FOUND lists the server names the trader probably meant. */
     readonly suggestedServers?: string[],
+    /** E_RESOURCE_SLOTS carries the slot count MetaApi wants the same request re-sent with. */
+    readonly recommendedResourceSlots?: number,
   ) {
     super(message);
     this.name = "MetaApiError";
@@ -51,6 +58,8 @@ export type MetaApiAccount = {
   version?: number;
   server?: string;
   login?: string;
+  /** How many slots this account actually runs on. The password PUT has to send it back. */
+  resourceSlots?: number;
 };
 
 export function platformOfVersion(version: number | undefined): BrokerPlatform | undefined {
@@ -91,6 +100,7 @@ type MetaApiErrorBody = {
 type MetaApiErrorDetailsResult = {
   code?: string;
   suggestedServers?: string[];
+  recommendedResourceSlots?: number;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,10 +120,18 @@ function readErrorDetails(details: unknown): MetaApiErrorDetailsResult {
     ? [...new Set(Object.values(serversByBrokers).flatMap((servers) =>
         Array.isArray(servers) ? servers.filter((server): server is string => Boolean(stringValue(server))) : []))]
     : undefined;
-  return { code: stringValue(details.code), suggestedServers };
+  // E_RESOURCE_SLOTS is the one error that says how to fix itself, so the number rides along.
+  const recommended = details.recommendedResourceSlots;
+  return {
+    code: stringValue(details.code),
+    suggestedServers,
+    recommendedResourceSlots: typeof recommended === "number" ? recommended : undefined,
+  };
 }
 
-async function readError(response: Response): Promise<{ message: string; code?: string; suggestedServers?: string[] }> {
+async function readError(
+  response: Response,
+): Promise<{ message: string; code?: string; suggestedServers?: string[]; recommendedResourceSlots?: number }> {
   const body = await response.text().catch(() => "");
   try {
     const parsed = JSON.parse(body) as MetaApiErrorBody;
@@ -152,7 +170,7 @@ async function metaApiFetch(url: string, init: MetaApiRequestInit = {}): Promise
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
         cache: "no-store",
       },
-      { attempts: 2, timeoutMs: REQUEST_TIMEOUT_MS },
+      { attempts: FETCH_ATTEMPTS, timeoutMs: REQUEST_TIMEOUT_MS },
     );
 
     // 202 = "still working, ask again". Bounded, and each wait capped, so the whole poll fits
@@ -176,7 +194,13 @@ async function metaApiFetch(url: string, init: MetaApiRequestInit = {}): Promise
 
     if (!response.ok) {
       const error = await readError(response);
-      throw new MetaApiError(response.status, error.message, error.code, error.suggestedServers);
+      throw new MetaApiError(
+        response.status,
+        error.message,
+        error.code,
+        error.suggestedServers,
+        error.recommendedResourceSlots,
+      );
     }
     return response;
   }
@@ -196,6 +220,11 @@ export async function createAccount(input: {
   server: string;
   login: string;
   password: string;
+  /** DEFAULT_RESOURCE_SLOTS unless a previous attempt came back E_RESOURCE_SLOTS. */
+  resourceSlots: number;
+  /** 202-poll ceiling, from createPollBudget. Required, not defaulted: a create that polls on the
+   *  full budget regardless of how much of the invocation is left is the orphan case. */
+  acceptedAttempts: number;
 }): Promise<{ id: string; state?: string }> {
   // Minted and logged BEFORE the network call, because this is the $2.10 one: a create killed
   // mid-flight never runs the route's compensating delete, and this id is then the only handle
@@ -208,7 +237,7 @@ export async function createAccount(input: {
     transactional: true,
     transactionId: transaction,
     // Settings detection + auth validation can take a couple of minutes of 202 polling.
-    acceptedAttempts: CREATE_ACCEPTED_ATTEMPTS,
+    acceptedAttempts: input.acceptedAttempts,
     body: {
       name: accountName(input.userId),
       login: input.login,
@@ -216,12 +245,15 @@ export async function createAccount(input: {
       server: input.server,
       platform: input.platform,
       ...ACCOUNT_SETTINGS,
+      resourceSlots: input.resourceSlots,
       metadata: { verifyUserId: input.userId },
     },
   });
 }
 
 // Shared by the create and the password PUT; the two drifting apart is a silent, expensive bug.
+// `resourceSlots` is deliberately NOT in here: it is the one setting that varies per account, so
+// both calls pass it beside this spread rather than reading it from a shared const.
 const ACCOUNT_SETTINGS = {
   // magic must be 0 alongside manualTrades; we only ever read closed trades.
   magic: 0,
@@ -239,11 +271,34 @@ function accountName(userId: string) {
   return `verify.trading — ${userId}`;
 }
 
-// Sized against the route's 300 s maxDuration. One poll costs up to ~45 s (fetchWithRetry sends
-// each twice, sleeping a capped MAX_RETRY_DELAY_MS of 15 s between them) plus a Retry-After of up
-// to 60 s, so 3 polls ≈ 255 s fits and 4 does not. Overrunning kills the function mid-poll, which
-// skips the compensating delete and leaves a paid orphan.
+// Sized against the route's 300 s maxDuration. One poll costs up to POLL_COST_MS plus a
+// Retry-After of up to 60 s, so 3 polls ≈ 255 s fits and 4 does not. Overrunning kills the
+// function mid-poll, which skips the compensating delete and leaves a paid orphan.
 const CREATE_ACCEPTED_ATTEMPTS = 3;
+
+/**
+ * Worst case for ONE MetaApi call: fetchWithRetry sends it FETCH_ATTEMPTS times, each capped at
+ * REQUEST_TIMEOUT_MS, sleeping up to MAX_RETRY_DELAY_MS between. Every input is imported rather
+ * than copied, so moving any of them moves this — and it is also the amount a caller reserves
+ * when it has to keep enough time for a compensating call of its own.
+ */
+export const POLL_COST_MS =
+  FETCH_ATTEMPTS * REQUEST_TIMEOUT_MS + (FETCH_ATTEMPTS - 1) * MAX_RETRY_DELAY_MS;
+
+/**
+ * How many of the create's 202 polls still fit in `remainingMs`, capped at the normal budget.
+ * Zero means: do not start a create at all — one killed mid-poll skips its caller's compensating
+ * delete and leaves a paid account billing with nothing pointing at it.
+ *
+ * DERIVED, not a written-down 255 s: N polls cost N * POLL_COST_MS with a wait between each, so
+ * raising CREATE_ACCEPTED_ATTEMPTS or either timeout moves this with them instead of leaving a
+ * caller's hand-computed copy short.
+ */
+export function createPollBudget(remainingMs: number): number {
+  const perPoll = POLL_COST_MS + MAX_ACCEPTED_WAIT_MS;
+  const fits = Math.floor((remainingMs + MAX_ACCEPTED_WAIT_MS) / perPoll);
+  return Math.max(0, Math.min(CREATE_ACCEPTED_ATTEMPTS, fits));
+}
 
 export async function getAccount(accountId: string): Promise<MetaApiAccount> {
   return metaApiJson<MetaApiAccount>(`${PROVISIONING_BASE}/users/current/accounts/${accountId}`);
@@ -255,11 +310,16 @@ export async function getAccount(accountId: string): Promise<MetaApiAccount> {
 // The full ACCOUNT_SETTINGS body is sent, not just the password: MetaApi does not document
 // whether the PUT merges or replaces, and under replace a partial body drops the g2 tier, the
 // metadata, and metastatsApiEnabled (which cannot be re-enabled without re-billing the account).
+// `resourceSlots` is in that same list and is why callers read the live account first: an account
+// upsized at create time would be silently cut back to 1 by a PUT that assumed the default, and
+// the next deploy would fail the way the create originally did.
 export async function updateAccountPassword(input: {
   accountId: string;
   userId: string;
   server: string;
   password: string;
+  /** Read off the live account, never assumed — see above. */
+  resourceSlots: number;
 }): Promise<void> {
   await metaApiFetch(`${PROVISIONING_BASE}/users/current/accounts/${input.accountId}`, {
     method: "PUT",
@@ -271,6 +331,7 @@ export async function updateAccountPassword(input: {
       server: input.server,
       // platform and login are absent on purpose: MetaApi fixes both at creation.
       ...ACCOUNT_SETTINGS,
+      resourceSlots: input.resourceSlots,
       metadata: { verifyUserId: input.userId },
     },
   });

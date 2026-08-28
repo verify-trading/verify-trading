@@ -45,7 +45,7 @@ export function parseRetryAfterMs(retryAfter: string | null) {
  * The cap is not a refusal to wait: a shorter header is honoured verbatim. It only stops an
  * upstream from setting our function's lifetime.
  */
-const MAX_RETRY_DELAY_MS = 15_000;
+export const MAX_RETRY_DELAY_MS = 15_000;
 
 function getRetryDelayMs(response: Response, attempt: number, baseDelayMs: number) {
   const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));

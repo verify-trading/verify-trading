@@ -13,6 +13,7 @@ import {
   type JournalEntryRow,
   type JournalSource,
 } from "@/lib/journal/contracts";
+import { hasAiConsent, AI_CONSENT_KEY } from "@/lib/ai/consent";
 import { generateChallengeStatus, overheatTrigger } from "@/lib/journal/ai";
 import { challengeStartedAt, type ChallengeConfigRow } from "@/lib/journal/challenge";
 import { getSessionUser } from "@/lib/auth/session";
@@ -247,6 +248,11 @@ async function enrichSavedEntry(supabase: SupabaseClient, userId: string, entry:
   const overheat = overheatTrigger(entries);
 
   if (!configData || entry.pnl_amount === null) return { entry, overheat };
+
+  // Apple 5.1.1(i): the coaching line sends the firm, its rules and the trader's P&L to a
+  // third-party AI. Saving still succeeds — it just saves without the note, exactly as it
+  // does when the provider is down.
+  if (!(await hasAiConsent(supabase, userId, AI_CONSENT_KEY))) return { entry, overheat };
 
   // The entry is already saved; a failure here (LLM/provider) must not surface as a
   // failed save. Best-effort enrich, otherwise return the saved entry without the note.

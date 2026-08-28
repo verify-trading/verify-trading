@@ -14,7 +14,7 @@ export default function TermsPage() {
     <LegalDocument
       eyebrow="Legal"
       title="Terms of Use"
-      summary="These terms govern your use of the service. Replace placeholder copy with counsel-reviewed language before taking paid users or scaling traffic. Our privacy policy describes how we handle personal data."
+      summary="These terms govern your use of the service, on the website and in the iOS app. Our privacy policy describes how we handle personal data, including what the AI features send to third-party processors. Last updated 26 August 2026."
       sections={[
         {
           title: "Service scope",
