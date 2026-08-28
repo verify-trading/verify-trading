@@ -1,4 +1,4 @@
-# verify.trading (Next.js)
+# verify.trading (Next.js).
 
 Ask interface for traders: broker checks, briefings, calculators, chart analysis, and projections. Stack: **Next.js 16**, **Supabase**, **Anthropic** (AI SDK), **FMP**.
 
