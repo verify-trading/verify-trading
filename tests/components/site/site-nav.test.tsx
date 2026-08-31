@@ -63,4 +63,21 @@ describe("SiteNav", () => {
 
     expect(screen.getAllByText("Guide").length).toBeGreaterThan(0);
   });
+
+  it("keeps the mobile sheet on destinations supported by the web app", () => {
+    render(<SiteNav />);
+
+    for (const [label, href] of [
+      ["Ask", "/ask"],
+      ["Markets", "/markets"],
+      ["Guide", "/guide"],
+      ["Contact", "/contact"],
+    ]) {
+      expect(screen.getAllByRole("link", { name: label })[1]).toHaveAttribute("href", href);
+    }
+
+    // Mind/Psychology and General have no web page or app deep-link target yet.
+    expect(screen.queryByRole("link", { name: "Psychology" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "General" })).not.toBeInTheDocument();
+  });
 });

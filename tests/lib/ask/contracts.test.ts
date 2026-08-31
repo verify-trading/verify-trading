@@ -6,6 +6,7 @@ import {
   fallbackInsightCard,
   sanitizeCard,
   sanitizeUiMeta,
+  stripAskInternalCitationMarkers,
 } from "@/lib/ask/contracts";
 
 describe("ask contracts", () => {
@@ -91,6 +92,36 @@ describe("ask contracts", () => {
     expect(card.verdict).toBe("Gold is weak, wait for rate cut noise to settle.");
   });
 
+  it("strips leaked gateway citation markers without touching source links", () => {
+    expect(
+      stripAskInternalCitationMarkers(
+        "Pressure is higher. �cite�turn0search0�turn0search6�",
+      ),
+    ).toBe("Pressure is higher.");
+    expect(
+      stripAskInternalCitationMarkers(
+        "Pressure is higher. citeturn0search0turn0search6 [official source](https://example.com/source)",
+      ),
+    ).toBe("Pressure is higher. [official source](https://example.com/source)");
+
+    const card = sanitizeCard({
+      type: "guru",
+      name: "Example Guru",
+      tier: "Caution",
+      trackRecord: "Reported by an official source.",
+      citationUrl: "https://example.com/source",
+      verdict: "Review the record. 【cite】turn0search0【turn0search6】",
+    });
+
+    expect(card.type).toBe("guru");
+    if (card.type !== "guru") {
+      throw new Error("Expected a guru card.");
+    }
+
+    expect(card.verdict).toBe("Review the record.");
+    expect(card.citationUrl).toBe("https://example.com/source");
+  });
+
   it("preserves ui metadata text without truncation", () => {
     const uiMeta = sanitizeUiMeta({
       marketSeries: [1, 2, 3],
@@ -100,6 +131,40 @@ describe("ask contracts", () => {
     expect(uiMeta).toEqual({
       marketSeries: [1, 2, 3],
       projectionMarkers: [0, 2],
+    });
+  });
+
+  it("removes leaked citation markers from persisted ui metadata", () => {
+    const uiMeta = sanitizeUiMeta({
+      marketSourceLabel: "Live web research 【cite】turn0search0",
+      verificationSourceLabel: "Registry citeturn0search1",
+      propFirm: {
+        confirmedFacts: [
+          {
+            text: "A confirmed fact 【turn0search2】",
+            sourceLabel: "Official source",
+            sourceUrl: "https://example.com/source",
+          },
+        ],
+        unconfirmedClaims: ["A claim citeturn0search3"],
+      },
+      followups: ["What changed? 【cite】turn0search4"],
+    });
+
+    expect(uiMeta).toEqual({
+      marketSourceLabel: "Live web research",
+      verificationSourceLabel: "Registry",
+      propFirm: {
+        confirmedFacts: [
+          {
+            text: "A confirmed fact",
+            sourceLabel: "Official source",
+            sourceUrl: "https://example.com/source",
+          },
+        ],
+        unconfirmedClaims: ["A claim"],
+      },
+      followups: ["What changed?"],
     });
   });
 

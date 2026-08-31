@@ -15,6 +15,9 @@ describe("welcome email builders", () => {
 
     expect(email.subject).toBe("Welcome to verify.trading");
     expect(email.text).toContain("Hi Afaq,");
+    expect(email.text).toContain(
+      "You’ve just found a tool traders use to make better, more informed decisions and avoid scams.",
+    );
     expect(email.text).toContain(`${appOrigin}/ask`);
     expect(email.html).toContain("https://www.verify.trading/verify-trading-email-logo.png");
     expect(email.html).toContain("Welcome to the winning team!");

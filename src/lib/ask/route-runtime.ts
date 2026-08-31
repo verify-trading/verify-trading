@@ -15,6 +15,7 @@ import type { AskGenerationCallbacks } from "@/lib/ask/service/types";
 import { buildUpdatedSessionMemory } from "@/lib/ask/session-memory";
 import { AskValidationError } from "@/lib/ask/validation-error";
 import { getSessionUser } from "@/lib/auth/session";
+import { AI_CONSENT_KEY, hasAiConsent } from "@/lib/ai/consent";
 import { logger } from "@/lib/observability/logger";
 import { refundAskQuery, reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
@@ -31,7 +32,7 @@ export type PreparedAskRoute = {
 };
 
 export type AskRouteFailure = {
-  error: "invalid_request" | "unauthorized" | "rate_limited" | "ask_failed";
+  error: "invalid_request" | "unauthorized" | "ai_consent_required" | "rate_limited" | "ask_failed";
   status: number;
   message: string;
   code?: string;
@@ -42,10 +43,24 @@ type PreparedResult =
   | { ok: true; value: PreparedAskRoute }
   | { ok: false; failure: AskRouteFailure };
 
-export async function prepareAskRoute(request: Request, logScope = "Ask"): Promise<PreparedResult> {
+export async function prepareAskRoute(
+  request: Request,
+  logScope = "Ask",
+  requireAiConsent = false,
+): Promise<PreparedResult> {
   const session = await getSessionUser();
   if (!session) {
     return { ok: false, failure: { error: "unauthorized", status: 401, message: "Sign in to use Ask." } };
+  }
+  if (requireAiConsent && !(await hasAiConsent(session.supabase, session.user.id, AI_CONSENT_KEY))) {
+    return {
+      ok: false,
+      failure: {
+        error: "ai_consent_required",
+        status: 403,
+        message: "Allow AI data sharing before using Ask.",
+      },
+    };
   }
 
   let body: unknown;

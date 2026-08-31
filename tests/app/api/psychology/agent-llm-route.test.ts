@@ -6,6 +6,11 @@ vi.mock("@/lib/ask/service/provider", () => ({ getPsychologyCoachModel: vi.fn(()
 
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdminClient: vi.fn(() => ({})) }));
 
+vi.mock("@/lib/ai/consent", () => ({
+  AI_CONSENT_KEY: "ai_consent_v2",
+  hasAiConsent: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("@/lib/psychology/context", () => ({ loadCoachContext: vi.fn() }));
 
 vi.mock("@/lib/observability/logger", () => ({
@@ -15,6 +20,7 @@ vi.mock("@/lib/observability/logger", () => ({
 import { streamText } from "ai";
 
 import { POST as agentLlm } from "@/app/api/psychology/agent-llm/chat/completions/route";
+import { hasAiConsent } from "@/lib/ai/consent";
 import { signAgentContext } from "@/lib/psychology/agent-token";
 import { loadCoachContext } from "@/lib/psychology/context";
 
@@ -61,6 +67,7 @@ async function readSse(response: Response): Promise<string> {
 describe("agent-llm custom LLM endpoint", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(hasAiConsent).mockResolvedValue(true);
     process.env.ELEVENLABS_AGENT_LLM_SECRET = SECRET;
     vi.mocked(loadCoachContext).mockResolvedValue({
       name: "Alex",
@@ -69,6 +76,16 @@ describe("agent-llm custom LLM endpoint", () => {
       challenge: null,
       recentEntries: [],
     });
+  });
+
+  it("stops a new model turn after consent is withdrawn", async () => {
+    vi.mocked(hasAiConsent).mockResolvedValue(false);
+
+    const response = await agentLlm(turnRequest({ "x-vt-agent-secret": SECRET }, nextSessionId()));
+
+    expect(response.status).toBe(403);
+    expect(streamText).not.toHaveBeenCalled();
+    expect(loadCoachContext).not.toHaveBeenCalled();
   });
 
   it("refuses a turn that carries neither accepted secret header", async () => {

@@ -8,6 +8,11 @@ vi.mock("@/lib/billing/require-pro", () => ({
   hasProAccess: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock("@/lib/ai/consent", () => ({
+  AI_CONSENT_KEY: "ai_consent_v2",
+  hasAiConsent: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("@/lib/observability/logger", () => ({
   logger: {
     error: vi.fn(),
@@ -17,6 +22,7 @@ vi.mock("@/lib/observability/logger", () => ({
 
 import { POST as mintToken } from "@/app/api/psychology/realtime-token/route";
 import { GET as getUsage } from "@/app/api/psychology/usage/route";
+import { hasAiConsent } from "@/lib/ai/consent";
 import { getSessionUser } from "@/lib/auth/session";
 import { DAILY_CALL_LIMIT, DAILY_MINT_LIMIT, REAL_CALL_FILTER } from "@/lib/psychology/sessions";
 import { getTodayUtcDateString } from "@/lib/rate-limit/usage";
@@ -82,10 +88,27 @@ function mintTables(callsToday: number) {
 describe("Psychology daily call limit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(hasAiConsent).mockResolvedValue(true);
     process.env.ELEVENLABS_API_KEY = "xi-test-key";
     process.env.ELEVENLABS_AGENT_ID = "agent-test";
     process.env.ELEVENLABS_AGENT_LLM_SECRET = "test-agent-secret";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token: "conv-token" }) }));
+  });
+
+  it("refuses a call before consent without minting an ElevenLabs token", async () => {
+    const { sessions, from } = mintTables(0);
+    mockSession(from);
+    vi.mocked(hasAiConsent).mockResolvedValue(false);
+
+    const response = await mintToken(mintRequest());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "ai_consent_required",
+      message: "Allow AI data sharing before starting a Companion call.",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(sessions.insert).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

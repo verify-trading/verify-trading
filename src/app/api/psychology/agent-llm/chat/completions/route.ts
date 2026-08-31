@@ -1,6 +1,7 @@
 import { streamText, type ModelMessage } from "ai";
 
 import { getPsychologyCoachModel } from "@/lib/ask/service/provider";
+import { AI_CONSENT_KEY, hasAiConsent } from "@/lib/ai/consent";
 import { jsonApiError } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -134,6 +135,11 @@ export async function POST(request: Request) {
   if (!supabase) {
     logger.error("agent-llm has no Supabase admin client (service role key unset).");
     return jsonApiError(503, "agent_llm_unconfigured", "The live coach is not available right now.");
+  }
+  // Re-check on every turn. This stops new transcript/context from reaching Anthropic if the
+  // user withdraws consent from another device during an active ElevenLabs session.
+  if (!(await hasAiConsent(supabase, ctx.userId, AI_CONSENT_KEY))) {
+    return jsonApiError(403, "ai_consent_required", "AI data sharing is turned off.");
   }
 
   try {

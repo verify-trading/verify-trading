@@ -5,6 +5,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 import { clearMemoryAskPersistence, getAskPersistence } from "@/lib/ask/persistence";
+import { parseStoredCard } from "@/lib/ask/persistence/shared";
 
 describe("getAskPersistence", () => {
   beforeEach(() => {
@@ -176,5 +177,26 @@ describe("getAskPersistence", () => {
         title: "nasdaq-chart.png",
       }),
     ]);
+  });
+});
+
+describe("parseStoredCard", () => {
+  it("sanitizes citation debris from old stored card payloads", () => {
+    const card = parseStoredCard(
+      {
+        type: "insight",
+        headline: "UK Russia Tension Is Higher",
+        body: "London added sanctions. 【cite】turn0search0【turn0search6】",
+        verdict: "Watch shipping headlines.",
+      },
+      "",
+    );
+
+    expect(card).toEqual({
+      type: "insight",
+      headline: "UK Russia Tension Is Higher",
+      body: "London added sanctions.",
+      verdict: "Watch shipping headlines.",
+    });
   });
 });

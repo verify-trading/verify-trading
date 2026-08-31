@@ -444,6 +444,35 @@ function limitSentences(value: string, maxSentences: number) {
     .trim();
 }
 
+// Some OpenAI-compatible gateways leak their internal web-search references into the
+// model's text. These are implementation details, not user-facing citations: the actual
+// source URL (when available) lives in a dedicated URL field and is intentionally untouched.
+const INTERNAL_TOOL_REFERENCE = /turn\d+(?:search|news|fetch|view|source)\d+/giu;
+const BRACKETED_INTERNAL_TOOL_REFERENCE = /[【〖⟦\[][^】〗⟧\]]*turn\d+(?:search|news|fetch|view|source)\d+[^】〗⟧\]]*[】〗⟧\]]?/giu;
+const PRIVATE_CITATION_BLOCK = /\uE200\s*cite(?:\s*\uE202\s*turn\d+(?:search|news|fetch|view|source)\d+)+\s*\uE201/giu;
+const PRIVATE_CITATION_PREFIX = /\uE200\s*cite(?:\s*\uE202)?/giu;
+const CITATION_LABEL = /[【〖⟦]\s*(?:cite|citation)\s*[】〗⟧]/giu;
+const REPLACEMENT_CITATION_LABEL = /\uFFFD\s*(?:cite|citation)\s*\uFFFD?/giu;
+
+/** Remove gateway/tool citation markers while preserving ordinary prose and source URLs. */
+export function stripAskInternalCitationMarkers(value: string): string {
+  return value
+    .replace(PRIVATE_CITATION_BLOCK, " ")
+    .replace(PRIVATE_CITATION_PREFIX, " ")
+    .replace(BRACKETED_INTERNAL_TOOL_REFERENCE, " ")
+    .replace(INTERNAL_TOOL_REFERENCE, " ")
+    .replace(CITATION_LABEL, " ")
+    .replace(REPLACEMENT_CITATION_LABEL, " ")
+    // The private-use citation delimiters can remain after a malformed block; they are
+    // never meaningful in model prose, so remove only those delimiters (not normal text).
+    .replace(/[\uE200-\uE202]/gu, " ")
+    // Unsupported gateway glyphs sometimes arrive as U+FFFD around the same marker.
+    .replace(/\uFFFD/gu, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;!?])/g, "$1")
+    .trim();
+}
+
 function sanitizeNaturalLanguageField(
   value: string,
   limits?: { maxSentences?: number; maxWords?: number },
@@ -464,7 +493,7 @@ function sanitizeNaturalLanguageField(
     return value;
   }
 
-  const normalized = value
+  const normalized = stripAskInternalCitationMarkers(value)
     .replace(/[\u2010-\u2015]/g, ",")
     .replace(/\s+-\s+/g, ", ")
     .replace(/(?<=\p{L})-(?=\p{L})/gu, " ")
@@ -472,6 +501,10 @@ function sanitizeNaturalLanguageField(
     .replace(/,{2,}/g, ",")
     .replace(/\s{2,}/g, " ")
     .trim();
+
+  if (!normalized) {
+    return "No additional detail available.";
+  }
 
   const sentenceLimited =
     limits.maxSentences === undefined
@@ -539,7 +572,15 @@ function sanitizeCardNaturalLanguage(card: AskCard): AskCard {
 }
 
 export function sanitizeCard(card: AskCard): AskCard {
-  return sanitizeCardNaturalLanguage(JSON.parse(JSON.stringify(card)) as AskCard);
+  const clonedCard = JSON.parse(JSON.stringify(card)) as AskCard;
+  for (const [key, value] of Object.entries(clonedCard)) {
+    if (key !== "citationUrl" && typeof value === "string") {
+      const cleaned = stripAskInternalCitationMarkers(value);
+      (clonedCard as Record<string, unknown>)[key] = cleaned || "Unavailable";
+    }
+  }
+
+  return sanitizeCardNaturalLanguage(clonedCard);
 }
 
 export function sanitizeUiMeta(uiMeta: AskUiMeta | undefined): AskUiMeta | undefined {
@@ -547,5 +588,60 @@ export function sanitizeUiMeta(uiMeta: AskUiMeta | undefined): AskUiMeta | undef
     return undefined;
   }
 
-  return JSON.parse(JSON.stringify(uiMeta)) as AskUiMeta;
+  const sanitized = JSON.parse(JSON.stringify(uiMeta)) as AskUiMeta;
+  const record = sanitized as unknown as Record<string, unknown>;
+  const cleanOptionalText = (owner: Record<string, unknown>, key: string) => {
+    const value = owner[key];
+    if (typeof value !== "string") {
+      return;
+    }
+
+    const cleaned = stripAskInternalCitationMarkers(value);
+    if (cleaned) {
+      owner[key] = cleaned;
+    } else {
+      delete owner[key];
+    }
+  };
+
+  for (const key of [
+    "marketSourceLabel",
+    "marketLevelScopeLabel",
+    "verificationSourceLabel",
+  ]) {
+    cleanOptionalText(record, key);
+  }
+
+  const propFirm = record.propFirm;
+  if (propFirm && typeof propFirm === "object" && !Array.isArray(propFirm)) {
+    const propFirmRecord = propFirm as Record<string, unknown>;
+    for (const key of ["band", "researchStatus", "reverifyTrigger"]) {
+      cleanOptionalText(propFirmRecord, key);
+    }
+
+    if (Array.isArray(propFirmRecord.confirmedFacts)) {
+      propFirmRecord.confirmedFacts = propFirmRecord.confirmedFacts
+        .filter((fact): fact is Record<string, unknown> => Boolean(fact && typeof fact === "object" && !Array.isArray(fact)))
+        .map((fact) => {
+          cleanOptionalText(fact, "text");
+          cleanOptionalText(fact, "sourceLabel");
+          return fact;
+        })
+        .filter((fact) => typeof fact.text === "string" && fact.text.length > 0);
+    }
+
+    if (Array.isArray(propFirmRecord.unconfirmedClaims)) {
+      propFirmRecord.unconfirmedClaims = propFirmRecord.unconfirmedClaims
+        .map((claim) => (typeof claim === "string" ? stripAskInternalCitationMarkers(claim) : ""))
+        .filter((claim) => claim.length > 0);
+    }
+  }
+
+  if (Array.isArray(record.followups)) {
+    record.followups = record.followups
+      .map((followup) => (typeof followup === "string" ? stripAskInternalCitationMarkers(followup) : ""))
+      .filter((followup) => followup.length > 0);
+  }
+
+  return sanitized;
 }

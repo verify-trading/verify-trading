@@ -95,9 +95,15 @@ function PromptChips({
   className: string;
 }) {
   return (
-    <ul className={`grid grid-cols-1 sm:grid-cols-2 ${className}`}>
+    <ul
+      aria-label="Suggested questions"
+      className={`hide-scrollbar flex max-w-full snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain pb-1 ${className} lg:grid lg:grid-cols-2 lg:gap-3 lg:overflow-visible lg:overscroll-auto lg:pb-0`}
+    >
       {prompts.map((prompt) => (
-        <li key={prompt} className="min-w-0">
+        <li
+          key={prompt}
+          className="w-[min(72vw,18.75rem)] shrink-0 snap-start lg:w-auto lg:min-w-0 lg:shrink"
+        >
           <Button
             type="button"
             variant="ghost"
@@ -131,15 +137,15 @@ export function AskEmptyState({
       <div className="hidden min-h-0 flex-1 flex-col items-center justify-center px-8 py-10 lg:flex">
         <div className="w-full max-w-2xl">
           <WelcomeBlock className="mb-10" />
-          <PromptChips prompts={prompts} onPromptClick={onPromptClick} className="gap-3" />
+          <PromptChips prompts={prompts} onPromptClick={onPromptClick} className="" />
         </div>
       </div>
 
-      {/* ─── Narrow / mobile-web: welcome + the same tappable prompt chips, stacked above the composer ─── */}
+      {/* ─── Narrow / mobile-web: welcome + a horizontally scrollable strip above the composer ─── */}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-4 lg:hidden sm:max-w-xl sm:px-8 sm:py-6">
         <div className="mx-auto w-full max-w-lg">
           <WelcomeBlock />
-          <PromptChips prompts={prompts} onPromptClick={onPromptClick} className="mt-8 gap-2.5" />
+          <PromptChips prompts={prompts} onPromptClick={onPromptClick} className="mt-8" />
         </div>
       </div>
     </div>

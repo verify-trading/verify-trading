@@ -12,6 +12,11 @@ vi.mock("@/lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
+vi.mock("@/lib/ai/consent", () => ({
+  AI_CONSENT_KEY: "ai_consent_v2",
+  hasAiConsent: vi.fn(),
+}));
+
 vi.mock("@/lib/rate-limit/reserve-ask-query", () => ({
   reserveAskQuery: vi.fn(),
 }));
@@ -21,6 +26,7 @@ import { fallbackInsightCard } from "@/lib/ask/contracts";
 import { getAskPersistence } from "@/lib/ask/persistence";
 import { generateAskResponse } from "@/lib/ask/pipeline";
 import { getSessionUser } from "@/lib/auth/session";
+import { hasAiConsent } from "@/lib/ai/consent";
 import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { reserveAskQuery } from "@/lib/rate-limit/reserve-ask-query";
 
@@ -35,6 +41,7 @@ describe("POST /api/mobile/ask", () => {
       user: { id: "00000000-0000-0000-0000-000000000001" } as never,
       supabase: {} as never,
     });
+    vi.mocked(hasAiConsent).mockResolvedValue(true);
     vi.mocked(reserveAskQuery).mockResolvedValue({
       ok: true,
       tier: "free",
@@ -79,5 +86,25 @@ describe("POST /api/mobile/ask", () => {
     });
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(saveExchange).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses Ask before consent without reserving usage or calling the model", async () => {
+    vi.mocked(hasAiConsent).mockResolvedValue(false);
+
+    const response = await POST(
+      new Request("http://localhost/api/mobile/ask", {
+        method: "POST",
+        body: JSON.stringify({ message: "Analyse my trades" }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "ai_consent_required",
+      message: "Allow AI data sharing before using Ask.",
+    });
+    expect(reserveAskQuery).not.toHaveBeenCalled();
+    expect(generateAskResponse).not.toHaveBeenCalled();
   });
 });

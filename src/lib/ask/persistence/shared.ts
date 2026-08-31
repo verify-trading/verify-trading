@@ -1,4 +1,10 @@
-import { askCardSchema, type AskCard, type AskHistoryPageMessage } from "@/lib/ask/contracts";
+import {
+  askCardSchema,
+  sanitizeCard,
+  stripAskInternalCitationMarkers,
+  type AskCard,
+  type AskHistoryPageMessage,
+} from "@/lib/ask/contracts";
 import { ASK_MODEL_HISTORY_LIMIT } from "@/lib/ask/config";
 
 function inferSessionTitle(message: string) {
@@ -80,13 +86,13 @@ export function parseStoredCard(
 ): AskCard | null {
   const parsedPayload = askCardSchema.safeParse(cardPayload);
   if (parsedPayload.success) {
-    return parsedPayload.data;
+    return sanitizeCard(parsedPayload.data);
   }
 
   try {
     const parsedContent = JSON.parse(fallbackContent) as unknown;
     const parsedCard = askCardSchema.safeParse(parsedContent);
-    return parsedCard.success ? parsedCard.data : null;
+    return parsedCard.success ? sanitizeCard(parsedCard.data) : null;
   } catch {
     return null;
   }
@@ -94,9 +100,15 @@ export function parseStoredCard(
 
 export function toHistory(messages: AskHistoryPageMessage[]) {
   const history = [];
-  for (const { role, content } of messages.slice(-ASK_MODEL_HISTORY_LIMIT)) {
-    if (role === "assistant" || content.trim().length > 0) {
-      history.push({ role, content });
+  for (const message of messages.slice(-ASK_MODEL_HISTORY_LIMIT)) {
+    const content =
+      message.role === "assistant"
+        ? message.card
+          ? JSON.stringify(message.card)
+          : stripAskInternalCitationMarkers(message.content)
+        : message.content;
+    if (message.role === "assistant" || content.trim().length > 0) {
+      history.push({ role: message.role, content });
     }
   }
   return history;

@@ -5,6 +5,8 @@ import { z } from "zod";
 import {
   askCardSchema,
   askUiMetaSchema,
+  sanitizeCard,
+  sanitizeUiMeta,
   type AskResponse,
 } from "@/lib/ask/contracts";
 import {
@@ -205,7 +207,10 @@ export async function readCachedAskResponse(input: AskCacheRequest): Promise<Cac
     await client
       .rpc("increment_ask_response_cache_hit", { p_cache_key: cacheKey })
       .then(() => {}, () => {}); // hit counting is best-effort
-    return parsed.data;
+    return {
+      data: sanitizeCard(parsed.data.data),
+      uiMeta: sanitizeUiMeta(parsed.data.uiMeta),
+    };
   } catch (error) {
     warn("Ask response cache read failed.", error);
     return null;

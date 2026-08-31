@@ -3,6 +3,7 @@ import {
   type AskAttachmentMeta,
   type AskSessionMemory,
   type AskUiMeta,
+  sanitizeUiMeta,
 } from "@/lib/ask/contracts";
 import {
   ASK_ATTACHMENTS_BUCKET,
@@ -309,7 +310,8 @@ export function createSupabasePersistence(userId: string): AskPersistence {
           role: message.role as "user" | "assistant",
           content: message.content as string,
           card: parseStoredCard(message.card_payload, message.content as string),
-          uiMeta: (message.ui_meta as AskUiMeta | null | undefined) ?? null,
+          uiMeta:
+            sanitizeUiMeta((message.ui_meta as AskUiMeta | null | undefined) ?? undefined) ?? null,
           attachmentMeta: await hydrateAttachmentMeta(
             (message.attachment_meta as AskAttachmentMeta | null | undefined) ?? null,
           ),
@@ -388,7 +390,7 @@ export function createSupabasePersistence(userId: string): AskPersistence {
           role: "assistant",
           content: JSON.stringify(input.assistantCard),
           card_payload: input.assistantCard,
-          ui_meta: input.assistantUiMeta ?? null,
+          ui_meta: sanitizeUiMeta(input.assistantUiMeta) ?? null,
           attachment_meta: attachmentMeta,
           created_at: new Date(Date.parse(now) + 1).toISOString(),
         },

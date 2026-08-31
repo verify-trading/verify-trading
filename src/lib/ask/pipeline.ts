@@ -37,7 +37,7 @@ import {
   getAskModel,
   getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
-import { createAskTools } from "@/lib/ask/service/tools";
+import { createAskTools, resolveVerificationToolResult } from "@/lib/ask/service/tools";
 import type {
   AskGenerationCallbacks,
   AskServiceDependencies,
@@ -58,6 +58,9 @@ const ASK_MAX_STEPS = 10;
 
 /** Recent turns kept verbatim; older context is carried by session memory. */
 const MAX_HISTORY_TURNS = 12;
+
+const DIRECT_VERIFICATION_INTENT =
+  /\b(?:safe|legit(?:imate)?|regulated|regulation|authori[sz]ed|scam|trustworthy|complaints?|deposit)\b/i;
 
 type ToolResultRecord = { toolName?: string; output?: unknown };
 
@@ -387,6 +390,23 @@ export async function generateAskResponse(
       messageId,
     });
   };
+
+  // A reviewed exact match already has a complete, deterministic card. Serving it here
+  // avoids two slow gateway model turns (select verify_entity, then submit_ask_card) while
+  // keeping fuzzy/unknown names on the model path where clarification and research matter.
+  const exactVerifiedEntity = !image && DIRECT_VERIFICATION_INTENT.test(normalizedMessage)
+    ? knowledge.entityCandidates.find((candidate) => candidate.matchType === "exact")
+    : undefined;
+  if (exactVerifiedEntity) {
+    const verification = await resolveVerificationToolResult(exactVerifiedEntity.title, dependencies);
+    if ("card" in verification) {
+      return finalize(
+        verification.card,
+        "exact_verified_entity",
+        [{ toolName: "verify_entity", output: verification }],
+      );
+    }
+  }
 
   const result = await runAskGeneration({
     messages,

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useState, useSyncExternalStore } from "react";
-import { BookOpen, LineChart, Mail, Menu, MessageSquare } from "lucide-react";
+import type { LucideProps } from "lucide-react";
+import { BookOpen, Mail, Menu } from "lucide-react";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { Button } from "@/components/ui/button";
@@ -15,15 +16,58 @@ import { Sheet } from "@/components/ui/sheet";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { cn } from "@/lib/utils";
 
+/** The web sheet uses the same core glyphs as the mobile tab bar. */
+function AskNavIcon({ size = 24, strokeWidth = 1.8, color, absoluteStrokeWidth, ...props }: LucideProps) {
+  void absoluteStrokeWidth;
+  return (
+    <svg
+      {...props}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color ?? "currentColor"}
+      strokeWidth={Number(strokeWidth) * 0.62}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="11" />
+      <circle cx="12" cy="12" r="9.9" />
+      <path d="M17 10.3a2.4 2.4 0 0 0-2.4-2.4H9.4A2.4 2.4 0 0 0 7 10.3v1.6a2.4 2.4 0 0 0 2.4 2.4h.1v2.9l2.9-2.9h2.2a2.4 2.4 0 0 0 2.4-2.4z" strokeWidth={strokeWidth} />
+      <circle cx="14.5" cy="10.4" r="1.15" fill="var(--vt-coral)" stroke="none" />
+    </svg>
+  );
+}
+
+function MarketsNavIcon({ size = 24, strokeWidth = 1.8, color, absoluteStrokeWidth, ...props }: LucideProps) {
+  void absoluteStrokeWidth;
+  return (
+    <svg
+      {...props}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color ?? "currentColor"}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M15.5 3h5v5" />
+      <path d="M20.5 3 10 11 6.5 7.5 3 11.5" />
+      <path d="M4.6 17h.8a1 1 0 0 1 1 1v3H3.6v-3a1 1 0 0 1 1-1z" />
+      <path d="M12.1 14.5h.8a1 1 0 0 1 1 1V21h-2.8v-5.5a1 1 0 0 1 1-1z" />
+      <path d="M18.6 11.5h.8a1 1 0 0 1 1 1V21h-2.8v-8.5a1 1 0 0 1 1-1z" />
+    </svg>
+  );
+}
+
 const navItems = [
-  { href: "/ask", label: "Ask", icon: MessageSquare, requiresAuth: true },
-  { href: "/markets", label: "Markets", icon: LineChart, requiresAuth: true },
+  { href: "/ask", label: "Ask", icon: AskNavIcon, requiresAuth: true },
+  { href: "/markets", label: "Markets", icon: MarketsNavIcon, requiresAuth: true },
   { href: "/guide", label: "Guide", icon: BookOpen, requiresAuth: false },
   { href: "/contact", label: "Contact", icon: Mail, requiresAuth: false },
 ] as const;
-
-/** Mobile header height for fixed overlays (single row + safe area). */
-const MOBILE_SITE_NAV_BODY_REM = "3.5rem";
 
 function subscribeToClient() {
   return () => {};
@@ -78,10 +122,10 @@ export function SiteNav() {
 
   const sheetLinkClass = (active: boolean) =>
     [
-      "flex items-center gap-3 rounded-xl px-4 py-3.5 text-base font-semibold transition active:bg-white/10",
+      "group flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-base font-semibold transition active:bg-white/10",
       active
-        ? "bg-white/[0.08] text-white"
-        : "text-white/80 hover:bg-white/[0.05]",
+        ? "border-white/10 bg-white/[0.08] text-white"
+        : "border-transparent text-white/80 hover:bg-white/[0.05]",
     ].join(" ");
 
   const visibleNavItems = hideAuthChrome
@@ -180,16 +224,22 @@ export function SiteNav() {
                   href={item.href}
                   prefetch={false}
                   className={sheetLinkClass(active)}
+                  aria-current={active ? "page" : undefined}
                   onClick={() => {
                     trackNavItemClick(item.label);
                     setMobileMenuOpen(false);
                   }}
                 >
-                  <Icon
-                    className="size-5 shrink-0 text-[var(--vt-muted)]"
-                    strokeWidth={2}
-                    aria-hidden
-                  />
+                  <span
+                    className={cn(
+                      "flex size-10 shrink-0 items-center justify-center rounded-xl border transition-colors",
+                      active
+                        ? "border-[rgba(242,109,109,0.35)] bg-[rgba(242,109,109,0.12)] text-[var(--vt-coral)]"
+                        : "border-white/[0.08] bg-white/[0.04] text-[var(--vt-muted)] group-hover:text-white",
+                    )}
+                  >
+                    <Icon size={24} strokeWidth={active ? 1.9 : 1.6} aria-hidden />
+                  </span>
                   {item.label}
                 </Link>
               );

@@ -21,7 +21,7 @@ export function buildSignupWelcomeEmail({
   const askUrl = `${normalizedAppOrigin}/ask`;
   const paragraphs = [
     `Hi ${greetingName},`,
-    "You have just found a tool a lot of traders who are done making decisions blind are now using.",
+    "You’ve just found a tool traders use to make better, more informed decisions and avoid scams.",
     "Traders are using verify.trading every single day: checking their brokers, scoring their trades, reading their morning brief before market open. And they are not going back to guessing.",
     "Now you are one of them.",
     "The Ask tab is open and waiting. Type in anything: your trade, your analysis, is your broker legit, is this trader's signal group real, what the markets are doing today.",

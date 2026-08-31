@@ -936,7 +936,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
 
 export type AskToolSet = ReturnType<typeof createAskTools>;
 
-async function resolveVerificationToolResult(
+export async function resolveVerificationToolResult(
   name: string,
   dependencies: AskServiceDependencies,
 ): Promise<VerificationToolResponse> {

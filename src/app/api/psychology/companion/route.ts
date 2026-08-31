@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth/session";
+import { AI_CONSENT_KEY, hasAiConsent } from "@/lib/ai/consent";
 import { hasProAccess } from "@/lib/billing/require-pro";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
@@ -35,6 +36,9 @@ export async function POST(request: Request) {
     const session = await getSessionUser();
     if (!session) {
       return jsonUnauthorized("Sign in to use the psychology coach.");
+    }
+    if (!(await hasAiConsent(session.supabase, session.user.id, AI_CONSENT_KEY))) {
+      return jsonApiError(403, "ai_consent_required", "Allow AI data sharing before using the Companion.");
     }
     // Pro-only: each turn is a billed model call, so entitlement is enforced server-side.
     if (!(await hasProAccess(session))) {

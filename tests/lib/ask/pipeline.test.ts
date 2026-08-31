@@ -208,6 +208,101 @@ describe("generateAskResponse", () => {
     expect(knowledgeMessage).not.toHaveProperty("providerOptions");
   });
 
+  it("returns an exact reviewed entity without waiting for the model", async () => {
+    const generateTextImpl = vi.fn() as never;
+    const lookupVerifiedEntityImpl = vi.fn().mockResolvedValue({
+      found: true,
+      entity: {
+        id: "pepperstone",
+        name: "Pepperstone",
+        type: "broker",
+        status: "legitimate",
+        fcaRegistered: true,
+        fcaReference: "684312",
+        fcaWarning: false,
+        trustScore: 7.7,
+        notes: "Reviewed broker.",
+        source: "verify.trading research",
+        aliases: ["pepperstone"],
+      },
+      brokerCardHint: {
+        name: "Pepperstone",
+        score: "7.7",
+        status: "LEGITIMATE",
+        fca: "Yes",
+        complaints: "Low",
+        color: "green",
+        provisional: false,
+        band: "Trusted",
+        founderNote: "Reviewed broker.",
+      },
+    });
+    const getFcaStatusImpl = vi.fn().mockResolvedValue({
+      available: true,
+      queriedName: "Pepperstone",
+      frn: "684312",
+      authorised: true,
+      warning: false,
+      statusText: "Authorised",
+      source: "FCA live lookup",
+      note: null,
+    });
+    const retrieveAskKnowledgeImpl = vi.fn().mockResolvedValue({
+      entityCandidates: [{
+        id: "pepperstone",
+        title: "Pepperstone",
+        tags: { entity_type: "broker", status: "legitimate" },
+        sourceId: "pepperstone",
+        matchType: "exact",
+        similarity: 1,
+      }],
+      chunks: [],
+    });
+
+    const response = await generateAskResponse(
+      baseRequest("Is Pepperstone safe for UK retail CFD?"),
+      { generateTextImpl, retrieveAskKnowledgeImpl, lookupVerifiedEntityImpl, getFcaStatusImpl },
+    );
+
+    expect(generateTextImpl).not.toHaveBeenCalled();
+    expect(lookupVerifiedEntityImpl).toHaveBeenCalledWith("Pepperstone");
+    expect(response.data).toMatchObject({
+      type: "broker",
+      name: "Pepperstone",
+      score: "7.7",
+      status: "LEGITIMATE",
+      fca: "Yes",
+    });
+    expect(response.uiMeta).toMatchObject({
+      verificationKind: "broker",
+      verificationSourceLabel: "Live FCA confirmed",
+    });
+  });
+
+  it("keeps fuzzy entity matches on the model path", async () => {
+    const generateTextImpl = vi
+      .fn()
+      .mockResolvedValue(textResult([submitResult(insightCard)])) as never;
+    const retrieveAskKnowledgeImpl = vi.fn().mockResolvedValue({
+      entityCandidates: [{
+        id: "pepperstone",
+        title: "Pepperstone",
+        tags: { entity_type: "broker", status: "legitimate" },
+        sourceId: "pepperstone",
+        matchType: "fuzzy",
+        similarity: 0.82,
+      }],
+      chunks: [],
+    });
+
+    await generateAskResponse(baseRequest("Is Pepper Stone safe?"), {
+      generateTextImpl,
+      retrieveAskKnowledgeImpl,
+    });
+
+    expect(generateTextImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps tool-owned numbers when the model rewrites a briefing", async () => {
     const generateTextImpl = vi
       .fn()

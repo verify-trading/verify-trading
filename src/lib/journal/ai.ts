@@ -51,7 +51,18 @@ function oneLine(text: string): string {
   return text.replace(/[*_`#>|]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-export async function generateWeeklyInsight(entries: JournalEntryRow[], name: string) {
+export async function generateWeeklyInsight(entries: JournalEntryRow[]) {
+  // Only fields used to write the insight leave our server. Database ids, account email,
+  // source markers and storage timestamps are unnecessary and deliberately excluded.
+  const sessions = entries.map((entry) => ({
+    date: entry.entry_date,
+    mood: entry.mood,
+    pnl: entry.pnl_amount,
+    currency: entry.pnl_currency,
+    note: entry.note,
+    lesson: entry.lesson,
+    tags: entry.tags,
+  }));
   const result = await generateText({
     model: getAskSimpleModel(),
     maxOutputTokens: 140,
@@ -59,8 +70,7 @@ export async function generateWeeklyInsight(entries: JournalEntryRow[], name: st
       "You are the trader's coach at verify.trading. Identify one meaningful trading pattern in under 60 words. " +
       "Be calm, direct, and honest — tell them what they need to hear, not what flatters them. " +
       "Plain text only — no markdown.",
-    prompt: `Trader: ${name}
-Sessions (last 30 days): ${JSON.stringify(entries)}
+    prompt: `Sessions (last 30 days): ${JSON.stringify(sessions)}
 Identify the single most useful pattern in this data.`,
   });
   return oneLine(result.text);

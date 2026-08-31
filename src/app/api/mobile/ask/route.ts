@@ -9,7 +9,7 @@ import {
 
 export async function POST(request: Request) {
   try {
-    const prepared = await prepareAskRoute(request, "mobile Ask");
+    const prepared = await prepareAskRoute(request, "mobile Ask", true);
     if (!prepared.ok) return jsonApiFailure(prepared.failure);
 
     const response = await completeAskExchange(prepared.value);

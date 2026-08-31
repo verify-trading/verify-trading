@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth/session";
+import { AI_CONSENT_KEY, hasAiConsent } from "@/lib/ai/consent";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
-import { challengeConfigSchema, challengeStartedAt, extractChallengeRules, reuseStoredRules, toChallengeConfig, type ChallengeConfigRow } from "@/lib/journal/challenge";
+import {
+  challengeConfigSchema,
+  challengeStartedAt,
+  extractChallengeRules,
+  reuseStoredRules,
+  toChallengeConfig,
+  type ChallengeConfigRow,
+} from "@/lib/journal/challenge";
 import { UnsafeUrlError } from "@/lib/http/safe-fetch";
 import { logger } from "@/lib/observability/logger";
 
@@ -48,7 +56,13 @@ export async function POST(request: Request) {
     );
     const startedAt = (unchanged && prior ? challengeStartedAt(prior.rules) : null) ?? new Date().toISOString();
 
-    const extracted = reuseStoredRules(prior, parsed.data) ?? (await extractChallengeRules(parsed.data));
+    const reusable = reuseStoredRules(prior, parsed.data);
+    // Reusing stored percentage rules stays inside our database. A fresh extraction sends the
+    // selected firm URL, account type and account size through Pikachu/Hueling AI to OpenAI.
+    if (!reusable && !(await hasAiConsent(session.supabase, session.user.id, AI_CONSENT_KEY))) {
+      return jsonApiError(403, "ai_consent_required", "Allow AI data sharing before reading challenge rules.");
+    }
+    const extracted = reusable ?? (await extractChallengeRules(parsed.data));
     const rules = { ...extracted, started_at: startedAt };
     const { data, error } = await session.supabase
       .from("challenge_config")

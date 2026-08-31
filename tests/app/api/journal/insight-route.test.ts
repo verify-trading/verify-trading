@@ -58,7 +58,7 @@ function mockSession(entries: Row[], { aiConsent = true }: { aiConsent?: boolean
   const journal = createQueryBuilder({ data: entries.map(row), error: null });
   const insights = createQueryBuilder({ data: { generated_at: "2026-07-30T10:00:00.000Z" }, error: null });
   // The AI consent gate reads profiles.preferences before anything is generated.
-  const profiles = createQueryBuilder({ data: { preferences: aiConsent ? { ai_consent_v1: true } : {} }, error: null });
+  const profiles = createQueryBuilder({ data: { preferences: aiConsent ? { ai_consent_v2: true } : {} }, error: null });
   const from = vi.fn((table: string) => {
     if (table === "journal_entries") return journal;
     if (table === "profiles") return profiles;
@@ -187,8 +187,8 @@ describe("Journal insight API", () => {
     });
   });
 
-  // Apple 5.1.1(i): the insight sends journal entries and the trader's name to a third party
-  // AI, so no consent means no generation and no call out.
+  // Apple 5.1.1(i): the insight sends selected journal fields to a third-party AI, so no
+  // consent means no generation and no call out.
   it("refuses to generate, and calls no AI, when consent has not been given", async () => {
     mockSession(Array.from({ length: 6 }, (_, i) => ({ entry_date: day(i + 1), source: "manual" as const })), { aiConsent: false });
 

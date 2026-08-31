@@ -5,6 +5,8 @@ import {
   type AskSessionMemory,
   type AskSessionListItem,
   type AskUiMeta,
+  sanitizeCard,
+  sanitizeUiMeta,
 } from "@/lib/ask/contracts";
 import { ASK_MODEL_HISTORY_LIMIT } from "@/lib/ask/config";
 
@@ -85,8 +87,8 @@ export function createMemoryPersistence(): AskPersistence {
         id: record.id,
         role: record.role,
         content: record.content,
-        card: record.card,
-        uiMeta: record.uiMeta ?? null,
+        card: record.card ? sanitizeCard(record.card) : null,
+        uiMeta: sanitizeUiMeta(record.uiMeta ?? undefined) ?? null,
         attachmentMeta: record.attachmentMeta,
         createdAt: record.createdAt,
       }));
@@ -103,6 +105,8 @@ export function createMemoryPersistence(): AskPersistence {
       const timestamp = new Date().toISOString();
       const records = memorySessions.get(input.sessionId) ?? [];
       const sessionListItem = memorySessionList.get(input.sessionId);
+      const assistantCard = sanitizeCard(input.assistantCard);
+      const assistantUiMeta = sanitizeUiMeta(input.assistantUiMeta);
       records.push(
         {
           id: crypto.randomUUID(),
@@ -116,9 +120,9 @@ export function createMemoryPersistence(): AskPersistence {
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: JSON.stringify(input.assistantCard),
-          card: input.assistantCard,
-          uiMeta: input.assistantUiMeta ?? null,
+          content: JSON.stringify(assistantCard),
+          card: assistantCard,
+          uiMeta: assistantUiMeta ?? null,
           attachmentMeta: input.attachmentMeta ?? null,
           createdAt: timestamp,
         },

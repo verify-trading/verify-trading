@@ -4,16 +4,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Server-side gate for App Store 5.1.1(i): nothing reaches a third-party AI until the user
  * has agreed in the app.
  *
- * Ask and the Mind call are gated client-side, because the client starts them. The journal AI
- * is not: `generateChallengeStatus` runs as a side effect of saving an entry, and
- * `generateWeeklyInsight` runs when the Journal tab opens. There is no user action to hang a
- * prompt on, so the check has to live here, where every path goes through it.
+ * Every mobile path is also gated server-side; client prompts provide the explanation and the
+ * server check prevents a modified or stale client from bypassing the user's choice.
  *
- * One key covers every AI feature, matching the single consent dialog in the app. It is
- * written by writeSyncedFlag (mobile src/lib/profilePrefs.ts), which mirrors consent into
- * profiles.preferences precisely so the server can read it.
+ * One versioned key covers every disclosed AI feature. The mobile app mirrors the explicit
+ * answer into profiles.preferences before it resumes a held AI action. A disclosure change
+ * requires a new key so existing users must make a fresh choice.
  */
-export const AI_CONSENT_KEY = "ai_consent_v1";
+export const AI_CONSENT_KEY = "ai_consent_v2";
 
 /** Fails closed: an unreadable profile means consent is not proven, so nothing is sent. */
 export async function hasAiConsent(

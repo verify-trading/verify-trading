@@ -60,7 +60,7 @@ export async function POST() {
 
   let insight: string;
   try {
-    insight = await generateWeeklyInsight(trimmed, session.user.email ?? "Trader");
+    insight = await generateWeeklyInsight(trimmed);
   } catch (insightError) {
     logger.error("Journal insight generation failed.", {
       error: insightError instanceof Error ? insightError.message : "unknown",

@@ -28,7 +28,6 @@ import { appendSafeNextParam, getSafeRedirectPath } from "@/lib/auth/safe-redire
 import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/messages";
 import { signupSchema, type SignupFormValues } from "@/lib/auth/schemas";
 import { LEGAL_LINKS } from "@/lib/legal/legal-links";
-import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
 
@@ -156,11 +155,6 @@ function SignupPageContent() {
   return (
     <AuthShell
       title={verificationSent ? "Check your inbox" : "Create your account"}
-      subtitle={
-        verificationSent
-          ? undefined
-          : `Free tier includes ${FREE_DAILY_ASK_LIMIT} chats per day.`
-      }
       leadingIcon={
         verificationSent ? <MailOpen className="size-7" strokeWidth={1.75} aria-hidden /> : undefined
       }

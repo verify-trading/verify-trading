@@ -4,6 +4,11 @@ vi.mock("@/lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
+vi.mock("@/lib/ai/consent", () => ({
+  AI_CONSENT_KEY: "ai_consent_v2",
+  hasAiConsent: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("@/lib/observability/logger", () => ({
   logger: {
     error: vi.fn(),
@@ -22,6 +27,7 @@ vi.mock("@/lib/psychology/companion", async (importOriginal) => {
 });
 
 import { POST } from "@/app/api/psychology/companion/route";
+import { hasAiConsent } from "@/lib/ai/consent";
 import { getSessionUser } from "@/lib/auth/session";
 import { generatePsychologyReply } from "@/lib/psychology/companion";
 
@@ -97,6 +103,17 @@ function companionRequest(body: Record<string, unknown>) {
 describe("Psychology companion API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(hasAiConsent).mockResolvedValue(true);
+  });
+
+  it("does not send a turn to the model before consent", async () => {
+    mockSession(createFrom(baseTables()));
+    vi.mocked(hasAiConsent).mockResolvedValue(false);
+
+    const response = await POST(companionRequest({ assessmentId: ASSESSMENT_ID, transcript: "I chased a loss." }));
+
+    expect(response.status).toBe(403);
+    expect(generatePsychologyReply).not.toHaveBeenCalled();
   });
 
   it("rejects a request without a transcript", async () => {
