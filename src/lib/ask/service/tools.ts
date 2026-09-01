@@ -397,7 +397,13 @@ function buildBrokerCard(
 
   // Founder note wins, then the live FCA text, then our reviewed note.
   const fcaText = dbDistrusted ? null : fcaStatus.note ?? fcaStatus.statusText;
-  const verdict = hint.founderNote || fcaText || entity.notes;
+  const fallbackVerdict =
+    status === "LEGITIMATE"
+      ? "Our reviewed record lists this broker as legitimate. Check the regulator register before depositing."
+      : status === "WARNING"
+        ? "Our reviewed record flags this broker for caution. Check the regulator register before depositing."
+        : "Our reviewed record flags this broker to avoid.";
+  const verdict = hint.founderNote || fcaText || entity.notes || fallbackVerdict;
 
   return {
     type: "broker",
