@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth/session";
-import { isOwnedTradingAccount } from "@/lib/trading-accounts";
+import { isOwnedTradingAccount, resolveDefaultManualAccount } from "@/lib/trading-accounts";
 import { AI_CONSENT_KEY, hasAiConsent } from "@/lib/ai/consent";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import {
@@ -59,8 +59,13 @@ export async function POST(request: Request) {
     const session = await getSessionUser();
     if (!session) return jsonUnauthorized("Sign in to set up challenge mode.");
 
-    if (parsed.data.tradingAccountId
-      && !(await isOwnedTradingAccount(session.supabase, session.user.id, parsed.data.tradingAccountId))) {
+    // "manual" is a request, not an id: resolve it to the trader's hand-tracked account, creating
+    // one the first time. Everything else must be an account they already own.
+    let tradingAccountId = parsed.data.tradingAccountId;
+    if (tradingAccountId === "manual") {
+      tradingAccountId = await resolveDefaultManualAccount(session.supabase, session.user.id);
+    } else if (tradingAccountId
+      && !(await isOwnedTradingAccount(session.supabase, session.user.id, tradingAccountId))) {
       return jsonApiError(400, "challenge_config_account_invalid", "That trading account isn't available.");
     }
 
@@ -103,7 +108,7 @@ export async function POST(request: Request) {
         // Undefined (an older client) leaves the stored value alone rather than clearing it: a
         // trader editing their account size from an old build must not silently un-scope a
         // challenge they had already attached to an account.
-        ...(parsed.data.tradingAccountId === undefined ? {} : { trading_account_id: parsed.data.tradingAccountId }),
+        ...(tradingAccountId === undefined ? {} : { trading_account_id: tradingAccountId }),
         rules,
       }, { onConflict: "user_id" })
       .select("id, firm_name, firm_url, account_size, account_type, rules, trading_account_id, created_at, updated_at")

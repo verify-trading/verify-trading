@@ -95,3 +95,79 @@ describe("DELETE /api/journal/challenge-config", () => {
     await expect(response.json()).resolves.toMatchObject({ error: "challenge_config_delete_failed" });
   });
 });
+
+describe("POST /api/journal/challenge-config account scoping", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Fuller than the file's queryBuilder above: the account resolution chains is/order/limit.
+  function chain(result: { data: unknown; error: unknown }) {
+    const b = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
+    for (const m of ["select", "eq", "is", "order", "limit", "insert", "update"]) b[m] = vi.fn(() => b);
+    b.maybeSingle = vi.fn().mockResolvedValue(result);
+    b.single = vi.fn().mockResolvedValue(result);
+    b.then = (ok, no) => Promise.resolve(result).then(ok, no);
+    return b;
+  }
+
+  function session(overrides: Record<string, unknown> = {}) {
+    const upsert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: {
+      id: "c1", firm_name: "FTMO", firm_url: "https://ftmo.com", account_size: 10000,
+      account_type: "2step", rules: {}, trading_account_id: null,
+      created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z",
+    }, error: null }) }) }));
+    const from = vi.fn((table: string) => {
+      if (table === "challenge_config") return { ...chain({ data: null, error: null }), upsert };
+      return chain({ data: { id: "33333333-3333-4333-8333-333333333333" }, error: null });
+    });
+    vi.mocked(getSessionUser).mockResolvedValue({ user: { id: "user-1" }, supabase: { from }, ...overrides } as never);
+    return { upsert };
+  }
+
+  const body = (tradingAccountId?: unknown) => new Request("http://localhost/api/journal/challenge-config", {
+    method: "POST",
+    body: JSON.stringify({
+      firmUrl: "https://ftmo.com", accountSize: 10000, accountType: "2step",
+      ...(tradingAccountId === undefined ? {} : { tradingAccountId }),
+    }),
+  });
+
+  it('resolves "manual" to a real account, never to null', async () => {
+    // The trap: null would mean "count every entry", so a trader who said they track this by
+    // hand would silently have their connected broker's imports counted against the challenge.
+    vi.mocked(hasAiConsent).mockResolvedValue(true);
+    vi.mocked(extractChallengeRules).mockResolvedValue({ firm_name: "FTMO" } as never);
+    const { upsert } = session();
+
+    await POST(body("manual"));
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ trading_account_id: "33333333-3333-4333-8333-333333333333" }),
+      expect.anything(),
+    );
+  });
+
+  it("leaves the stored account alone when an older build sends nothing", async () => {
+    // Editing account size from an old build must not un-scope a challenge already attached.
+    vi.mocked(hasAiConsent).mockResolvedValue(true);
+    vi.mocked(extractChallengeRules).mockResolvedValue({ firm_name: "FTMO" } as never);
+    const { upsert } = session();
+
+    await POST(body(undefined));
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ trading_account_id: expect.anything() }),
+      expect.anything(),
+    );
+  });
+
+  it("rejects an account the caller does not own", async () => {
+    vi.mocked(hasAiConsent).mockResolvedValue(true);
+    const from = vi.fn(() => chain({ data: null, error: null }));
+    vi.mocked(getSessionUser).mockResolvedValue({ user: { id: "user-1" }, supabase: { from } } as never);
+
+    const response = await POST(body("44444444-4444-4444-8444-444444444444"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "challenge_config_account_invalid" });
+  });
+});

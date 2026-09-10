@@ -9,9 +9,18 @@ export const challengeConfigSchema = z.object({
   firmUrl: z.url(),
   accountSize: z.number().finite().positive().max(100_000_000),
   accountType: z.enum(["2step", "1step", "instant"]),
-  // Which account this challenge measures. Optional so older builds still save, and those keep
-  // legacy whole-journal behaviour rather than being silently narrowed to one account.
-  tradingAccountId: z.uuid().nullable().optional(),
+  /**
+   * Which account this challenge measures. Three distinct values, deliberately not two:
+   *   undefined  older build — leave whatever is stored alone
+   *   null       explicitly unscoped: every entry, which is what legacy challenges count
+   *   "manual"   the trader chose "I'll log it myself" — resolve or create their manual account
+   *   <uuid>     that account
+   *
+   * "manual" exists because null cannot mean both "legacy, all entries" and "a hand-tracked
+   * account". Collapsing them would hand a trader who picked "I'll log it myself" a challenge
+   * that silently counts their connected broker's imports too.
+   */
+  tradingAccountId: z.union([z.uuid(), z.literal("manual")]).nullable().optional(),
 });
 
 const challengeRulesSchema = z.object({
