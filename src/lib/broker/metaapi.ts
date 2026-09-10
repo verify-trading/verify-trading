@@ -368,12 +368,38 @@ export async function deleteAccount(accountId: string): Promise<void> {
 // The path segment is the MT version NUMBER (4/5), not the platform string, and there is no
 // /users/current prefix. Response is broker name -> server names.
 export async function searchServers(platform: BrokerPlatform, query: string): Promise<string[]> {
-  const version = platform === "mt4" ? 4 : 5;
-  const byBroker = await metaApiJson<Record<string, string[]>>(
-    `${PROVISIONING_BASE}/known-mt-servers/${version}/search?query=${encodeURIComponent(query)}`,
-  );
+  const byBroker = await knownServers(platform, query);
   const servers = Object.values(byBroker ?? {}).flat();
   return [...new Set(servers.filter((server) => typeof server === "string" && server))];
+}
+
+/** MetaApi keys its known-server list by BROKER, which is the only reliable owner signal we get. */
+function knownServers(platform: BrokerPlatform, query: string) {
+  const version = platform === "mt4" ? 4 : 5;
+  return metaApiJson<Record<string, string[]>>(
+    `${PROVISIONING_BASE}/known-mt-servers/${version}/search?query=${encodeURIComponent(query)}`,
+  );
+}
+
+/**
+ * Which broker owns this server, e.g. 'FTMO-Server' → 'FTMO Global Markets Ltd'. Stored on the
+ * trading account for display and for the challenge-setup note.
+ *
+ * Best effort by design: null means "we could not confirm", never "this is not a prop firm".
+ * The list genuinely does not have everyone — Topstep is futures and absent entirely — and the
+ * server name cannot be parsed for its owner (ICMarketsSC-MT5 belongs to Raw Trading Ltd). Any
+ * caller that turns a null into a claim about the account is reading more than the data says.
+ */
+export async function findBrokerName(platform: BrokerPlatform, server: string): Promise<string | null> {
+  const wanted = server.trim().toLowerCase();
+  if (!wanted) return null;
+  const byBroker = await knownServers(platform, server.trim());
+  for (const [broker, servers] of Object.entries(byBroker ?? {})) {
+    if (servers.some((candidate) => typeof candidate === "string" && candidate.trim().toLowerCase() === wanted)) {
+      return broker;
+    }
+  }
+  return null;
 }
 
 // MetaStats wants `YYYY-MM-DD HH:mm:ss.SSS` in BROKER time, not ISO — no `T`, no `Z`. Callers must

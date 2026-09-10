@@ -9,6 +9,9 @@ export const challengeConfigSchema = z.object({
   firmUrl: z.url(),
   accountSize: z.number().finite().positive().max(100_000_000),
   accountType: z.enum(["2step", "1step", "instant"]),
+  // Which account this challenge measures. Optional so older builds still save, and those keep
+  // legacy whole-journal behaviour rather than being silently narrowed to one account.
+  tradingAccountId: z.uuid().nullable().optional(),
 });
 
 const challengeRulesSchema = z.object({
@@ -33,6 +36,8 @@ export type ChallengeConfigRow = {
   account_size: number | string;
   account_type: AccountType;
   rules: ChallengeRules;
+  /** Null means legacy: configured before accounts existed, so it counts every entry. */
+  trading_account_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -55,6 +60,7 @@ export function toChallengeConfig(row: ChallengeConfigRow) {
     accountType: row.account_type,
     rules: row.rules,
     startedAt: challengeStartedAt(row.rules),
+    tradingAccountId: row.trading_account_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

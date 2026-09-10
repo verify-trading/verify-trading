@@ -190,6 +190,7 @@ describe("toBrokerAccountPayload", () => {
       metaapi_account_id: "meta-1",
       platform: "mt5",
       region: "london",
+      trading_account_id: "acct-1",
       last_synced_at: null,
       last_sync_error,
       created_at: "2026-07-01T00:00:00.000Z",

@@ -35,6 +35,11 @@ export const isImportedRow = (row: { source: JournalSource; tags: string[] | nul
  * as a LOCAL day key — so a challenge started within hours of midnight can differ from the
  * app by one day. Store the trader's timezone if that ever matters.
  */
+/**
+ * Date boundary only. Prefer `scopeToChallenge` below for anything a trader sees: calling this
+ * directly skips the ACCOUNT filter, which is how challenge figures came to count every entry
+ * regardless of which account traded them.
+ */
 export function scopeToChallengeStart<T extends { entry_date: string }>(
   rows: T[],
   startedAt: string | null,
@@ -42,6 +47,24 @@ export function scopeToChallengeStart<T extends { entry_date: string }>(
   if (!startedAt) return rows;
   const startDay = startedAt.slice(0, 10);
   return rows.filter((row) => row.entry_date >= startDay);
+}
+
+/**
+ * The rows a challenge's figures may count: its account, then its start date.
+ *
+ * `tradingAccountId` null is LEGACY — a challenge configured before accounts existed — and means
+ * every entry, which is what those challenges have always counted. It is deliberately NOT the
+ * same as "a manual account", which has a real id: reading null as "unassigned entries only"
+ * would silently empty a working challenge the day this shipped.
+ */
+export function scopeToChallenge<T extends { entry_date: string; trading_account_id?: string | null }>(
+  rows: T[],
+  challenge: { startedAt: string | null; tradingAccountId: string | null },
+): T[] {
+  const owned = challenge.tradingAccountId
+    ? rows.filter((row) => row.trading_account_id === challenge.tradingAccountId)
+    : rows;
+  return scopeToChallengeStart(owned, challenge.startedAt);
 }
 
 // Stored as a jsonb blob. Every field is optional — a session can be saved with none of them.
@@ -79,7 +102,12 @@ export const journalEntryCreateSchema = z.object({
   lesson: z.string().trim().max(2_000).nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(12).optional().default([]),
   tradeDetails: tradeDetailsSchema,
+  // Optional: builds that predate multi-account posting send nothing, and the route resolves an
+  // account for them. Required-by-omission would break every app version already installed.
+  tradingAccountId: z.uuid().nullable().optional(),
 });
+
+export type JournalEntryCreateInput = z.infer<typeof journalEntryCreateSchema>;
 
 export const overheatLogCreateSchema = z.object({
   triggerType: z.enum(["winning_streak", "losing_streak", "pnl_overheat"]),
@@ -89,6 +117,10 @@ export const overheatLogCreateSchema = z.object({
 
 export const journalEntryDeleteSchema = z.object({
   entryDate: z.iso.date(),
+  // Preferred addressing. A date stopped identifying one record once entries belong to accounts,
+  // so a date-only delete would take a personal day and a challenge day together. Optional
+  // because older builds send only the date, and pre-cutover a date still maps to one row.
+  entryId: z.uuid().nullable().optional(),
 });
 
 export const journalEntriesQuerySchema = z.object({
@@ -110,6 +142,8 @@ export type JournalEntryRow = {
   tags: string[] | null;
   trade_details: TradeDetails | null;
   source: JournalSource;
+  /** Null on rows that predate accounts; every new entry carries one. */
+  trading_account_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -117,6 +151,7 @@ export type JournalEntryRow = {
 export type JournalEntry = {
   id: string;
   entryDate: string;
+  tradingAccountId: string | null;
   mood: "good" | "okay" | "tough";
   pnlAmount: number | null;
   pnlCurrency: string;
@@ -222,6 +257,7 @@ export function toJournalEntry(row: JournalEntryRow): JournalEntry {
     tags: row.tags ?? [],
     tradeDetails: row.trade_details ?? null,
     source: row.source,
+    tradingAccountId: row.trading_account_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

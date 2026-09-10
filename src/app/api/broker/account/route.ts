@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { archiveTradingAccount, mintConnectedTradingAccount } from "@/lib/trading-accounts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -257,6 +259,8 @@ export async function POST(request: Request) {
   let claimedDormantRowId: string | undefined;
   let targetRowId: string;
   let replacedAccountId: string | undefined;
+  /** The replaced account's identity, archived after the swap so its history stays attributed. */
+  let replacedTradingAccountId: string | undefined;
   /** Set only once the row points at the new account — what makes the committed tail safe. */
   let writtenRow: BrokerAccountRow | undefined;
   /** Whether the durable create budget was charged; refunding otherwise hands back real spend. */
@@ -292,6 +296,7 @@ export async function POST(request: Request) {
       // There is only something to release when the old account still exists.
       claimedDormantRowId = dormant.id;
       replacedAccountId = live === "gone" ? undefined : dormant.metaapi_account_id;
+      replacedTradingAccountId = dormant.trading_account_id ?? undefined;
       targetRowId = dormant.id;
     } else {
       // Claim the slot BEFORE spending: the unique index on user_id is the double-provisioning
@@ -344,10 +349,19 @@ export async function POST(request: Request) {
       startedAt,
     );
 
+    // A new identity for both paths. New connection: the row had none. Replacement: this is a
+    // different trading account, and reusing the old identity would re-attribute the previous
+    // account's imported days to it.
+    const tradingAccountId = await mintConnectedTradingAccount(access.admin, access.userId, {
+      platform: parsed.data.platform,
+      server: parsed.data.server,
+    });
+
     const { data, error } = await access.admin
       .from("broker_accounts")
       .update({
         metaapi_account_id: created.id,
+        trading_account_id: tradingAccountId,
         // A replacement is a different account, so everything the row remembered has to go.
         // computeSyncWindow starts from last_synced_at, so leaving it would begin the new
         // account's history at the old account's last sync instead of pulling its 30 days.
@@ -433,6 +447,10 @@ export async function POST(request: Request) {
 
   // Committed tail: nothing from here on may roll the create back.
   const committedRow = writtenRow as BrokerAccountRow;
+
+  if (replacedTradingAccountId) {
+    await archiveTradingAccount(access.admin, replacedTradingAccountId);
+  }
 
   if (replacedAccountId) {
     await releaseReplacedAccount(replacedAccountId, access.userId);

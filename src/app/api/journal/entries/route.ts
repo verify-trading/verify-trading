@@ -6,9 +6,10 @@ import {
   currencyTotals,
   journalEntriesQuerySchema,
   journalEntryCreateSchema,
+  type JournalEntryCreateInput,
   journalEntryDeleteSchema,
   overheatLogCreateSchema,
-  scopeToChallengeStart,
+  scopeToChallenge,
   toJournalEntry,
   type JournalEntryRow,
   type JournalSource,
@@ -17,13 +18,14 @@ import { hasAiConsent, AI_CONSENT_KEY } from "@/lib/ai/consent";
 import { generateChallengeStatus, overheatTrigger } from "@/lib/journal/ai";
 import { challengeStartedAt, type ChallengeConfigRow } from "@/lib/journal/challenge";
 import { getSessionUser } from "@/lib/auth/session";
+import { isOwnedTradingAccount, resolveDefaultManualAccount } from "@/lib/trading-accounts";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 
 // Every column toJournalEntry reads, in one place: a column missing here (as `source` once
 // was) silently starves every reader that needs it, with no type error to show for it.
 const ENTRY_COLUMNS =
-  "id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, trade_details, source, created_at, updated_at";
+  "id, entry_date, mood, pnl_amount, pnl_currency, note, lesson, challenge_status_note, tags, trade_details, source, trading_account_id, created_at, updated_at";
 
 export async function GET(request: Request) {
   const parsedQuery = journalEntriesQuerySchema.safeParse(
@@ -91,6 +93,94 @@ export async function GET(request: Request) {
   }
 }
 
+
+/**
+ * Where a manual save lands. `id` set means "update this exact row"; `id` null means "insert,
+ * owned by tradingAccountId".
+ */
+type SaveTarget = { id: string | null; tradingAccountId: string | null };
+
+/**
+ * A client that names its account gets the fast path: no read, and an exact conflict target, so
+ * two saves racing each other still resolve in the database rather than in a read-then-write gap.
+ *
+ * A client that names none is an older build. Those cannot be refused — an app release reaches
+ * everyone slowly — so the server looks for a row already on that date and keeps whatever account
+ * it has. That is what preserves editing a broker-imported day to claim it: without it the save
+ * would open a SECOND row for the date on the manual account and leave the imported one behind.
+ */
+async function resolveSaveAccount(
+  supabase: SupabaseClient,
+  userId: string,
+  input: { entryDate: string; tradingAccountId?: string | null },
+): Promise<SaveTarget> {
+  if (input.tradingAccountId) return { id: null, tradingAccountId: input.tradingAccountId };
+
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select("id, trading_account_id")
+    .eq("user_id", userId)
+    .eq("entry_date", input.entryDate)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`journal_entries lookup failed: ${error.message}`);
+
+  const existing = data as { id: string; trading_account_id: string | null } | null;
+  if (existing) return { id: existing.id, tradingAccountId: existing.trading_account_id };
+  return { id: null, tradingAccountId: await resolveDefaultManualAccount(supabase, userId) };
+}
+
+function entryPayload(userId: string, input: JournalEntryCreateInput, tradingAccountId: string | null) {
+  return {
+    user_id: userId,
+    trading_account_id: tradingAccountId,
+    entry_date: input.entryDate,
+    mood: input.mood,
+    pnl_amount: input.pnlAmount ?? null,
+    pnl_currency: input.pnlCurrency,
+    note: input.note,
+    lesson: input.lesson?.trim() || null,
+    tags: input.tags,
+    trade_details: input.tradeDetails ?? null,
+    // A CSV import posts through this same route, so the only thing separating it from a day the
+    // trader typed is the bare 'csv' tag the importer sends. Stamp that difference into the
+    // column at write time: every reader then asks `source`, and a tag the client is free to drop
+    // stops being what decides whether a day is the trader's own account of it (see isImportedRow).
+    source: (input.tags.includes("csv") ? "csv" : "mobile") satisfies JournalSource,
+    // Logging a day you previously deleted brings it back — and hands the date back to the
+    // importer, which skips any date whose row is flagged deleted.
+    deleted_at: null,
+  };
+}
+
+/**
+ * Addressed by ID when adopting an existing row, because after the uniqueness change a date no
+ * longer identifies one record and a date-keyed write could land on another account's day.
+ */
+function writeEntry(
+  supabase: SupabaseClient,
+  userId: string,
+  input: JournalEntryCreateInput,
+  target: SaveTarget,
+) {
+  const payload = entryPayload(userId, input, target.tradingAccountId);
+  if (target.id) {
+    return supabase
+      .from("journal_entries")
+      .update(payload)
+      .eq("id", target.id)
+      .eq("user_id", userId)
+      .select(ENTRY_COLUMNS)
+      .single();
+  }
+  return supabase
+    .from("journal_entries")
+    .upsert(payload, { onConflict: "user_id,trading_account_id,entry_date" })
+    .select(ENTRY_COLUMNS)
+    .single();
+}
+
 export async function POST(request: Request) {
   let body: unknown;
 
@@ -112,30 +202,16 @@ export async function POST(request: Request) {
     }
 
     const input = parsedBody.data;
-    const { data, error } = await session.supabase
-      .from("journal_entries")
-      .upsert({
-        user_id: session.user.id,
-        entry_date: input.entryDate,
-        mood: input.mood,
-        pnl_amount: input.pnlAmount ?? null,
-        pnl_currency: input.pnlCurrency,
-        note: input.note,
-        lesson: input.lesson?.trim() || null,
-        tags: input.tags,
-        trade_details: input.tradeDetails ?? null,
-        // A CSV import posts through this same route, so the only thing separating it from a
-        // day the trader typed is the bare 'csv' tag the importer sends. Stamp that difference
-        // into the column at write time: every reader then asks `source`, and a tag the client
-        // is free to drop stops being what decides whether a day is the trader's own account
-        // of it (see isImportedRow).
-        source: (input.tags.includes("csv") ? "csv" : "mobile") satisfies JournalSource,
-        // Logging a day you previously deleted brings it back — and hands the date back to
-        // the importer, which skips any date whose row is flagged deleted.
-        deleted_at: null,
-      }, { onConflict: "user_id,entry_date" })
-      .select(ENTRY_COLUMNS)
-      .single();
+
+    // Which account this day belongs to. A client that names one must own it; a client that
+    // names none is an older build, and `resolveSaveAccount` keeps it working by adopting the
+    // account of an existing row for that date, or falling back to the default manual account.
+    if (input.tradingAccountId && !(await isOwnedTradingAccount(session.supabase, session.user.id, input.tradingAccountId))) {
+      return jsonApiError(400, "journal_entry_account_invalid", "That trading account isn't available.");
+    }
+    const saveTarget = await resolveSaveAccount(session.supabase, session.user.id, input);
+
+    const { data, error } = await writeEntry(session.supabase, session.user.id, input, saveTarget);
 
     if (error || !data) {
       return jsonApiError(500, "journal_entry_save_failed", "Could not save the journal entry right now.");
@@ -177,15 +253,41 @@ export async function PUT(request: Request) {
   return NextResponse.json({ ok: true }, { headers: PRIVATE_CACHE_HEADERS });
 }
 
+
+/** The row an older build would have been showing for a date: newest first, matching the list. */
+async function newestEntryIdOn(
+  supabase: SupabaseClient,
+  userId: string,
+  entryDate: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("entry_date", entryDate)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`journal_entries delete lookup failed: ${error.message}`);
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 export async function DELETE(request: Request) {
   // Accept entryDate from a JSON body or a ?entryDate= query param.
   const url = new URL(request.url);
   const queryDate = url.searchParams.get("entryDate");
-  const bodyDate = queryDate
+  const rawBody = queryDate
     ? null
-    : ((await request.json().catch(() => null)) as { entryDate?: unknown } | null)?.entryDate;
+    : ((await request.json().catch(() => null)) as { entryDate?: unknown; entryId?: unknown } | null);
+  const bodyDate = rawBody?.entryDate;
 
-  const parsedBody = journalEntryDeleteSchema.safeParse({ entryDate: queryDate ?? bodyDate });
+  const queryId = url.searchParams.get("entryId");
+  const bodyId = queryId ? null : (rawBody as { entryId?: unknown } | null)?.entryId;
+  const parsedBody = journalEntryDeleteSchema.safeParse({
+    entryDate: queryDate ?? bodyDate,
+    ...(queryId ?? bodyId ? { entryId: queryId ?? bodyId } : {}),
+  });
   if (!parsedBody.success) {
     return jsonApiError(400, "journal_entry_delete_invalid", "The journal entry delete request is invalid.");
   }
@@ -204,11 +306,21 @@ export async function DELETE(request: Request) {
     //
     // RLS (journal_entries_delete_own) scopes this to the caller; the user_id filter keeps
     // it explicit. Deleting a nonexistent entry is a no-op, so it's still ok:true.
+    // Always resolves to ONE row. A client that knows the id says so; one that sends only a date
+    // is an older build, and a date can now name several rows — deleting them all would take a
+    // personal day and a challenge day together on the strength of a single tap. Older builds
+    // render one row per date (the newest, matching the list order), so that is the row the tap
+    // meant and the only one that may go.
+    const entryId = parsedBody.data.entryId ?? (await newestEntryIdOn(session.supabase, session.user.id, parsedBody.data.entryDate));
+
+    // Nothing stored for that date. Deleting a nonexistent entry has always been a no-op.
+    if (!entryId) return NextResponse.json({ ok: true }, { headers: PRIVATE_CACHE_HEADERS });
+
     const { error } = await session.supabase
       .from("journal_entries")
       .update({ deleted_at: new Date().toISOString() })
       .eq("user_id", session.user.id)
-      .eq("entry_date", parsedBody.data.entryDate);
+      .eq("id", entryId);
 
     if (error) {
       return jsonApiError(500, "journal_entry_delete_failed", "Could not delete the journal entry right now.");
@@ -240,7 +352,7 @@ async function enrichSavedEntry(supabase: SupabaseClient, userId: string, entry:
       .limit(30),
     supabase
       .from("challenge_config")
-      .select("id, firm_name, firm_url, account_size, account_type, rules, created_at, updated_at")
+      .select("id, firm_name, firm_url, account_size, account_type, rules, trading_account_id, created_at, updated_at")
       .eq("user_id", userId)
       .maybeSingle(),
   ]);
@@ -261,7 +373,12 @@ async function enrichSavedEntry(supabase: SupabaseClient, userId: string, entry:
     // The prompt calls these "this evaluation", so they must mean it: only the days logged
     // since the challenge started, and only the ones that actually carry a P&L — a journaled
     // day with no trade on it is not a trading day the firm would count.
-    const inChallenge = scopeToChallengeStart(entries, challengeStartedAt(config.rules))
+    // Same helper as the dashboard and the coach: the note must not describe a different set of
+    // days than the figures beside it.
+    const inChallenge = scopeToChallenge(entries, {
+      startedAt: challengeStartedAt(config.rules),
+      tradingAccountId: config.trading_account_id ?? null,
+    })
       .filter((row) => row.pnl_amount !== null);
     const note = await generateChallengeStatus({
       config,

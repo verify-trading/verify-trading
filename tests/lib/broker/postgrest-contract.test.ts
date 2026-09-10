@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/broker/metaapi", () => ({
+  // Read by the identity backfill, which runs off the snapshot sync already fetched.
+  platformOfVersion: (version?: number) => (version === 4 ? "mt4" : version === 5 ? "mt5" : undefined),
+  findBrokerName: vi.fn(async () => null),
   getAccount: vi.fn(),
   deployAccount: vi.fn(),
   undeployAccount: vi.fn(),
@@ -48,6 +51,7 @@ const ROW = {
   region: "london",
   last_synced_at: null,
   last_sync_error: null,
+  trading_account_id: "acct-1",
   created_at: "2026-07-01T00:00:00.000Z",
 };
 
@@ -118,7 +122,11 @@ describe("broker engine → PostgREST contract", () => {
     // which days it actually created.
     expect(insert[0].prefer).toContain("resolution=ignore-duplicates");
     expect(insert[0].prefer).toContain("return=representation");
-    expect(insert[0].url).toContain("on_conflict=user_id,entry_date");
+    // Account-aware, and it must stay inferrable: Postgres can only resolve this to an index
+    // that is NOT partial, which is why journal_entries_user_account_date_key has no WHERE.
+    expect(insert[0].url).toContain("on_conflict=user_id,trading_account_id,entry_date");
+    // Every imported day carries the account it came from, or challenge figures cannot be scoped.
+    expect(insert[0].body).toContain('"trading_account_id":"acct-1"');
     // The broker's base currency, not the journal's GBP default.
     expect(insert[0].body).toContain('"pnl_currency":"USD"');
 
@@ -129,10 +137,37 @@ describe("broker engine → PostgREST contract", () => {
     // `source=eq.broker` is what makes a hand-typed day untouchable; `deleted_at=is.null` is
     // what keeps a deleted day deleted. Both live in the WHERE, never in TypeScript.
     expect(rewrite[0].url).toContain("source=eq.broker");
+    // Scopes the rewrite to THIS account: a hand-logged day on another account is a different
+    // row on the same date and must never be a candidate.
+    expect(rewrite[0].url).toContain("trading_account_id=eq.acct-1");
     expect(rewrite[0].url).toContain("deleted_at=is.null");
     expect(rewrite[0].prefer).toContain("return=representation");
 
     expect(result).toEqual({ status: "imported", importedDays: 2, skippedDays: 0 });
+  });
+
+  it("refuses to import a connection with no account identity, rather than duplicating days", async () => {
+    // The conflict target is (user_id, trading_account_id, entry_date) and Postgres treats NULLs
+    // as distinct, so a null account matches nothing and EVERY sync would insert the day again.
+    // Silently multiplying a trader's history is far worse than a loud failure, so this throws.
+    const { client, captured } = recordingClient({ journal_entries: [], broker_accounts: [] });
+    vi.mocked(getAccount).mockResolvedValue({
+      _id: "meta-1",
+      state: "DEPLOYED",
+      connectionStatus: "CONNECTED",
+      region: "london",
+      baseCurrency: "USD",
+    });
+    vi.mocked(fetchHistoricalTrades).mockResolvedValue([
+      { _id: "t1", accountId: "meta-1", type: "DEAL_TYPE_BUY", profit: 10, closeTime: "2026-07-01 10:00:00.000" },
+    ]);
+
+    await expect(advanceBrokerSync(client, { ...ROW, trading_account_id: null }))
+      .rejects.toThrow(/trading_account_id/);
+
+    // The refusal has to happen BEFORE any write, not after a partial one.
+    expect(find(captured, "POST", "journal_entries")).toHaveLength(0);
+    expect(find(captured, "PATCH", "journal_entries")).toHaveLength(0);
   });
 
   it("counts a day it does not own as skipped rather than imported", async () => {
@@ -191,5 +226,53 @@ describe("broker engine → PostgREST contract", () => {
 
     expect(deployAccount).not.toHaveBeenCalled();
     expect(result).toEqual({ status: "linking" });
+  });
+
+
+  it("fills in a pre-migration account's identity from the live snapshot, once", async () => {
+    // The 20260910 backfill could not know the server: it was never persisted before that
+    // migration. MetaApi does know, and sync already holds the snapshot, so the gap closes on
+    // the next pass rather than needing a script.
+    const { client, captured } = recordingClient({
+      journal_entries: [],
+      broker_accounts: [],
+      // server null => identity still missing, so the backfill should write.
+      trading_accounts: [{ id: "acct-1", name: "Connected account", server: null, broker_name: null }],
+    });
+    vi.mocked(getAccount).mockResolvedValue({
+      _id: "meta-1",
+      state: "DEPLOYED",
+      connectionStatus: "CONNECTED",
+      region: "london",
+      baseCurrency: "USD",
+      version: 5,
+      server: "FTMO-Server",
+    });
+    vi.mocked(fetchHistoricalTrades).mockResolvedValue([]);
+
+    await advanceBrokerSync(client, ROW);
+
+    const patched = find(captured, "PATCH", "trading_accounts");
+    expect(patched).toHaveLength(1);
+    expect(patched[0].body).toContain('"server":"FTMO-Server"');
+    // `is.null` in the WHERE: two passes racing must not both rewrite it.
+    expect(patched[0].url).toContain("server=is.null");
+  });
+
+  it("does not overwrite an identity that is already filled in", async () => {
+    const { client, captured } = recordingClient({
+      journal_entries: [],
+      broker_accounts: [],
+      trading_accounts: [{ id: "acct-1", name: "FTMO Global Markets Ltd", server: "FTMO-Server", broker_name: "FTMO Global Markets Ltd" }],
+    });
+    vi.mocked(getAccount).mockResolvedValue({
+      _id: "meta-1", state: "DEPLOYED", connectionStatus: "CONNECTED",
+      region: "london", baseCurrency: "USD", version: 5, server: "FTMO-Server",
+    });
+    vi.mocked(fetchHistoricalTrades).mockResolvedValue([]);
+
+    await advanceBrokerSync(client, ROW);
+
+    expect(find(captured, "PATCH", "trading_accounts")).toHaveLength(0);
   });
 });

@@ -109,7 +109,7 @@ describe("buildPsychologyCoachInstructions", () => {
     expect(text).toContain('call the self-assessment "your last check-in"');
     // Background supports the live conversation; it never outranks it. The old prompt said
     // "You know their full situation below. USE IT", which is what put the data first.
-    expect(text).toContain("Answer what they just said, first and directly.");
+    expect(text).toContain("Answer what they just said, first and directly");
     expect(text).not.toContain("USE IT");
   });
 
@@ -153,9 +153,23 @@ describe("buildPsychologyCoachInstructions", () => {
     // "Always end with one natural follow-up question" made the coach interrogate a trader who
     // had just said thanks and goodbye — the one moment a person would not ask anything.
     expect(text).not.toContain("Always end with one");
-    expect(text).toContain("Usually end with one natural follow-up question, and never more than one");
+    expect(text).not.toContain("Usually end with one");
+    expect(text).toContain("Never more than one question");
     expect(text).toContain("ask nothing and close warmly in one short line");
     expect(text).toContain("Follow the thread:");
+  });
+
+  it("tells the coach to lead, since answering-then-asking handed the trader the wheel", () => {
+    // Reported from the app: "it picks up the conversation and flows, but it doesn't have
+    // authority." The prompt had it answer, follow the thread and end on a question every turn,
+    // so it never opened with the data it was holding.
+    const text = prompt();
+    expect(text).toContain("YOU LEAD THIS CALL");
+    expect(text).toContain("Name what you see in their numbers before they think to ask");
+    expect(text).toContain("End on a question only when their answer changes what you say next");
+    // Leading is not steamrolling: the call is still a wellbeing call.
+    expect(text).toContain("Authority is not pressure");
+    expect(text).toContain("if they are struggling, slow down and stay with them");
   });
 });
 

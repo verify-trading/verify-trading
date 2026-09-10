@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 vi.mock("@/lib/broker/metaapi", () => ({
+  // Read by the identity backfill, which runs off the snapshot sync already fetched.
+  platformOfVersion: (version?: number) => (version === 4 ? "mt4" : version === 5 ? "mt5" : undefined),
+  findBrokerName: vi.fn(async () => null),
   getAccount: vi.fn(),
   deployAccount: vi.fn(),
   undeployAccount: vi.fn(),

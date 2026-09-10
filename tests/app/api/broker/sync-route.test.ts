@@ -9,6 +9,9 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 vi.mock("@/lib/broker/metaapi", () => ({
+  // Read by the identity backfill, which runs off the snapshot sync already fetched.
+  platformOfVersion: (version?: number) => (version === 4 ? "mt4" : version === 5 ? "mt5" : undefined),
+  findBrokerName: vi.fn(async () => null),
   createAccount: vi.fn(),
   updateAccountPassword: vi.fn(),
   deleteAccount: vi.fn(),
@@ -39,6 +42,7 @@ const ACCOUNT_ROW = {
   id: "row-1",
   user_id: "user-1",
   metaapi_account_id: "meta-1",
+  trading_account_id: "acct-1",
   platform: "mt5",
   region: "london",
   last_synced_at: null,
@@ -209,10 +213,10 @@ describe("POST /api/broker/sync", () => {
     // land in a gap and be overwritten. Note the rows carry no trade_details blob.
     expect(journalInsert.upsert).toHaveBeenCalledWith(
       [
-        { user_id: "user-1", entry_date: "2026-07-01", mood: "okay", pnl_amount: 120, pnl_currency: "USD", source: "broker" },
-        { user_id: "user-1", entry_date: "2026-07-02", mood: "okay", pnl_amount: -20.5, pnl_currency: "USD", source: "broker" },
+        { user_id: "user-1", trading_account_id: "acct-1", entry_date: "2026-07-01", mood: "okay", pnl_amount: 120, pnl_currency: "USD", source: "broker" },
+        { user_id: "user-1", trading_account_id: "acct-1", entry_date: "2026-07-02", mood: "okay", pnl_amount: -20.5, pnl_currency: "USD", source: "broker" },
       ],
-      { onConflict: "user_id,entry_date", ignoreDuplicates: true },
+      { onConflict: "user_id,trading_account_id,entry_date", ignoreDuplicates: true },
     );
     // The day that already existed is only rewritten where the row is ours.
     expect(journalRewrite.update).toHaveBeenCalledWith({ pnl_amount: 120, pnl_currency: "USD" });

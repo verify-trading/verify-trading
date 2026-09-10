@@ -9,6 +9,9 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 vi.mock("@/lib/broker/metaapi", () => ({
+  // Read by the identity backfill, which runs off the snapshot sync already fetched.
+  platformOfVersion: (version?: number) => (version === 4 ? "mt4" : version === 5 ? "mt5" : undefined),
+  findBrokerName: vi.fn(async () => null),
   searchServers: vi.fn(),
 }));
 

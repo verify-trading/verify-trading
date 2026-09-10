@@ -47,7 +47,14 @@ export function mockSession(tier: string | null = "pro") {
 }
 
 export function mockAdmin(tables: Record<string, Builder[]>) {
-  const from = createFrom(tables);
+  const from = createFrom({
+    // Every successful connect mints a trading-account identity for the new connection, and a
+    // replacement archives the one it superseded. Defaulted here so the tests that exercise the
+    // create path don't each have to stub a table they make no assertions about; a test that DOES
+    // care still overrides it by passing its own builders.
+    trading_accounts: [createQueryBuilder({ data: { id: "acct-1" }, error: null })],
+    ...tables,
+  });
   vi.mocked(getSupabaseAdminClient).mockReturnValue({ from } as never);
   return from;
 }

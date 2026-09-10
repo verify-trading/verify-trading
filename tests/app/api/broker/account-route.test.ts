@@ -232,7 +232,12 @@ describe("Broker account API", () => {
     expect(claimBuilder.insert).toHaveBeenCalledWith(
       expect.objectContaining({ user_id: "user-1", metaapi_account_id: "pending:user-1", platform: "mt5", region: null }),
     );
-    expect(patchBuilder.update).toHaveBeenCalledWith({ metaapi_account_id: "meta-1" });
+    // A first connection stamps the identity its imported days will carry; the reset fields are
+    // absent because there is no previous account's state to clear.
+    expect(patchBuilder.update).toHaveBeenCalledWith({
+      metaapi_account_id: "meta-1",
+      trading_account_id: "acct-1",
+    });
   });
 
   it("turns a rejected login into a 400 the form can show, and releases the claim", async () => {

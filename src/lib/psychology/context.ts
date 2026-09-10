@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { challengeStartedAt, type ChallengeRules } from "@/lib/journal/challenge";
-import { currencyTotals, isImportedRow, scopeToChallengeStart, type JournalSource } from "@/lib/journal/contracts";
+import { currencyTotals, isImportedRow, scopeToChallenge, type JournalSource } from "@/lib/journal/contracts";
 import type { PsychologyAssessmentRow } from "@/lib/psychology/assessment";
 import {
   ruleToAmount,
@@ -25,6 +25,7 @@ type JournalRow = {
   note: string | null;
   lesson: string | null;
   source: JournalSource;
+  trading_account_id: string | null;
   // Read only by isImportedRow, for CSV days predating the source:'csv' stamp.
   // Droppable once migration 32 has backfilled those rows.
   tags: string[] | null;
@@ -35,13 +36,19 @@ type ChallengeConfigRow = {
   account_size: number | string;
   account_type: string;
   rules: ChallengeRules;
+  trading_account_id: string | null;
 };
 
 // Scoped to sessions logged since the challenge STARTED. Reading all-time history here had
 // the coach say "you're 140% to target" over a screen showing a fresh challenge at zero.
 function buildChallengeContext(config: ChallengeConfigRow | null, allRows: JournalRow[]): ChallengeContext | null {
   if (!config) return null;
-  const rows = scopeToChallengeStart(allRows, challengeStartedAt(config.rules));
+  // Account first, then the start date. The coach must speak the same figures the dashboard
+  // shows, so it reads through the same helper rather than re-deriving the boundary.
+  const rows = scopeToChallenge(allRows, {
+    startedAt: challengeStartedAt(config.rules),
+    tradingAccountId: config.trading_account_id ?? null,
+  });
   const withPnl = rows.filter((row) => row.pnl_amount !== null);
   // One currency: this is spoken aloud against the firm's target, not a blend of accounts.
   const { totalPnl: cumulativePnl } = currencyTotals(withPnl);
@@ -164,14 +171,14 @@ export async function loadCoachContext(
       .single(),
     supabase
       .from("journal_entries")
-      .select("entry_date, mood, pnl_amount, pnl_currency, note, lesson, source, tags")
+      .select("entry_date, mood, pnl_amount, pnl_currency, note, lesson, source, trading_account_id, tags")
       .eq("user_id", userId)
       .is("deleted_at", null)
       .order("entry_date", { ascending: false })
       .limit(60),
     supabase
       .from("challenge_config")
-      .select("firm_name, account_size, account_type, rules")
+      .select("firm_name, account_size, account_type, rules, trading_account_id")
       .eq("user_id", userId)
       .maybeSingle(),
     loadLastCall(supabase, userId, currentSessionId),

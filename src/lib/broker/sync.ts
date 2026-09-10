@@ -7,10 +7,12 @@ import {
   fetchHistoricalTrades,
   getAccount,
   type MetaStatsTrade,
+  platformOfVersion,
   undeployAccount,
 } from "@/lib/broker/metaapi";
 import { type JournalSource } from "@/lib/journal/contracts";
 import { logger } from "@/lib/observability/logger";
+import { backfillConnectedIdentity } from "@/lib/trading-accounts";
 
 // Connection state is NEVER stored; it is derived from MetaApi on every read. One cycle, twice a
 // day: `wake` deploys every parked account, `pull` imports 35 minutes later and parks EVERYTHING.
@@ -27,11 +29,13 @@ export type BrokerAccountRow = {
   region: string | null;
   last_synced_at: string | null;
   last_sync_error: string | null;
+  /** The durable account identity every imported day is stamped with. See importBrokerDays. */
+  trading_account_id: string | null;
   created_at: string;
 };
 
 export const BROKER_ACCOUNT_COLUMNS =
-  "id, user_id, metaapi_account_id, platform, region, last_synced_at, last_sync_error, created_at";
+  "id, user_id, metaapi_account_id, platform, region, last_synced_at, last_sync_error, trading_account_id, created_at";
 
 /** Exactly the shape the mobile client is coded against. */
 export type BrokerAccountPayload = {
@@ -341,6 +345,18 @@ export async function advanceBrokerSync(
   const { account, snapshot } = await readBrokerSnapshot(row);
   const derived = deriveBrokerState(snapshot);
 
+  // Opportunistic, non-blocking: accounts connected before the server string was persisted have
+  // no display identity, and MetaApi is the only place it exists. Costs nothing — this snapshot
+  // was already fetched — and no-ops once filled.
+  if (row.trading_account_id) {
+    await backfillConnectedIdentity(supabase, row.trading_account_id, {
+      server: account.server,
+      platform: platformOfVersion(account.version),
+    }).catch((error) => logger.warn("Trading account identity backfill failed.", {
+      error: error instanceof Error ? error.message : "unknown",
+    }));
+  }
+
   if (derived.state === "awaiting_config") {
     throw new BrokerNotConfiguredError();
   }
@@ -515,6 +531,16 @@ async function importBrokerDays(
 ): Promise<{ importedDays: number; skippedDays: number }> {
   if (days.length === 0) return { importedDays: 0, skippedDays: 0 };
 
+  // Refused rather than defaulted. The conflict target below is (user_id, trading_account_id,
+  // entry_date) and Postgres treats NULLs as distinct, so importing with no account would match
+  // nothing and insert a duplicate row on EVERY sync. A live connection always has an identity —
+  // the migration backfills existing ones and the connect route mints one — so a null here is a
+  // broken row, and failing loudly beats quietly multiplying a trader's history.
+  const tradingAccountId = row.trading_account_id;
+  if (!tradingAccountId) {
+    throw new Error(`broker_accounts ${row.id} has no trading_account_id; refusing to import unattributed days`);
+  }
+
   // ignoreDuplicates leaves every existing row as it is and returns only the ones inserted. A day
   // the trader DELETED is soft-deleted, so its row still exists and this skips it — that is what
   // keeps a deleted day deleted.
@@ -523,6 +549,7 @@ async function importBrokerDays(
     .upsert(
       days.map((day) => ({
         user_id: row.user_id,
+        trading_account_id: tradingAccountId,
         entry_date: day.entryDate,
         // mood is NOT NULL; it is the trader's own read on the day, never guessed from the P&L.
         mood: "okay",
@@ -531,7 +558,7 @@ async function importBrokerDays(
         pnl_currency: currency,
         source: "broker" satisfies JournalSource,
       })),
-      { onConflict: "user_id,entry_date", ignoreDuplicates: true },
+      { onConflict: "user_id,trading_account_id,entry_date", ignoreDuplicates: true },
     )
     .select("entry_date");
   if (error) {
@@ -541,15 +568,18 @@ async function importBrokerDays(
   const insertedDates = new Set((inserted ?? []).map((entry) => (entry as { entry_date: string }).entry_date));
   const existing = days.filter((day) => !insertedDates.has(day.entryDate));
 
-  // Days that already had a row. `source='broker'` in the WHERE is the whole guard: a day the
-  // trader typed matches nothing, and a previously imported day is rewritten so a boundary day
-  // picks up trades that closed after the last run.
+  // Days that already had a row ON THIS ACCOUNT. `source='broker'` in the WHERE is still the
+  // guard that stops a rewrite landing on a day the trader typed — now scoped to the account, so
+  // a hand-logged day on a DIFFERENT account is a different row entirely and never a candidate.
+  // A previously imported day is rewritten so a boundary day picks up trades that closed after
+  // the last run.
   const rewritten = await Promise.all(
     existing.map(async (day) => {
       const { data: updated, error: updateError } = await supabase
         .from("journal_entries")
         .update({ pnl_amount: day.pnl, pnl_currency: currency })
         .eq("user_id", row.user_id)
+        .eq("trading_account_id", tradingAccountId)
         .eq("entry_date", day.entryDate)
         .eq("source", "broker" satisfies JournalSource)
         // Stops the rewrite branch refreshing a day the trader deleted.
