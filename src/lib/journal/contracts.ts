@@ -180,6 +180,8 @@ export type JournalAggregates = {
   // Every logged date across the WHOLE history: a day outside the loaded window would otherwise
   // read as unlogged and offer a blank form whose save upserts over the stored row.
   loggedDates: string[];
+  /** `"<accountId>|<date>"`, empty prefix for an unassigned legacy row. See computeJournalAggregates. */
+  loggedAccountDates: string[];
 };
 
 /**
@@ -241,6 +243,11 @@ export function computeJournalAggregates(rows: JournalEntryRow[]): JournalAggreg
     streak,
     dominantCurrency,
     loggedDates: rows.map((row) => row.entry_date),
+    // The same days, but each tagged with the account that owns it. `loggedDates` alone answers
+    // "has ANY account logged this day?", which stopped being the useful question once a personal
+    // day and a challenge day could share a date — it made the CSV importer skip days the
+    // destination account had never seen. Empty prefix means an unassigned legacy row.
+    loggedAccountDates: rows.map((row) => `${row.trading_account_id ?? ""}|${row.entry_date}`),
   };
 }
 

@@ -98,9 +98,29 @@ export async function resolveDefaultManualAccount(
     .insert({ user_id: userId, name: DEFAULT_MANUAL_ACCOUNT_NAME, kind: "manual" })
     .select("id")
     .single();
+
+  // Lost the race. The read above found nothing, another request created it in between, and the
+  // unique index refused the second copy — which is exactly its job. Re-read and use theirs.
+  // The CSV importer posts five days at once, so a trader's first import runs this concurrently
+  // by design; without the index those five requests each made their own "My journal".
+  if (error?.code === UNIQUE_VIOLATION) {
+    const { data: raced } = await supabase
+      .from("trading_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("kind", "manual")
+      .eq("name", DEFAULT_MANUAL_ACCOUNT_NAME)
+      .is("archived_at", null)
+      .maybeSingle();
+    if (raced) return (raced as { id: string }).id;
+  }
+
   if (error || !data) throw new Error(`trading_accounts insert failed: ${error?.message ?? "no row"}`);
   return (data as { id: string }).id;
 }
+
+/** Postgres unique_violation. Surfaced by PostgREST as the error `code`. */
+const UNIQUE_VIOLATION = "23505";
 
 /**
  * Confirms a client-supplied account is the caller's own and still live.

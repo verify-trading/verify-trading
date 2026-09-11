@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       query,
       session.supabase
         .from("journal_entries")
-        .select("entry_date, pnl_amount, pnl_currency, lesson")
+        .select("entry_date, pnl_amount, pnl_currency, lesson, trading_account_id")
         .eq("user_id", session.user.id)
         .is("deleted_at", null)
         .order("entry_date", { ascending: false })
