@@ -18,7 +18,7 @@ export default function PrivacyPage() {
     <LegalDocument
       eyebrow="Legal"
       title="Privacy Policy"
-      summary="This policy explains what verify.trading collects, how it is collected, what it is used for, and every third party it is shared with — including the AI services that process Ask, Journal, Challenge and Companion data. Last updated 31 August 2026."
+      summary="This policy explains what verify.trading collects, how it is collected, what it is used for, and every third party it is shared with — including the AI services that process Ask, Journal, Challenge and Companion data. Last updated 15 September 2026."
       sections={[
         {
           title: "Who this covers",
@@ -43,7 +43,7 @@ export default function PrivacyPage() {
           title: "AI features: what is sent, and to whom",
           paragraphs: [
             "The iOS app uses one versioned permission for its third-party AI features. After onboarding, it shows a standalone disclosure that identifies the data and recipients below and asks whether you allow AI data sharing. You may choose Not now and enter the app with AI sharing off. If you later try to use Ask, AI-assisted Challenge setup or the Mind Companion, the disclosure is shown again at that moment. Nothing described below is shared with an AI provider unless you explicitly choose Allow AI data sharing.",
-            "Ask: your current question, recent messages in that Ask conversation and any chart image you attach go to our servers and then to Pikachu/Hueling AI, the third-party gateway at pikachu.hueling.cc. Pikachu/Hueling AI provides the OpenAI GPT/Codex-family model used to answer. Search terms derived from your question and public pages fetched to answer it are handled through the same gateway.",
+            "Ask: your current question, recent messages in that Ask conversation and any chart image you attach go to our servers and then to Pikachu/Hueling AI, the third-party gateway at pikachu.hueling.cc. Pikachu/Hueling AI provides the Anthropic Claude model used to answer. Search terms derived from your question and public pages fetched to answer it are handled through the same gateway.",
             "Journal and Challenge: journal dates, moods, P&L, currency, notes, lessons and tags go through Pikachu/Hueling AI to an OpenAI model to produce weekly insights. When challenge coaching is enabled, your selected prop-firm name or URL, account type, account size, extracted rules and relevant P&L totals go through the same route to extract public firm rules or write a coaching line. Database identifiers, account email and storage timestamps are not included in the weekly-insight AI prompt. Saving and reading ordinary journal entries and viewing locally calculated statistics do not require AI sharing.",
             "Mind Companion: when you start a call, live microphone audio is streamed from your device directly to ElevenLabs for speech recognition and synthesised voice. ElevenLabs produces the running transcript and returns the final transcript to us so you can reread it. To generate Companion replies, the running transcript, your profile name, assessment answers and scores, recent journal entries, challenge context and relevant prior-call context go through Pikachu/Hueling AI to an Anthropic Claude model.",
             "We do not sell any of this data, and we do not use it to train our own models. We instruct our AI processors not to train on it and rely on their contractual commitments to that effect; we do not control their internal systems and cannot audit them directly.",
@@ -64,9 +64,9 @@ export default function PrivacyPage() {
           paragraphs: [
             "Supabase — authentication and database hosting. Holds your account record, journal, assessments, transcripts, and chat messages at rest.",
             "Vercel — application hosting and content delivery. Processes requests and technical logs.",
-            "Pikachu/Hueling AI (pikachu.hueling.cc) — the third-party AI gateway that provides access to OpenAI GPT/Codex-family models for Ask, Journal and Challenge, and Anthropic Claude-family models for the Mind Companion. It receives the feature-specific data listed in the AI section above and handles the web searches used by Ask.",
-            "OpenAI — the underlying model provider for Ask, Journal and Challenge requests routed by Pikachu/Hueling AI. Receives the applicable Ask, journal or challenge prompt data listed above.",
-            "Anthropic — the underlying Claude model provider for Mind Companion requests routed by Pikachu/Hueling AI. Receives the applicable transcript and coaching context listed above.",
+            "Pikachu/Hueling AI (pikachu.hueling.cc) — the third-party AI gateway that provides access to Anthropic Claude-family models for Ask and the Mind Companion, and OpenAI GPT-family models for Journal and Challenge. It receives the feature-specific data listed in the AI section above and handles the web searches used by Ask.",
+            "OpenAI — the underlying model provider for Journal and Challenge requests routed by Pikachu/Hueling AI. Receives the applicable journal or challenge prompt data listed above.",
+            "Anthropic — the underlying Claude model provider for Ask and Mind Companion requests routed by Pikachu/Hueling AI. Receives the applicable Ask question, attached chart, transcript and coaching context listed above.",
             "ElevenLabs — speech recognition and synthesised voice for Companion calls. Receives your live microphone audio and running conversation during a call and produces the transcript.",
             "Stripe — subscription billing and card processing. Receives your payment details directly and your email address.",
             "Resend — transactional email delivery. Receives your email address and the message content.",
