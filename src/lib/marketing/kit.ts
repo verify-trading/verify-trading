@@ -1,3 +1,5 @@
+import { readOptionalEnv } from "@/lib/env";
+
 const KIT_API_BASE_URL = "https://api.kit.com/v4";
 
 type KitSubscriberInput = {
@@ -12,11 +14,6 @@ type KitSubscriberResponse = {
     email_address?: string;
   };
 };
-
-function readOptionalEnv(name: string): string | null {
-  const value = process.env[name]?.trim();
-  return value ? value : null;
-}
 
 function readPositiveIntegerEnv(name: string): number | null {
   const value = readOptionalEnv(name);

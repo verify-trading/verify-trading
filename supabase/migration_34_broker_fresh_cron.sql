@@ -7,8 +7,10 @@
 -- the trader stayed on the broker screen until the account connected. One who left waited for
 -- the 06:00 / 18:00 UTC wake pass — up to twelve hours of "I connected and nothing happened".
 --
--- The `where exists` is what keeps this cheap: the endpoint is only called while some live link
--- has never synced, so for a database where everyone is synced the job is a local no-op.
+-- The `where exists` is what keeps this cheap: the endpoint is only called while some Pro trader's
+-- live link has never synced, so for a database where everyone is synced the job is a local no-op.
+-- Pro only, because the pass itself skips lapsed owners without changing their row — without the
+-- join, one lapsed never-synced link would keep the job firing every five minutes for good.
 
 do $$
 begin
@@ -21,8 +23,10 @@ select cron.schedule(
   'broker-fresh',
   '*/5 * * * *',
   $$select public.call_cron_endpoint('/api/broker/cron?pass=fresh')
-     where exists (select 1 from public.broker_accounts
-                   where disconnected_at is null and last_synced_at is null and last_sync_error is null)$$
+     where exists (select 1
+                   from public.broker_accounts b
+                   join public.profiles p on p.id = b.user_id and p.tier = 'pro'
+                   where b.disconnected_at is null and b.last_synced_at is null and b.last_sync_error is null)$$
 );
 
 -- Check with:

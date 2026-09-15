@@ -30,22 +30,18 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 
-function readSearchParam(params: ReturnType<typeof useSearchParams>, key: string): string | null {
-  return params.get(key);
-}
-
 function LoginPageContent() {
   const { supabase } = useSupabaseAuth();
   const searchParams = useSearchParams();
-  const nextParam = readSearchParam(searchParams, "next");
+  const nextParam = searchParams.get("next");
   const next = useMemo(() => getSafeRedirectPath(nextParam, "/ask"), [nextParam]);
   const forgotPasswordHref = useMemo(
     () => appendSafeNextParam("/forgot-password", nextParam),
     [nextParam],
   );
   const signupHref = useMemo(() => appendSafeNextParam("/signup", nextParam), [nextParam]);
-  const paramError = readSearchParam(searchParams, "error");
-  const resetParam = readSearchParam(searchParams, "reset");
+  const paramError = searchParams.get("error");
+  const resetParam = searchParams.get("reset");
 
   const [googleBusy, setGoogleBusy] = useState(false);
   const captcha = useCaptcha();

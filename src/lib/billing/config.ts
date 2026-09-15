@@ -1,4 +1,5 @@
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+import { readOptionalEnv } from "@/lib/env";
 
 export type BillingPlanKey = "weekly" | "monthly" | "annual";
 
@@ -56,11 +57,6 @@ const PLAN_PRICE_GBP: Record<BillingPlanKey, number> = {
   monthly: MONTHLY_PRICE_GBP,
   annual: ANNUAL_PRICE_GBP,
 };
-
-function readOptionalEnv(name: string): string | null {
-  const value = process.env[name]?.trim();
-  return value ? value : null;
-}
 
 function readRequiredEnv(name: string): string {
   const value = readOptionalEnv(name);

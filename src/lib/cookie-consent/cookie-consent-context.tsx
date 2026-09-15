@@ -2,7 +2,6 @@
 
 import {
   createContext,
-  use,
   useCallback,
   useEffect,
   useMemo,
@@ -36,7 +35,7 @@ const CookieConsentContext = createContext<CookieConsentContextValue | null>(nul
  * without stored consent are treated as resolved with no choice (analytics flags stay off).
  * Flip to `true` to show the banner again for visitors who have not consented yet.
  */
-export const COOKIE_CONSENT_BANNER_ENABLED = false;
+const COOKIE_CONSENT_BANNER_ENABLED = false;
 
 function initialCookieConsentState(): { status: Status; choice: CookieConsentChoice | null } {
   const stored = readConsentFromStorage();
@@ -96,12 +95,4 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
       ) : null}
     </CookieConsentContext.Provider>
   );
-}
-
-function useCookieConsent(): CookieConsentContextValue {
-  const ctx = use(CookieConsentContext);
-  if (!ctx) {
-    throw new Error("useCookieConsent must be used within CookieConsentProvider");
-  }
-  return ctx;
 }

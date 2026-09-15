@@ -52,13 +52,11 @@ export function createMemoryPersistence(): AskPersistence {
       const sessions = sortedSessions.slice(startIndex, startIndex + pageSize);
       const nextItem = sortedSessions[startIndex + pageSize];
 
+      const lastSession = sessions.at(-1);
       return {
         sessions,
         nextCursor: nextItem
-          ? encodeSessionCursor({
-              id: sessions.at(-1)?.id ?? "",
-              updatedAt: sessions.at(-1)?.updatedAt ?? "",
-            })
+          ? encodeSessionCursor({ id: lastSession?.id ?? "", updatedAt: lastSession?.updatedAt ?? "" })
           : null,
       };
     },

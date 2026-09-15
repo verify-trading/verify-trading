@@ -1,7 +1,4 @@
-function readOptionalEnv(name: string): string | null {
-  const value = process.env[name]?.trim();
-  return value ? value : null;
-}
+import { readOptionalEnv } from "@/lib/env";
 
 export function getResendApiKey(): string | null {
   return readOptionalEnv("RESEND_API_KEY");

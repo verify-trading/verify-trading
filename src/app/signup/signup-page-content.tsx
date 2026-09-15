@@ -34,14 +34,10 @@ import { toast } from "sonner";
 const EMPTY_SIGNUP: SignupFormValues = { username: "", email: "", password: "" };
 const SIGNUP_COMPLETED_KEY = "vt_sign_up_completed";
 
-function readSearchParam(params: ReturnType<typeof useSearchParams>, key: string): string | null {
-  return params.get(key);
-}
-
 function SignupPageContent() {
   const { supabase } = useSupabaseAuth();
   const searchParams = useSearchParams();
-  const nextParam = readSearchParam(searchParams, "next");
+  const nextParam = searchParams.get("next");
   const next = useMemo(() => getSafeRedirectPath(nextParam, "/ask"), [nextParam]);
   const loginHref = useMemo(() => appendSafeNextParam("/login", nextParam), [nextParam]);
   /** Set after email sign-up when Supabase sends a confirmation link (no immediate session). */

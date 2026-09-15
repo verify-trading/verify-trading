@@ -58,14 +58,10 @@ function forgotPasswordReducer(
   }
 }
 
-function readSearchParam(params: ReturnType<typeof useSearchParams>, key: string): string | null {
-  return params.get(key);
-}
-
 function ForgotPasswordPageContent() {
   const { supabase } = useSupabaseAuth();
   const searchParams = useSearchParams();
-  const nextParam = readSearchParam(searchParams, "next");
+  const nextParam = searchParams.get("next");
   const next = useMemo(() => getSafeRedirectPath(nextParam, "/ask"), [nextParam]);
   const loginHref = useMemo(() => appendSafeNextParam("/login", nextParam), [nextParam]);
   const [state, dispatch] = useReducer(forgotPasswordReducer, initialForgotPasswordState);
