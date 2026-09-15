@@ -128,6 +128,10 @@ export const journalEntriesQuerySchema = z.object({
   // never by cursor: a day left unloaded reads as unlogged, and logging it again upserts over
   // the stored row.
   limit: z.coerce.number().int().min(1).max(366).optional().default(31),
+  // Absent: live accounts only, so a replaced broker's days stop showing. `all` adds them back.
+  // Never narrower than the default: the client's "already logged" guards read this response,
+  // and a hidden row is one a save or CSV import would upsert over.
+  account: z.literal("all").optional(),
 });
 
 export type JournalEntryRow = {

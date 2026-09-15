@@ -123,6 +123,21 @@ export async function resolveDefaultManualAccount(
 const UNIQUE_VIOLATION = "23505";
 
 /**
+ * PostgREST `or` filter that drops journal rows owned by a replaced (archived) account, or null
+ * when the trader has none. Null-account rows are legacy hand-logged days and always pass.
+ */
+export async function liveJournalScope(supabase: SupabaseClient, userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("trading_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .not("archived_at", "is", null);
+  if (error) throw new Error(`trading_accounts archived read failed: ${error.message}`);
+  const archived = ((data ?? []) as { id: string }[]).map((row) => row.id);
+  return archived.length === 0 ? null : `trading_account_id.is.null,trading_account_id.not.in.(${archived.join(",")})`;
+}
+
+/**
  * Confirms a client-supplied account is the caller's own and still live.
  *
  * The composite foreign key already makes a cross-user reference impossible, but that surfaces as

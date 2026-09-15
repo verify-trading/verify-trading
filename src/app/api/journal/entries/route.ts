@@ -18,7 +18,7 @@ import { hasAiConsent, AI_CONSENT_KEY } from "@/lib/ai/consent";
 import { generateChallengeStatus, overheatTrigger } from "@/lib/journal/ai";
 import { challengeStartedAt, type ChallengeConfigRow } from "@/lib/journal/challenge";
 import { getSessionUser } from "@/lib/auth/session";
-import { isOwnedTradingAccount, resolveDefaultManualAccount } from "@/lib/trading-accounts";
+import { isOwnedTradingAccount, liveJournalScope, resolveDefaultManualAccount } from "@/lib/trading-accounts";
 import { jsonApiError, jsonUnauthorized, PRIVATE_CACHE_HEADERS } from "@/lib/http/json-response";
 import { logger } from "@/lib/observability/logger";
 
@@ -42,35 +42,32 @@ export async function GET(request: Request) {
       return jsonUnauthorized("Sign in to load journal entries.");
     }
 
-    const query = session.supabase
-      .from("journal_entries")
-      .select(ENTRY_COLUMNS)
-      .eq("user_id", session.user.id)
-      // Deleted days keep their row so the importer can't re-add them; they are gone as far
-      // as everything above this line is concerned.
-      .is("deleted_at", null)
-      .order("entry_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(parsedQuery.data.limit);
-
-    // The page (above) is what the client renders; the aggregates read is a light,
-    // full-history scan (minimal columns) so lifetime header metrics stay correct even
-    // when the trader has more sessions than a single page holds. Fanned out in parallel.
-    const [{ data, error }, { data: allRows, error: aggError }] = await Promise.all([
-      query,
-      session.supabase
+    // Same filter on the page and the aggregates, or the header sums days the calendar hides.
+    const scope = parsedQuery.data.account === "all" ? null : await liveJournalScope(session.supabase, session.user.id);
+    // Deleted days keep their row so the importer can't re-add them; they are gone as far as
+    // everything above this line is concerned. Newest first (computeJournalAggregates expects it).
+    const { supabase, user } = session;
+    function history(columns: string) {
+      let query = supabase
         .from("journal_entries")
-        .select("entry_date, pnl_amount, pnl_currency, lesson, trading_account_id")
-        .eq("user_id", session.user.id)
-        .is("deleted_at", null)
+        .select(columns)
+        .eq("user_id", user.id)
+        .is("deleted_at", null);
+      if (scope) query = query.or(scope);
+      return query
         .order("entry_date", { ascending: false })
         .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        // Without an explicit limit, PostgREST silently caps this at its default
-        // (~1000 rows). Raise the cap and keep newest-first ordering (computeJournalAggregates
-        // expects that) so if truncation ever occurs it's the OLDEST rows that get dropped.
-        .limit(5000),
+        .order("id", { ascending: false });
+    }
+
+    // The page is what the client renders; the aggregates read is a light, full-history scan
+    // (minimal columns) so lifetime header metrics stay correct even when the trader has more
+    // sessions than a single page holds. Fanned out in parallel.
+    const [{ data, error }, { data: allRows, error: aggError }] = await Promise.all([
+      history(ENTRY_COLUMNS).limit(parsedQuery.data.limit),
+      // Without an explicit limit PostgREST silently caps at its default (~1000 rows). Raise it,
+      // so if truncation ever occurs it's the OLDEST rows that get dropped.
+      history("entry_date, pnl_amount, pnl_currency, lesson, trading_account_id").limit(5000),
     ]);
 
     if (error || !data || aggError || !allRows) {
@@ -79,8 +76,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       {
-        entries: (data as JournalEntryRow[]).map(toJournalEntry),
-        aggregates: computeJournalAggregates(allRows as JournalEntryRow[]),
+        entries: (data as unknown as JournalEntryRow[]).map(toJournalEntry),
+        aggregates: computeJournalAggregates(allRows as unknown as JournalEntryRow[]),
       },
       { headers: PRIVATE_CACHE_HEADERS },
     );

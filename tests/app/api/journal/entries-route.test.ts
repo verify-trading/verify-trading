@@ -25,7 +25,7 @@ import { generateChallengeStatus } from "@/lib/journal/ai";
 function createQueryBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
   const builder = {} as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>;
 
-  for (const method of ["select", "eq", "is", "order", "limit", "insert", "update", "upsert"]) {
+  for (const method of ["select", "eq", "is", "not", "or", "order", "limit", "insert", "update", "upsert"]) {
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn().mockResolvedValue(result);
@@ -117,6 +117,36 @@ describe("Journal entries API", () => {
         updatedAt: "2026-05-26T12:00:00.000Z",
       },
     ]);
+  });
+
+  // The bug this guards: a replaced broker's imported days stayed in the history and header
+  // totals, so the journal kept showing the old broker after a swap.
+  function withArchivedAccounts() {
+    const entries = createQueryBuilder({ data: [], error: null });
+    const accounts = createQueryBuilder({ data: [{ id: "a1" }, { id: "a2" }], error: null });
+    const from = vi.fn((table: string) => (table === "trading_accounts" ? accounts : entries));
+    vi.mocked(getSessionUser).mockResolvedValue({ user: { id: "user-1" }, supabase: { from } } as never);
+    return { entries, accounts };
+  }
+
+  it("hides archived accounts' days by default", async () => {
+    const { entries, accounts } = withArchivedAccounts();
+
+    expect((await GET(new Request("http://localhost/api/journal/entries"))).status).toBe(200);
+
+    expect(accounts.not).toHaveBeenCalledWith("archived_at", "is", null);
+    // Both the page and the aggregates read, or the header sums days the calendar hides.
+    expect(entries.or).toHaveBeenCalledTimes(2);
+    expect(entries.or).toHaveBeenCalledWith("trading_account_id.is.null,trading_account_id.not.in.(a1,a2)");
+  });
+
+  it("shows every account's days when asked for all", async () => {
+    const { entries, accounts } = withArchivedAccounts();
+
+    expect((await GET(new Request("http://localhost/api/journal/entries?account=all"))).status).toBe(200);
+
+    expect(accounts.not).not.toHaveBeenCalled();
+    expect(entries.or).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid journal entry body", async () => {

@@ -43,7 +43,7 @@ type Result = { data?: unknown; error?: unknown };
 function builder(result: Result) {
   const chain = {} as Record<string, unknown> & PromiseLike<unknown>;
   for (const method of ["select", "eq", "is", "not", "or", "in", "update", "upsert"]) {
-    (chain as Record<string, unknown>)[method] = () => chain;
+    (chain as Record<string, unknown>)[method] = vi.fn(() => chain);
   }
   chain.then = (onFulfilled, onRejected) => Promise.resolve(result).then(onFulfilled, onRejected);
   return chain;
@@ -181,6 +181,33 @@ describe("runBrokerSyncPass", () => {
     await expect(runBrokerSyncPass(supabase, "wake")).rejects.toThrow(/profiles read failed/);
     expect(deployAccount).not.toHaveBeenCalled();
     expect(getAccount).not.toHaveBeenCalled();
+  });
+
+  // The first import used to wait for the trader to keep the broker screen open; `fresh` runs
+  // it from the server within minutes of the account connecting.
+  it("imports a never-synced link on the fresh pass and leaves it running", async () => {
+    const supabase = fakeSupabase({ data: [accountRow("row-1")], error: null });
+    mockMetaApi({ "meta-row-1": { state: "DEPLOYED", connectionStatus: "CONNECTED" } });
+
+    const outcome = await runBrokerSyncPass(supabase, "fresh");
+
+    expect(outcome.results).toEqual(["row-1:imported:0/0"]);
+    expect(fetchHistoricalTrades).toHaveBeenCalledTimes(1);
+    expect(undeployAccount).not.toHaveBeenCalled();
+    // Only never-synced, never-failed rows: for everyone else this pass is a no-op read.
+    const accounts = vi.mocked(supabase.from).mock.results[0].value as Record<string, ReturnType<typeof vi.fn>>;
+    expect(accounts.is).toHaveBeenCalledWith("last_synced_at", null);
+    expect(accounts.is).toHaveBeenCalledWith("last_sync_error", null);
+  });
+
+  it("does not deploy for a lapsed trader on the fresh pass either", async () => {
+    const supabase = fakeSupabase({ data: [accountRow("row-1")], error: null }, { data: [], error: null });
+    mockMetaApi({ "meta-row-1": { state: "UNDEPLOYED", connectionStatus: "DISCONNECTED" } });
+
+    const outcome = await runBrokerSyncPass(supabase, "fresh");
+
+    expect(outcome.results).toEqual(["row-1:skipped_not_pro"]);
+    expect(deployAccount).not.toHaveBeenCalled();
   });
 
   it("imports and parks everything on the pull pass, straggler included", async () => {

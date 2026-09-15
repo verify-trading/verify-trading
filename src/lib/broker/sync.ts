@@ -444,27 +444,41 @@ async function readProUserIds(supabase: SupabaseClient, rows: BrokerAccountRow[]
 // `wake` at 06:00 / 18:00 UTC deploys every parked account whose owner is Pro; `pull` 35 minutes
 // later imports and parks EVERYTHING. Schedule in supabase/migration_29_broker_cron.sql.
 // Per-account failures are collected, not thrown: one broken login can't stop the pass.
+// wake 06:00/18:00 UTC deploys parked accounts; pull 06:35/18:35 imports and parks everything;
+// fresh, every 5 min, imports links that have never synced so the first pull no longer depends on
+// the trader keeping the broker screen open (supabase/migration_29, migration_34).
+export const BROKER_SYNC_PASSES = ["wake", "pull", "fresh"] as const;
+export type BrokerSyncPass = (typeof BROKER_SYNC_PASSES)[number];
+
 export async function runBrokerSyncPass(
   supabase: SupabaseClient,
-  pass: "wake" | "pull",
+  pass: BrokerSyncPass,
 ): Promise<{ accounts: number; results: string[]; errors: string[] }> {
   const startedAt = Date.now();
+  // wake and fresh deploy, which is billed; pull never does, and parks instead.
+  const deploys = pass === "wake" || pass === "fresh";
   // Live connections only: waking a disconnected row would bill a deployment for an account its
   // owner has switched off.
-  const { data, error } = await supabase
+  let query = supabase
     .from("broker_accounts")
     .select(BROKER_ACCOUNT_COLUMNS)
     .is("disconnected_at", null);
+  // fresh: never imported and never failed. A failed attempt stamps last_sync_error and leaves
+  // this set; wake retries those.
+  if (pass === "fresh") {
+    query = query.is("last_synced_at", null).is("last_sync_error", null);
+  }
+  const { data, error } = await query;
   if (error) throw new Error(`broker_accounts read failed: ${error.message}`);
 
   const rows = (data ?? []) as BrokerAccountRow[];
   const results: string[] = [];
   const errors: string[] = [];
 
-  // Only wake spends, so only wake asks who is paying — and it FAILS CLOSED: a profiles error
-  // throws out of the whole pass rather than billing a deployment per lapsed trader. pull never
-  // asks, because parking has to run for everyone.
-  const proUserIds = pass === "wake" && rows.length > 0 ? await readProUserIds(supabase, rows) : null;
+  // Only a deploying pass asks who is paying — and it FAILS CLOSED: a profiles error throws out
+  // of the whole pass rather than billing a deployment per lapsed trader. pull never asks,
+  // because parking has to run for everyone.
+  const proUserIds = deploys && rows.length > 0 ? await readProUserIds(supabase, rows) : null;
 
   // ponytail: sequential — one connected account per Pro trader, and MetaApi rate-limits
   // on CPU credits. Batch with Promise.all in chunks if this ever runs past ~50 accounts.
@@ -476,7 +490,7 @@ export async function runBrokerSyncPass(
       break;
     }
 
-    if (pass === "wake") {
+    if (deploys) {
       // Pro lapsed: nothing beyond parked rent. Nothing is deleted, so resubscribing resumes with
       // no reconnect and no new fee.
       if (!proUserIds?.has(row.user_id)) {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/broker/sync", () => ({
+  BROKER_SYNC_PASSES: ["wake", "pull", "fresh"],
   runBrokerSyncPass: vi.fn(),
 }));
 
@@ -103,7 +104,7 @@ describe("Broker cron route", () => {
     expect(runBrokerSyncPass).not.toHaveBeenCalled();
   });
 
-  it.each(["wake", "pull"] as const)("runs the %s pass", async (pass) => {
+  it.each(["wake", "pull", "fresh"] as const)("runs the %s pass", async (pass) => {
     vi.mocked(runBrokerSyncPass).mockResolvedValue({
       accounts: 2,
       results: [`row-1:imported:3/1`],
