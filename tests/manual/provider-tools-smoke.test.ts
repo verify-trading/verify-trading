@@ -79,7 +79,7 @@ describe.skipIf(!RUN)("provider tool support", () => {
   // cannot be in any training set (a story posted minutes ago) and check it
   // against the source.
   it("server tool: web_search really executes", async () => {
-    const { getAskModel, codexProvider } = await import("@/lib/ask/service/provider");
+    const { getAskModel, getAskWebSearchTool } = await import("@/lib/ask/service/provider");
 
     // Accept any front-page story, not the current #1. Ranks churn by the minute
     // and the search index serves a snapshot up to an hour old, so pinning to #1
@@ -104,22 +104,29 @@ describe.skipIf(!RUN)("provider tool support", () => {
       // schema of ours, so the tools record needs the call's own type.
       tools: {
         // Identical config to production (ask/service/tools.ts).
-        web_search: codexProvider.tools.webSearch({
-          searchContextSize: "medium",
-          userLocation: { type: "approximate", country: "GB" },
-        }),
+        web_search: getAskWebSearchTool(),
       } as Parameters<typeof generateText>[0]["tools"],
       stopWhen: stepCountIs(5),
     });
 
-    // Match on a distinctive slice: models reformat punctuation and casing.
+    // Two proofs, either is enough. The front page is the strong one: every story there was
+    // posted today. But the search index can lag the live page by days (measured 4 on the
+    // Anthropic route), so a story that IS on HN — per its own search API — also passes, as
+    // long as the provider actually ran the tool.
+    const searched = r.steps.some((step) => step.toolCalls.some((call) => call.toolName === "web_search" && call.providerExecuted));
     const answer = r.text.toLowerCase().replace(/\s+/g, " ");
-    const matched = top.some((story) =>
+    const onFrontPage = top.some((story) =>
       answer.includes(story.title.toLowerCase().split(/\s+/).slice(0, 5).join(" ")),
     );
+    const hn = (await fetch(
+      `https://hn.algolia.com/api/v1/search?tags=story&query=${encodeURIComponent(r.text.replace(/["']/g, "").slice(0, 80))}`,
+    ).then((res) => res.json())) as { hits: { title: string }[] };
+    // Either way round: models drop a leading "The" or add quotes.
+    const answerSlice = answer.replace(/^(the )?/, "").split(" ").slice(0, 5).join(" ");
+    const onHn = hn.hits.some((hit) => hit.title.toLowerCase().includes(answerSlice));
     expect(
-      matched,
-      `the provider at ${process.env.OPENAI_BASE_URL ?? "the default base URL"} did not really search — no HN front-page title appears in: ${r.text.slice(0, 200)}`,
+      searched && (onFrontPage || onHn),
+      `the provider at ${process.env.OPENAI_BASE_URL ?? "the default base URL"} did not really search (tool ran: ${searched}) — answer: ${r.text.slice(0, 200)}`,
     ).toBe(true);
   }, 180_000);
 });

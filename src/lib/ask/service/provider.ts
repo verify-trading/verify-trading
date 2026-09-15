@@ -1,3 +1,4 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import {
   defaultSettingsMiddleware,
@@ -18,13 +19,23 @@ function resolveOpenAIBaseURL() {
   return /\/v\d+$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
 }
 
-// Ask, the daily brief and the simple writers. The Claude route can't serve these: it does
-// not implement the SERVER-side web_search/web_fetch tools, and silently strips them —
-// HTTP 200 with an uncited answer invented from memory (measured 0 real searches vs 7/8).
+// The daily brief, the simple writers, and Ask when ASK_MODEL names a gpt model.
 export const codexProvider = createOpenAI({ baseURL: resolveOpenAIBaseURL() });
 
-/** Primary model for Ask. Fastest of the gateway's models that reliably searches. */
-export const DEFAULT_ASK_MODEL = "gpt-5.6-terra";
+// The gateway's NATIVE Anthropic route (/v1/messages), which runs Anthropic's own server-side
+// web_search — measured 2026-09-15: real searches, cited URLs resolve, ~15-30 s a turn. The
+// OpenAI-compatible route in front of claude models is the one that strips the tool; this is
+// not that. Terra on the codex route had grown to 120 s+ per searching turn, past the function
+// limit, which is what "Ask generation started" with no answer was.
+const anthropicProvider = createAnthropic({
+  baseURL: resolveOpenAIBaseURL(),
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+/** Primary model for Ask. A `claude-` id takes the Anthropic route; anything else, the codex one. */
+export const DEFAULT_ASK_MODEL = "claude-sonnet-5";
+
+const isClaude = (modelId: string) => modelId.startsWith("claude-");
 
 /** Cheaper tier for the non-conversational writers (journal insight, challenge status). */
 export const DEFAULT_ASK_SIMPLE_MODEL = "gpt-5.4-mini";
@@ -88,7 +99,16 @@ function askModel(modelId: string, openaiOptions: Record<string, string | boolea
 }
 
 export function getAskModel() {
-  return askModel(getAskPrimaryModelId());
+  const modelId = getAskPrimaryModelId();
+  return isClaude(modelId) ? anthropicProvider(modelId) : askModel(modelId);
+}
+
+/** The live-web tool that matches getAskModel's route: each provider only runs its own. */
+export function getAskWebSearchTool() {
+  if (isClaude(getAskPrimaryModelId())) {
+    return anthropicProvider.tools.webSearch_20250305({ maxUses: 5, userLocation: { type: "approximate", country: "GB" } });
+  }
+  return codexProvider.tools.webSearch({ searchContextSize: "medium", userLocation: { type: "approximate", country: "GB" } });
 }
 
 // Chat-completions unlike Ask: the gateway injects the whole Codex CLI system prompt

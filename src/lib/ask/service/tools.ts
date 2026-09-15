@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { codexProvider } from "@/lib/ask/service/provider";
+import { getAskWebSearchTool } from "@/lib/ask/service/provider";
 
 import {
   httpUrlSchema,
@@ -859,10 +859,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     // doesn't cover. The provider runs it and decides per turn whether to search, open a
     // page, or find text within one — so this single tool covers what used to be
     // web_search + web_fetch. Typical turn lands in 4-12s.
-    web_search: codexProvider.tools.webSearch({
-      searchContextSize: "medium",
-      userLocation: { type: "approximate", country: "GB" },
-    }),
+    web_search: getAskWebSearchTool(),
     get_economic_calendar: tool({
       description:
         "Cached economic calendar events for scheduled macro releases. Use this for questions like economic calendar today/this week, what high-impact events are next, CPI/NFP/Fed timings, USD/GBP/EUR events, and what a release means for FX pairs or Gold. This reads the cached calendar only; do not use it for breaking-news reactions.",

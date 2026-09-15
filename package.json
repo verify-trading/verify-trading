@@ -16,6 +16,7 @@
     "eval:ask": "node scripts/evals/run-ask-evals.mjs"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.118",
     "@ai-sdk/openai": "^3.0.90",
     "@ai-sdk/react": "^3.0.148",
     "@hookform/resolvers": "^5.2.2",

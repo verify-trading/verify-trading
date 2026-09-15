@@ -11,6 +11,10 @@ import {
   prepareAskRoute,
   type PreparedAskRoute,
 } from "@/lib/ask/route-runtime";
+// A searching turn is ~10-40 s on the Claude route; the platform default is shorter than a
+// slow one, and a function killed mid-stream reads as "generation started" then nothing.
+export const maxDuration = 120;
+
 
 type AskRouteMessage = UIMessage<unknown, AskStreamData>;
 
