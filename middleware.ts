@@ -1,6 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { AUTH_PAGE_PATHS } from "@/lib/auth/auth-paths";
+import {
+  getTubmanBillingPath,
+  isTubmanReferralToken,
+  PROMO_OFFER_COOKIE_NAME,
+  TUBMAN_OFFER_KEY,
+} from "@/lib/billing/promo-offers";
 import { updateSession } from "@/lib/supabase/middleware";
 
 /**
@@ -13,6 +19,7 @@ function redirectPreservingSessionCookies(
   destination: string | URL,
 ): NextResponse {
   const redirect = NextResponse.redirect(destination);
+
   if (typeof sessionResponse.headers.getSetCookie === "function") {
     for (const cookie of sessionResponse.headers.getSetCookie()) {
       redirect.headers.append("Set-Cookie", cookie);
@@ -23,15 +30,17 @@ function redirectPreservingSessionCookies(
   sessionResponse.cookies.getAll().forEach((cookie) => {
     redirect.cookies.set(cookie);
   });
+
   return redirect;
 }
 
 export async function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
+
   /**
-   * When `redirectTo` is not allowlisted in Supabase, Auth falls back to **Site URL**
-   * and appends `?code=…` there — often `/` instead of `/auth/callback`. The PKCE
-   * exchange only runs in `app/auth/callback/route.ts`, so we forward the same query.
+   * When `redirectTo` is not allowlisted in Supabase, Auth falls back to the
+   * Site URL and appends `?code=…` there. The PKCE exchange only runs in
+   * `app/auth/callback/route.ts`, so forward the same query.
    */
   if (url.pathname === "/" && url.searchParams.has("code")) {
     url.pathname = "/auth/callback";
@@ -40,6 +49,38 @@ export async function middleware(request: NextRequest) {
 
   const { response, user } = await updateSession(request);
   const pathname = request.nextUrl.pathname;
+  const isTubmanReferral = isTubmanReferralToken(
+    request.nextUrl.searchParams.get("via"),
+  );
+
+  if (isTubmanReferral) {
+    response.cookies.set(PROMO_OFFER_COOKIE_NAME, TUBMAN_OFFER_KEY, {
+      httpOnly: true,
+      maxAge: 30 * 24 * 60 * 60,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    if (pathname === "/") {
+      const billingPath = getTubmanBillingPath();
+      const destination = new URL(
+        user ? billingPath : "/signup",
+        request.url,
+      );
+
+      destination.searchParams.set(
+        "via",
+        request.nextUrl.searchParams.get("via")!,
+      );
+
+      if (!user) {
+        destination.searchParams.set("next", billingPath);
+      }
+
+      return redirectPreservingSessionCookies(response, destination);
+    }
+  }
 
   const requiresAuth =
     pathname.startsWith("/ask") ||
@@ -49,14 +90,22 @@ export async function middleware(request: NextRequest) {
   if (requiresAuth) {
     if (!user) {
       const login = new URL("/login", request.url);
-      login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+      login.searchParams.set(
+        "next",
+        `${pathname}${request.nextUrl.search}`,
+      );
+
       return redirectPreservingSessionCookies(response, login);
     }
+
     return response;
   }
 
   if (AUTH_PAGE_PATHS.has(pathname) && user) {
-    return redirectPreservingSessionCookies(response, new URL("/ask", request.url));
+    return redirectPreservingSessionCookies(
+      response,
+      new URL("/ask", request.url),
+    );
   }
 
   return response;
