@@ -1,6 +1,6 @@
 # verify.trading (Next.js).
 
-Ask interface for traders: broker checks, briefings, calculators, chart analysis, and projections. Stack: **Next.js 16**, **Supabase**, **Anthropic** (AI SDK), **FMP**.
+Ask interface for traders: broker checks, briefings, calculators, chart analysis, and projections. Stack: **Next.js 16**, **Supabase**, **OpenAI-compatible gateway** (AI SDK), **FMP**.
 
 ## Local development
 
@@ -9,7 +9,7 @@ npm install
 cp .env.example .env.local
 ```
 
-Fill in at least `ANTHROPIC_API_KEY`. Add Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) and `FMP_API_KEY` when you need auth, persistence, and live markets. Add Stripe variables when you want subscription billing and the customer portal.
+Fill in at least `OPENAI_BASE_URL` and `OPENAI_API_KEY`. Add Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) and `FMP_API_KEY` when you need auth, persistence, and live markets. Add Stripe variables when you want subscription billing and the customer portal.
 
 ```bash
 npm run dev
@@ -30,10 +30,11 @@ See `.env.example` for all keys. **Never commit `.env` or `.env.local`** (they a
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `ANTHROPIC_API_KEY` | Yes (for Ask) | Claude API key |
-| `ANTHROPIC_MODEL` | Optional | Sonnet-class model for harder Ask requests |
-| `ANTHROPIC_SIMPLE_MODEL` | Optional | Haiku-class model for simple Ask requests |
-| `ANTHROPIC_FALLBACK_MODEL` | Optional | Fallback model for transient primary-model failures |
+| `OPENAI_BASE_URL` | Yes (for Ask) | Gateway base URL (pikachu.hueling.cc) |
+| `OPENAI_API_KEY` | Yes (for Ask) | Gateway API key |
+| `ASK_MODEL` | Optional | Ask model (default `gpt-5.6-terra`) |
+| `ASK_SIMPLE_MODEL` | Optional | Journal/challenge writer model (default `gpt-5.4-mini`) |
+| `ASK_COACH_MODEL` | Optional | Mind coach model (default `gpt-5.6-terra`) |
 | `NEXT_PUBLIC_SUPABASE_URL` | For Auth + chat history | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | For Auth (browser + SSR) | Anon key (safe to expose) |
 | `SUPABASE_SERVICE_ROLE_KEY` | For chat history + admin tasks | Service role (server only) |

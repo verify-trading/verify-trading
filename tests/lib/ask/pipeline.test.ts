@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { generateText } from "ai";
 
 vi.mock("@/lib/observability/logger", () => ({
   logger: {
@@ -14,6 +15,7 @@ import {
 } from "@/lib/ask/pipeline";
 import { fallbackInsightCard, imageFallbackInsightCard } from "@/lib/ask/contracts";
 import { DEFAULT_ASK_MODEL } from "@/lib/ask/service/provider";
+import { logger } from "@/lib/observability/logger";
 
 const insightCard = {
   type: "insight" as const,
@@ -115,6 +117,62 @@ function baseRequest(message: string) {
 describe("generateAskResponse", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("reports local tools before execution finishes and logs separate timings", async () => {
+    const onToolCall = vi.fn();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    const toolCall = {
+      toolCallId: "market-1",
+      toolName: "get_market_briefing",
+      input: { asset: "Gold", timeframe: "1D" },
+    };
+    const generateTextImpl = vi.fn(async (options: Parameters<typeof generateText>[0]) => {
+      clock.mockReturnValue(1200);
+      await options.experimental_onStepStart?.({ stepNumber: 0 } as never);
+      clock.mockReturnValue(2200);
+      await options.experimental_onToolCallStart?.({ toolCall } as never);
+      expect(onToolCall).toHaveBeenCalledExactlyOnceWith({
+        toolName: toolCall.toolName,
+        input: toolCall.input,
+      });
+      clock.mockReturnValue(2500);
+      await options.experimental_onToolCallFinish?.({
+        stepNumber: 0, toolCall, durationMs: 300, success: true,
+      } as never);
+      await options.onStepFinish?.({
+        stepNumber: 0,
+        toolCalls: [toolCall],
+        toolResults: [],
+        finishReason: "tool-calls",
+        usage: {},
+      } as never);
+      expect(onToolCall).toHaveBeenCalledTimes(1);
+      // Server tools lack local execution hooks, so retain their step-finish status.
+      await options.onStepFinish?.({
+        stepNumber: 1,
+        toolCalls: [{ toolName: "web_search", input: {}, providerExecuted: true }],
+        toolResults: [],
+        finishReason: "tool-calls",
+        usage: {},
+      } as never);
+      return textResult([submitResult(insightCard)]);
+    }) as never;
+
+    try {
+      await generateAskResponse(baseRequest("Gold: key levels before London open"), {
+        generateTextImpl,
+        retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge),
+      }, { onToolCall });
+
+      expect(onToolCall).toHaveBeenCalledTimes(2);
+      expect(logger.info).toHaveBeenCalledWith("Ask context prepared.", expect.objectContaining({ durationMs: 0 }));
+      expect(logger.info).toHaveBeenCalledWith("Ask tool finished.", expect.objectContaining({ toolName: "get_market_briefing", durationMs: 300, success: true }));
+      expect(logger.info).toHaveBeenCalledWith("Ask step finished.", expect.objectContaining({ stepNumber: 0, durationMs: 1300 }));
+      expect(logger.info).toHaveBeenCalledWith("Ask generation completed.", expect.objectContaining({ durationMs: 1500 }));
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("answers queries with a single Sonnet model call", async () => {

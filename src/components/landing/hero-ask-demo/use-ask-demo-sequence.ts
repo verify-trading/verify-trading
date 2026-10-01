@@ -1,12 +1,15 @@
 "use client";
 
 import { useReducedMotion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   DEMO_EXCHANGES,
+  DEMO_SCREENS,
   DEMO_SUGGESTIONS,
+  PRO_SCREEN_HOLD_MS,
   type DemoExchange,
+  type DemoScreen,
   type HeroLiveBriefing,
 } from "./types";
 
@@ -15,6 +18,8 @@ import {
  * this however they like — the state itself is presentation-agnostic.
  */
 export type DemoState = {
+  /** Which app screen the phone is on. Ask replays the exchanges; the rest are timed Pro screens. */
+  screen: DemoScreen;
   /** Answered exchanges currently sitting in the thread. */
   thread: DemoExchange[];
   /** The question shown as a user bubble that is still awaiting its answer. */
@@ -29,11 +34,12 @@ export type DemoState = {
   activeSuggestion: number;
 };
 
-type Frame = { state: DemoState; ms: number };
+export type Frame = { state: DemoState; ms: number };
 
 const DEFAULT_THINKING = "Thinking through your question";
 
 const EMPTY: DemoState = {
+  screen: "ask",
   thread: [],
   pendingQuestion: null,
   thinking: false,
@@ -55,7 +61,7 @@ const TIMING = {
 } as const;
 
 /** Merge real gold values over the scripted briefing card when available. */
-function resolveExchanges(liveBriefing: HeroLiveBriefing | null): DemoExchange[] {
+export function resolveExchanges(liveBriefing: HeroLiveBriefing | null): DemoExchange[] {
   if (!liveBriefing) return DEMO_EXCHANGES;
   return DEMO_EXCHANGES.map((exchange) =>
     exchange.card.type === "briefing"
@@ -65,7 +71,7 @@ function resolveExchanges(liveBriefing: HeroLiveBriefing | null): DemoExchange[]
 }
 
 /** Pre-computed frames make pause/resume trivial (stop advancing the index) and the loop deterministic. */
-function buildFrames(exchanges: DemoExchange[]): Frame[] {
+export function buildFrames(exchanges: DemoExchange[]): Frame[] {
   const frames: Frame[] = [];
   const push = (patch: Partial<DemoState>, ms: number, base: DemoState) =>
     frames.push({ state: { ...base, ...patch }, ms });
@@ -117,25 +123,35 @@ function buildFrames(exchanges: DemoExchange[]): Frame[] {
     prev = exchange;
   });
 
-  // Hold the last answer briefly, then loop back to the intro.
+  // Hold the last answer briefly, then leave Ask for the Pro screens.
   push(
     {},
     TIMING.loopReset,
     { ...EMPTY, thread: prev ? [prev] : [], showIntro: false },
   );
 
+  // Every non-Ask screen in the cycle gets its own timed frame, so none can be skipped:
+  // Markets (Intelligence), then the same Markets screen on its Economic sub-tab, Journal, Mind.
+  for (const screen of DEMO_SCREENS) {
+    if (screen !== "ask") push({ screen, showIntro: false }, PRO_SCREEN_HOLD_MS, EMPTY);
+  }
+
   return frames;
 }
 
 /**
- * Drives the looping Ask demo. Pass `paused` (e.g. while the CTA modal is open
- * or the section is off-screen) to freeze the animation in place. `liveBriefing`
- * overrides the scripted gold card with real, server-fetched values.
+ * Drives the whole phone demo: the Ask exchanges, then each Pro screen, then back to the start.
+ * Pass `paused` (sheet open, pointer down, off-screen) to freeze it in place. `liveBriefing`
+ * overrides the scripted gold card with real, server-fetched values. `goTo` jumps to a screen
+ * (a tab tap) and works under reduced motion, where nothing advances on its own.
  */
 export function useAskDemoSequence({
   paused = false,
   liveBriefing = null,
-}: { paused?: boolean; liveBriefing?: HeroLiveBriefing | null } = {}): DemoState {
+}: {
+  paused?: boolean;
+  liveBriefing?: HeroLiveBriefing | null;
+} = {}): { state: DemoState; goTo: (screen: DemoScreen) => void } {
   const exchanges = useMemo(() => resolveExchanges(liveBriefing), [liveBriefing]);
   const frames = useMemo(() => buildFrames(exchanges), [exchanges]);
   const reduced = useReducedMotion() ?? false;
@@ -143,13 +159,18 @@ export function useAskDemoSequence({
 
   useEffect(() => {
     if (reduced || paused) return;
-    const timer = setTimeout(
-      () => setIndex((i) => (i + 1) % frames.length),
-      frames[index].ms,
-    );
+    const timer = setTimeout(() => setIndex((i) => (i + 1) % frames.length), frames[index].ms);
     return () => clearTimeout(timer);
   }, [index, paused, reduced, frames]);
 
-  // Representative still frame for visitors who prefer reduced motion.
-  return reduced ? { ...EMPTY, thread: [exchanges[0]], showIntro: false } : frames[index].state;
+  const goTo = useCallback(
+    (screen: DemoScreen) => setIndex(Math.max(0, frames.findIndex((f) => f.state.screen === screen))),
+    [frames],
+  );
+
+  const current = frames[index].state;
+  // Representative still frame for visitors who prefer reduced motion (Pro screens stay reachable by tab).
+  const state =
+    reduced && current.screen === "ask" ? { ...EMPTY, thread: [exchanges[0]], showIntro: false } : current;
+  return { state, goTo };
 }

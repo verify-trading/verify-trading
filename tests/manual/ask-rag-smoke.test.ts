@@ -1,5 +1,5 @@
 /**
- * Manual end-to-end smoke test for the Ask RAG flow. Makes REAL Anthropic +
+ * Manual end-to-end smoke test for the Ask RAG flow. Makes REAL gateway +
  * Supabase calls, so it is opt-in:
  *
  *   RUN_ASK_SMOKE=1 npx vitest run tests/manual/ask-rag-smoke.test.ts

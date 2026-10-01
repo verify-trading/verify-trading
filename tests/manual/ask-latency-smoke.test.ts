@@ -1,6 +1,6 @@
 /**
  * Manual latency smoke for the short-circuit + cache fixes. Makes REAL
- * Anthropic + Supabase calls, so it is opt-in:
+ * gateway + Supabase calls, so it is opt-in:
  *
  *   RUN_ASK_SMOKE=1 npx vitest run tests/manual/ask-latency-smoke.test.ts
  *
@@ -11,9 +11,7 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, it } from "vitest";
-
-import { generateAskResponse } from "@/lib/ask/pipeline";
+import { describe, expect as assert, it } from "vitest";
 
 // @next/env skips .env.local when NODE_ENV=test (which vitest sets), so the real
 // API keys never load through the normal path. Parse .env.local directly.
@@ -68,12 +66,14 @@ describe.skipIf(!RUN)("Ask latency smoke", () => {
     it(
       q,
       async () => {
+        // Provider clients read the base URL at import time, after .env.local loads.
+        const { generateAskResponse } = await import("@/lib/ask/pipeline");
         const timeline: string[] = [];
         const start = Date.now();
         const at = () => `+${Date.now() - start}ms`;
         let card: unknown = null;
         let followups: unknown = null;
-        let error: string | null = null;
+        let error: unknown = null;
         try {
           const res = await generateAskResponse(
             { message: q },
@@ -83,16 +83,18 @@ describe.skipIf(!RUN)("Ask latency smoke", () => {
           card = res.data;
           followups = res.uiMeta?.followups ?? [];
         } catch (e) {
-          error = e instanceof Error ? e.message : String(e);
+          error = e;
         }
         const ms = Date.now() - start;
         const block = `\n———————————————————————————————————————————————\nQ: ${q}  (TOTAL ${ms}ms)\nexpect: ${expect}\ntimeline: ${timeline.join(" | ")} | done ${at()}\n${
           error
-            ? `ERROR: ${error}`
+            ? `ERROR: ${error instanceof Error ? error.message : String(error)}`
             : `card: ${JSON.stringify(card, null, 2)}\nfollowups: ${JSON.stringify(followups)}`
         }`;
         console.log(block);
         if (process.env.ASK_SMOKE_OUT) appendFileSync(process.env.ASK_SMOKE_OUT, block + "\n");
+        assert(error, "Ask generation must succeed for a latency measurement").toBeNull();
+        assert(card).not.toBeNull();
       },
       120_000,
     );

@@ -37,3 +37,18 @@ export function getSiteDescription(): string {
 export function expandPromptTemplate(template: string): string {
   return template.replace(/\{\{APP_NAME\}\}/g, getAppName());
 }
+
+/** Public store listings for the mobile app. */
+export const STORE_URLS = {
+  apple: "https://apps.apple.com/app/id6792117065",
+  googlePlay: "https://play.google.com/store/apps/details?id=trading.verify.mobile",
+} as const;
+
+/** Footer social profiles. `#` = placeholder until the client supplies the real URL. */
+export const SOCIAL_URLS = {
+  instagram: "https://www.instagram.com/verifytrading.app",
+  tiktok: "#",
+  x: "#",
+  linkedin: "#",
+  youtube: "https://youtube.com/@verify.trading",
+} as const;

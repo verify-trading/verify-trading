@@ -263,6 +263,7 @@ async function runAskGeneration({
 }): Promise<AskRunResult> {
   const modelId = getAskPrimaryModelId();
   const collectedToolResults: ToolResultRecord[] = [];
+  let stepStartedAt = Date.now();
 
   const result = await generateTextImpl({
     model: getAskModel(),
@@ -271,6 +272,23 @@ async function runAskGeneration({
     stopWhen: [stepCountIs(maxSteps), stopAfterFinalToolResult],
     messages,
     tools: tools as Parameters<typeof generateText>[0]["tools"],
+    experimental_onStepStart({ stepNumber }) {
+      stepStartedAt = Date.now();
+      logger.info("Ask model step started.", { sessionId, messageId, modelId, stepNumber });
+    },
+    experimental_onToolCallStart({ toolCall }) {
+      callbacks.onToolCall?.({ toolName: toolCall.toolName, input: toolCall.input });
+    },
+    experimental_onToolCallFinish({ stepNumber, toolCall, durationMs, success }) {
+      logger.info("Ask tool finished.", {
+        sessionId,
+        messageId,
+        stepNumber,
+        toolName: toolCall.toolName,
+        durationMs,
+        success,
+      });
+    },
     onStepFinish({ stepNumber, toolCalls, toolResults, finishReason, usage }) {
       collectedToolResults.push(...(toolResults as ToolResultRecord[]));
 
@@ -279,6 +297,7 @@ async function runAskGeneration({
         messageId,
         modelId,
         stepNumber,
+        durationMs: Date.now() - stepStartedAt,
         finishReason,
         toolCalls: toolCalls.map((toolCall) => ({
           toolName: toolCall.toolName,
@@ -288,7 +307,10 @@ async function runAskGeneration({
       });
 
       toolCalls.forEach((toolCall) => {
-        callbacks.onToolCall?.({ toolName: toolCall.toolName, input: toolCall.input });
+        // Provider-run tools do not invoke the local execution hooks above.
+        if (toolCall.providerExecuted) {
+          callbacks.onToolCall?.({ toolName: toolCall.toolName, input: toolCall.input });
+        }
       });
     },
   });
@@ -314,7 +336,7 @@ function resolveRunCard(run: AskRunResult): AskCard | null {
 }
 
 /**
- * Ask pipeline: retrieve knowledge (RAG) → one Sonnet pass with the full
+ * Ask pipeline: retrieve knowledge (RAG) → one model pass with the full
  * toolset → tool-owned numeric merge → final card.
  */
 export async function generateAskResponse(
@@ -333,6 +355,7 @@ export async function generateAskResponse(
   const messageId = crypto.randomUUID();
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
+  const generationStartedAt = Date.now();
 
   logger.info("Ask generation started.", {
     sessionId,
@@ -356,6 +379,12 @@ export async function generateAskResponse(
       : Promise.resolve(null),
   ]);
 
+  logger.info("Ask context prepared.", {
+    sessionId,
+    messageId,
+    durationMs: Date.now() - generationStartedAt,
+  });
+
   const knowledgeContextBlock = buildKnowledgeContextBlock(knowledge);
   const messages = buildAskMessages({
     request,
@@ -376,6 +405,7 @@ export async function generateAskResponse(
     logger.info("Ask generation completed.", {
       sessionId,
       messageId,
+      durationMs: Date.now() - generationStartedAt,
       cardSource: source,
       finalCardType: merged.type,
       toolNames: toolResults.map((toolResult) => toolResult.toolName ?? "unknown"),

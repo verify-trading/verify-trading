@@ -136,7 +136,7 @@ export async function POST(request: Request) {
     logger.error("agent-llm has no Supabase admin client (service role key unset).");
     return jsonApiError(503, "agent_llm_unconfigured", "The live coach is not available right now.");
   }
-  // Re-check on every turn. This stops new transcript/context from reaching Anthropic if the
+  // Re-check on every turn. This stops new transcript/context from reaching the AI provider if the
   // user withdraws consent from another device during an active ElevenLabs session.
   if (!(await hasAiConsent(supabase, ctx.userId, AI_CONSENT_KEY))) {
     return jsonApiError(403, "ai_consent_required", "AI data sharing is turned off.");
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
             // streamText does NOT reject when the provider fails — verified against ai@6: the step
             // promise enqueues an error part and closes the stream, so `textStream` finishes
             // normally with zero deltas and the catch below never runs. Without this hook an
-            // Anthropic outage is invisible in our logs and silent in the trader's ear.
+            // provider outage is invisible in our logs and silent in the trader's ear.
             onError: ({ error }) =>
               logger.error("agent-llm model stream failed.", {
                 sessionId: ctx.sessionId,

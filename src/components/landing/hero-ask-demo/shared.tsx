@@ -14,16 +14,6 @@ import { DemoAnswerCard } from "./demo-cards";
 import { DEMO_EXCHANGES, DEMO_SUGGESTIONS, type DemoExchange } from "./types";
 import type { DemoState } from "./use-ask-demo-sequence";
 
-/** Props every visual variant receives from the `HeroAskDemo` container. */
-export type VariantViewProps = {
-  state: DemoState;
-  onActivate: () => void;
-  /** Whether the in-screen subscription CTA is open. */
-  ctaOpen: boolean;
-  /** Dismiss the in-screen subscription CTA. */
-  onCloseCta: () => void;
-};
-
 // Buttery spring for message enter/exit — a soft, well-damped bounce (not snappy).
 const MESSAGE_TRANSITION = {
   type: "spring",
@@ -246,7 +236,7 @@ const AnswerContent = memo(function AnswerContent({
                 key={q}
                 type="button"
                 onClick={onActivate}
-                className="group inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-left text-[11px] font-medium text-white/65 transition-colors hover:border-[rgba(76,110,245,0.35)] hover:bg-[rgba(76,110,245,0.08)] hover:text-white"
+                className="group cursor-pointer inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-left text-[11px] font-medium text-white/65 transition-colors hover:border-[rgba(76,110,245,0.35)] hover:bg-[rgba(76,110,245,0.08)] hover:text-white"
               >
                 <ArrowUpRight className="size-3 shrink-0 text-white/35 group-hover:text-[var(--vt-blue)]" />
                 <span>{q}</span>
@@ -275,7 +265,8 @@ function IntroBlock({
       <p className="mx-auto mt-1.5 max-w-[15rem] text-[12px] leading-snug text-white/50">
         Brokers, markets, sizing &amp; charts. Ask in plain English.
       </p>
-      <div className="mt-4 grid w-full max-w-xs grid-cols-1 gap-2">
+      {/* Desktop: vertical stacked cards (hidden on mobile — shown above the composer instead) */}
+      <div className="mt-4 hidden w-full max-w-xs grid-cols-1 gap-2 sm:grid">
         {DEMO_SUGGESTIONS.slice(0, 3).map((prompt, i) => (
           <motion.button
             key={prompt}
@@ -286,7 +277,7 @@ function IntroBlock({
             }
             transition={{ duration: 0.18 }}
             className={cn(
-              "rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-[12px] font-medium leading-snug text-white/85 ring-1 ring-white/[0.03] transition-colors",
+              "cursor-pointer rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-[12px] font-medium leading-snug text-white/85 ring-1 ring-white/[0.03] transition-colors",
               "hover:border-[rgba(76,110,245,0.35)] hover:bg-[rgba(76,110,245,0.08)] hover:text-white",
               state.activeSuggestion === i &&
                 "border-[rgba(76,110,245,0.45)] bg-[rgba(76,110,245,0.12)] text-white",
@@ -392,6 +383,48 @@ export function DemoThread({
   );
 }
 
+
+/**
+ * Mobile-only horizontal scrollable suggestion chips, shown just above the
+ * composer when the intro state is active. Hidden on sm+ where the IntroBlock
+ * renders them as a vertical grid instead.
+ */
+export function DemoSuggestionStrip({
+  state,
+  onActivate,
+}: {
+  state: DemoState;
+  onActivate: () => void;
+}) {
+  const isIntro =
+    state.showIntro && state.thread.length === 0 && !state.pendingQuestion;
+  if (!isIntro) return null;
+
+  return (
+    <div className="hide-scrollbar flex gap-2 overflow-x-auto pb-2 sm:hidden">
+      {DEMO_SUGGESTIONS.slice(0, 3).map((prompt, i) => (
+        <motion.button
+          key={prompt}
+          type="button"
+          onClick={onActivate}
+          animate={
+            state.activeSuggestion === i ? { scale: 0.97 } : { scale: 1 }
+          }
+          transition={{ duration: 0.18 }}
+          className={cn(
+            "cursor-pointer shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-left text-[11px] font-medium leading-snug text-white/85 ring-1 ring-white/[0.03] transition-colors",
+            "hover:border-[rgba(76,110,245,0.35)] hover:bg-[rgba(76,110,245,0.08)] hover:text-white",
+            state.activeSuggestion === i &&
+              "border-[rgba(76,110,245,0.45)] bg-[rgba(76,110,245,0.12)] text-white",
+          )}
+        >
+          {prompt}
+        </motion.button>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Static composer — a calm "Ask anything…" field. The conversation plays itself
  * in the thread; this just invites the visitor. Any focus / keypress / submit
@@ -416,7 +449,7 @@ export function DemoComposer({ onActivate }: { onActivate: () => void }) {
         readOnly
         aria-label="Ask anything"
         placeholder="Ask anything…"
-        className="min-w-0 flex-1 cursor-text bg-transparent text-[13px] text-white caret-transparent outline-none placeholder:text-white/40"
+        className="min-w-0 flex-1 cursor-pointer bg-transparent text-[13px] text-white caret-transparent outline-none placeholder:text-white/40"
         onFocus={onActivate}
         onKeyDown={onActivate}
       />
@@ -425,7 +458,7 @@ export function DemoComposer({ onActivate }: { onActivate: () => void }) {
         aria-label="Send"
         onClick={onActivate}
         whileTap={reduced ? undefined : { scale: 0.9 }}
-        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--vt-blue)] text-white shadow-[0_4px_16px_rgba(76,110,245,0.35)] transition hover:brightness-110"
+        className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[var(--vt-blue)] text-white shadow-[0_4px_16px_rgba(76,110,245,0.35)] transition hover:brightness-110"
       >
         <ArrowUp className="size-3.5" aria-hidden />
       </motion.button>

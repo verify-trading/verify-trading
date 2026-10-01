@@ -1,3 +1,4 @@
+import { SiteFooter } from "@/components/site/site-footer";
 import { SiteNav } from "@/components/site/site-nav";
 
 /**
@@ -12,6 +13,7 @@ export default function LegalLayout({
     <div className="flex min-h-dvh flex-col bg-[var(--vt-navy)] text-white">
       <SiteNav />
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <SiteFooter />
     </div>
   );
 }

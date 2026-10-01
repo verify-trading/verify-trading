@@ -113,6 +113,7 @@ export type PsychologySessionRow = {
 };
 
 export type PsychologySessionMessageRow = {
+  id: string;
   role: "user" | "coach";
   content: string;
   created_at: string;
@@ -134,6 +135,7 @@ export function toPsychologySession(row: PsychologySessionRow) {
 
 export function toPsychologySessionMessage(row: PsychologySessionMessageRow) {
   return {
+    id: row.id,
     role: row.role,
     content: row.content,
     createdAt: row.created_at,
