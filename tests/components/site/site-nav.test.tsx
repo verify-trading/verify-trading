@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let mockPathname = "/ask";
 let mockIsSignedIn = true;
@@ -34,6 +34,8 @@ vi.mock("@/components/ui/sheet", () => ({
 import { SiteNav } from "@/components/site/site-nav";
 
 describe("SiteNav", () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     mockPathname = "/ask";
     mockIsSignedIn = true;
