@@ -82,14 +82,14 @@ export default function RootLayout({
           `}
         </Script>
         {/* Rewardful tracking */}
-        <Script id="rewardful-queue" strategy="lazyOnload">
-          {`(function(w,r){w._rwq=r;w[r]=w[r]||function(){(w[r].q=w[r].q||[]).push(arguments)}})(window,'rewardful');`}
-        </Script>
-        <Script
-          src="https://r.wdfl.co/rw.js"
-          data-rewardful="2f6e2f"
-          strategy="lazyOnload"
-        />
+<Script id="rewardful-queue" strategy="afterInteractive">
+  {`(function(w,r){w._rwq=r;w[r]=w[r]||function(){(w[r].q=w[r].q||[]).push(arguments)}})(window,'rewardful');`}
+</Script>
+<Script
+  src="https://r.wdfl.co/rw.js"
+  data-rewardful="2f6e2f"
+  strategy="afterInteractive"
+/>
         {/* Meta Pixel */}
         {META_PIXEL_ID ? (
           <>

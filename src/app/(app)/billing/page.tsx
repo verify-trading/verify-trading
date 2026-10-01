@@ -5,6 +5,7 @@ import { BillingPageView } from "@/components/billing/billing-page-view";
 import { CheckoutAutoStart } from "@/components/billing/checkout-auto-start";
 import { getSessionUser } from "@/lib/auth/session";
 import type { BillingPlanKey } from "@/lib/billing/config";
+import { isBillingPromoOfferKey } from "@/lib/billing/promo-offers";
 import {
   billingStatusGrantsProAccess,
   canManageSubscription,
@@ -44,6 +45,7 @@ type BillingSubscriptionRow = {
 const BILLING_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
 });
+
 const GBP_BILLING_FORMATTER = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "GBP",
@@ -54,9 +56,11 @@ function readSearchParam(
   key: string,
 ): string | null {
   const value = params[key];
+
   if (Array.isArray(value)) {
     return value[0] ?? null;
   }
+
   return value ?? null;
 }
 
@@ -66,6 +70,7 @@ function formatBillingDate(value: string | null): string | null {
   }
 
   const date = new Date(value);
+
   if (Number.isNaN(date.valueOf())) {
     return null;
   }
@@ -113,6 +118,7 @@ function isSubscriptionScheduledToCancel(
   }
 
   const cancelAt = new Date(subscription.cancel_at);
+
   if (Number.isNaN(cancelAt.valueOf())) {
     return false;
   }
@@ -155,15 +161,30 @@ export default async function BillingPage({
     // Keep the promo-link params so checkout still resumes after signing in.
     const planParam = readSearchParam(resolvedSearchParams, "plan");
     const trialParam = readSearchParam(resolvedSearchParams, "trial");
+    const offerParam = readSearchParam(resolvedSearchParams, "offer");
+
     const query = new URLSearchParams({
       ...(planParam && { plan: planParam }),
       ...(trialParam && { trial: trialParam }),
+      ...(offerParam && { offer: offerParam }),
     }).toString();
-    redirect(`/login?next=${encodeURIComponent(`/billing${query ? `?${query}` : ""}`)}`);
+
+    redirect(
+      `/login?next=${encodeURIComponent(
+        `/billing${query ? `?${query}` : ""}`,
+      )}`,
+    );
   }
 
-  const checkoutState = readSearchParam(resolvedSearchParams, "checkout");
-  const checkoutSessionId = readSearchParam(resolvedSearchParams, "session_id");
+  const checkoutState = readSearchParam(
+    resolvedSearchParams,
+    "checkout",
+  );
+  const checkoutSessionId = readSearchParam(
+    resolvedSearchParams,
+    "session_id",
+  );
+
   if (checkoutState === "cancelled") {
     redirect("/billing");
   }
@@ -180,7 +201,10 @@ export default async function BillingPage({
         "status, current_period_end, cancel_at_period_end, cancel_at, currency, unit_amount, interval, interval_count",
       )
       .eq("user_id", session.user.id)
-      .order("current_period_end", { ascending: false, nullsFirst: false })
+      .order("current_period_end", {
+        ascending: false,
+        nullsFirst: false,
+      })
       .order("updated_at", { ascending: false })
       .limit(1),
   ]);
@@ -195,18 +219,26 @@ export default async function BillingPage({
 
   const profile = (profileResult.data as ProfileRow | null) ?? null;
   const subscription =
-    ((subscriptionResult.data as BillingSubscriptionRow[] | null) ?? [])[0] ??
-    null;
+    (
+      (subscriptionResult.data as BillingSubscriptionRow[] | null) ??
+      []
+    )[0] ?? null;
+
   const hasProTier = profile?.tier === "pro";
-  const hasStripeCustomer = Boolean(profile?.stripe_customer_id?.trim());
+  const hasStripeCustomer = Boolean(
+    profile?.stripe_customer_id?.trim(),
+  );
   const canOpenBillingPortal = hasStripeCustomer;
-  const canManageSubscriptionActions = canManageSubscription(subscription?.status);
+  const canManageSubscriptionActions = canManageSubscription(
+    subscription?.status,
+  );
   const showSubscriptionManagement =
     hasProTier ||
     canManageSubscriptionActions ||
     billingStatusGrantsProAccess(subscription?.status);
 
   let freeAskUsage: AskUsageSummary | null = null;
+
   if (!showSubscriptionManagement) {
     const usageState = await loadAskUsageState(
       session.supabase,
@@ -214,7 +246,9 @@ export default async function BillingPage({
     );
     freeAskUsage = usageState.usage;
   }
-  const isCanceling = isSubscriptionScheduledToCancel(subscription);
+
+  const isCanceling =
+    isSubscriptionScheduledToCancel(subscription);
   const renewalDate = formatBillingDate(
     subscription?.current_period_end ?? null,
   );
@@ -223,14 +257,29 @@ export default async function BillingPage({
     profile?.display_name?.trim() ||
     session.user.email?.split("@")[0] ||
     "there";
-  const currentPlanLabel = getCurrentPlanLabel(profile, subscription);
+  const currentPlanLabel = getCurrentPlanLabel(
+    profile,
+    subscription,
+  );
 
   // Resume checkout for a plan picked while signed out (?plan=<plan>), unless the
   // user already manages a subscription.
-  const planParam = readSearchParam(resolvedSearchParams, "plan");
+  const planParam = readSearchParam(
+    resolvedSearchParams,
+    "plan",
+  );
+  const offerParam = readSearchParam(
+    resolvedSearchParams,
+    "offer",
+  );
+
   const resumeCheckoutPlan: BillingPlanKey | null =
     !showSubscriptionManagement &&
-    (planParam === "weekly" || planParam === "monthly" || planParam === "annual")
+    (
+      planParam === "weekly" ||
+      planParam === "monthly" ||
+      planParam === "annual"
+    )
       ? planParam
       : null;
 
@@ -239,24 +288,32 @@ export default async function BillingPage({
       {resumeCheckoutPlan ? (
         <CheckoutAutoStart
           plan={resumeCheckoutPlan}
-          trial={readSearchParam(resolvedSearchParams, "trial") === "1"}
+          trial={
+            readSearchParam(resolvedSearchParams, "trial") === "1"
+          }
+          offer={
+            isBillingPromoOfferKey(offerParam)
+              ? offerParam
+              : undefined
+          }
         />
       ) : null}
+
       <BillingPageView
-      subscription={subscription}
-      customerName={customerName}
-      currentPlanLabel={currentPlanLabel}
-      state={{
-        canOpenBillingPortal,
-        canManageSubscriptionActions,
-        showSubscriptionManagement,
-        isCanceling,
-      }}
-      renewalDate={renewalDate}
-      recurringAmount={recurringAmount}
-      freeAskUsage={freeAskUsage}
-      checkoutState={checkoutState}
-      checkoutSessionId={checkoutSessionId}
+        subscription={subscription}
+        customerName={customerName}
+        currentPlanLabel={currentPlanLabel}
+        state={{
+          canOpenBillingPortal,
+          canManageSubscriptionActions,
+          showSubscriptionManagement,
+          isCanceling,
+        }}
+        renewalDate={renewalDate}
+        recurringAmount={recurringAmount}
+        freeAskUsage={freeAskUsage}
+        checkoutState={checkoutState}
+        checkoutSessionId={checkoutSessionId}
       />
     </>
   );

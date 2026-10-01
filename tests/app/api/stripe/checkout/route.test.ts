@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { mockCookieGet } = vi.hoisted(() => ({
+  mockCookieGet: vi.fn(),
+}));
+
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(async () => ({ get: mockCookieGet })),
+}));
+
 vi.mock("@/lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
@@ -64,6 +72,7 @@ describe("POST /api/stripe/checkout", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCookieGet.mockReturnValue(undefined);
 
     vi.mocked(getSessionUser).mockResolvedValue({
       user: {
@@ -360,8 +369,82 @@ describe("POST /api/stripe/checkout", () => {
         idempotencyKey: "billing-checkout:token-trial:trial",
       },
     );
-    // Checkout's default payment_method_collection ("always") is what forces card entry.
-    expect(createCheckoutSession.mock.calls[0]?.[0]).not.toHaveProperty("payment_method_collection");
+    expect(createCheckoutSession.mock.calls[0]?.[0]).toHaveProperty(
+      "payment_method_collection",
+      "always",
+    );
+  });
+
+  it("gives a verified Tubman referral 14 days on Pro Monthly", async () => {
+    mockCookieGet.mockReturnValue({ name: "vt_promo_offer", value: "tubman-14-day" });
+    vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
+      checkoutToken: "token-tubman",
+      stripeCheckoutSessionId: null,
+      checkoutUrl: null,
+      expiresAt: new Date().toISOString(),
+      reused: false,
+      replacedCheckoutSessionId: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "monthly", offer: "tubman-14-day" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payment_method_collection: "always",
+        subscription_data: expect.objectContaining({
+          trial_period_days: 14,
+          metadata: expect.objectContaining({
+            promotionOffer: "tubman-14-day",
+            promotionTrialDays: "14",
+          }),
+        }),
+      }),
+      { idempotencyKey: "billing-checkout:token-tubman:offer:tubman-14-day" },
+    );
+  });
+
+  it("rejects the Tubman offer without the referral cookie", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "monthly", offer: "tubman-14-day" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("does not silently charge a previous subscriber who requests the Tubman trial", async () => {
+    mockCookieGet.mockReturnValue({ name: "vt_promo_offer", value: "tubman-14-day" });
+    listSubscriptions.mockReturnValue(asyncList([{ id: "sub_old", status: "canceled" }]));
+    vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
+      checkoutToken: "token-tubman-repeat",
+      stripeCheckoutSessionId: null,
+      checkoutUrl: null,
+      expiresAt: new Date().toISOString(),
+      reused: false,
+      replacedCheckoutSessionId: null,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan: "monthly", offer: "tubman-14-day" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it("never stores a trial checkout URL for later reuse", async () => {
