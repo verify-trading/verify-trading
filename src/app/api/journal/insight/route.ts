@@ -13,16 +13,16 @@ export async function GET() {
 
   const { data: cached } = await session.supabase
     .from("journal_insights")
-    .select("insight_text, generated_at")
+    .select("id, insight_text, generated_at")
     .eq("user_id", session.user.id)
     .order("generated_at", { ascending: false })
     .limit(1);
-  const latest = Array.isArray(cached) ? cached[0] as { insight_text: string; generated_at: string } | undefined : undefined;
+  const latest = Array.isArray(cached) ? cached[0] as { id: string; insight_text: string; generated_at: string } | undefined : undefined;
   if (latest && Date.now() - new Date(latest.generated_at).getTime() < 7 * 24 * 60 * 60 * 1000) {
-    return NextResponse.json({ insight: latest.insight_text, generatedAt: latest.generated_at }, { headers: PRIVATE_CACHE_HEADERS });
+    return NextResponse.json({ insight: latest.insight_text, generatedAt: latest.generated_at, insightId: latest.id }, { headers: PRIVATE_CACHE_HEADERS });
   }
 
-  return NextResponse.json({ insight: null, generatedAt: null, status: "needs_generation" }, { headers: PRIVATE_CACHE_HEADERS });
+  return NextResponse.json({ insight: null, generatedAt: null, insightId: null, status: "needs_generation" }, { headers: PRIVATE_CACHE_HEADERS });
 }
 
 export async function POST() {
@@ -71,8 +71,8 @@ export async function POST() {
   const { data } = await session.supabase
     .from("journal_insights")
     .insert({ user_id: session.user.id, insight_text: insight })
-    .select("generated_at")
+    .select("id, generated_at")
     .single();
 
-  return NextResponse.json({ insight, generatedAt: (data as { generated_at?: string } | null)?.generated_at ?? new Date().toISOString() }, { headers: PRIVATE_CACHE_HEADERS });
+  return NextResponse.json({ insight, generatedAt: (data as { generated_at?: string } | null)?.generated_at ?? new Date().toISOString(), insightId: (data as { id?: string } | null)?.id ?? null }, { headers: PRIVATE_CACHE_HEADERS });
 }

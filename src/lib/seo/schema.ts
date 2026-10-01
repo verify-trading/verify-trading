@@ -3,7 +3,6 @@
  * (`src/components/seo/json-ld.tsx`). Keep these truthful: no fabricated
  * ratings, social links, or claims — only what the product actually is.
  */
-import type { FaqItem } from "@/lib/landing/faq";
 import { getAppName, getSiteDescription, getSiteUrl } from "@/lib/site-config";
 
 /** Plain JSON-LD object accepted by the `<JsonLd>` renderer's `data` prop. */
@@ -56,7 +55,7 @@ export function softwareApplicationSchema(): SchemaOrgObject {
   };
 }
 
-export function faqPageSchema(faqs: FaqItem[]): SchemaOrgObject {
+export function faqPageSchema(faqs: Array<{ q: string; a: string }>): SchemaOrgObject {
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",

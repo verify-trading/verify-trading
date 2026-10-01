@@ -125,6 +125,7 @@ describe("Journal insight API", () => {
     await expect(response.json()).resolves.toEqual({
       insight: "You cut winners short after a loss.",
       generatedAt: "2026-07-30T10:00:00.000Z",
+      insightId: null,
     });
     // The imported day funds no part of the prompt — a placeholder mood and no note would
     // read back to the trader as a feeling they never reported.
@@ -183,6 +184,7 @@ describe("Journal insight API", () => {
     await expect((await GET()).json()).resolves.toEqual({
       insight: null,
       generatedAt: null,
+      insightId: null,
       status: "needs_generation",
     });
   });

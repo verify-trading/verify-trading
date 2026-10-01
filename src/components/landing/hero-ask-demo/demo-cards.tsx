@@ -48,11 +48,11 @@ function StatTile({
   valueClassName?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-xl bg-[var(--vt-card-alt)] p-2 text-center">
-      <div className="text-[9px] uppercase tracking-[0.12em] text-[var(--vt-muted)]">
+    <div className="min-w-0 rounded-xl bg-[var(--vt-card-alt)] px-1.5 py-1.5 text-center">
+      <div className="truncate text-[8.5px] uppercase tracking-[0.06em] text-[var(--vt-muted)]">
         {label}
       </div>
-      <div className={`mt-0.5 break-words text-[12px] font-bold ${valueClassName}`}>
+      <div className={`mt-0.5 truncate text-[11px] font-bold sm:text-[12px] ${valueClassName}`}>
         {value}
       </div>
     </div>

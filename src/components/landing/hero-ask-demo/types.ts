@@ -151,3 +151,9 @@ export const DEMO_EXCHANGES: DemoExchange[] = [
     ],
   },
 ];
+
+/** Screens the phone demo cycles through. Ask replays DEMO_EXCHANGES; the rest are static mocks. */
+export type DemoScreen = "ask" | "markets" | "calendar" | "journal" | "mind" | "chat";
+export const DEMO_SCREENS: DemoScreen[] = ["ask", "markets", "calendar", "journal", "mind", "chat"];
+/** How long each static Pro screen is held before the demo moves on. */
+export const PRO_SCREEN_HOLD_MS = 4500;

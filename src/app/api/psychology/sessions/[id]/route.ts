@@ -106,7 +106,7 @@ const clearConversationLink = (supabase: SupabaseClient, userId: string, session
 const readMessages = (supabase: SupabaseClient, userId: string, sessionId: string) =>
   supabase
     .from("psychology_session_messages")
-    .select("role, content, created_at")
+    .select("id, role, content, created_at")
     .eq("user_id", userId)
     .eq("session_id", sessionId)
     .order("created_at", { ascending: true })

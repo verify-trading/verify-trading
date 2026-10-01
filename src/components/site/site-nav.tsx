@@ -17,7 +17,7 @@ import { useSupabaseAuth } from "@/lib/supabase/auth-context";
 import { cn } from "@/lib/utils";
 
 /** The web sheet uses the same core glyphs as the mobile tab bar. */
-function AskNavIcon({ size = 24, strokeWidth = 1.8, color, absoluteStrokeWidth, ...props }: LucideProps) {
+export function AskNavIcon({ size = 24, strokeWidth = 1.8, color, absoluteStrokeWidth, ...props }: LucideProps) {
   void absoluteStrokeWidth;
   return (
     <svg
@@ -39,7 +39,7 @@ function AskNavIcon({ size = 24, strokeWidth = 1.8, color, absoluteStrokeWidth, 
   );
 }
 
-function MarketsNavIcon({ size = 24, strokeWidth = 1.8, color, absoluteStrokeWidth, ...props }: LucideProps) {
+export function MarketsNavIcon({ size = 24, strokeWidth = 1.8, color, absoluteStrokeWidth, ...props }: LucideProps) {
   void absoluteStrokeWidth;
   return (
     <svg
@@ -107,7 +107,8 @@ function trackNavItemClick(label: string) {
   }
 }
 
-export function SiteNav() {
+/** `slim`: logo + a single call-to-action pill (homepage) — no menu or tabs. */
+export function SiteNav({ slim = false }: { slim?: boolean } = {}) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const hasMounted = useSyncExternalStore(subscribeToClient, getClientSnapshot, getServerSnapshot);
@@ -135,6 +136,29 @@ export function SiteNav() {
   const showMenu = visibleNavItems.length > 0;
   /** Avoid hydration mismatch: SSR and first paint match (end-aligned); after mount, centre when signed in. */
   const desktopNavCentered = hasMounted && ready && isSignedIn;
+
+  if (slim) {
+    const signedIn = ready && isSignedIn;
+    return (
+      <nav className="sticky top-0 z-50 border-b border-white/[0.07] bg-[rgb(10,13,46)]/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-2 px-3 sm:px-4 lg:px-6">
+          <Link href="/" className="shrink-0">
+            <Logo compact showWordmark />
+          </Link>
+          <Button
+            asChild
+            variant="outline"
+            size="pillCompact"
+            className="cursor-pointer border-[var(--vt-coral)] px-3.5 text-[var(--vt-coral)] hover:bg-[var(--vt-coral)]/10 hover:text-[var(--vt-coral)] sm:px-5"
+          >
+            <Link href={signedIn ? "/ask" : "/signup"} prefetch={false}>
+              {signedIn ? "Open app" : "Get started"}
+            </Link>
+          </Button>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <>

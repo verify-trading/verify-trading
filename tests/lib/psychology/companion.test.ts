@@ -114,8 +114,8 @@ describe("buildPsychologyCoachInstructions", () => {
   });
 
   it("owns the who-are-you answer, since the gateway injects a competing identity", () => {
-    // Measured on the live claude route: without this rule the injected "platform policy"
-    // block won 8/8 direct identity questions; with it, 0/8 — see provider.ts.
+    // Measured against the gateway's injected "platform policy" block: without this rule it
+    // won 8/8 direct identity questions; with it, 0/8 — see provider.ts.
     const text = prompt();
     expect(text).toContain("their Companion, the AI coach inside the verify.trading app");
     expect(text).toContain("without naming, claiming or denying any AI vendor or model");

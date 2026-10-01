@@ -19,21 +19,23 @@ function resolveOpenAIBaseURL() {
   return /\/v\d+$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
 }
 
-// The daily brief, the simple writers, and Ask when ASK_MODEL names a gpt model.
+// Ask, the coach, the daily brief and the simple writers. The Claude route can't serve Ask:
+// it does not implement the SERVER-side web_search/web_fetch tools, and silently strips them —
+// HTTP 200 with an uncited answer invented from memory (measured 0 real searches vs 7/8).
 export const codexProvider = createOpenAI({ baseURL: resolveOpenAIBaseURL() });
 
-// The gateway's NATIVE Anthropic route (/v1/messages), which runs Anthropic's own server-side
-// web_search — measured 2026-09-15: real searches, cited URLs resolve, ~15-30 s a turn. The
-// OpenAI-compatible route in front of claude models is the one that strips the tool; this is
-// not that. Terra on the codex route had grown to 120 s+ per searching turn, past the function
-// limit, which is what "Ask generation started" with no answer was.
+// The gateway's NATIVE Anthropic route (/v1/messages), taken only when ASK_MODEL or
+// ASK_COACH_MODEL names a `claude-` model. It runs Anthropic's own server-side web_search —
+// measured 2026-09-15: real searches, cited URLs resolve, ~15-30 s a turn. Kept as an escape
+// hatch; the gpt/codex route above is the default.
 const anthropicProvider = createAnthropic({
   baseURL: resolveOpenAIBaseURL(),
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-/** Primary model for Ask. A `claude-` id takes the Anthropic route; anything else, the codex one. */
-export const DEFAULT_ASK_MODEL = "claude-sonnet-5";
+/** Primary model for Ask. Fastest of the gateway's models that reliably searches. A `claude-`
+ *  id takes the Anthropic route; anything else, the codex one. */
+export const DEFAULT_ASK_MODEL = "gpt-5.6-terra";
 
 const isClaude = (modelId: string) => modelId.startsWith("claude-");
 
@@ -48,8 +50,10 @@ const coachProvider = createOpenAI({
 });
 
 // The Mind coach only. Not ASK_SIMPLE_MODEL: that one also feeds the journal/challenge
-// writers, which are not voice and should not follow the coach's tradeoffs.
-export const DEFAULT_COACH_MODEL = "claude-sonnet-5";
+// writers, which are not voice and should not follow the coach's tradeoffs. Same model as
+// Ask; reasoning is pinned low at the call site below, because on a voice call the thinking
+// is dead air.
+export const DEFAULT_COACH_MODEL = "gpt-5.6-terra";
 
 export function getAskPrimaryModelId() {
   return process.env.ASK_MODEL ?? DEFAULT_ASK_MODEL;
@@ -122,24 +126,32 @@ export function getAskSimpleModel() {
 }
 
 /**
- * `.chat()` is load-bearing: the SDK defaults to the Responses API, which serves no claude
- * model here (/v1/messages is blocked for our group too). Raw, with no askModel middleware —
- * `store`/`reasoningEffort` are OpenAI-isms, and stripping maxOutputTokens is pointless
- * because `max_tokens` is silently IGNORED on this route (asked 5, got 169).
+ * A `claude-` id takes the gateway's Claude route, where `.chat()` is load-bearing: the SDK
+ * defaults to the Responses API, which serves no claude model there (/v1/messages is blocked
+ * for our group too). That path is raw, no askModel middleware — `store`/`reasoningEffort` are
+ * OpenAI-isms, and stripping maxOutputTokens is pointless because `max_tokens` is silently
+ * IGNORED there (asked 5, got 169). The gpt models take the codex (Responses) route like Ask.
  *
- * Prompt-hostile: the gateway injects a ~450-token block asserting a coding-assistant
- * identity "by platform policy", ranked above our system prompt and varying per call (so it
- * also defeats prefix caching). It won 8/8 on "who am I talking to?" until the persona
+ * Prompt-hostile either way: the gateway injects a competing coding-assistant identity block
+ * ranked above our system prompt. It won 8/8 on "who am I talking to?" until the persona
  * answered that itself — the identity rule in buildPsychologyCoachInstructions is the
  * counter and must stay.
  */
 export function getPsychologyCoachModel() {
+  const modelId = getPsychologyCoachModelId();
+  if (!isClaude(modelId)) {
+    // Reasoning tokens are dead air on a voice call: "low" roughly halves time to first
+    // token, and the coach's replies are short and empathetic rather than analytical, so
+    // little is lost. NOT "minimal": on this gateway that returns an EMPTY text stream —
+    // the call succeeds, streams no chunks, and the trader hears silence.
+    return askModel(modelId, { reasoningEffort: "low" });
+  }
   // Fail loudly rather than let createOpenAI fall back to OPENAI_API_KEY, whose group
   // errors on every claude model — i.e. a coach that greets the trader and then dies.
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not set; the Mind coach cannot reach the gateway's Claude route.");
   }
-  return coachProvider.chat(getPsychologyCoachModelId());
+  return coachProvider.chat(modelId);
 }
 
 // The Responses API caches long prompt prefixes on its own, so the static block just has to
