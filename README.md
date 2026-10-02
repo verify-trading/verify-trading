@@ -91,6 +91,12 @@ where cache_key = 'cron:markets:last-run';
 
 Deployment host and product copy are driven by env vars (`NEXT_PUBLIC_APP_NAME`, optional title/description). There is no hardcoded client origin list in this app; configure CORS or Supabase URL allowlists in those services if needed.
 
+## Shareable monthly trial link
+
+Share `https://www.verify.trading/?offer=monthly-14-day` after deploying this change. New subscribers sign up (or sign in to an existing free account), then enter a card in Stripe Checkout to start 14 days of Pro free. After the trial, the existing Pro Monthly plan renews at £19.99/month until canceled. Customers with a previous subscription cannot claim another trial. No coupon code or new Stripe price is needed.
+
+The existing Tubman referral link continues to use its separate offer and referral attribution.
+
 ## Security notes
 
 - **Secrets:** Keep `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and market API keys **server-only** (never `NEXT_PUBLIC_*` except Supabase URL + anon if you add them later). Rotate keys if exposed.

@@ -10,8 +10,8 @@ import {
 } from "@/lib/billing/config";
 import {
   getBillingPromoOffer,
+  BILLING_PROMO_OFFER_KEYS,
   PROMO_OFFER_COOKIE_NAME,
-  TUBMAN_OFFER_KEY,
 } from "@/lib/billing/promo-offers";
 import {
   claimBillingCheckoutSession,
@@ -41,8 +41,8 @@ const checkoutRequestSchema = z.object({
   source: z.enum(["web", "mobile"]).default("web"),
   /** Existing promo links start with a free week. */
   trial: z.boolean().default(false),
-  /** Tubman referral offer starts Pro Monthly with 14 days free. */
-  offer: z.literal(TUBMAN_OFFER_KEY).optional(),
+  /** Promotional offers start Pro Monthly with 14 days free. */
+  offer: z.enum(BILLING_PROMO_OFFER_KEYS).optional(),
 });
 
 /**
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
         return jsonApiError(
           403,
           "promo_offer_not_verified",
-          "Open the original referral link again to activate this offer.",
+          "Open the original promotional link again to activate this offer.",
         );
       }
 
@@ -305,6 +305,7 @@ export async function POST(request: Request) {
             session.user.id,
           billing_address_collection: "auto",
           payment_method_collection: "always",
+          payment_method_types: promoOffer ? ["card"] : undefined,
           allow_promotion_codes: true,
           line_items: [
             {

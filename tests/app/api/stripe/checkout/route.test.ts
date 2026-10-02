@@ -375,8 +375,8 @@ describe("POST /api/stripe/checkout", () => {
     );
   });
 
-  it("gives a verified Tubman referral 14 days on Pro Monthly", async () => {
-    mockCookieGet.mockReturnValue({ name: "vt_promo_offer", value: "tubman-14-day" });
+  it.each(["tubman-14-day", "monthly-14-day"])("gives the verified %s offer 14 days on Pro Monthly with a required card", async (offer) => {
+    mockCookieGet.mockReturnValue({ name: "vt_promo_offer", value: offer });
     vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
       checkoutToken: "token-tubman",
       stripeCheckoutSessionId: null,
@@ -389,7 +389,7 @@ describe("POST /api/stripe/checkout", () => {
     const response = await POST(
       new Request("http://localhost/api/stripe/checkout", {
         method: "POST",
-        body: JSON.stringify({ plan: "monthly", offer: "tubman-14-day" }),
+        body: JSON.stringify({ plan: "monthly", offer }),
         headers: { "content-type": "application/json" },
       }),
     );
@@ -398,23 +398,25 @@ describe("POST /api/stripe/checkout", () => {
     expect(createCheckoutSession).toHaveBeenCalledWith(
       expect.objectContaining({
         payment_method_collection: "always",
+        payment_method_types: ["card"],
+        line_items: [{ price: "price_standard", quantity: 1 }],
         subscription_data: expect.objectContaining({
           trial_period_days: 14,
           metadata: expect.objectContaining({
-            promotionOffer: "tubman-14-day",
+            promotionOffer: offer,
             promotionTrialDays: "14",
           }),
         }),
       }),
-      { idempotencyKey: "billing-checkout:token-tubman:offer:tubman-14-day" },
+      { idempotencyKey: `billing-checkout:token-tubman:offer:${offer}` },
     );
   });
 
-  it("rejects the Tubman offer without the referral cookie", async () => {
+  it.each(["tubman-14-day", "monthly-14-day"])("rejects the %s offer without its promo cookie", async (offer) => {
     const response = await POST(
       new Request("http://localhost/api/stripe/checkout", {
         method: "POST",
-        body: JSON.stringify({ plan: "monthly", offer: "tubman-14-day" }),
+        body: JSON.stringify({ plan: "monthly", offer }),
         headers: { "content-type": "application/json" },
       }),
     );
@@ -423,8 +425,8 @@ describe("POST /api/stripe/checkout", () => {
     expect(createCheckoutSession).not.toHaveBeenCalled();
   });
 
-  it("does not silently charge a previous subscriber who requests the Tubman trial", async () => {
-    mockCookieGet.mockReturnValue({ name: "vt_promo_offer", value: "tubman-14-day" });
+  it.each(["tubman-14-day", "monthly-14-day"])("does not silently charge a previous subscriber who requests the %s trial", async (offer) => {
+    mockCookieGet.mockReturnValue({ name: "vt_promo_offer", value: offer });
     listSubscriptions.mockReturnValue(asyncList([{ id: "sub_old", status: "canceled" }]));
     vi.mocked(claimBillingCheckoutSession).mockResolvedValue({
       checkoutToken: "token-tubman-repeat",
@@ -438,12 +440,26 @@ describe("POST /api/stripe/checkout", () => {
     const response = await POST(
       new Request("http://localhost/api/stripe/checkout", {
         method: "POST",
-        body: JSON.stringify({ plan: "monthly", offer: "tubman-14-day" }),
+        body: JSON.stringify({ plan: "monthly", offer }),
         headers: { "content-type": "application/json" },
       }),
     );
 
     expect(response.status).toBe(409);
+    expect(createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it.each(["weekly", "annual"])("rejects the generic monthly offer on the %s plan", async (plan) => {
+    mockCookieGet.mockReturnValue({ name: "vt_promo_offer", value: "monthly-14-day" });
+    const response = await POST(
+      new Request("http://localhost/api/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan, offer: "monthly-14-day" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
     expect(createCheckoutSession).not.toHaveBeenCalled();
   });
 

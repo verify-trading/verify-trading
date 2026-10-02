@@ -64,6 +64,49 @@ describe("middleware", () => {
     expect(response).toBe(baseResponse);
   });
 
+  it("sends a signed-out generic trial link to signup and preserves session cookies", async () => {
+    const baseResponse = NextResponse.next();
+    baseResponse.cookies.set("sb-session", "refreshed-token");
+    vi.mocked(updateSession).mockResolvedValue({ response: baseResponse, user: null });
+
+    const response = await middleware(
+      new NextRequest("http://localhost/?offer=monthly-14-day"),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "http://localhost/signup?next=%2Fbilling%3Fplan%3Dmonthly%26offer%3Dmonthly-14-day",
+    );
+    expect(response.headers.get("set-cookie")).toContain("vt_promo_offer=monthly-14-day");
+    expect(response.headers.get("set-cookie")).toContain("HttpOnly");
+    expect(response.headers.get("set-cookie")).toContain("sb-session=refreshed-token");
+  });
+
+  it("sends a signed-in generic trial link directly to monthly checkout", async () => {
+    vi.mocked(updateSession).mockResolvedValue({
+      response: NextResponse.next(),
+      user: { id: "user-1" } as never,
+    });
+
+    const response = await middleware(
+      new NextRequest("http://localhost/?offer=monthly-14-day"),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "http://localhost/billing?plan=monthly&offer=monthly-14-day",
+    );
+    expect(response.headers.get("set-cookie")).toContain("vt_promo_offer=monthly-14-day");
+  });
+
+  it("ignores unknown promotional offers", async () => {
+    const baseResponse = NextResponse.next();
+    vi.mocked(updateSession).mockResolvedValue({ response: baseResponse, user: null });
+
+    const response = await middleware(new NextRequest("http://localhost/?offer=unknown"));
+
+    expect(response).toBe(baseResponse);
+    expect(response.cookies.get("vt_promo_offer")).toBeUndefined();
+  });
+
   it("sends a signed-out Tubman referral to signup and records the offer", async () => {
     vi.mocked(updateSession).mockResolvedValue({
       response: NextResponse.next(),

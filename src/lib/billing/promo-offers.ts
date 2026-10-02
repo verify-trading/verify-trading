@@ -2,9 +2,11 @@ import type { BillingPlanKey } from "@/lib/billing/config";
 
 export const PROMO_OFFER_COOKIE_NAME = "vt_promo_offer";
 export const TUBMAN_OFFER_KEY = "tubman-14-day";
+export const MONTHLY_TRIAL_OFFER_KEY = "monthly-14-day";
 export const TUBMAN_REFERRAL_TOKEN = "Tubman";
 
-export type BillingPromoOfferKey = typeof TUBMAN_OFFER_KEY;
+export const BILLING_PROMO_OFFER_KEYS = [TUBMAN_OFFER_KEY, MONTHLY_TRIAL_OFFER_KEY] as const;
+export type BillingPromoOfferKey = (typeof BILLING_PROMO_OFFER_KEYS)[number];
 
 export type BillingPromoOffer = {
   key: BillingPromoOfferKey;
@@ -18,12 +20,17 @@ const BILLING_PROMO_OFFERS: Record<BillingPromoOfferKey, BillingPromoOffer> = {
     plan: "monthly",
     trialPeriodDays: 14,
   },
+  [MONTHLY_TRIAL_OFFER_KEY]: {
+    key: MONTHLY_TRIAL_OFFER_KEY,
+    plan: "monthly",
+    trialPeriodDays: 14,
+  },
 };
 
 export function isBillingPromoOfferKey(
   value: string | null,
 ): value is BillingPromoOfferKey {
-  return value === TUBMAN_OFFER_KEY;
+  return BILLING_PROMO_OFFER_KEYS.some((key) => key === value);
 }
 
 export function getBillingPromoOffer(
@@ -38,6 +45,6 @@ export function isTubmanReferralToken(value: string | null): boolean {
   return value?.trim().toLowerCase() === TUBMAN_REFERRAL_TOKEN.toLowerCase();
 }
 
-export function getTubmanBillingPath(): string {
-  return `/billing?plan=monthly&offer=${TUBMAN_OFFER_KEY}`;
+export function getPromoBillingPath(offer: BillingPromoOffer): string {
+  return `/billing?plan=${offer.plan}&offer=${offer.key}`;
 }

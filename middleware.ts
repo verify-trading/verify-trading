@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { AUTH_PAGE_PATHS } from "@/lib/auth/auth-paths";
 import {
-  getTubmanBillingPath,
+  getBillingPromoOffer,
+  getPromoBillingPath,
   isTubmanReferralToken,
   PROMO_OFFER_COOKIE_NAME,
   TUBMAN_OFFER_KEY,
@@ -52,9 +53,12 @@ export async function middleware(request: NextRequest) {
   const isTubmanReferral = isTubmanReferralToken(
     request.nextUrl.searchParams.get("via"),
   );
+  const promoOffer = getBillingPromoOffer(
+    isTubmanReferral ? TUBMAN_OFFER_KEY : request.nextUrl.searchParams.get("offer"),
+  );
 
-  if (isTubmanReferral) {
-    response.cookies.set(PROMO_OFFER_COOKIE_NAME, TUBMAN_OFFER_KEY, {
+  if (promoOffer) {
+    response.cookies.set(PROMO_OFFER_COOKIE_NAME, promoOffer.key, {
       httpOnly: true,
       maxAge: 30 * 24 * 60 * 60,
       path: "/",
@@ -63,16 +67,18 @@ export async function middleware(request: NextRequest) {
     });
 
     if (pathname === "/") {
-      const billingPath = getTubmanBillingPath();
+      const billingPath = getPromoBillingPath(promoOffer);
       const destination = new URL(
         user ? billingPath : "/signup",
         request.url,
       );
 
-      destination.searchParams.set(
-        "via",
-        request.nextUrl.searchParams.get("via")!,
-      );
+      if (isTubmanReferral) {
+        destination.searchParams.set(
+          "via",
+          request.nextUrl.searchParams.get("via")!,
+        );
+      }
 
       if (!user) {
         destination.searchParams.set("next", billingPath);
