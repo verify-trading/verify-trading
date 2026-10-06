@@ -10,6 +10,7 @@ import type { PricingPageBillingContext } from "@/lib/billing/pricing-page-data"
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { cn } from "@/lib/utils";
 
+import { PricingFeatures } from "./pricing-features";
 import { ProAnnualPlanCard, ProMonthlyPlanCard, ProWeeklyPlanCard } from "./pro-plan-cards";
 
 /**
@@ -49,7 +50,15 @@ export function PricingPlansSection({
         </Link>
       ) : null}
       {compactHeader ? (
-        <h1 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">Pricing</h1>
+        <div className="text-center">
+          <SectionEyebrow>Pricing</SectionEyebrow>
+          <h1 className="mt-2 text-3xl font-bold tracking-[-0.03em] text-white sm:text-5xl">Simple pricing. Full access.</h1>
+          <p className="mt-3 text-base text-slate-300 sm:text-lg">One Pro membership — every feature. Billed your way.</p>
+          <Button asChild size="pill" className="mt-5">
+            <a href="#plans">Get Pro →</a>
+          </Button>
+          <p className="mt-3 text-xs text-slate-400">No commitment — cancel anytime.</p>
+        </div>
       ) : (
         <div className="max-w-2xl">
           <SectionEyebrow>Pricing</SectionEyebrow>
@@ -64,11 +73,14 @@ export function PricingPlansSection({
         </div>
       )}
 
+      {compactHeader ? <PricingFeatures /> : null}
+
       <div
+        id="plans"
         className={cn(
-          "grid gap-4",
+          "grid scroll-mt-20 gap-4",
           hideFreePlan ? "sm:grid-cols-2 lg:grid-cols-3" : "md:grid-cols-2 xl:grid-cols-4",
-          compactHeader ? "mt-5" : "mt-12",
+          compactHeader ? "mt-8" : "mt-12",
         )}
       >
         {!hideFreePlan ? (
@@ -80,6 +92,7 @@ export function PricingPlansSection({
               {[
                 `${FREE_DAILY_ASK_LIMIT} Ask chats per day`,
                 "Broker verification",
+                "Live market prices",
                 "Trade Analysis",
                 "Risk Calculators",
               ].map((feature) => (

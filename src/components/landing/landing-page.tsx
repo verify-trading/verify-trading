@@ -1,5 +1,7 @@
 "use client";
 
+import { ShieldCheck } from "lucide-react";
+
 import { HeroAskDemoLazy } from "@/components/landing/hero-ask-demo/lazy";
 import type { HeroLiveBriefing } from "@/components/landing/hero-ask-demo/types";
 import { AppWordmarkInline } from "@/components/site/logo";
@@ -75,6 +77,57 @@ function StoreBadges() {
   );
 }
 
+function Star() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-3.5 fill-current sm:size-4" aria-hidden>
+      <path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.7 5.8 21l1.2-6.8-5-4.9 6.9-1z" />
+    </svg>
+  );
+}
+
+/** Social-proof row under the store badges: three stats split by hairline dividers.
+ *  ponytail: static figures (1K+ per client; DB had 397 auth users Oct 2026. App Store GB 5.0 from 10 ratings), refresh by hand or wire to live counts if they need to stay current.
+ *  Phones: three compact columns (visual over text). sm+: visual beside text. */
+function SocialProof() {
+  const item = "flex flex-col items-center gap-2 px-2 text-center sm:flex-row sm:gap-3 sm:px-6 sm:text-left";
+  const value = "text-base font-semibold leading-tight text-white sm:text-lg";
+  const label = "text-[11px] leading-tight text-[#9fb0e8] sm:text-xs";
+  return (
+    <div className="mt-8 grid w-full max-w-md grid-cols-3 divide-x divide-white/15 sm:flex sm:max-w-none sm:justify-center">
+      <div className={item}>
+        <div className="flex -space-x-2 sm:-space-x-2.5" aria-hidden>
+          {[1, 2, 3, 4].map((n) => (
+            // eslint-disable-next-line @next/next/no-img-element -- 32px static avatars
+            <img key={n} src={`/avatars/user-${n}.webp`} alt="" width={32} height={32} className="size-6 rounded-full border-2 border-[#aab8e8]/70 object-cover sm:size-8" />
+          ))}
+        </div>
+        <div>
+          <p className={value}>1K+</p>
+          <p className={label}>Traders Joined</p>
+        </div>
+      </div>
+      <div className={item}>
+        <span className="flex h-6 items-center text-white sm:h-auto" role="img" aria-label="Rated 5.0 out of 5">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Star key={i} />
+          ))}
+        </span>
+        <div>
+          <p className={value}>5.0</p>
+          <p className={label}>App Store Rating</p>
+        </div>
+      </div>
+      <div className={item}>
+        <ShieldCheck className="size-6 shrink-0 text-[#aab8e8] sm:size-8" strokeWidth={1.5} aria-hidden />
+        <div>
+          <p className={value}>All-in-One</p>
+          <p className={label}>Trading Intelligence</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HeroSection({ liveGold }: { liveGold: HeroLiveBriefing | null }) {
   const appName = getAppName();
 
@@ -96,14 +149,10 @@ function HeroSection({ liveGold }: { liveGold: HeroLiveBriefing | null }) {
           </span>
           <span className="block">Fewer Losses.</span>
         </h1>
-        <p className="mt-5 max-w-md text-[15px] font-normal leading-6 text-slate-400 sm:max-w-xl sm:text-base">
-          Verify brokers, prop firms and gurus, validate trades, and manage risk
-          with live data &amp; AI — all in one place.
-        </p>
-
         <div className="mt-8">
           <StoreBadges />
         </div>
+        <SocialProof />
 
         {/* Phone demo with a soft gradient glow behind it */}
         <div className="relative mt-12 w-full sm:mt-14">

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Faq, Section } from "@/components/marketing/primitives";
 import { PricingPlansSection } from "@/components/pricing/pricing-plans";
 import { JsonLd } from "@/components/seo/json-ld";
+import { Button } from "@/components/ui/button";
 import { SiteFooter } from "@/components/site/site-footer";
 import { getPricingPageData } from "@/lib/billing/pricing-page-data";
 import { PRICING_FAQS } from "@/lib/marketing/copy";
@@ -26,6 +27,17 @@ export default async function PricingPage() {
       <Section eyebrow="FAQ" title="Common questions" narrow>
         <Faq items={PRICING_FAQS} />
       </Section>
+      <section className="mx-auto w-full max-w-3xl px-4 pb-14 sm:px-6">
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-[var(--vt-blue)]/40 bg-[linear-gradient(110deg,rgba(76,110,245,0.18),rgba(139,92,246,0.14))] p-6 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div>
+            <p className="text-xl font-semibold text-white sm:text-2xl">Verify before you trade.</p>
+            <p className="mt-1 text-sm text-slate-300">Smarter checks. Better decisions.</p>
+          </div>
+          <Button asChild size="pill">
+            <a href="#plans">Get Pro →</a>
+          </Button>
+        </div>
+      </section>
       <SiteFooter />
     </div>
   );

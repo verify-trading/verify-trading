@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { Breadcrumbs, CardGrid, CtaBand, FaqSection, PageHero, Section, Steps } from "@/components/marketing/primitives";
 import { JsonLd } from "@/components/seo/json-ld";
-import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
+import { INDEPENDENCE_STATEMENT } from "@/lib/marketing/copy";
 import { PAGE_FAQS } from "@/lib/marketing/faqs";
 import { pageMetadata, webPageSchema } from "@/lib/marketing/seo";
 
@@ -59,7 +59,6 @@ export default function TrustPage() {
       </Section>
       <FaqSection items={[...PAGE_FAQS.trust]} band={false} />
       <CtaBand title="Spotted an error?" body="Send us the page and a primary source." primary={{ label: "Contact us", href: "/contact" }} secondary={{ label: "About us", href: "/about" }} location="trust" />
-      <p className="mx-auto w-full max-w-6xl px-4 pb-8 text-xs leading-relaxed text-[var(--vt-muted)] sm:px-6">{NOT_ADVICE_STATEMENT}</p>
     </>
   );
 }

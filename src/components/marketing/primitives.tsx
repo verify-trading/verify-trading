@@ -67,7 +67,7 @@ export function PageHero({
 }) {
   const split = Boolean(visual);
   return (
-    <section className="relative overflow-hidden border-b border-white/[0.06] bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(76,110,245,0.12),transparent_60%),var(--vt-navy)]">
+    <section className="relative overflow-hidden bg-[radial-gradient(ellipse_60%_65%_at_50%_45%,rgba(76,110,245,0.17),transparent_70%),radial-gradient(ellipse_35%_40%_at_82%_40%,rgba(242,109,109,0.09),transparent_70%)]">
       <div
         className={cn(
           "mx-auto w-full max-w-6xl px-4 pt-10 pb-12 sm:px-6 sm:pt-16 sm:pb-16",
@@ -76,7 +76,7 @@ export function PageHero({
       >
         <div className={split ? "" : "mx-auto"}>
           <SectionEyebrow>{eyebrow}</SectionEyebrow>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-[2.6rem] lg:leading-[1.1]">
+          <h1 className="mt-3 text-[2rem] font-semibold leading-[1.1] tracking-tight text-white sm:text-[2.6rem] lg:text-5xl">
             {title}
           </h1>
           <p
@@ -88,7 +88,7 @@ export function PageHero({
             {lede}
           </p>
           {primary || secondary ? (
-            <div className={cn("mt-6 flex flex-wrap items-center gap-3", !split && "justify-center")}>
+            <div className={cn("mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center [&>*]:w-full sm:[&>*]:w-auto", !split && "sm:justify-center")}>
               {primary ? (
                 <CtaLink href={primary.href} event={primary.event} location={`${location}_hero`}>
                   {primary.label}
@@ -130,7 +130,7 @@ export function Section({
   id?: string;
 }) {
   return (
-    <section id={id} className={cn("scroll-mt-20 py-16 sm:py-20", band && "border-y border-white/[0.07] bg-black/15")}>
+    <section id={id} className={cn("scroll-mt-20 py-14 sm:py-20", band && "bg-[linear-gradient(180deg,transparent,rgba(5,7,30,0.5)_18%,rgba(5,7,30,0.5)_82%,transparent)]")}>
       <div className={cn("mx-auto w-full px-4 sm:px-6", narrow ? "max-w-3xl" : "max-w-6xl")}>
         <div className="max-w-2xl">
           {eyebrow ? <SectionEyebrow>{eyebrow}</SectionEyebrow> : null}
@@ -151,10 +151,7 @@ export type CardItem = {
   index?: string;
 };
 
-/**
- * Editorial feature grid. No card backgrounds, borders, or icon badges.
- * Thin top hairline divider per item, with optional small coral index label.
- */
+/** Feature grid: soft gradient cards (Mobbin: Origin / Slash), optional icon tile or coral index label. */
 export function CardGrid({
   items,
   cols = 3,
@@ -167,14 +164,19 @@ export function CardGrid({
   return (
     <div
       className={cn(
-        "grid gap-x-10 gap-y-10",
+        "grid gap-4 sm:gap-5",
         cols === 3 ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2",
       )}
     >
       {items.map((item, i) => {
         const label = item.index ?? (numbered ? String(i + 1).padStart(2, "0") : null);
         return (
-          <div key={item.title} className="border-t border-white/10 pt-6">
+          <div key={item.title} className="rounded-2xl border border-white/[0.08] bg-[linear-gradient(160deg,rgba(76,110,245,0.09),rgba(255,255,255,0.015)_55%)] p-5 transition hover:border-[var(--vt-blue)]/40 sm:p-6">
+            {item.icon ? (
+              <span className="mb-4 flex size-10 items-center justify-center rounded-xl bg-[var(--vt-blue)]/15 text-[#8fa5ff]">
+                <item.icon className="size-5" aria-hidden />
+              </span>
+            ) : null}
             {label ? (
               <span className="font-mono text-xs font-semibold tracking-widest text-[var(--vt-coral)]">
                 {label}
@@ -182,13 +184,13 @@ export function CardGrid({
             ) : null}
             <h3
               className={cn(
-                "text-lg font-semibold tracking-tight text-white sm:text-xl",
+                "text-lg font-semibold tracking-tight text-white",
                 label ? "mt-3" : "",
               )}
             >
               {item.title}
             </h3>
-            <p className="mt-2.5 text-[15px] leading-7 text-slate-400">{item.body}</p>
+            <p className="mt-2 text-[15px] leading-7 text-slate-400">{item.body}</p>
           </div>
         );
       })}
@@ -202,10 +204,10 @@ export function CardGrid({
  */
 export function Steps({ items }: { items: Array<{ title: string; body: string }> }) {
   return (
-    <ol className="max-w-3xl divide-y divide-white/10 border-y border-white/10">
+    <ol className="max-w-3xl divide-y divide-white/[0.08]">
       {items.map((step, i) => (
         <li key={step.title} className="flex gap-6 py-6 sm:gap-10 sm:py-8">
-          <span className="shrink-0 font-mono text-3xl font-light tabular-nums text-white/25">
+          <span className="shrink-0 font-mono text-3xl font-light tabular-nums text-[var(--vt-coral)]/60">
             {String(i + 1).padStart(2, "0")}
           </span>
           <div className="min-w-0">
@@ -220,15 +222,15 @@ export function Steps({ items }: { items: Array<{ title: string; body: string }>
   );
 }
 
-/** Related products: plain text links with arrow in columns, hairline top border per item. */
+/** Related products: card links in columns. */
 export function RelatedLinks({ keys, title = "Related products" }: { keys: string[]; title?: string }) {
   const items = keys.map((k) => PRODUCT_LINKS[k]).filter(Boolean).slice(0, 3);
   return (
     <Section title={title} band>
-      <ul className="grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
         {items.map((p) => (
-          <li key={p.href} className="border-t border-white/10 pt-6">
-            <Link href={p.href} className="group block">
+          <li key={p.href}>
+            <Link href={p.href} className="group flex h-full flex-col rounded-2xl border border-white/[0.08] bg-[linear-gradient(160deg,rgba(76,110,245,0.09),rgba(255,255,255,0.015)_55%)] p-5 transition hover:border-[var(--vt-blue)]/40 sm:p-6">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-base font-semibold text-white transition-colors group-hover:text-[var(--vt-coral)]">
                   {p.name}
@@ -238,7 +240,7 @@ export function RelatedLinks({ keys, title = "Related products" }: { keys: strin
                 </span>
               </div>
               <p className="mt-2 text-[15px] leading-7 text-slate-400">{p.blurb}</p>
-              <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-slate-300 transition-colors group-hover:text-white">
+              <span className="mt-auto inline-flex items-center gap-1 pt-3 text-sm font-medium text-slate-300 transition-colors group-hover:text-white">
                 Learn more <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" aria-hidden />
               </span>
             </Link>
@@ -249,7 +251,7 @@ export function RelatedLinks({ keys, title = "Related products" }: { keys: strin
   );
 }
 
-/** Centred CTA section with hairline above, no gradient card. */
+/** Centred CTA in a glowing gradient card, matching the How It Works banner. */
 export function CtaBand({
   title,
   body,
@@ -264,20 +266,22 @@ export function CtaBand({
   location: string;
 }) {
   return (
-    <section className="border-t border-white/[0.07] py-16 sm:py-20">
-      <div className="mx-auto w-full max-w-6xl px-4 text-center sm:px-6">
-        <h2 className="mx-auto max-w-2xl text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h2>
-        <p className="mx-auto mt-3 max-w-2xl text-[15px] leading-7 text-slate-400">{body}</p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          <CtaLink href={primary.href} event={primary.event} location={`${location}_cta`}>
-            {primary.label}
-            <ArrowRight aria-hidden />
-          </CtaLink>
-          {secondary ? (
-            <CtaLink href={secondary.href} event={secondary.event} location={`${location}_cta_secondary`} variant="outline">
-              {secondary.label}
+    <section className="py-14 sm:py-20">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+        <div className="rounded-3xl border border-white/[0.12] bg-[linear-gradient(110deg,rgba(76,110,245,0.2),rgba(139,92,246,0.14)_55%,rgba(242,109,109,0.2))] px-6 py-10 text-center shadow-[0_0_60px_rgba(76,110,245,0.15)] sm:px-10 sm:py-14">
+          <h2 className="mx-auto max-w-2xl text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-[15px] leading-7 text-slate-300">{body}</p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center [&>*]:w-full sm:[&>*]:w-auto">
+            <CtaLink href={primary.href} event={primary.event} location={`${location}_cta`}>
+              {primary.label}
+              <ArrowRight aria-hidden />
             </CtaLink>
-          ) : null}
+            {secondary ? (
+              <CtaLink href={secondary.href} event={secondary.event} location={`${location}_cta_secondary`} variant="outline">
+                {secondary.label}
+              </CtaLink>
+            ) : null}
+          </div>
         </div>
       </div>
     </section>
@@ -344,7 +348,7 @@ export function FaqSection({
 }) {
   const visible = items.slice(0, 6);
   return (
-    <section id="faq" className={cn("scroll-mt-20 py-16 sm:py-20", band && "border-y border-white/[0.06] bg-black/15")}>
+    <section id="faq" className={cn("scroll-mt-20 py-14 sm:py-20", band && "bg-[linear-gradient(180deg,transparent,rgba(5,7,30,0.5)_18%,rgba(5,7,30,0.5)_82%,transparent)]")}>
       {schema ? <JsonLd data={faqPageSchema(visible)} /> : null}
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.8fr_1.4fr] lg:gap-14">
         <div>
@@ -364,7 +368,7 @@ export function FaqSection({
 
 export type LinkCard = { href: string; title: string; body: string; tag?: string };
 
-/** Generic related/spoke links grid: plain text links with arrow, hairline top border per item. */
+/** Generic related/spoke links grid: card links with arrow. */
 export function LinkGrid({
   items,
   title,
@@ -383,25 +387,21 @@ export function LinkGrid({
     <Section eyebrow={eyebrow} title={title} band={band}>
       <ul
         className={cn(
-          "grid gap-x-10 gap-y-8",
+          "grid gap-4 sm:gap-5",
           cols === 3 ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2",
         )}
       >
         {shown.map((p) => (
-          <li key={p.href} className="border-t border-white/10 pt-6">
-            <Link href={p.href} className="group block">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-base font-semibold text-white transition-colors group-hover:text-[var(--vt-coral)]">
-                  {p.title}
-                </span>
-                {p.tag ? (
-                  <span className="font-mono text-[11px] uppercase tracking-wider text-slate-400">
-                    {p.tag}
-                  </span>
-                ) : null}
-              </div>
+          <li key={p.href}>
+            <Link href={p.href} className="group flex h-full flex-col rounded-2xl border border-white/[0.08] bg-[linear-gradient(160deg,rgba(76,110,245,0.09),rgba(255,255,255,0.015)_55%)] p-5 transition hover:border-[var(--vt-blue)]/40 sm:p-6">
+              {p.tag ? (
+                <span className="mb-2 font-mono text-[11px] uppercase tracking-wider text-[var(--vt-coral)]/80">{p.tag}</span>
+              ) : null}
+              <span className="text-base font-semibold text-white transition-colors group-hover:text-[var(--vt-coral)]">
+                {p.title}
+              </span>
               <p className="mt-2 text-[15px] leading-7 text-slate-400">{p.body}</p>
-              <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-slate-300 transition-colors group-hover:text-white">
+              <span className="mt-auto inline-flex items-center gap-1 pt-3 text-sm font-medium text-slate-300 transition-colors group-hover:text-white">
                 Read more <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" aria-hidden />
               </span>
             </Link>

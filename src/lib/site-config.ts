@@ -44,11 +44,11 @@ export const STORE_URLS = {
   googlePlay: "https://play.google.com/store/apps/details?id=trading.verify.mobile",
 } as const;
 
-/** Footer social profiles. `#` = placeholder until the client supplies the real URL. */
+/** Footer social profiles. `#` = placeholder until the client supplies the real URL (not rendered). */
 export const SOCIAL_URLS = {
-  instagram: "https://www.instagram.com/verifytrading.app",
+  instagram: "https://www.instagram.com/verify.tradingapp",
+  facebook: "https://www.facebook.com/share/1C9GPUjAvV/",
   tiktok: "#",
-  x: "#",
-  linkedin: "#",
+  linkedin: "https://www.linkedin.com/company/verifytrading/",
   youtube: "https://youtube.com/@verify.trading",
 } as const;

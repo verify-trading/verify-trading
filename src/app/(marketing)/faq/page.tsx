@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { Breadcrumbs, CtaBand, FaqSection, LinkGrid, PageHero } from "@/components/marketing/primitives";
-import { NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { PAGE_FAQS } from "@/lib/marketing/faqs";
 import { pageMetadata } from "@/lib/marketing/seo";
 
@@ -38,7 +37,6 @@ export default function FaqPage() {
         secondary={{ label: "Learning hub", href: "/resources" }}
         location="faq"
       />
-      <p className="mx-auto w-full max-w-6xl px-4 pb-8 text-xs leading-relaxed text-[var(--vt-muted)] sm:px-6">{NOT_ADVICE_STATEMENT}</p>
     </>
   );
 }

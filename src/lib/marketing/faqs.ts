@@ -9,11 +9,10 @@ export type Faq = { q: string; a: string };
 
 export const PAGE_FAQS = {
   howItWorks: [
-    { q: "What can I type into Ask?", a: "A broker, prop firm or educator name for an entity check, a trade idea for position-size maths, or a market such as gold or EUR/USD for context. Ask routes each type of question to a different source instead of answering everything from one model." },
-    { q: "Where does the answer to an entity check come from?", a: "From our verified registry, which is built from regulator registers, warning lists and public enforcement records. The record shows its source, so you can open the register and confirm it yourself." },
-    { q: "What happens when you have no record for a name?", a: "We say so. A missing record is shown as missing, not filled in with a guess, and you can request a check. A gap is never presented as a clean result." },
-    { q: "Does verify.trading tell me which broker or prop firm to use?", a: "No. It shows records, a verdict and the source behind it. Choosing where to trade stays with you, and no firm can pay to change what is shown." },
-    { q: "Do I need an account to check a name?", a: "You can browse the public broker and prop firm records without one. Asking questions in Ask needs a free account, and free accounts get a daily allowance of chats." },
+    { q: "Is it really free to start?", a: `Yes. A free account includes ${FREE_DAILY_ASK_LIMIT} Ask chats a day, and entity checks stay free either way. Pro adds a higher Ask limit and the premium app features, and you can cancel anytime.` },
+    { q: "Can brokers pay for better scores?", a: "No. Records are computed from public regulator sources and cannot be bought, improved or removed by their subject. We take no affiliate commissions from the firms we rate, and a firm can only request a correction by sending a primary source." },
+    { q: "Do you give trading signals?", a: "No. verify.trading publishes records, analysis and market context, not investment advice. A daily bias is a summary of how the market looks, not an instruction to buy or sell, and the decision always stays with you." },
+    { q: "What does verification actually check?", a: "For a broker: the regulators it lists, its register status and any warning-list entries. For a prop firm: its operating status and published terms. For an educator: whether there is a documented regulator or court action. Every record shows its source." },
   ],
   verify: [
     { q: "What does Verify actually check?", a: "For a broker: the regulators it lists, its register status and any warning-list entries. For a prop firm: its operating status and published terms, and a score where we hold a scored record. For an educator or signal group: whether there is a documented regulator or court action against them." },

@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { AppWordmarkInline } from "@/components/site/logo";
 import { LEGAL_LINKS } from "@/lib/legal/legal-links";
+import { NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { getAppName, SOCIAL_URLS } from "@/lib/site-config";
 
 const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: string]> }> = [
@@ -17,18 +19,18 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
   {
     title: "Products",
     links: [
-      ["Ask", "/ask"],
-      ["Verify", "/verify"],
-      ["Markets", "/markets"],
-      ["Intelligence", "/intelligence"],
-      ["Economic Calendar", "/economic-calendar"],
-      ["Journal", "/journal"],
-      ["Mind", "/mind"],
+      ["Ask Feature", "/ask"],
+      ["Markets Feature", "/markets"],
+      ["Intelligence Feature", "/intelligence"],
+      ["Calendar Feature", "/economic-calendar"],
+      ["Journal Feature", "/journal"],
+      ["MIND Feature", "/mind"],
     ],
   },
   {
     title: "Compare",
     links: [
+      ["Verify", "/verify"],
       ["Compare Brokers", "/compare/brokers"],
       ["Compare Prop Firms", "/compare/prop-firms"],
       ["Regulators", "/regulators"],
@@ -39,7 +41,6 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
     links: [
       ["Retail Traders", "/retail-traders"],
       ["Prop Firm Traders", "/prop-firm-traders"],
-      ["Affiliates", "/affiliates"],
       ["Brokers", "/brokers"],
       ["Prop Firms", "/prop-firms"],
     ],
@@ -60,6 +61,7 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
       ["About", "/about"],
       ["Trust & Independence", "/trust"],
       ["Careers", "/careers"],
+      ["Affiliates", "/affiliates"],
       ["Contact", "/contact"],
     ],
   },
@@ -80,7 +82,7 @@ const linkClass = "text-sm text-[var(--vt-muted)] transition hover:text-white";
 const svg = { viewBox: "0 0 24 24", "aria-hidden": true, className: "size-[18px]" } as const;
 const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
-const SOCIALS: Array<{ label: string; href: string; icon: ReactNode }> = [
+const ALL_SOCIALS: Array<{ label: string; href: string; icon: ReactNode }> = [
   {
     label: "Instagram",
     href: SOCIAL_URLS.instagram,
@@ -102,11 +104,12 @@ const SOCIALS: Array<{ label: string; href: string; icon: ReactNode }> = [
     ),
   },
   {
-    label: "X",
-    href: SOCIAL_URLS.x,
+    label: "Facebook",
+    href: SOCIAL_URLS.facebook,
     icon: (
-      <svg {...svg} fill="currentColor">
-        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+      <svg {...svg} {...stroke}>
+        <rect x="3" y="3" width="18" height="18" rx="5" />
+        <path d="M15.5 8.5h-1.3c-1 0-1.7.7-1.7 1.7V21M10 13h5.5" />
       </svg>
     ),
   },
@@ -132,62 +135,90 @@ const SOCIALS: Array<{ label: string; href: string; icon: ReactNode }> = [
   },
 ];
 
+/** Skip profiles still set to the `#` placeholder so no dead link renders. */
+const SOCIALS = ALL_SOCIALS.filter((s) => s.href !== "#");
+
 export function SiteFooter() {
   const year = new Date().getFullYear();
 
   return (
     <footer className="mt-auto border-t border-white/[0.07] bg-[rgba(10,13,46,0.92)]">
-      <div className="mx-auto w-full max-w-7xl px-4 pb-8 pt-12 sm:px-6 lg:px-8">
-        <Link href="/" className="inline-block text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
-          <AppWordmarkInline />
-        </Link>
-        <p className="mt-3 text-sm text-[var(--vt-muted)] sm:text-base">
-          Independent verification. Trusted intelligence.
-        </p>
+      <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 pb-8 pt-12 sm:px-6 sm:pt-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.8fr)] lg:gap-12">
+        {/* Brand column (Mobbin: Linear / Amplemarket footers). */}
+        <div>
+          <Link href="/" className="inline-block text-[1.75rem] font-bold tracking-tight text-white sm:text-3xl">
+            <AppWordmarkInline />
+          </Link>
+          <p className="mt-2 text-sm text-[var(--vt-muted)]">
+            Independent verification. Trusted intelligence.
+          </p>
 
-        <nav
-          aria-label="Footer"
-          className="mt-10 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-6 sm:gap-y-9 lg:grid-cols-7 lg:gap-x-4"
-        >
-          {FOOTER_COLUMNS.map((col) => (
-            <div key={col.title}>
-              <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
-                {col.title}
-              </h2>
-              <ul className="mt-4 space-y-2.5">
-                {col.links.map(([label, href]) => (
-                  <li key={label}>
-                    <Link href={href} className={linkClass}>
-                      {label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <ul className="mt-5 flex items-center gap-2.5">
+            {SOCIALS.map((s) => (
+              <li key={s.label}>
+                <a
+                  href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${getAppName()} on ${s.label}`}
+                  className="flex size-10 items-center justify-center rounded-full border border-white/15 bg-white/[0.03] text-[var(--vt-muted)] transition hover:border-[var(--vt-blue)]/60 hover:bg-[var(--vt-blue)]/10 hover:text-white"
+                >
+                  {s.icon}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <nav aria-label="Footer">
+          {/* Mobile: collapsed accordion rows (native <details>). */}
+          <div className="divide-y divide-white/10 border-y border-white/10 md:hidden">
+            {FOOTER_COLUMNS.map((col) => (
+              <details key={col.title} className="group">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 py-3 text-[15px] font-semibold text-white [&::-webkit-details-marker]:hidden">
+                  {col.title}
+                  <ChevronDown className="size-4 shrink-0 text-[var(--vt-muted)] transition-transform duration-200 group-open:rotate-180" aria-hidden />
+                </summary>
+                <ul className="space-y-3 pb-4">
+                  {col.links.map(([label, href]) => (
+                    <li key={label}>
+                      <Link href={href} className={linkClass}>
+                        {label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+          </div>
+
+          {/* Desktop: all columns expanded. */}
+          <div className="hidden gap-x-6 gap-y-10 md:grid md:grid-cols-4">
+            {FOOTER_COLUMNS.map((col) => (
+              <div key={col.title}>
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
+                  {col.title}
+                </h2>
+                <ul className="mt-4 space-y-2.5">
+                  {col.links.map(([label, href]) => (
+                    <li key={label}>
+                      <Link href={href} className={linkClass}>
+                        {label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </nav>
 
-        <div className="mt-12 flex flex-col gap-5 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-white/45">
-            © {year} Verify Trading Limited. All rights reserved.
-          </p>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-            <ul className="flex items-center gap-4 text-[var(--vt-muted)]">
-              {SOCIALS.map((s) => (
-                <li key={s.label}>
-                  <a
-                    href={s.href}
-                    target={s.href === "#" ? undefined : "_blank"}
-                    rel="noopener noreferrer"
-                    aria-label={`${getAppName()} on ${s.label}`}
-                    className="block transition hover:text-white"
-                  >
-                    {s.icon}
-                  </a>
-                </li>
-              ))}
-            </ul>
-            <span className="hidden h-5 w-px bg-white/15 sm:block" aria-hidden />
+        <div className="flex flex-col gap-4 md:border-t md:border-white/10 md:pt-6 lg:col-span-2">
+          <p className="max-w-4xl text-xs leading-relaxed text-white/40">{NOT_ADVICE_STATEMENT}</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-white/45">
+              © {year} Verify Trading Limited. All rights reserved.
+            </p>
             <p className="flex items-center gap-2 text-xs text-white/45">
               <Link href={PRIVACY_LINK.href} className="transition hover:text-white">
                 Privacy Policy

@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { Breadcrumbs, CardGrid, CtaBand, LinkGrid, PageHero, Section } from "@/components/marketing/primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { POSTS } from "@/lib/blog/posts";
-import { NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { postCard } from "@/lib/marketing/links";
 import { collectionPageSchema, pageMetadata } from "@/lib/marketing/seo";
 
@@ -51,7 +50,6 @@ export default function ResourcesPage() {
         secondary={{ label: "Read the FAQ", href: "/faq" }}
         location="resources"
       />
-      <p className="mx-auto w-full max-w-6xl px-4 pb-8 text-xs leading-relaxed text-[var(--vt-muted)] sm:px-6">{NOT_ADVICE_STATEMENT}</p>
     </>
   );
 }
