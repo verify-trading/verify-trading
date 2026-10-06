@@ -12,28 +12,28 @@ export type FaqItem = { q: string; a: string };
 /** Pricing-page FAQ (restored from the old homepage, plus two facts from the methodology). */
 export const PRICING_FAQS: FaqItem[] = [
   {
-    q: "Is this financial advice?",
-    a: "No. verify.trading publishes records and analysis: regulator-sourced entity records, risk maths against rules you set, and market context. We never recommend trades or tell you where to deposit. The decision is always yours.",
+    q: "Is there a free plan?",
+    a: `Yes. Free includes ${FREE_DAILY_ASK_LIMIT} Ask chats a day, broker and prop firm checks, live market prices and the risk calculators. No card needed.`,
   },
   {
-    q: "What makes this different from ChatGPT?",
-    a: "Structured routing. Entity checks answer only from our verified registry with citations; market data comes from professional feeds; risk maths runs on deterministic engines. Where we have no record, we say so, and you can request a check.",
+    q: "What does Pro add?",
+    a: `${PRO_DAILY_ASK_LIMIT} Ask chats a day, the daily Intelligence brief, the economic calendar with event alerts, Journal with Challenge Mode, Mind coaching and the members-only community.`,
   },
   {
-    q: "How does an entity earn a “Caution”?",
-    a: "Only with a documented regulator or court action, such as an FCA warning, an FTC settlement or a confirmed closure, and the official citation is shown on the record. No citation, no caution. The rule is enforced in our system, not just our policy.",
-  },
-  {
-    q: "Do paid features change a verdict?",
-    a: "Never. A status or band is computed from the records and can't be bought. Paid plans unlock tools, but they don't move a single verdict.",
-  },
-  {
-    q: "How many Ask chats do I get?",
-    a: `Free accounts get ${FREE_DAILY_ASK_LIMIT} Ask chats a day and Pro gets ${PRO_DAILY_ASK_LIMIT}. Entity checks stay free either way.`,
+    q: "Can I switch between weekly, monthly and annual?",
+    a: "Yes. Pick a different billing period on this page or from billing, and Stripe handles the change. You keep Pro throughout.",
   },
   {
     q: "Can I cancel anytime?",
-    a: "Yes. Cancel from billing and you keep access through the end of the paid period. Entity checks stay free either way.",
+    a: "Yes. Cancel from billing and you keep Pro until the end of the period you've paid for. Entity checks stay free either way.",
+  },
+  {
+    q: "Do paid plans change a verdict?",
+    a: "Never. A status is computed from regulator records and can't be bought. Pro unlocks tools, not better scores.",
+  },
+  {
+    q: "Is this financial advice?",
+    a: "No. verify.trading publishes regulator-sourced records, risk maths and market context. We never tell you what to trade or where to deposit. The decision is always yours.",
   },
 ];
 

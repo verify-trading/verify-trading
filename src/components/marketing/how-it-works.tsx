@@ -271,12 +271,12 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  { n: "01", icon: "ask", title: "Ask", body: "Get instant answers to your trading questions and verify brokers, prop firms and educators — all in one place.", href: "/ask", cta: "Go to Ask", tier: "Free", visual: askScreen },
-  { n: "02", icon: "markets", title: "Markets", body: "Live market data, key assets and real-time insights.", href: "/markets", cta: "Go to Markets", tier: "Free", visual: marketsScreen },
-  { n: "03", icon: "intelligence", title: "Intelligence", body: "AI-powered market analysis, trend insights and actionable intelligence.", href: "/intelligence", cta: "Go to Intelligence", tier: "Pro", visual: intelligenceScreen },
-  { n: "04", icon: "calendar", title: "Economic Calendar", body: "Stay ahead of key events, avoid surprises and trade with context.", href: "/economic-calendar", cta: "Go to Economic Calendar", tier: "Pro", visual: calendarScreen },
-  { n: "05", icon: "journal", title: "Journal", body: "Track your performance, build better habits and trade with a sharper mindset.", href: "/journal", cta: "Go to Journal", tier: "Pro", visual: journalScreen },
-  { n: "06", icon: "mind", title: "Mind", body: "Build discipline, manage emotions and trade with a clear head.", href: "/mind", cta: "Go to Mind", tier: "Pro", visual: mindScreen },
+  { n: "01", icon: "ask", title: "Ask", body: "Ask about any broker, prop firm, setup or market and get a sourced answer in seconds.", href: "/ask", cta: "Go to Ask", tier: "Free", visual: askScreen },
+  { n: "02", icon: "markets", title: "Markets", body: "Live prices across gold, forex, indices and crypto, with the context behind each move.", href: "/markets", cta: "Go to Markets", tier: "Free", visual: marketsScreen },
+  { n: "03", icon: "intelligence", title: "Intelligence", body: "A daily pre-session brief: the bias, the key level and what to watch for each major asset.", href: "/intelligence", cta: "Go to Intelligence", tier: "Pro", visual: intelligenceScreen },
+  { n: "04", icon: "calendar", title: "Economic Calendar", body: "See CPI, NFP and FOMC coming, with impact levels and a heads-up before high-impact releases.", href: "/economic-calendar", cta: "Go to Economic Calendar", tier: "Pro", visual: calendarScreen },
+  { n: "05", icon: "journal", title: "Journal", body: "Log every trade, spot the patterns that cost you, and run Challenge Mode for prop firm evaluations.", href: "/journal", cta: "Go to Journal", tier: "Pro", visual: journalScreen },
+  { n: "06", icon: "mind", title: "Mind", body: "Build discipline, catch tilt early and trade with a clear head.", href: "/mind", cta: "Go to Mind", tier: "Pro", visual: mindScreen },
 ];
 
 export function HowItWorksSteps() {
@@ -330,7 +330,7 @@ export function HowItWorksCtaBanner() {
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             Join the traders already using verify.trading.
           </h2>
-          <p className="mt-2 text-sm text-slate-300">Get started today and unlock the full platform.</p>
+          <p className="mt-2 text-sm text-slate-300">Start free and check your first broker in seconds.</p>
         </div>
         <CtaLink href="/signup" event="signup" location="how_it_works_banner">
           Get Started

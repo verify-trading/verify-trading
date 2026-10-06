@@ -23,7 +23,7 @@ function signedOutCheckoutHref(plan: BillingPlanKey): string {
   return `/signup?next=${encodeURIComponent(`/billing?plan=${plan}`)}`;
 }
 
-function PaidPlanAction({
+export function PaidPlanAction({
   billingContext,
   checkoutPlan,
   isCurrentPlan,

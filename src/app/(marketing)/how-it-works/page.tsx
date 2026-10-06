@@ -26,7 +26,7 @@ export default function HowItWorksPage() {
             <span className="text-[var(--vt-coral)]">Better Trades.</span>
           </>
         }
-        lede="In 6 simple steps, verify.trading gives you the insights, tools and confidence to trade smarter, safer and with real-time market intelligence."
+        lede="Six tools in one app: check who you're trading with, read the market before you act, then review how you traded."
         visual={<HowItWorksVideo />}
         location="how_it_works"
       />

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 describe("PricingPlansSection", () => {
-  it("shows current-plan and change-plan actions for subscribers", () => {
+  it("opens on the subscriber's current plan and offers Stripe plan changes on the others", () => {
     const { container } = render(
       <PricingPlansSection
         pricing={pricing}
@@ -74,8 +74,11 @@ describe("PricingPlansSection", () => {
       />,
     );
 
+    expect(screen.getByRole("radio", { name: /Annual/ })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("button", { name: "Current plan" })).toBeDisabled();
-    expect(screen.getAllByRole("button", { name: "Change plan in Stripe" })).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("radio", { name: /Weekly/ }));
+    expect(screen.getByRole("button", { name: "Change plan in Stripe" })).toBeInTheDocument();
     expect(container.querySelectorAll('[data-action="checkout"]').length).toBe(0);
     expect(screen.getByText(/subscription updates sync back to the app automatically/i)).toBeInTheDocument();
   });
@@ -92,15 +95,23 @@ describe("PricingPlansSection", () => {
       />,
     );
 
-    expect(screen.getAllByRole("link", { name: "Manage subscription" })).toHaveLength(3);
+    for (const name of [/Weekly/, /Monthly/, /Annual/]) {
+      fireEvent.click(screen.getByRole("radio", { name }));
+      expect(screen.getByRole("link", { name: "Manage subscription" })).toBeInTheDocument();
+    }
     expect(container.querySelectorAll('[data-action="checkout"]').length).toBe(0);
   });
 
-  it("renders weekly, monthly, and annual daily-equivalent pricing copy", () => {
-    render(<PricingPlansSection pricing={pricing} compactHeader />);
+  it("defaults to monthly and shows each plan's daily-equivalent price in the toggle", () => {
+    render(<PricingPlansSection pricing={pricing} />);
 
+    expect(screen.getByRole("radio", { name: /Monthly/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("link", { name: /Start Pro/ })).toHaveAttribute(
+      "href",
+      `/signup?next=${encodeURIComponent("/billing?plan=monthly")}`,
+    );
     expect(screen.getAllByText("99p per day")).toHaveLength(1);
-    expect(screen.getAllByText("66p per day")).toHaveLength(1);
+    expect(screen.getAllByText(/66p per day/)).toHaveLength(2);
     expect(screen.getAllByText("33p per day")).toHaveLength(1);
   });
 });
