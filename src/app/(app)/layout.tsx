@@ -26,7 +26,7 @@ export default async function AppShellLayout({
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <div className="flex h-dvh flex-col overflow-hidden bg-[var(--vt-navy)] text-white">
-        <SiteNav />
+        <SiteNav initialSignedIn={Boolean(session)} />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
     </HydrationBoundary>

@@ -58,12 +58,13 @@ describe("SiteNav", () => {
     expect(screen.getAllByText("Guide").length).toBeGreaterThan(0);
   });
 
-  it("shows the guide tab for signed-out users", () => {
+  it("gives signed-out visitors the same slim header as the marketing site", () => {
     mockIsSignedIn = false;
 
     render(<SiteNav />);
 
-    expect(screen.getAllByText("Guide").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Get started" })).toHaveAttribute("href", "/signup");
+    expect(screen.queryByText("Guide")).not.toBeInTheDocument();
   });
 
   it("keeps the mobile sheet on destinations supported by the web app", () => {

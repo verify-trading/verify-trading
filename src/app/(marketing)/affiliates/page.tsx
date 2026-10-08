@@ -416,13 +416,13 @@ function StepsSection() {
 
 export default function AffiliatesPage() {
   return (
-    <main>
+    <>
       <HeroSection />
       <StatsBandSection />
       <WhyPartnerSection />
       <EarningsSection />
       <WhyTradersChooseSection />
       <StepsSection />
-    </main>
+    </>
   );
 }

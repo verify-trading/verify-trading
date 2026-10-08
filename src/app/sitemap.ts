@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 
+import { getRemoteSitemapEntries } from "@/lib/blog/feed";
 import { POSTS } from "@/lib/blog/posts";
 import { getCompareSitemapEntries } from "@/lib/compare/sitemap";
 import { GLOSSARY } from "@/lib/marketing/glossary";
@@ -37,6 +38,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Compare/regulator/entity/vs URLs come from the compare module. A failed DB read omits them rather than breaking the sitemap.
   const compareEntries = await getCompareSitemapEntries(baseUrl).catch(() => []);
+  const remotePosts = await getRemoteSitemapEntries();
   const dynamicEntries: MetadataRoute.Sitemap = [
     ...MARKETING_PATHS.map(([path, priority]) => ({
       url: `${baseUrl}${path}`,
@@ -48,6 +50,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${baseUrl}/blog/${p.slug}`,
       lastModified: new Date(p.updated ?? p.date),
       changeFrequency: "yearly" as const,
+      priority: 0.6,
+    })),
+    ...remotePosts.map((e) => ({
+      url: `${baseUrl}/blog/${e.slug}`,
+      lastModified: new Date(e.updated_at),
+      changeFrequency: "monthly" as const,
       priority: 0.6,
     })),
     ...GLOSSARY.map((t) => ({

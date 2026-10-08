@@ -107,8 +107,13 @@ function trackNavItemClick(label: string) {
   }
 }
 
-/** `slim`: logo + a single call-to-action pill (homepage) — no menu or tabs. */
-export function SiteNav({ slim = false }: { slim?: boolean } = {}) {
+/**
+ * One header for the whole site. Visitors (signed out) always get the slim header: logo + wordmark and a
+ * single call-to-action pill. Signed-in users inside the app shell get the app tabs + account menu.
+ * `slim` forces the visitor header (marketing pages). `initialSignedIn` is the server-side session, so the
+ * first paint matches before the client auth state is ready.
+ */
+export function SiteNav({ slim = false, initialSignedIn = false }: { slim?: boolean; initialSignedIn?: boolean } = {}) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const hasMounted = useSyncExternalStore(subscribeToClient, getClientSnapshot, getServerSnapshot);
@@ -137,8 +142,9 @@ export function SiteNav({ slim = false }: { slim?: boolean } = {}) {
   /** Avoid hydration mismatch: SSR and first paint match (end-aligned); after mount, centre when signed in. */
   const desktopNavCentered = hasMounted && ready && isSignedIn;
 
-  if (slim) {
-    const signedIn = ready && isSignedIn;
+  const signedIn = ready ? isSignedIn : initialSignedIn;
+
+  if (slim || !signedIn) {
     return (
       <nav className="sticky top-0 z-50 border-b border-white/[0.07] bg-[rgb(10,13,46)]/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-2 px-3 sm:px-4 lg:px-6">
