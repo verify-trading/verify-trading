@@ -13,31 +13,19 @@ export const CATEGORY_THEME: Record<BlogCategory, { icon: LucideIcon; glow: stri
 };
 
 /**
- * Article cover. A real image when the article has one (BabyLoveGrowth), otherwise a designed cover:
- * navy base, category glow, faint grid, category chip and the title set large (Mobbin: Replit, Linear blogs).
+ * Designed article cover (no vendor or stock photos): navy base, category glow, faint grid, category chip and the title set large (Mobbin: Replit, Linear blogs).
  */
 export function BlogThumb({
   category,
   title,
-  image,
   size = "card",
   className,
 }: {
   category: BlogCategory;
   title?: string;
-  image?: string | null;
   size?: "card" | "feature" | "banner";
   className?: string;
 }) {
-  if (image) {
-    return (
-      <div className={cn("relative overflow-hidden bg-[var(--vt-card)]", className)}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- remote CMS cover, host varies */}
-        <img src={image} alt="" loading="lazy" className="absolute inset-0 size-full object-cover transition duration-500 group-hover:scale-[1.03]" />
-      </div>
-    );
-  }
-
   const { icon: Icon, glow } = CATEGORY_THEME[category];
   return (
     <div
@@ -48,8 +36,8 @@ export function BlogThumb({
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:32px_32px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]" />
       <Icon
         className={cn(
-          "absolute text-white/[0.07] transition duration-500 group-hover:text-white/[0.1]",
-          size === "card" ? "-right-6 -top-6 size-40" : "-right-10 -top-10 size-64",
+          "absolute top-1/2 -translate-y-1/2 text-white/[0.08] transition duration-500 group-hover:text-white/[0.12]",
+          size === "card" ? "right-6 size-28" : "right-8 size-44 sm:right-12 sm:size-52",
         )}
         strokeWidth={1.2}
       />

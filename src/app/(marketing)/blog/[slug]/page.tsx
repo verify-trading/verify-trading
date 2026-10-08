@@ -144,7 +144,7 @@ function RemotePost({ article: a }: { article: RemoteArticle }) {
           <p className="mt-4 border-b border-white/[0.08] pb-6 text-xs text-[var(--vt-muted)]">
             <time dateTime={a.published_at}>{dateFmt.format(new Date(a.published_at))}</time> · {a.readMins} min read
           </p>
-          <BlogThumb category={a.category} image={a.hero_image_url || null} size="banner" className="mt-8 aspect-[16/9] rounded-2xl border border-white/[0.08]" />
+          <BlogThumb category={a.category} size="banner" className="mt-8 aspect-[16/9] rounded-2xl border border-white/[0.08]" />
           <div className="blog-content mt-8" dangerouslySetInnerHTML={{ __html: a.html }} />
           <p className="mt-12 border-t border-white/[0.08] pt-6 text-xs leading-relaxed text-[var(--vt-muted)]">
             This article is general education, not investment advice. See{" "}

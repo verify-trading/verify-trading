@@ -56,7 +56,6 @@ export async function getBlogCards(): Promise<BlogCard[]> {
     category: asCategory(p.category),
     date: p.date,
     readMins: readingTimeMinutes(p),
-    image: null,
   }));
 
   const remoteCards: BlogCard[] = (await remoteSummaries())
@@ -68,7 +67,6 @@ export async function getBlogCards(): Promise<BlogCard[]> {
       category: categorize([a.title, a.seedKeyword ?? "", ...a.keywords].join(" ")),
       date: a.published_at,
       readMins: null,
-      image: a.hero_image_url || null,
     }));
 
   return [...local, ...remoteCards].sort((a, b) => Date.parse(b.date) - Date.parse(a.date));

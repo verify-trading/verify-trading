@@ -32,7 +32,7 @@ const cardShell =
 function FeaturedCard({ card }: { card: BlogCard }) {
   return (
     <Link href={`/blog/${card.slug}`} className={cn(cardShell, "grid md:grid-cols-[1.15fr_1fr]")}>
-      <BlogThumb category={card.category} image={card.image} size="feature" className="aspect-[16/9] md:aspect-auto md:min-h-[320px]" />
+      <BlogThumb category={card.category} size="feature" className="aspect-[16/9] md:aspect-auto md:min-h-[320px]" />
       <div className="flex flex-col p-6 sm:p-8">
         <span className="w-fit rounded-full bg-[var(--vt-coral)]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--vt-coral)]">Latest</span>
         <h2 className="mt-4 text-2xl font-semibold leading-tight tracking-tight text-white transition-colors group-hover:text-[var(--vt-coral)] sm:text-[1.75rem]">
@@ -53,7 +53,7 @@ function FeaturedCard({ card }: { card: BlogCard }) {
 function ArticleCard({ card }: { card: BlogCard }) {
   return (
     <Link href={`/blog/${card.slug}`} className={cn(cardShell, "flex flex-col")}>
-      <BlogThumb category={card.category} title={card.title} image={card.image} className="aspect-[16/9] md:aspect-auto md:h-52" />
+      <BlogThumb category={card.category} title={card.title} className="aspect-[16/9] md:aspect-auto md:h-52" />
       <div className="flex flex-1 flex-col p-5 sm:p-6">
         <Meta card={card} />
         <h3 className="mt-2.5 text-lg font-semibold leading-snug tracking-tight text-white transition-colors group-hover:text-[var(--vt-coral)]">
