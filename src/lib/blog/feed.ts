@@ -25,7 +25,7 @@ export function categorize(text: string): BlogCategory {
   return CATEGORY_RULES.find(([, re]) => re.test(text))?.[0] ?? DEFAULT_CATEGORY;
 }
 
-function asCategory(value: string): BlogCategory {
+export function asCategory(value: string): BlogCategory {
   return (BLOG_CATEGORIES as readonly string[]).includes(value) ? (value as BlogCategory) : categorize(value);
 }
 
@@ -56,6 +56,7 @@ export async function getBlogCards(): Promise<BlogCard[]> {
     category: asCategory(p.category),
     date: p.date,
     readMins: readingTimeMinutes(p),
+    image: null,
   }));
 
   const remoteCards: BlogCard[] = (await remoteSummaries())
@@ -67,6 +68,7 @@ export async function getBlogCards(): Promise<BlogCard[]> {
       category: categorize([a.title, a.seedKeyword ?? "", ...a.keywords].join(" ")),
       date: a.published_at,
       readMins: null,
+      image: a.hero_image_url || null,
     }));
 
   return [...local, ...remoteCards].sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
@@ -83,7 +85,7 @@ export async function getRemoteArticle(slug: string): Promise<RemoteArticle | nu
       ...a,
       category: categorize([a.title, a.seedKeyword ?? "", ...a.keywords].join(" ")),
       readMins: htmlReadingMinutes(a.content_html),
-      html: stripActiveContent(a.content_html),
+      html: cleanArticleHtml(a.content_html, a.hero_image_url),
     };
   } catch (error) {
     console.error("[blog] BabyLoveGrowth article failed", slug, error);
@@ -110,3 +112,41 @@ export function stripActiveContent(html: string): string {
     .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
     .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, '$1="#"');
 }
+
+/**
+ * Fit BabyLoveGrowth HTML into our article shell: drop the leading <h1> (the page renders the title),
+ * the cover <img> when it repeats hero_image_url (the page renders the cover), and their inline-styled
+ * CTA blocks (light theme; every article page ends with our own CTA band) and their footer credit.
+ */
+export function cleanArticleHtml(html: string, heroUrl?: string | null): string {
+  let out = stripActiveContent(html).replace(/^\s*<h1\b[^>]*>[\s\S]*?<\/h1>\s*/i, "");
+  if (heroUrl) {
+    out = out.replace(/<p>\s*<img\b[^>]*>\s*<\/p>/i, (m) => (m.includes(heroUrl) ? "" : m));
+  }
+  // Their footer credit link ("Created with BabyLoveGrowth technology").
+  out = out.replace(/<p>\s*<a\b[^>]*babylovegrowth\.ai[^>]*>[^<]*<\/a>\s*<\/p>/gi, "");
+  return removeDivBlocks(out, "data-blg-cta").trim();
+}
+
+/** Remove every <div …attr…> block, matching nested divs by depth (regex alone can't). */
+function removeDivBlocks(html: string, attr: string): string {
+  const open = new RegExp(`<div\\b[^>]*\\b${attr}\\b`, "i");
+  let out = html;
+  for (let start = out.search(open); start !== -1; start = out.search(open)) {
+    const tag = /<\/?div\b[^>]*>/gi;
+    tag.lastIndex = start;
+    let depth = 0;
+    let end = -1;
+    for (let m = tag.exec(out); m; m = tag.exec(out)) {
+      depth += m[0][1] === "/" ? -1 : 1;
+      if (depth === 0) {
+        end = m.index + m[0].length;
+        break;
+      }
+    }
+    if (end === -1) break; // unbalanced markup: leave it rather than eat the article
+    out = out.slice(0, start) + out.slice(end);
+  }
+  return out;
+}
+

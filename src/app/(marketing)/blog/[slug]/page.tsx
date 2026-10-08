@@ -5,7 +5,8 @@ import { notFound } from "next/navigation";
 import { ArticleBody, tocFromBlocks } from "@/components/marketing/article";
 import { Breadcrumbs, Byline, CtaBand, Toc } from "@/components/marketing/primitives";
 import { JsonLd } from "@/components/seo/json-ld";
-import { getRemoteArticle, type RemoteArticle } from "@/lib/blog/feed";
+import { BlogThumb } from "@/components/marketing/blog-thumb";
+import { asCategory, getRemoteArticle, type RemoteArticle } from "@/lib/blog/feed";
 import { getPost, POSTS, readingTimeMinutes } from "@/lib/blog/posts";
 import { NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { getTerm } from "@/lib/marketing/glossary";
@@ -63,6 +64,7 @@ export default async function BlogPostPage({ params }: Props) {
             <Byline updated={post.updated ?? post.date} extra={`${readingTimeMinutes(post)} min read`} />
           </div>
           <p className="mt-6 text-[17px] leading-8 text-slate-300 font-medium">{post.description}</p>
+          <BlogThumb category={asCategory(post.category)} size="banner" className="mt-8 aspect-[21/9] rounded-2xl border border-white/[0.08]" />
           <div className="mt-8">
             <ArticleBody blocks={post.body} />
           </div>
@@ -142,10 +144,7 @@ function RemotePost({ article: a }: { article: RemoteArticle }) {
           <p className="mt-4 border-b border-white/[0.08] pb-6 text-xs text-[var(--vt-muted)]">
             <time dateTime={a.published_at}>{dateFmt.format(new Date(a.published_at))}</time> · {a.readMins} min read
           </p>
-          {a.hero_image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- remote CMS image, host varies
-            <img src={a.hero_image_url} alt="" className="mt-8 aspect-[16/9] w-full rounded-2xl border border-white/[0.08] object-cover" />
-          ) : null}
+          <BlogThumb category={a.category} image={a.hero_image_url || null} size="banner" className="mt-8 aspect-[16/9] rounded-2xl border border-white/[0.08]" />
           <div className="blog-content mt-8" dangerouslySetInnerHTML={{ __html: a.html }} />
           <p className="mt-12 border-t border-white/[0.08] pt-6 text-xs leading-relaxed text-[var(--vt-muted)]">
             This article is general education, not investment advice. See{" "}

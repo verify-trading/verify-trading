@@ -15,4 +15,6 @@ export type BlogCard = {
   category: BlogCategory;
   date: string;
   readMins: number | null;
+  /** Cover image (BabyLoveGrowth articles); null falls back to the designed category cover. */
+  image: string | null;
 };

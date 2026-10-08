@@ -12,36 +12,34 @@ const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short
 
 function Meta({ card }: { card: BlogCard }) {
   return (
-    <p className="text-xs text-slate-500">
+    <p className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+      <span className={cn("font-semibold", CATEGORY_THEME[card.category].chip)}>{card.category}</span>
+      <span aria-hidden>·</span>
       <time dateTime={card.date}>{dateFmt.format(new Date(card.date))}</time>
-      {card.readMins ? ` · ${card.readMins} min read` : null}
+      {card.readMins ? (
+        <>
+          <span aria-hidden>·</span>
+          <span>{card.readMins} min read</span>
+        </>
+      ) : null}
     </p>
   );
 }
 
-function CategoryLabel({ category }: { category: BlogCategory }) {
-  return (
-    <p className={cn("text-[11px] font-semibold uppercase tracking-[0.14em]", CATEGORY_THEME[category].chip)}>{category}</p>
-  );
-}
-
 const cardShell =
-  "group overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] transition hover:border-[var(--vt-blue)]/40 hover:bg-white/[0.035]";
+  "group overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] transition duration-300 hover:-translate-y-0.5 hover:border-[var(--vt-blue)]/40 hover:bg-white/[0.035] hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)] motion-reduce:hover:translate-y-0";
 
 function FeaturedCard({ card }: { card: BlogCard }) {
   return (
-    <Link href={`/blog/${card.slug}`} className={cn(cardShell, "grid md:grid-cols-[1.05fr_1fr]")}>
-      <BlogThumb category={card.category} large className="aspect-[16/9] md:aspect-auto md:min-h-[300px]" />
+    <Link href={`/blog/${card.slug}`} className={cn(cardShell, "grid md:grid-cols-[1.15fr_1fr]")}>
+      <BlogThumb category={card.category} image={card.image} size="feature" className="aspect-[16/9] md:aspect-auto md:min-h-[320px]" />
       <div className="flex flex-col p-6 sm:p-8">
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-[var(--vt-coral)]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--vt-coral)]">Featured</span>
-          <CategoryLabel category={card.category} />
-        </div>
+        <span className="w-fit rounded-full bg-[var(--vt-coral)]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--vt-coral)]">Latest</span>
         <h2 className="mt-4 text-2xl font-semibold leading-tight tracking-tight text-white transition-colors group-hover:text-[var(--vt-coral)] sm:text-[1.75rem]">
           {card.title}
         </h2>
         <p className="mt-3 line-clamp-3 text-[15px] leading-7 text-slate-400">{card.excerpt}</p>
-        <div className="mt-auto flex items-center justify-between gap-4 pt-6">
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-4 pt-6">
           <Meta card={card} />
           <span className="inline-flex items-center gap-1 text-sm font-medium text-white">
             Read article <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden />
@@ -55,16 +53,16 @@ function FeaturedCard({ card }: { card: BlogCard }) {
 function ArticleCard({ card }: { card: BlogCard }) {
   return (
     <Link href={`/blog/${card.slug}`} className={cn(cardShell, "flex flex-col")}>
-      <BlogThumb category={card.category} className="aspect-[16/9] md:aspect-auto md:h-48" />
+      <BlogThumb category={card.category} title={card.title} image={card.image} className="aspect-[16/9] md:aspect-auto md:h-52" />
       <div className="flex flex-1 flex-col p-5 sm:p-6">
-        <CategoryLabel category={card.category} />
-        <h3 className="mt-2 text-lg font-semibold leading-snug tracking-tight text-white transition-colors group-hover:text-[var(--vt-coral)]">
+        <Meta card={card} />
+        <h3 className="mt-2.5 text-lg font-semibold leading-snug tracking-tight text-white transition-colors group-hover:text-[var(--vt-coral)]">
           {card.title}
         </h3>
         <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{card.excerpt}</p>
-        <div className="mt-auto pt-4">
-          <Meta card={card} />
-        </div>
+        <span className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-medium text-slate-300 transition-colors group-hover:text-white">
+          Read article <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" aria-hidden />
+        </span>
       </div>
     </Link>
   );
