@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function Page({ params }: Props) {
   const { slug, other } = await params;
   const { a, b } = await load(slug, other);
-  if (!a || !b || a.slug === b.slug) notFound();
+  if (!a || !b || a.slug === b.slug || !isIndexable(a) || !isIndexable(b)) notFound();
   const [x, y] = pairKey(a.slug, b.slug);
   if (x !== slug) permanentRedirect(`/compare/brokers/${x}/vs/${y}`);
   return <VsView a={a} b={b} />;

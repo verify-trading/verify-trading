@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { EntityDetail } from "@/components/marketing/entity-detail";
 import { getPublicEntities, getPublicEntity } from "@/lib/compare/entities";
+import { isIndexable } from "@/lib/compare/insights";
 import { entityMetadata } from "@/lib/compare/page-meta";
 
 // Rendered on first request, then cached and revalidated hourly (no build-time DB dependency).
@@ -19,6 +20,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function Page({ params }: Props) {
   const entity = await getPublicEntity("broker", (await params).slug);
-  if (!entity) notFound();
+  if (!entity || !isIndexable(entity)) notFound();
   return <EntityDetail entity={entity} all={await getPublicEntities("broker")} />;
 }
