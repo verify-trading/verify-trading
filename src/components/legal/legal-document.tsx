@@ -53,8 +53,7 @@ export function LegalDocument({
       </div>
 
       <p className="mt-16 border-t border-white/10 pt-8 text-center text-xs leading-relaxed text-[var(--vt-muted)]">
-        This text is for transparency and is not legal or financial advice. Have it reviewed for your jurisdiction before
-        launch.
+        This text is for transparency and is not legal or financial advice.
       </p>
     </main>
   );

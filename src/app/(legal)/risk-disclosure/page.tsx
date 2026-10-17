@@ -14,7 +14,7 @@ export default function RiskDisclosurePage() {
     <LegalDocument
       eyebrow="Risk"
       title="Risk Disclosure"
-      summary="Trading and leveraged products carry significant risk. This page sets expectations for educational use of the product. Have it reviewed for your jurisdiction and product roadmap."
+      summary="Trading and leveraged products carry significant risk. This page sets expectations for educational use of the product."
       sections={[
         {
           title: "Trading risk",
