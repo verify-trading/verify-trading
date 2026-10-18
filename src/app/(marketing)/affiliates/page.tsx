@@ -25,7 +25,6 @@ export const metadata: Metadata = {
   description:
     "Turn referrals into recurring revenue. Earn 30% commission every month, for every Pro member you refer to verify.trading. No caps, no expiry.",
   alternates: { canonical: "/affiliates" },
-  robots: { index: false, follow: true },
 };
 
 const APPLY_URL = "/affiliate-terms";

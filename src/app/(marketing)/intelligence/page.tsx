@@ -12,7 +12,7 @@ const path = "/intelligence";
 const description =
   "A daily pre-session market brief on gold, oil, the dollar and major FX pairs, with a bias, a key level and a one-line verdict for each. Context before you sit down to trade.";
 
-export const metadata: Metadata = { ...pageMetadata({ title: "Daily Market Brief for Forex & Gold Traders", description, path }), robots: { index: false, follow: true } };
+export const metadata: Metadata = pageMetadata({ title: "Daily Market Brief for Forex & Gold Traders", description, path });
 
 export const revalidate = 3600;
 
