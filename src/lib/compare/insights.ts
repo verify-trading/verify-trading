@@ -23,6 +23,17 @@ export function isIndexable(e: PublicEntity): boolean {
   return e.regulators.length > 0 || e.fcaRegistered || e.fcaWarning;
 }
 
+/**
+ * Stricter filter for the sitemap and robots index tag. With zero domain authority only the
+ * strongest pages should be indexed: "Strongly Trusted" brokers and "Trusted" prop firms.
+ * Pages that pass isIndexable but not isSeoWorthy stay live (no 404) but get noindex.
+ */
+export function isSeoWorthy(e: PublicEntity): boolean {
+  if (!isIndexable(e)) return false;
+  if (e.type === "propfirm") return e.verdict === "Trusted" || e.verdict === "Strongly Trusted";
+  return e.verdict === "Strongly Trusted";
+}
+
 export const entityPath = (e: Pick<PublicEntity, "type" | "slug">) =>
   `${e.type === "broker" ? "/compare/brokers" : "/compare/prop-firms"}/${e.slug}`;
 
@@ -68,7 +79,7 @@ export const hubFor = (brokers: PublicEntity[], slug: string): HubStats | null =
 export const pairKey = (a: string, b: string) => (a < b ? [a, b] : [b, a]) as [string, string];
 
 export const VS_PER_REGULATOR = 6;
-export const VS_CAP = 120;
+export const VS_CAP = 0;
 
 /**
  * Bounded set of "X vs Y" pages worth indexing: for each regulator with a reference entry, the top-scoring

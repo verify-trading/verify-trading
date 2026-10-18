@@ -12,7 +12,7 @@ const path = "/economic-calendar";
 const description =
   "A forex economic calendar with seven days of events across eight major economies, impact levels, forecast and previous figures, filters and an AI risk level. Plan around red-folder news.";
 
-export const metadata: Metadata = pageMetadata({ title: "Economic Calendar for Forex Traders", description, path });
+export const metadata: Metadata = { ...pageMetadata({ title: "Economic Calendar for Forex Traders", description, path }), robots: { index: false, follow: true } };
 
 export const revalidate = 3600;
 

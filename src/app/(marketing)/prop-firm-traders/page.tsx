@@ -9,7 +9,7 @@ const path = "/prop-firm-traders";
 const description =
   "Tools for prop firm challenge traders: verify a firm before you pay, see the news that breaks news rules, track your target and drawdown in a journal, and fix the habits that breach rules.";
 
-export const metadata: Metadata = pageMetadata({ title: "Prop Firm Challenge Tools: Verify, Track & Pass", description, path });
+export const metadata: Metadata = { ...pageMetadata({ title: "Prop Firm Challenge Tools: Verify, Track & Pass", description, path }), robots: { index: false, follow: true } };
 
 export default function PropFirmTradersPage() {
   return (

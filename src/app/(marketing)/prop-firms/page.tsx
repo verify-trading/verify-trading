@@ -8,7 +8,7 @@ const path = "/prop-firms";
 const description =
   "How prop firms are assessed on verify.trading, how to request a correction to your record, and our independence policy: no paid placement or commissions.";
 
-export const metadata: Metadata = pageMetadata({ title: "For Prop Firms: How You Are Assessed", description, path });
+export const metadata: Metadata = { ...pageMetadata({ title: "For Prop Firms: How You Are Assessed", description, path }), robots: { index: false, follow: true } };
 
 export default function PropFirmsPage() {
   return (
