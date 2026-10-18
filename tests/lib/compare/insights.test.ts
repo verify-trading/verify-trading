@@ -51,12 +51,10 @@ describe("alternatives and vs pairs", () => {
     expect(alts).not.toContain("me");
     expect(alts).not.toContain("other");
   });
-  it("bounds and canonicalises vs pairs", () => {
-    const pairs = vsPairs(all);
-    expect(pairs.length).toBeGreaterThan(0);
-    for (const [a, b] of pairs) expect(a.slug < b.slug).toBe(true);
+  it("produces no indexed vs pairs (VS pages removed for SEO)", () => {
+    expect(vsPairs(all)).toEqual([]);
     expect(pairKey("z", "a")).toEqual(["a", "z"]);
-    expect(isIndexedPair(all, "hi", "me")).toBe(true);
+    expect(isIndexedPair(all, "hi", "me")).toBe(false);
     expect(isIndexedPair(all, "hi", "other")).toBe(false);
   });
 });
