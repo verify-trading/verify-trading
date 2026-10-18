@@ -8,7 +8,7 @@ const path = "/brokers";
 const description =
   "How brokers are assessed on verify.trading, how to request a correction to your record, and our independence policy: no paid placement or affiliate commissions.";
 
-export const metadata: Metadata = { ...pageMetadata({ title: "For Brokers: How You Are Assessed", description, path }), robots: { index: false, follow: true } };
+export const metadata: Metadata = pageMetadata({ title: "For Brokers: How You Are Assessed", description, path });
 
 export default function BrokersPage() {
   return (

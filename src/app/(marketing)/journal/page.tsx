@@ -10,7 +10,7 @@ const path = "/journal";
 const description =
   "A trading journal app that logs P&L, mood and lessons, imports closed trades from your broker or a CSV, tracks prop firm challenges and writes a weekly insight. Part of Pro.";
 
-export const metadata: Metadata = { ...pageMetadata({ title: "Trading Journal App: Log, Import & Review", description, path }), robots: { index: false, follow: true } };
+export const metadata: Metadata = pageMetadata({ title: "Trading Journal App: Log, Import & Review", description, path });
 
 export default function JournalPage() {
   return (

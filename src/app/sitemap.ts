@@ -8,9 +8,19 @@ import { getSiteUrl } from "@/lib/site-config";
 const MARKETING_PATHS: Array<[path: string, priority: number]> = [
   ["/how-it-works", 0.8],
   ["/verify", 0.8],
+  ["/intelligence", 0.7],
+  ["/economic-calendar", 0.7],
+  ["/journal", 0.7],
+  ["/mind", 0.7],
   ["/compare/brokers", 0.8],
   ["/compare/prop-firms", 0.8],
+  ["/retail-traders", 0.7],
+  ["/prop-firm-traders", 0.7],
+  ["/brokers", 0.5],
+  ["/prop-firms", 0.5],
   ["/blog", 0.7],
+  ["/glossary", 0.7],
+  ["/resources", 0.7],
   ["/faq", 0.6],
   ["/trust", 0.6],
   ["/tools/position-size-calculator", 0.8],
@@ -18,6 +28,8 @@ const MARKETING_PATHS: Array<[path: string, priority: number]> = [
   ["/tools/pip-value-calculator", 0.7],
   ["/tools/margin-calculator", 0.7],
   ["/about", 0.5],
+  ["/careers", 0.3],
+  ["/affiliates", 0.6],
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
