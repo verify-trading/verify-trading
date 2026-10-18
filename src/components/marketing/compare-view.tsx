@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, SearchX, ShieldCh
 import { Breadcrumbs } from "@/components/marketing/primitives";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { FaqBlock, VerdictBands } from "@/components/marketing/entity-sections";
-import { regulatorHubs } from "@/lib/compare/insights";
+import { listableEntities, regulatorHubs } from "@/lib/compare/insights";
 import { FilterMenu } from "@/components/marketing/filter-menu";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -165,7 +165,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
   const cfg = CONFIG[type];
   const filters = parseCompareParams(searchParams);
   const view: View = { ...filters, sort: parseSort(searchParams) };
-  const all = await getPublicEntities(type);
+  const all = listableEntities(await getPublicEntities(type));
   const matches = sortEntities(filterEntities(all, filters), view.sort);
   const pages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
   const page = Math.min(filters.page ?? 1, pages);
@@ -353,7 +353,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
         ) : (
           <div className={cn(surface, "mt-3 flex flex-col items-center px-6 py-14 text-center")}>
             <span className="flex size-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400"><SearchX className="size-5" aria-hidden /></span>
-            <h2 className="mt-4 text-base font-semibold text-white">No {cfg.plural} match{filters.q ? ` "${filters.q}"` : ""}</h2>
+            <h2 className="mt-4 text-base font-semibold text-white">No {cfg.plural} match{filters.q ? ` \"${filters.q}\"` : ""}</h2>
             <p className="mt-1.5 max-w-sm text-sm text-slate-400">
               Try a shorter name or fewer filters. If we may not hold a record yet, run a check in Ask.
             </p>

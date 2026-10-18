@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getPublicEntities } from "@/lib/compare/entities";
-import { entityPath, isSeoWorthy, regulatorHubs } from "@/lib/compare/insights";
+import { entityPath, isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
 
 /** Every SEO-worthy data-driven URL: top entity records and major regulator hubs only. */
 export async function getCompareSitemapEntries(baseUrl: string): Promise<MetadataRoute.Sitemap> {
@@ -11,7 +11,7 @@ export async function getCompareSitemapEntries(baseUrl: string): Promise<Metadat
 
   return [
     { url: url("/regulators"), changeFrequency: "weekly", priority: 0.7 },
-    ...regulatorHubs(brokers)
+    ...regulatorHubs(listableEntities(brokers))
       .filter((h) => h.regulator.standing === "major" && h.entities.length >= 3)
       .map((h) => ({ url: url(`/regulators/${h.regulator.slug}`), changeFrequency: "weekly" as const, priority: 0.7 })),
     ...[...brokers, ...propFirms].filter(isSeoWorthy).map((e) => ({

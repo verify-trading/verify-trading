@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { isUniqueCode, RegulatorHub } from "@/components/marketing/regulator-views";
 import { getPublicEntities } from "@/lib/compare/entities";
-import { hubFor, regulatorHubs } from "@/lib/compare/insights";
+import { hubFor, listableEntities, regulatorHubs } from "@/lib/compare/insights";
 import { getRegulator } from "@/lib/compare/regulators";
 import { pageMetadata } from "@/lib/marketing/seo";
 
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const slug = (await params).slug;
   const reg = getRegulator(slug);
   if (!reg) return { title: "Not found", robots: { index: false } };
-  const hub = hubFor(await getPublicEntities("broker"), slug);
+  const hub = hubFor(listableEntities(await getPublicEntities("broker")), slug);
   const n = hub?.entities.length ?? 0;
   const meta = pageMetadata({
     title: `${reg.code} Regulated Brokers: List, Protection and Verdicts`,
@@ -33,7 +33,7 @@ export default async function Page({ params }: Props) {
   const slug = (await params).slug;
   const reg = getRegulator(slug);
   if (!reg) notFound();
-  const hubs = regulatorHubs(await getPublicEntities("broker"));
+  const hubs = regulatorHubs(listableEntities(await getPublicEntities("broker")));
   const hub = hubs.find((h) => h.regulator.slug === slug)!;
   const others = hubs.filter((h) => h.regulator.standing === reg.standing && h.regulator.slug !== slug && h.entities.length > 0).sort((a, b) => b.entities.length - a.entities.length).slice(0, 8);
   return <RegulatorHub hub={hub} uniqueCode={isUniqueCode(reg.code)} others={others} />;
