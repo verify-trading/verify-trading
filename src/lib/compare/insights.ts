@@ -34,6 +34,12 @@ export function isSeoWorthy(e: PublicEntity): boolean {
   return e.verdict === "Strongly Trusted";
 }
 
+/**
+ * The only entities the site surfaces: those with a live detail page. Every other record 404s
+ * and is dropped from every listing (Compare, regulator hubs, alternatives) so no link dangles.
+ */
+export const listableEntities = (entities: PublicEntity[]): PublicEntity[] => entities.filter(isSeoWorthy);
+
 export const entityPath = (e: Pick<PublicEntity, "type" | "slug">) =>
   `${e.type === "broker" ? "/compare/brokers" : "/compare/prop-firms"}/${e.slug}`;
 

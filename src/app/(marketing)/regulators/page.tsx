@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { RegulatorsIndex } from "@/components/marketing/regulator-views";
 import { getPublicEntities } from "@/lib/compare/entities";
-import { regulatorHubs } from "@/lib/compare/insights";
+import { listableEntities, regulatorHubs } from "@/lib/compare/insights";
 import { pageMetadata } from "@/lib/marketing/seo";
 
 export const revalidate = 3600;
@@ -14,6 +14,6 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function Page() {
-  const brokers = await getPublicEntities("broker");
+  const brokers = listableEntities(await getPublicEntities("broker"));
   return <RegulatorsIndex hubs={regulatorHubs(brokers)} total={brokers.length} />;
 }
