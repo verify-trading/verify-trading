@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { isUniqueCode, RegulatorHub } from "@/components/marketing/regulator-views";
 import { getPublicEntities } from "@/lib/compare/entities";
-import { hubFor, hubIndexable, regulatorHubs } from "@/lib/compare/insights";
+import { hubFor, regulatorHubs } from "@/lib/compare/insights";
 import { getRegulator } from "@/lib/compare/regulators";
 import { pageMetadata } from "@/lib/marketing/seo";
 
@@ -25,7 +25,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description: `${n} brokers list ${reg.name} (${reg.code}) in our register. What ${reg.code} protects, how to check its register, and each broker's verdict.`.slice(0, 160),
     path: `/regulators/${slug}`,
   });
-  return hub && hubIndexable(hub) ? meta : { ...meta, robots: { index: false, follow: true } };
+  const worthy = hub && reg.standing === "major" && hub.entities.length >= 3;
+  return worthy ? meta : { ...meta, robots: { index: false, follow: true } };
 }
 
 export default async function Page({ params }: Props) {

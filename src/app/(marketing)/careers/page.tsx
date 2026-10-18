@@ -8,7 +8,7 @@ const path = "/careers";
 const description =
   "Careers at Verify Trading Limited. No open roles right now, but we are keen to hear from traders, engineers and researchers who care about independent verification.";
 
-export const metadata: Metadata = pageMetadata({ title: "Careers at verify.trading", description, path });
+export const metadata: Metadata = { ...pageMetadata({ title: "Careers at verify.trading", description, path }), robots: { index: false, follow: true } };
 
 export default function CareersPage() {
   return (

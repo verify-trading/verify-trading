@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { getPublicEntity, type PublicEntityType } from "@/lib/compare/entities";
-import { entityPath, isIndexable } from "@/lib/compare/insights";
+import { entityPath, isIndexable, isSeoWorthy } from "@/lib/compare/insights";
 import { entityDescription } from "@/components/marketing/entity-detail";
 import { pageMetadata } from "@/lib/marketing/seo";
 
@@ -14,5 +14,5 @@ export async function entityMetadata(type: PublicEntityType, slug: string): Prom
     description: entityDescription(entity),
     path: entityPath(entity),
   });
-  return isIndexable(entity) ? meta : { ...meta, robots: { index: false, follow: true } };
+  return isSeoWorthy(entity) ? meta : { ...meta, robots: { index: false, follow: true } };
 }

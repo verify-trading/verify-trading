@@ -10,7 +10,7 @@ const path = "/resources";
 const description =
   "The verify.trading learning hub: guides on broker safety and risk, a trading glossary, free calculators and the broker and prop firm records, all in one place.";
 
-export const metadata: Metadata = pageMetadata({ title: "Trading Learning Hub: Guides, Glossary & Calculators", description, path });
+export const metadata: Metadata = { ...pageMetadata({ title: "Trading Learning Hub: Guides, Glossary & Calculators", description, path }), robots: { index: false, follow: true } };
 
 export default function ResourcesPage() {
   const latest = [...POSTS].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);

@@ -10,7 +10,7 @@ const path = "/mind";
 const description =
   "Trading psychology AI: a 30-question assessment scores five habits under pressure and draws your discipline radar, then a voice Companion helps you talk it through. Part of Pro.";
 
-export const metadata: Metadata = pageMetadata({ title: "Trading Psychology App: Assessment & AI Coach", description, path });
+export const metadata: Metadata = { ...pageMetadata({ title: "Trading Psychology App: Assessment & AI Coach", description, path }), robots: { index: false, follow: true } };
 
 export default function MindPage() {
   return (

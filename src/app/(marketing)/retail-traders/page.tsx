@@ -9,7 +9,7 @@ const path = "/retail-traders";
 const description =
   "Tools for retail forex and CFD traders: check brokers against regulator records, size every position with free calculators, and get market context before you risk money.";
 
-export const metadata: Metadata = pageMetadata({ title: "Trading Tools for Retail Traders", description, path });
+export const metadata: Metadata = { ...pageMetadata({ title: "Trading Tools for Retail Traders", description, path }), robots: { index: false, follow: true } };
 
 export default function RetailTradersPage() {
   return (
