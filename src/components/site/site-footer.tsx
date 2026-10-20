@@ -12,6 +12,7 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
     title: "Platform",
     links: [
       ["How it Works", "/how-it-works"],
+      ["Verify a Firm", "/verify"],
       ["Pricing", "/pricing"],
       ["Methodology", "/methodology"],
     ],
@@ -30,11 +31,11 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
   {
     title: "Compare",
     links: [
-      ["Verify", "/verify"],
-      ["Compare Brokers", "/compare/brokers"],
-      ["Compare Prop Firms", "/compare/prop-firms"],
-      ["Compare futures prop firms", "/compare/futures-prop-firms"],
-      ["Compare forex prop firms", "/compare/forex-prop-firms"],
+      ["All Brokers", "/compare/brokers"],
+      ["All Prop Firms", "/compare/prop-firms"],
+      ["Futures Prop Firms", "/compare/futures-prop-firms"],
+      ["Forex Prop Firms", "/compare/forex-prop-firms"],
+      ["Forex vs Futures", "/compare/forex-vs-futures-prop-firms"],
       ["Regulators", "/regulators"],
     ],
   },

@@ -353,9 +353,11 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                         Check in Ask AI
                       </Link>
                     )}
-                    <Link href={askCheckHref(e.name)} prefetch={false} aria-label={`Run full check on ${e.name}`} title="Run full check" className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-[var(--vt-blue)] transition-colors hover:bg-[var(--vt-blue)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:hidden">
-                      Run full check <ArrowRight className="size-3.5" aria-hidden />
-                    </Link>
+                    {isSeoWorthy(e) ? (
+                      <Link href={askCheckHref(e.name)} prefetch={false} aria-label={`Run full check on ${e.name}`} title="Run full check" className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-[var(--vt-blue)] transition-colors hover:bg-[var(--vt-blue)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:hidden">
+                        Run full check <ArrowRight className="size-3.5" aria-hidden />
+                      </Link>
+                    ) : null}
                   </div>
                 </li>
               ))}

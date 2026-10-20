@@ -134,12 +134,13 @@ export default async function FuturesPropFirmsPage() {
         eyebrow="Compare"
         title="Compare Futures Prop Firms: Fees, Rules & Drawdown"
         lede="Futures prop firms offer traders different ways to qualify for funded trading arrangements, but their evaluation fees, profit targets, drawdown limits and payout rules are not the same. A lower entry fee does not necessarily mean a better programme — the way a firm calculates drawdown, applies consistency requirements or charges for account activation can have a greater impact than the advertised account size. Compare futures prop firms using specific programme details, then explore their individual verification records on Verify Trading before making a decision."
-        primary={{ label: "Compare Futures Prop Firms", href: "/compare/prop-firms" }}
+        primary={{ label: "See the Comparison Table", href: "#comparison" }}
         secondary={{ label: "Verify a Prop Firm", href: "/verify" }}
         location="futures_prop_firms"
       />
 
       <Section
+        id="comparison"
         eyebrow="Comparison"
         title="Futures Prop Firm Comparison Table"
         intro="The table below compares selected $50,000 futures evaluation programmes using published programme terms."
@@ -218,10 +219,10 @@ export default async function FuturesPropFirmsPage() {
                   </Link>
                 ) : (
                   <Link
-                    href="/compare/prop-firms"
+                    href={`/compare/prop-firms?q=${encodeURIComponent(firm.name)}`}
                     className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-300 transition-colors hover:text-white"
                   >
-                    Browse prop firm records
+                    Find {firm.name} in the prop firm list
                   </Link>
                 )}
               </div>
