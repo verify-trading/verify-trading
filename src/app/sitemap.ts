@@ -14,6 +14,7 @@ const MARKETING_PATHS: Array<[path: string, priority: number]> = [
   ["/mind", 0.7],
   ["/compare/brokers", 0.8],
   ["/compare/prop-firms", 0.8],
+  ["/compare/futures-prop-firms", 0.8],
   ["/retail-traders", 0.7],
   ["/prop-firm-traders", 0.7],
   ["/brokers", 0.5],
