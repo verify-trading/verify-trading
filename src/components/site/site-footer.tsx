@@ -36,7 +36,6 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
       ["Futures Prop Firms", "/compare/futures-prop-firms"],
       ["Forex Prop Firms", "/compare/forex-prop-firms"],
       ["Forex vs Futures", "/compare/forex-vs-futures-prop-firms"],
-      ["Regulators", "/regulators"],
     ],
   },
   {
@@ -54,6 +53,7 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
       ["Blog", "/blog"],
       ["Learning Hub", "/resources"],
       ["Glossary", "/glossary"],
+      ["Regulators", "/regulators"],
       ["Risk Calculators", "/tools"],
       ["FAQ", "/faq"],
     ],
