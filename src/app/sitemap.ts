@@ -2,10 +2,16 @@ import type { MetadataRoute } from "next";
 
 import { getRemoteSitemapEntries } from "@/lib/blog/feed";
 import { POSTS } from "@/lib/blog/posts";
+import { REVIEWED as FUTURES_REVIEWED } from "@/app/(marketing)/compare/futures-prop-firms/page";
+import { REVIEWED as FOREX_REVIEWED } from "@/app/(marketing)/compare/forex-prop-firms/page";
+import { REVIEWED as FOREX_VS_FUTURES_REVIEWED } from "@/app/(marketing)/compare/forex-vs-futures-prop-firms/page";
+import { TOOLS_REVIEWED } from "@/components/marketing/tool-page";
 import { getCompareSitemapEntries } from "@/lib/compare/sitemap";
 import { getSiteUrl } from "@/lib/site-config";
 
-const MARKETING_PATHS: Array<[path: string, priority: number]> = [
+/** Pages with a real review date get it as lastmod; the rest omit lastmod rather than claim "changed today" on every crawl. */
+
+const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]> = [
   ["/how-it-works", 0.8],
   ["/verify", 0.8],
   ["/intelligence", 0.7],
@@ -14,37 +20,49 @@ const MARKETING_PATHS: Array<[path: string, priority: number]> = [
   ["/mind", 0.7],
   ["/compare/brokers", 0.8],
   ["/compare/prop-firms", 0.8],
-  ["/compare/futures-prop-firms", 0.8],
-  ["/compare/forex-prop-firms", 0.8],
-  ["/compare/forex-vs-futures-prop-firms", 0.7],
+  ["/compare/futures-prop-firms", 0.8, FUTURES_REVIEWED],
+  ["/compare/forex-prop-firms", 0.8, FOREX_REVIEWED],
+  ["/compare/forex-vs-futures-prop-firms", 0.7, FOREX_VS_FUTURES_REVIEWED],
   ["/retail-traders", 0.7],
   ["/prop-firm-traders", 0.7],
   ["/brokers", 0.5],
   ["/prop-firms", 0.5],
   ["/blog", 0.7],
-  ["/glossary", 0.7],
+  // /glossary is noindex, so it stays out of the sitemap.
   ["/resources", 0.7],
   ["/faq", 0.6],
   ["/trust", 0.6],
-  ["/tools/position-size-calculator", 0.8],
-  ["/tools/risk-reward-calculator", 0.7],
-  ["/tools/pip-value-calculator", 0.7],
-  ["/tools/margin-calculator", 0.7],
+  ["/tools/position-size-calculator", 0.8, TOOLS_REVIEWED],
+  ["/tools/risk-reward-calculator", 0.7, TOOLS_REVIEWED],
+  ["/tools/pip-value-calculator", 0.7, TOOLS_REVIEWED],
+  ["/tools/margin-calculator", 0.7, TOOLS_REVIEWED],
   ["/about", 0.5],
   ["/careers", 0.3],
   ["/affiliates", 0.6],
 ];
 
+const OTHER_PATHS: Array<[path: string, priority: number, changeFrequency: "weekly" | "monthly" | "yearly"]> = [
+  ["/", 1.0, "weekly"],
+  ["/methodology", 0.8, "monthly"],
+  ["/pricing", 0.8, "monthly"],
+  ["/tools", 0.7, "weekly"],
+  ["/contact", 0.4, "yearly"],
+  ["/privacy", 0.3, "yearly"],
+  ["/terms", 0.3, "yearly"],
+  ["/cookies", 0.3, "yearly"],
+  ["/risk-disclosure", 0.3, "yearly"],
+];
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = getSiteUrl();
-  const lastModified = new Date();
 
   const compareEntries = await getCompareSitemapEntries(baseUrl).catch(() => []);
   const remotePosts = await getRemoteSitemapEntries();
-  const dynamicEntries: MetadataRoute.Sitemap = [
-    ...MARKETING_PATHS.map(([path, priority]) => ({
+
+  return [
+    ...MARKETING_PATHS.map(([path, priority, reviewed]) => ({
       url: `${baseUrl}${path}`,
-      lastModified,
+      ...(reviewed ? { lastModified: new Date(reviewed) } : {}),
       changeFrequency: "monthly" as const,
       priority,
     })),
@@ -61,63 +79,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     })),
     ...compareEntries,
-  ];
-
-  return [
-    ...dynamicEntries,
-    {
-      url: `${baseUrl}/`,
-      lastModified,
-      changeFrequency: "weekly",
-      priority: 1.0,
-    },
-    {
-      url: `${baseUrl}/methodology`,
-      lastModified,
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/pricing`,
-      lastModified,
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/tools`,
-      lastModified,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/signup`,
-      lastModified,
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/privacy`,
-      lastModified,
-      changeFrequency: "yearly",
-      priority: 0.3,
-    },
-    {
-      url: `${baseUrl}/terms`,
-      lastModified,
-      changeFrequency: "yearly",
-      priority: 0.3,
-    },
-    {
-      url: `${baseUrl}/cookies`,
-      lastModified,
-      changeFrequency: "yearly",
-      priority: 0.3,
-    },
-    {
-      url: `${baseUrl}/risk-disclosure`,
-      lastModified,
-      changeFrequency: "yearly",
-      priority: 0.3,
-    },
+    ...OTHER_PATHS.map(([path, priority, changeFrequency]) => ({
+      url: path === "/" ? `${baseUrl}/` : `${baseUrl}${path}`,
+      changeFrequency,
+      priority,
+    })),
   ];
 }

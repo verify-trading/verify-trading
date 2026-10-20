@@ -10,6 +10,10 @@ import { pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/forex-vs-futures-prop-firms";
+/** When the facts on this page were last verified against each firm's site. The sitemap and the TL;DR both read this. */
+export const REVIEWED = "2026-10-20";
+const REVIEWED_LABEL = `Reviewed ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(REVIEWED))}`;
+
 const description =
   "Forex vs futures prop firms compared: markets, drawdown models, costs and who each model suits, with verified firm examples and Verify Trading verdicts.";
 
@@ -120,7 +124,7 @@ export default async function ForexVsFuturesPropFirmsPage() {
           "Futures suit intraday traders of US index and commodity futures; forex suits swing traders who want 24/5 flexibility.",
           "Neither is cheaper by default: resets, renewals and activation fees decide the total cost.",
         ]}
-        tldrNote="Reviewed 20 Oct 2026"
+        tldrNote={REVIEWED_LABEL}
         primary={{ label: "Compare futures prop firms", href: "/compare/futures-prop-firms" }}
         secondary={{ label: "Compare forex prop firms", href: "/compare/forex-prop-firms" }}
         location="forex_vs_futures_prop_firms"

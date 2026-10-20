@@ -10,6 +10,10 @@ import { pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/forex-prop-firms";
+/** When the facts on this page were last verified against each firm's site. The sitemap and the TL;DR both read this. */
+export const REVIEWED = "2026-10-20";
+const REVIEWED_LABEL = `Reviewed ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(REVIEWED))}`;
+
 const description =
   "Compare the top forex prop firms by challenge fees, profit targets, drawdown limits and profit splits. FTMO, The5ers, FundingPips and their Verify Trading verdicts.";
 
@@ -128,7 +132,7 @@ export default async function ForexPropFirmsPage() {
           "Funded splits: FTMO 80% up to 90%, The5ers 80% up to 100%, FundingPips 60% to 90% by payout cadence.",
           "List prices are rarely what you pay: all three run standing discounts, so check the live checkout price.",
         ]}
-        tldrNote="Reviewed 20 Oct 2026"
+        tldrNote={REVIEWED_LABEL}
         primary={{ label: "See the Comparison Table", href: "#comparison" }}
         secondary={{ label: "Verify a Prop Firm", href: "/verify" }}
         location="forex_prop_firms"
