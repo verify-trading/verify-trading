@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { computeBrokerTrustScore } from "@/lib/ask/bts";
 import { computePropFirmScore, isClosedFirm } from "@/lib/ask/prop-firms";
 import { findRegulator } from "@/lib/compare/regulators";
+import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -170,19 +171,31 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
   };
 }
 
-async function loadEntities(type: PublicEntityType): Promise<PublicEntity[]> {
+/** Fewer records than this from Supabase almost certainly means a broken query or empty table, not real data. */
+export const MIN_EXPECTED_ENTITIES: Record<PublicEntityType, number> = { broker: 100, propfirm: 20 };
+
+export async function loadEntities(type: PublicEntityType): Promise<PublicEntity[]> {
   const client = getSupabaseAdminClient();
-  if (!client) return [];
+  if (!client) {
+    logger.warn("Compare register unavailable: Supabase admin is not configured.", { type });
+    return [];
+  }
   const { data, error } = await client
     .from("verified_entities")
     .select(PUBLIC_ENTITY_COLUMNS)
     .eq("entity_type", type)
     .order("name")
     .range(0, 4999);
-  if (error || !data) return [];
-  return (data as unknown as Record<string, unknown>[])
+  // Throw rather than return [] so a failed read is never cached for an hour as "0 brokers"
+  // and detail pages answer 500 (retry) instead of 404 (gone) to search engines.
+  if (error || !data) throw new Error(`Compare register read failed for ${type}: ${error?.message ?? "no data"}`);
+  const entities = (data as unknown as Record<string, unknown>[])
     .map(toPublicEntity)
     .filter((e): e is PublicEntity => e !== null);
+  if (entities.length < MIN_EXPECTED_ENTITIES[type]) {
+    logger.error("Compare register returned far fewer records than expected.", { type, count: entities.length });
+  }
+  return entities;
 }
 
 /** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */

@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, SearchX, ShieldCh
 import { Breadcrumbs } from "@/components/marketing/primitives";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { FaqBlock, VerdictBands } from "@/components/marketing/entity-sections";
-import { listableEntities, regulatorHubs } from "@/lib/compare/insights";
+import { isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
 import { FilterMenu } from "@/components/marketing/filter-menu";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -165,7 +165,8 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
   const cfg = CONFIG[type];
   const filters = parseCompareParams(searchParams);
   const view: View = { ...filters, sort: parseSort(searchParams) };
-  const all = listableEntities(await getPublicEntities(type));
+  // The directory lists every record in the register; only records with a live detail page get a link to it.
+  const all = await getPublicEntities(type);
   const matches = sortEntities(filterEntities(all, filters), view.sort);
   const pages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
   const page = Math.min(filters.page ?? 1, pages);
@@ -202,7 +203,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
       <JsonLd
         data={itemListSchema({
           name: `${cfg.crumb}: verification records`,
-          items: rows.map((e) => ({ name: e.name, path: `${cfg.path}/${e.slug}` })),
+          items: rows.filter(isSeoWorthy).map((e) => ({ name: e.name, path: `${cfg.path}/${e.slug}` })),
         })}
       />
 
@@ -327,9 +328,13 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                   <div className="flex min-w-0 items-center gap-3">
                     <EntityAvatar name={e.name} verdict={e.verdict} />
                     <div className="min-w-0 flex-1">
-                      <Link href={`${cfg.path}/${e.slug}`} className="block truncate rounded text-[15px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60">
-                        {e.name}
-                      </Link>
+                      {isSeoWorthy(e) ? (
+                        <Link href={`${cfg.path}/${e.slug}`} className="block truncate rounded text-[15px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60">
+                          {e.name}
+                        </Link>
+                      ) : (
+                        <p className="truncate text-[15px] font-semibold text-white">{e.name}</p>
+                      )}
                       <p className="mt-0.5 text-xs text-[var(--vt-muted)] md:hidden">Updated {formatRecordDate(e.updatedAt)}</p>
                     </div>
                     <VerdictBadge verdict={e.verdict} className="md:hidden" />
@@ -339,9 +344,15 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                   <RegulatorTags e={e} />
                   <p className="hidden text-xs text-slate-400 md:block">{formatRecordDate(e.updatedAt)}</p>
                   <div className="flex items-center gap-2 md:justify-end">
-                    <Link href={`${cfg.path}/${e.slug}`} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:flex-none">
-                      View record
-                    </Link>
+                    {isSeoWorthy(e) ? (
+                      <Link href={`${cfg.path}/${e.slug}`} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:flex-none">
+                        View record
+                      </Link>
+                    ) : (
+                      <Link href={askCheckHref(e.name)} prefetch={false} rel="nofollow" aria-label={`Check ${e.name} in Ask AI`} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:flex-none">
+                        Check in Ask AI
+                      </Link>
+                    )}
                     <Link href={askCheckHref(e.name)} prefetch={false} aria-label={`Run full check on ${e.name}`} title="Run full check" className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-[var(--vt-blue)] transition-colors hover:bg-[var(--vt-blue)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:hidden">
                       Run full check <ArrowRight className="size-3.5" aria-hidden />
                     </Link>
@@ -440,7 +451,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
               <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">Browse by regulator</h2>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">What each regulator protects, how to check its register, and every broker in our data that lists it.</p>
               <div className="mt-5 flex flex-wrap gap-2">
-                {regulatorHubs(all).filter((h) => h.entities.length > 0).sort((a, b) => b.entities.length - a.entities.length).slice(0, 12).map((h) => (
+                {regulatorHubs(listableEntities(all)).filter((h) => h.entities.length > 0).sort((a, b) => b.entities.length - a.entities.length).slice(0, 12).map((h) => (
                   <Link key={h.regulator.slug} href={`/regulators/${h.regulator.slug}`} className="rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.08] hover:text-white">
                     {h.regulator.code}
                     {h.regulator.code === "FSC" || h.regulator.code === "FSA" ? <span className="text-slate-500"> {h.regulator.country.replace("British Virgin Islands", "BVI")}</span> : null}
