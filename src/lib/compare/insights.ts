@@ -35,9 +35,12 @@ export function isSeoWorthy(e: PublicEntity): boolean {
 }
 
 /**
- * The only entities the site surfaces: those with a live detail page. Every other record 404s
- * and is dropped from regulator hubs and alternatives. The Compare directory still lists every record,
- * but only links these to a detail page (see compare-view.tsx).
+ * SEO PAGE GATE, not a visibility filter. Records that pass isSeoWorthy get a detail page;
+ * the rest 404 and are dropped from regulator hubs and alternatives.
+ *
+ * Never use this to filter the Compare directory (/compare/brokers, /compare/prop-firms): that
+ * lists every record in Supabase and only links these. Filtering it here once made the directory
+ * fall from 777 brokers to 20; tests/components/site/compare-view.test.tsx guards against it.
  */
 export const listableEntities = (entities: PublicEntity[]): PublicEntity[] => entities.filter(isSeoWorthy);
 
