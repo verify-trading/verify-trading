@@ -10,6 +10,10 @@ import { pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/futures-prop-firms";
+/** When the facts on this page were last verified against each firm's site. The sitemap and the TL;DR both read this. */
+export const REVIEWED = "2026-10-20";
+const REVIEWED_LABEL = `Reviewed ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(REVIEWED))}`;
+
 const description =
   "Compare futures prop firms by evaluation fees, profit targets, drawdown limits and trading rules. Explore Topstep, Earn2Trade, Bulenox and more.";
 
@@ -140,7 +144,7 @@ export default async function FuturesPropFirmsPage() {
           "Consistency rules apply at Topstep (55%), Earn2Trade (30%) and TradeDay (30%).",
           "A low fee is not a trust signal. Check each firm's VT verdict in the table before you buy.",
         ]}
-        tldrNote="Reviewed 20 Oct 2026"
+        tldrNote={REVIEWED_LABEL}
         primary={{ label: "See the Comparison Table", href: "#comparison" }}
         secondary={{ label: "Verify a Prop Firm", href: "/verify" }}
         location="futures_prop_firms"

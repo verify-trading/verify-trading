@@ -25,3 +25,23 @@ describe("sitemap", () => {
     }
   });
 });
+
+import { REVIEWED as FUTURES_REVIEWED } from "@/app/(marketing)/compare/futures-prop-firms/page";
+
+describe("compare page review dates", () => {
+  it("drive the sitemap lastmod for that page", async () => {
+    const entries = await sitemap();
+    const futures = entries.find((e) => e.url.endsWith("/compare/futures-prop-firms"));
+    expect(futures?.lastModified).toEqual(new Date(FUTURES_REVIEWED));
+  });
+
+  it("are real ISO dates in the past or today", () => {
+    const now = Date.now();
+    for (const d of [FUTURES_REVIEWED]) {
+      expect(/^\d{4}-\d{2}-\d{2}$/.test(d)).toBe(true);
+      const t = Date.parse(d);
+      expect(Number.isFinite(t)).toBe(true);
+      expect(t).toBeLessThanOrEqual(now);
+    }
+  });
+});

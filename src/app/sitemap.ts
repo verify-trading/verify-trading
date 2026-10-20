@@ -2,12 +2,14 @@ import type { MetadataRoute } from "next";
 
 import { getRemoteSitemapEntries } from "@/lib/blog/feed";
 import { POSTS } from "@/lib/blog/posts";
+import { REVIEWED as FUTURES_REVIEWED } from "@/app/(marketing)/compare/futures-prop-firms/page";
+import { REVIEWED as FOREX_REVIEWED } from "@/app/(marketing)/compare/forex-prop-firms/page";
+import { REVIEWED as FOREX_VS_FUTURES_REVIEWED } from "@/app/(marketing)/compare/forex-vs-futures-prop-firms/page";
 import { TOOLS_REVIEWED } from "@/components/marketing/tool-page";
 import { getCompareSitemapEntries } from "@/lib/compare/sitemap";
 import { getSiteUrl } from "@/lib/site-config";
 
 /** Pages with a real review date get it as lastmod; the rest omit lastmod rather than claim "changed today" on every crawl. */
-const COMPARE_REVIEWED = "2026-10-20";
 
 const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]> = [
   ["/how-it-works", 0.8],
@@ -18,9 +20,9 @@ const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]
   ["/mind", 0.7],
   ["/compare/brokers", 0.8],
   ["/compare/prop-firms", 0.8],
-  ["/compare/futures-prop-firms", 0.8, COMPARE_REVIEWED],
-  ["/compare/forex-prop-firms", 0.8, COMPARE_REVIEWED],
-  ["/compare/forex-vs-futures-prop-firms", 0.7, COMPARE_REVIEWED],
+  ["/compare/futures-prop-firms", 0.8, FUTURES_REVIEWED],
+  ["/compare/forex-prop-firms", 0.8, FOREX_REVIEWED],
+  ["/compare/forex-vs-futures-prop-firms", 0.7, FOREX_VS_FUTURES_REVIEWED],
   ["/retail-traders", 0.7],
   ["/prop-firm-traders", 0.7],
   ["/brokers", 0.5],
