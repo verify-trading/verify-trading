@@ -19,6 +19,12 @@ export default function Page() {
       description={description}
       h1={<>Position size calculator: <span className="text-[var(--vt-coral)]">how many lots to trade.</span></>}
       lede="Set the amount you are willing to lose, the distance to your stop, and get the lot size that risks exactly that. Free, instant and nothing is stored."
+      tldr={[
+        "Lots = (account x risk %) / (stop in pips x pip value per lot).",
+        "Example: risking 1% of 10,000 USD with a 20-pip stop on EUR/USD is 0.50 lots.",
+        "A wider stop means a smaller position for the same risk.",
+        "Free and instant, works in USD, GBP and EUR, and nothing is stored.",
+      ]}
       calculator={<PositionSizeCalculator />}
       formulaTitle="Lot size = risk amount / (stop in pips x pip value per lot)"
       formula="Lots = (Account x Risk %) / (Stop pips x Pip value per lot)"

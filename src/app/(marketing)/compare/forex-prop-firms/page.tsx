@@ -121,7 +121,14 @@ export default async function ForexPropFirmsPage() {
       <PageHero
         eyebrow="Compare"
         title="Compare Forex Prop Firms: Fees, Rules & Drawdown"
-        lede="Forex prop firms run evaluation challenges with different fees, profit targets, drawdown limits and profit splits — and a lower fee does not make a firm easier to pass or more likely to pay out. Compare the top firms on their actual programme rules, then check each one's independent verification record on Verify Trading before you commit."
+        lede="Compare FTMO, The5ers and FundingPips on their standard 2-step $100K challenges: fees, profit targets, drawdown and profit split, then check each firm's independent verdict."
+        tldr={[
+          "All three 2-step $100K challenges use a 5% maximum daily loss and a 10% static maximum loss.",
+          "Profit targets: FTMO and The5ers 10% then 5%; FundingPips 8% then 5%.",
+          "Funded splits: FTMO 80% up to 90%, The5ers 80% up to 100%, FundingPips 60% to 90% by payout cadence.",
+          "List prices are rarely what you pay: all three run standing discounts, so check the live checkout price.",
+        ]}
+        tldrNote="Reviewed 20 Oct 2026"
         primary={{ label: "See the Comparison Table", href: "#comparison" }}
         secondary={{ label: "Verify a Prop Firm", href: "/verify" }}
         location="forex_prop_firms"
@@ -223,7 +230,8 @@ export default async function ForexPropFirmsPage() {
         </div>
       </Section>
 
-      <Section eyebrow="Guide" title="How to Choose a Forex Prop Firm" narrow>
+      <Section eyebrow="Guide" title="How to Choose a Forex Prop Firm"
+        summary="Compare the profit target, the drawdown model and daily-loss basis, and the profit split before the headline fee." narrow>
         <p className="text-[15px] leading-7 text-slate-300">
           {"The most useful forex prop firm comparison goes beyond the headline fee. Compare the profit target, then the drawdown model — whether the maximum loss is static or trailing, and whether it is calculated on balance or equity. Check the daily-loss basis, the profit split and how it scales, and the rules that apply once you reach the funded stage. A lower advertised price does not make a programme easier to pass or more likely to pay out. Once you understand the published terms, check the firm's independent verification record before you commit."}
         </p>
@@ -232,6 +240,7 @@ export default async function ForexPropFirmsPage() {
       <Section
         eyebrow="Drawdown"
         title="Drawdown Models Explained"
+        summary="A static 10% floor never moves; a trailing limit rises with your balance, and an equity-based daily loss counts floating P&L."
         intro="How a firm measures your maximum loss matters as much as the headline percentage."
         narrow
         band
@@ -257,19 +266,22 @@ export default async function ForexPropFirmsPage() {
         </div>
       </Section>
 
-      <Section eyebrow="Costs" title="Evaluation Fees vs What You Actually Pay" narrow>
+      <Section eyebrow="Costs" title="Evaluation Fees vs What You Actually Pay"
+        summary="All three firms discount their list prices, so compare the live checkout price plus resets and add-ons." narrow>
         <p className="text-[15px] leading-7 text-slate-300">
           {"The list price is rarely the price you pay. FTMO runs standing percentage discounts, The5ers sells the same $100K account size far more cheaply through promotional plans, and FundingPips has standing codes worth around 20% off. Beyond the headline fee, compare the full structure — the cost of resets, any add-ons and the funded-stage terms — and always check the live checkout price rather than the advertised list price before buying."}
         </p>
       </Section>
 
-      <Section eyebrow="Targets" title="Profit Targets and 1-Step vs 2-Step" narrow band>
+      <Section eyebrow="Targets" title="Profit Targets and 1-Step vs 2-Step"
+        summary="A lower target is not automatically easier: the drawdown and daily-loss rules decide how hard a programme is to hold." narrow band>
         <p className="text-[15px] leading-7 text-slate-300">
           {"A two-step evaluation splits the profit target across two phases — for example 10% in Phase 1 then 5% in Phase 2. A one-step evaluation asks for the target in a single phase, but it usually pairs that with a tighter daily loss limit or a trailing drawdown to balance the shorter path. A lower overall target is not automatically easier: the drawdown model and daily-loss rules can make a lower-target programme harder to hold than a higher-target one with more generous risk limits."}
         </p>
       </Section>
 
-      <Section eyebrow="Splits" title="Profit Splits and Scaling" narrow>
+      <Section eyebrow="Splits" title="Profit Splits and Scaling"
+        summary="Splits start around 80% and scale differently at each firm, so read the scaling conditions in the funded-stage agreement." narrow>
         <p className="text-[15px] leading-7 text-slate-300">
           {"Funded splits and the way they scale differ between firms. FTMO starts at 80% and scales toward 90%; The5ers starts at 80% and scales up to 100% through its scaling plan; FundingPips pays roughly 60% to 90% depending on payout cadence. The headline split only tells part of the story — read the funded-stage agreement, including the scaling conditions and payout rules, rather than relying on the evaluation objectives alone."}
         </p>

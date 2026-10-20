@@ -28,6 +28,12 @@ export default async function EconomicCalendarPage() {
       eyebrow="Economic calendar"
       title={<>See the news that can hit your trades <span className="text-[var(--vt-coral)]">before it lands.</span></>}
       lede="Seven days of scheduled events for the US, Germany, UK, Canada, Japan, Australia, New Zealand and China, with impact levels, forecasts and filters. Many prop firm rules restrict trading around high-impact news, and this is where you see it coming."
+      tldr={[
+        "Seven days of scheduled events for the US, Germany, UK, Canada, Japan, Australia, New Zealand and China.",
+        "Impact levels, forecasts and previous values, filtered to the currencies you trade.",
+        "Spot the high-impact releases that many prop firm rules restrict trading around.",
+        "A preview is free on this page; the full calendar with filters is part of Pro.",
+      ]}
       primary={{ label: "See Pro plans", href: "/pricing", event: "pricing" }}
       secondary={{ label: "Create a free account", href: "/signup", event: "signup" }}
       visual={<ProPhone screen="calendar" />}

@@ -19,6 +19,11 @@ export default function BrokersPage() {
       eyebrow="For brokers"
       title={<>How verify.trading assesses <span className="text-[var(--vt-coral)]">brokers.</span></>}
       lede="Traders check us before they deposit with you. This page explains what a broker record is built from, how to ask for a correction, and why the outcome is not for sale."
+      tldr={[
+        "Broker records are built from public registers, warning lists, licences and documented court or regulatory actions.",
+        "The same fixed model is applied to every broker, with the citation shown on the record.",
+        "The outcome is not for sale. You can ask for a correction.",
+      ]}
       compareHref="/compare/brokers"
       compareLabel="Compare Brokers"
       entityNoun="broker"

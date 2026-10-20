@@ -19,6 +19,11 @@ export default function PropFirmsPage() {
       eyebrow="For prop firms"
       title={<>How verify.trading assesses <span className="text-[var(--vt-coral)]">prop firms.</span></>}
       lede="Traders check a firm before they buy a challenge. This page explains what a prop firm record is built from, how to ask for a correction, and why the outcome is not for sale."
+      tldr={[
+        "Prop firm records cover operating status, published terms and documented payout complaint patterns.",
+        "Records not yet scored show as Not yet rated; closed firms are clearly marked.",
+        "The outcome is not for sale. You can ask for a correction.",
+      ]}
       compareHref="/compare/prop-firms"
       compareLabel="Compare Prop Firms"
       entityNoun="prop firm"

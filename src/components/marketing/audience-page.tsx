@@ -31,6 +31,7 @@ export function AudiencePage(p: {
   eyebrow: string;
   title: ReactNode;
   lede: string;
+  tldr?: string[];
   primary: Cta;
   secondary?: Cta;
   cards?: CardItem[];
@@ -61,7 +62,7 @@ export function AudiencePage(p: {
     <>
       <JsonLd data={webPageSchema({ name: p.name, description: p.description, path: p.path })} />
       <Breadcrumbs crumbs={[{ name: p.name, path: p.path }]} />
-      <PageHero eyebrow={p.eyebrow} title={p.title} lede={p.lede} primary={p.primary} secondary={p.secondary} location={location} />
+      <PageHero eyebrow={p.eyebrow} title={p.title} lede={p.lede} primary={p.primary} secondary={p.secondary} location={location} tldr={p.tldr} />
 
       <Section eyebrow="Key capabilities" title={p.helpTitle ?? p.problemsTitle ?? "What helps you trade safer"}>
         <CardGrid items={cards} cols={3} numbered />

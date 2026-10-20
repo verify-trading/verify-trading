@@ -26,6 +26,7 @@ export type ProductPageProps = {
   eyebrow: string;
   title: ReactNode;
   lede: string;
+  tldr?: string[];
   primary: Cta;
   secondary?: Cta;
   visual: ReactNode;
@@ -75,6 +76,7 @@ export function ProductPage(p: ProductPageProps) {
         secondary={p.secondary}
         visual={p.visual}
         location={location}
+        tldr={p.tldr}
       />
       <Section eyebrow="What it does" title={p.featuresTitle ?? `Why traders use ${p.name}`} intro={p.featuresIntro}>
         <CardGrid items={featureCards} cols={3} numbered />

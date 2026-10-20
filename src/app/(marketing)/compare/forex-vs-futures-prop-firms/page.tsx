@@ -113,7 +113,14 @@ export default async function ForexVsFuturesPropFirmsPage() {
       <PageHero
         eyebrow="Compare"
         title="Forex vs Futures Prop Firms: Which Should You Choose?"
-        lede="Forex and futures prop firms both fund traders who pass an evaluation, but they differ in the markets you trade, how drawdown and targets are calculated, and how you pay for the challenge. The right choice depends on what you trade and how you manage risk — not on which looks cheaper up front. Here's how the two models compare, with verified firm examples from each side."
+        lede="Forex and futures prop firms differ in the markets you trade, how drawdown is calculated and how you pay. Here's how the two models compare, with verified firm examples from each side."
+        tldr={[
+          "Forex: currencies, indices and metals as CFDs, 24/5, with percentage limits (about 5% daily, 10% maximum) and usually a one-time fee.",
+          "Futures: exchange-traded CME futures, with a dollar trailing drawdown (about $2,000 to $2,500) and often a monthly fee.",
+          "Futures suit intraday traders of US index and commodity futures; forex suits swing traders who want 24/5 flexibility.",
+          "Neither is cheaper by default: resets, renewals and activation fees decide the total cost.",
+        ]}
+        tldrNote="Reviewed 20 Oct 2026"
         primary={{ label: "Compare futures prop firms", href: "/compare/futures-prop-firms" }}
         secondary={{ label: "Compare forex prop firms", href: "/compare/forex-prop-firms" }}
         location="forex_vs_futures_prop_firms"
@@ -149,19 +156,22 @@ export default async function ForexVsFuturesPropFirmsPage() {
         </p>
       </Section>
 
-      <Section eyebrow="Markets" title="The Markets You Trade" narrow band>
+      <Section eyebrow="Markets" title="The Markets You Trade"
+        summary="Forex firms offer CFDs on currencies, indices and metals nearly 24/5; futures firms offer exchange-listed CME futures during exchange hours." narrow band>
         <p className="text-[15px] leading-7 text-slate-300">
           {"Forex and CFD prop firms give access to currency pairs, indices and metals traded as CFDs, running nearly 24/5, usually on MT4, MT5, cTrader or DXtrade. Futures prop firms give access to exchange-listed futures on regulated venues such as CME Group — index futures (ES, NQ), energy (CL) and metals (GC) — usually on NinjaTrader, Tradovate or Rithmic, during exchange hours. Futures are centrally cleared and regulated as an asset class, whereas the forex/CFD side is traded over the counter. On both sides, most retail prop evaluations are simulated until you are funded."}
         </p>
       </Section>
 
-      <Section eyebrow="Drawdown" title="How Drawdown Differs" narrow>
+      <Section eyebrow="Drawdown" title="How Drawdown Differs"
+        summary="Forex uses percentage limits that may be static; futures use a dollar trailing drawdown that ratchets up and never moves back down." narrow>
         <p className="text-[15px] leading-7 text-slate-300">
           {"Forex firms typically use percentage-based limits: roughly a 5% maximum daily loss and a 10% maximum overall loss, which may be a static floor or trail upward with your balance. Futures firms typically use a dollar trailing drawdown — an end-of-day or intraday threshold, for example around $2,000, that ratchets up as the account balance grows and never moves back down. A dollar trailing drawdown behaves very differently from a static percentage floor, especially after a winning run or when you hold positions through volatility: the threshold can sit much closer to your current balance than the headline number suggests, leaving less room than a fixed floor would."}
         </p>
       </Section>
 
-      <Section eyebrow="Costs" title="What You Pay" narrow band>
+      <Section eyebrow="Costs" title="What You Pay"
+        summary="Forex is usually a one-time fee and futures often a monthly subscription, so how long you take to pass decides which costs more." narrow band>
         <p className="text-[15px] leading-7 text-slate-300">
           {"Forex challenges are usually a one-time fee, frequently discounted through standing promotions. Futures evaluations are often a monthly subscription that runs until you pass, sometimes with an activation fee once you are funded; some futures firms also offer one-time pricing. The cheapest headline price is not the cheapest total cost once resets, activation fees and monthly renewals are counted — a low monthly price can cost more than a one-time fee if it takes several months to pass. All of these numbers change frequently, so check the current terms before you buy."}
         </p>

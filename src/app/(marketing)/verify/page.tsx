@@ -23,6 +23,12 @@ export default function VerifyPage() {
       eyebrow="Verify"
       title={<>Check who you are trading with <span className="text-[var(--vt-coral)]">before you deposit.</span></>}
       lede="Verify checks a name against regulator and court records and returns a plain verdict with the source shown. Entity checks are free, and a verdict is never behind a paywall."
+      tldr={[
+        "Type a broker, prop firm or educator and get a plain verdict: Verified, Unverified or Caution.",
+        "Checks run against regulator registers, warning lists and court enforcement records, with the source cited.",
+        "A Caution is only issued when it is backed by a documented regulator or court action.",
+        "Entity checks are free, and a verdict is never behind a paywall.",
+      ]}
       primary={{ label: "Check a name", href: "/ask", event: "ask" }}
       secondary={{ label: "Read the methodology", href: "/methodology" }}
       visual={<VerifyCardMock />}

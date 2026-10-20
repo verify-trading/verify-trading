@@ -20,6 +20,12 @@ export default function PropFirmTradersPage() {
       eyebrow="For prop firm traders"
       title={<>Pass the challenge without <span className="text-[var(--vt-coral)]">breaking your own rules.</span></>}
       lede="A funded account is lost to a rule breach far more often than to a bad read of the market. verify.trading helps you pick the firm, plan around the news, and catch the habits that breach the rules."
+      tldr={[
+        "Check a firm's operating status, payout disputes and published rules before paying evaluation fees.",
+        "Size trades so a normal losing streak cannot breach the maximum daily loss.",
+        "Plan around high-impact news so you are flat during restricted windows.",
+        "Track the challenge in the journal and catch the habits behind daily loss breaches.",
+      ]}
       primary={{ label: "Check a prop firm", href: "/ask", event: "ask" }}
       secondary={{ label: "Compare prop firms", href: "/compare/prop-firms" }}
       helpTitle="Tools designed around prop firm evaluation rules"
