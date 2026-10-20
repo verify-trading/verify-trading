@@ -33,6 +33,8 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
       ["Verify", "/verify"],
       ["Compare Brokers", "/compare/brokers"],
       ["Compare Prop Firms", "/compare/prop-firms"],
+      ["Compare futures prop firms", "/compare/futures-prop-firms"],
+      ["Compare forex prop firms", "/compare/forex-prop-firms"],
       ["Regulators", "/regulators"],
     ],
   },
