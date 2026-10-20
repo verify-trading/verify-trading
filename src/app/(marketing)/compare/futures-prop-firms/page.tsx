@@ -278,7 +278,7 @@ export default async function FuturesPropFirmsPage() {
 
       <Section eyebrow="Consistency" title="Futures Prop Firm Consistency Rules" narrow band>
         <p className="text-[15px] leading-7 text-slate-300">
-          {"Consistency requirements can limit how much of a trader's total profit may come from a single trading day. Topstep's Trading Combine uses a consistency target: if a trader's best day exceeds the permitted share of the target, the profit target increases. Earn2Trade's $50K Gauntlet Mini lists a 30% consistency requirement. TradeDay's $50K Intraday evaluation also lists a 30% consistency requirement. These percentages belong to specific programmes and should not be assumed to apply to every account offered by those firms."}
+          {"Consistency requirements can limit how much of a trader's total profit may come from a single trading day. Topstep's Trading Combine applies a 55% consistency rule: your best single trading day must stay at or below 55% of the profit target, and Topstep treats it as a hard line with no rounding. At the funded stage, the Express Funded Account's consistency payout path caps your best day at 40% of total net profit, with a three-day minimum. Earn2Trade's $50K Gauntlet Mini lists a 30% consistency requirement. TradeDay's $50K Intraday evaluation also lists a 30% consistency requirement. These percentages belong to specific programmes and should not be assumed to apply to every account offered by those firms."}
         </p>
       </Section>
 
