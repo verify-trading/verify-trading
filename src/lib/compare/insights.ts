@@ -36,7 +36,8 @@ export function isSeoWorthy(e: PublicEntity): boolean {
 
 /**
  * The only entities the site surfaces: those with a live detail page. Every other record 404s
- * and is dropped from every listing (Compare, regulator hubs, alternatives) so no link dangles.
+ * and is dropped from regulator hubs and alternatives. The Compare directory still lists every record,
+ * but only links these to a detail page (see compare-view.tsx).
  */
 export const listableEntities = (entities: PublicEntity[]): PublicEntity[] => entities.filter(isSeoWorthy);
 
