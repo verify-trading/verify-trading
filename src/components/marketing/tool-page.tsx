@@ -6,6 +6,7 @@ import {
   CtaBand,
   FaqSection,
   Section,
+  Tldr,
 } from "@/components/marketing/primitives";
 import { SectionEyebrow } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -26,6 +27,7 @@ export function ToolPage(p: {
   description: string;
   h1: ReactNode;
   lede: string;
+  tldr?: string[];
   calculator: ReactNode;
   formulaTitle: string;
   formula: string;
@@ -53,6 +55,7 @@ export function ToolPage(p: {
         <div className="mx-auto mt-8 w-full max-w-4xl px-4 sm:px-6">
           {p.calculator}
         </div>
+        {p.tldr?.length ? <Tldr items={p.tldr} className="mx-auto mt-6 max-w-4xl" /> : null}
       </section>
 
       {/* Short explainer: Formula & Worked Example */}

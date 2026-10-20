@@ -28,6 +28,7 @@ export function BusinessPage(p: {
   eyebrow: string;
   title: ReactNode;
   lede: string;
+  tldr?: string[];
   compareHref: string;
   compareLabel: string;
   assessed: Array<{ title: string; body: string }>;
@@ -52,6 +53,7 @@ export function BusinessPage(p: {
         primary={{ label: "Request a correction", href: "/contact" }}
         secondary={{ label: "Read the methodology", href: "/methodology" }}
         location={location}
+        tldr={p.tldr}
       />
       <Section eyebrow="Assessment model" title="A fixed model, applied the same way to everyone">
         <CardGrid items={cards} cols={3} numbered />

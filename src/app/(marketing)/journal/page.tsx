@@ -22,6 +22,12 @@ export default function JournalPage() {
       eyebrow="Trading journal"
       title={<>A trading journal that <span className="text-[var(--vt-coral)]">fills itself in.</span></>}
       lede="Log P&L, mood and the lesson from each session, or connect your broker and let closed trades land in the diary. Track a prop firm challenge against its target, and read a weekly insight written from your own sessions."
+      tldr={[
+        "Log P&L, mood and the lesson from each session in a calendar diary.",
+        "Connect your broker or import a CSV so closed trades fill in automatically.",
+        "Challenge mode tracks a prop firm evaluation against its target and trading days.",
+        "A weekly insight is written from your own sessions. Journal is part of Pro.",
+      ]}
       primary={{ label: "See Pro plans", href: "/pricing", event: "pricing" }}
       secondary={{ label: "Create a free account", href: "/signup", event: "signup" }}
       visual={<ProPhone screen="journal" />}

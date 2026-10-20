@@ -133,7 +133,14 @@ export default async function FuturesPropFirmsPage() {
       <PageHero
         eyebrow="Compare"
         title="Compare Futures Prop Firms: Fees, Rules & Drawdown"
-        lede="Futures prop firms offer traders different ways to qualify for funded trading arrangements, but their evaluation fees, profit targets, drawdown limits and payout rules are not the same. A lower entry fee does not necessarily mean a better programme — the way a firm calculates drawdown, applies consistency requirements or charges for account activation can have a greater impact than the advertised account size. Compare futures prop firms using specific programme details, then explore their individual verification records on Verify Trading before making a decision."
+        lede="Compare five $50K futures evaluations on fees, profit targets, drawdown and consistency rules, then check each firm's independent Verify Trading verdict before you pay."
+        tldr={[
+          "Lowest entry price here: Topstep's $50K Standard Path at $49/month, plus a $149 activation fee once you earn a funded account.",
+          "All five $50K programmes target $3,000 profit. The real difference is drawdown: $2,000 to $2,500, end-of-day or intraday trailing.",
+          "Consistency rules apply at Topstep (55%), Earn2Trade (30%) and TradeDay (30%).",
+          "A low fee is not a trust signal. Check each firm's VT verdict in the table before you buy.",
+        ]}
+        tldrNote="Reviewed 20 Oct 2026"
         primary={{ label: "See the Comparison Table", href: "#comparison" }}
         secondary={{ label: "Verify a Prop Firm", href: "/verify" }}
         location="futures_prop_firms"
@@ -231,7 +238,8 @@ export default async function FuturesPropFirmsPage() {
         </div>
       </Section>
 
-      <Section eyebrow="Guide" title="How to Choose a Futures Prop Firm" narrow>
+      <Section eyebrow="Guide" title="How to Choose a Futures Prop Firm"
+        summary="Compare the profit target, then the drawdown model, consistency rules, trading days and activation or reset fees, and only then the price." narrow>
         <p className="text-[15px] leading-7 text-slate-300">
           The most useful futures prop firm comparison goes beyond the account size and headline evaluation price. Start with the profit target. In the programmes compared above, the $50,000 evaluations each list a $3,000 target — however, the risk limits and other qualification requirements differ. Next, compare the drawdown model. An intraday trailing threshold can respond to account performance differently from an end-of-day threshold; this distinction matters when a trader holds positions through market fluctuations. Also review consistency rules, minimum trading days, contract limits and any activation or reset fees. Finally, investigate the company itself — published evaluation terms explain the programme, while independent verification records provide another layer of information about the firm behind it.
         </p>
@@ -240,6 +248,7 @@ export default async function FuturesPropFirmsPage() {
       <Section
         eyebrow="Drawdown"
         title="Futures Prop Firm Drawdown Explained"
+        summary="End-of-day trailing, intraday trailing and EOD with a separate daily loss limit behave very differently, so the headline drawdown figure alone is not enough."
         intro="Drawdown determines how much an evaluation account can lose before breaching a programme's risk limits."
         narrow
         band
@@ -271,19 +280,22 @@ export default async function FuturesPropFirmsPage() {
         </div>
       </Section>
 
-      <Section eyebrow="Costs" title="Evaluation Fees vs Total Programme Costs" narrow>
+      <Section eyebrow="Costs" title="Evaluation Fees vs Total Programme Costs"
+        summary="The lowest monthly price is not the lowest total cost once activation fees, resets and recurring months are counted." narrow>
         <p className="text-[15px] leading-7 text-slate-300">
           {"The advertised evaluation price is only one part of the cost comparison. Topstep's $50K Standard Path is listed at $49 per month, but earning an Express Funded Account through that path also involves a $149 activation fee. Earn2Trade and OneUp Trader publish monthly evaluation pricing for the programmes compared here. Bulenox lists a one-time fee for its Momentum programme (though it is frequently discounted), while TradeDay advertises both standard and promotional monthly prices. Traders should compare the full payment structure — including resets, activation charges and any recurring fees — rather than treating the lowest initial price as the lowest total cost."}
         </p>
       </Section>
 
-      <Section eyebrow="Consistency" title="Futures Prop Firm Consistency Rules" narrow band>
+      <Section eyebrow="Consistency" title="Futures Prop Firm Consistency Rules"
+        summary="Topstep caps your best day at 55% of the profit target in the Combine; Earn2Trade and TradeDay list 30% on the programmes compared here." narrow band>
         <p className="text-[15px] leading-7 text-slate-300">
           {"Consistency requirements can limit how much of a trader's total profit may come from a single trading day. Topstep's Trading Combine applies a 55% consistency rule: your best single trading day must stay at or below 55% of the profit target, and Topstep treats it as a hard line with no rounding. At the funded stage, the Express Funded Account's consistency payout path caps your best day at 40% of total net profit, with a three-day minimum. Earn2Trade's $50K Gauntlet Mini lists a 30% consistency requirement. TradeDay's $50K Intraday evaluation also lists a 30% consistency requirement. These percentages belong to specific programmes and should not be assumed to apply to every account offered by those firms."}
         </p>
       </Section>
 
-      <Section eyebrow="Payouts" title="Futures Prop Firm Payout Rules" narrow>
+      <Section eyebrow="Payouts" title="Futures Prop Firm Payout Rules"
+        summary="Passing the evaluation and qualifying for a payout are separate milestones, so read the funded-stage agreement before you buy." narrow>
         <p className="text-[15px] leading-7 text-slate-300">
           {"Passing an evaluation and becoming eligible for a payout are separate milestones. Payout conditions can depend on the funded-stage account type, qualifying trading days, minimum request amounts, profit-sharing terms and withdrawal caps. For example, TradeDay's published funded-stage rules distinguish between its simulated and live funded arrangements, and Topstep also applies payout rules according to the type of funded account. Always review the funded-stage agreement, not just the evaluation objectives, before choosing a programme."}
         </p>

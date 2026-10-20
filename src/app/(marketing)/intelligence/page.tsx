@@ -28,6 +28,12 @@ export default async function IntelligencePage() {
       eyebrow="Intelligence"
       title={<>Know the tone of the session <span className="text-[var(--vt-coral)]">before it opens.</span></>}
       lede="A short daily brief on gold, oil, the dollar and major FX pairs: a bias, a level and a one-line verdict for each, and the tone to expect. It is market context, not trade advice."
+      tldr={[
+        "A short daily brief on gold, oil, the dollar index, USD/JPY, EUR/USD and GBP/USD.",
+        "Each asset gets a bias, a key level and a one-line verdict, readable in under a minute.",
+        "Levels are synced to live price feeds, so quoted figures are never stale.",
+        "Market context, not trade advice. The full brief is part of Pro.",
+      ]}
       primary={{ label: "See Pro plans", href: "/pricing", event: "pricing" }}
       secondary={{ label: "Create a free account", href: "/signup", event: "signup" }}
       visual={<ProPhone screen="markets" />}

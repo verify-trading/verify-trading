@@ -19,6 +19,12 @@ export default function Page() {
       description={description}
       h1={<>Risk to reward calculator: <span className="text-[var(--vt-coral)]">what a win pays against a loss.</span></>}
       lede="Enter your entry, stop and target to see the ratio, the distances in pips and the win rate you need just to break even. Free and instant."
+      tldr={[
+        "R:R = reward distance / risk distance; break-even win rate = 1 / (1 + R:R).",
+        "Example: a 30-pip stop and a 90-pip target is 1:3, so you break even winning 25% of trades.",
+        "At 1:1 you need to win 50% of trades just to break even, before costs.",
+        "Free and instant, for long and short trades.",
+      ]}
       calculator={<RiskRewardCalculator />}
       formulaTitle="Ratio = reward distance / risk distance"
       formula="R:R = |Target - Entry| / |Entry - Stop|     Break-even win rate = 1 / (1 + R:R)"

@@ -22,6 +22,12 @@ export default function MindPage() {
       eyebrow="Mind"
       title={<>Find out what your trading habits <span className="text-[var(--vt-coral)]">actually cost you.</span></>}
       lede="A 30-question assessment scores how you trade under pressure and draws your discipline radar. Then talk it through with a Companion in a live voice call, and reread any call as a transcript."
+      tldr={[
+        "A 30-question assessment scores how you trade under pressure.",
+        "Your discipline radar highlights the weakest habit to work on first.",
+        "Talk it through with a Companion on a live voice call, and reread every call as a transcript.",
+        "Mind is part of Pro.",
+      ]}
       primary={{ label: "See Pro plans", href: "/pricing", event: "pricing" }}
       secondary={{ label: "Create a free account", href: "/signup", event: "signup" }}
       visual={<ProPhone screen="mind" />}

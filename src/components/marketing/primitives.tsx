@@ -44,6 +44,32 @@ export function Breadcrumbs({ crumbs }: { crumbs: Crumb[] }) {
   );
 }
 
+/* ─── TL;DR ─── */
+
+/**
+ * Answer-first summary at the top of a money page: 3-4 short, factual bullets a reader
+ * (or an answer engine) can take away without reading the rest of the page.
+ */
+export function Tldr({ items, updated, className }: { items: string[]; updated?: string; className?: string }) {
+  if (!items.length) return null;
+  return (
+    <aside aria-label="TL;DR" className={cn("rounded-2xl border border-white/[0.09] bg-white/[0.03] p-4 text-left sm:p-5", className)}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]">TL;DR</p>
+        {updated ? <p className="text-[11px] text-[var(--vt-muted)]">{updated}</p> : null}
+      </div>
+      <ul className="mt-3 space-y-2">
+        {items.map((t) => (
+          <li key={t} className="flex gap-2.5 text-sm leading-6 text-slate-200">
+            <Check className="mt-1 size-3.5 shrink-0 text-[var(--vt-green)]" aria-hidden />
+            <span>{t}</span>
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
 /* ─── Hero ─── */
 
 export function PageHero({
@@ -54,6 +80,8 @@ export function PageHero({
   secondary,
   visual,
   location,
+  tldr,
+  tldrNote,
   children,
 }: {
   eyebrow: string;
@@ -63,6 +91,10 @@ export function PageHero({
   secondary?: Cta;
   visual?: ReactNode;
   location: string;
+  /** Answer-first bullets shown under the CTAs. */
+  tldr?: string[];
+  /** Small note beside the TL;DR label, e.g. the review date. */
+  tldrNote?: string;
   children?: ReactNode;
 }) {
   const split = Boolean(visual);
@@ -102,6 +134,7 @@ export function PageHero({
               ) : null}
             </div>
           ) : null}
+          {tldr?.length ? <Tldr items={tldr} updated={tldrNote} className={cn("mt-8", split ? "max-w-xl" : "mx-auto max-w-2xl")} /> : null}
           {children}
         </div>
         {visual ? <div className="min-w-0">{visual}</div> : null}
@@ -120,6 +153,7 @@ export function Section({
   band = false,
   narrow = false,
   id,
+  summary,
 }: {
   eyebrow?: string;
   title: string;
@@ -128,6 +162,8 @@ export function Section({
   band?: boolean;
   narrow?: boolean;
   id?: string;
+  /** Key takeaway shown up front; the body then folds into "Read more" (still in the HTML, so still indexed). */
+  summary?: string;
 }) {
   return (
     <section id={id} className={cn("scroll-mt-20 py-14 sm:py-20", band && "bg-[linear-gradient(180deg,transparent,rgba(5,7,30,0.5)_18%,rgba(5,7,30,0.5)_82%,transparent)]")}>
@@ -136,8 +172,20 @@ export function Section({
           {eyebrow ? <SectionEyebrow>{eyebrow}</SectionEyebrow> : null}
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h2>
           {intro ? <p className="mt-3 text-[15px] leading-7 text-slate-400">{intro}</p> : null}
+          {summary ? <p className="mt-3 text-[15px] font-medium leading-7 text-slate-200">{summary}</p> : null}
         </div>
-        {children ? <div className="mt-8 sm:mt-10">{children}</div> : null}
+        {children && summary ? (
+          <details className="group mt-5">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-sm font-medium text-[var(--vt-blue)] hover:underline [&::-webkit-details-marker]:hidden">
+              <span className="group-open:hidden">Read more</span>
+              <span className="hidden group-open:inline">Show less</span>
+              <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
+            </summary>
+            <div className="mt-5">{children}</div>
+          </details>
+        ) : children ? (
+          <div className="mt-8 sm:mt-10">{children}</div>
+        ) : null}
       </div>
     </section>
   );

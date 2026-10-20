@@ -19,6 +19,12 @@ export default function Page() {
       description={description}
       h1={<>Margin calculator: <span className="text-[var(--vt-coral)]">what a position ties up.</span></>}
       lede="Enter a pair, lot size, price and your leverage to see the margin your broker holds while the trade is open. Free and instant."
+      tldr={[
+        "Margin = position value in your account currency / leverage.",
+        "Example: 1 lot of EUR/USD at 1.0850 with 30:1 leverage holds 3,616.67 USD of margin.",
+        "Lower leverage needs more margin, which limits how big a position you can open.",
+        "Free and instant, in USD, GBP or EUR.",
+      ]}
       calculator={<MarginCalculator />}
       formulaTitle="Margin = position value in account currency / leverage"
       formula="Margin = (Lots x 100,000 x Base-to-account rate) / Leverage"

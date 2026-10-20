@@ -19,6 +19,12 @@ export default function Page() {
       description={description}
       h1={<>Pip value calculator: <span className="text-[var(--vt-coral)]">what one pip is worth.</span></>}
       lede="Choose a pair, a lot size and your account currency and see the money value of a single pip, so you can turn a stop in pips into a real loss. Free and instant."
+      tldr={[
+        "Pip value = units x pip size, converted to your account currency.",
+        "Example: 1 standard lot of EUR/USD is worth 10 USD per pip.",
+        "JPY pairs use a 0.01 pip size: 1 lot of USD/JPY at 150 is about 6.67 USD per pip.",
+        "Free and instant, in USD, GBP or EUR.",
+      ]}
       calculator={<PipValueCalculator />}
       formulaTitle="Pip value = units x pip size, converted to your account currency"
       formula="Pip value = (Lots x 100,000) x Pip size x Quote-to-account rate"

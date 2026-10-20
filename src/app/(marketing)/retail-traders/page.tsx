@@ -20,6 +20,12 @@ export default function RetailTradersPage() {
       eyebrow="For retail traders"
       title={<>Trade with the lights on, <span className="text-[var(--vt-coral)]">not on trust.</span></>}
       lede="Most retail traders do not lose to a bad strategy. They lose to a bad broker, an entry taken too early, or a position that was too big. verify.trading puts a check in front of each one."
+      tldr={[
+        "Check a broker against regulator records and warning lists before you deposit. Free, with sources shown.",
+        "Size every trade from the amount you are willing to lose, using the free position size calculator.",
+        "Check the economic calendar and session tone before scheduled news moves the market.",
+        "Log each trade and your discipline in the journal to spot patterns over time.",
+      ]}
       primary={{ label: "Check a name", href: "/ask", event: "ask" }}
       secondary={{ label: "Use the free calculators", href: "/tools" }}
       helpTitle="Essential tools before risking capital"

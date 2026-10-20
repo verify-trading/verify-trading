@@ -27,6 +27,12 @@ export default function HowItWorksPage() {
           </>
         }
         lede="Six tools in one app: check who you're trading with, read the market before you act, then review how you traded."
+        tldr={[
+          "Ask (free): a sourced answer on any broker, prop firm, setup or market in seconds.",
+          "Markets (free): live prices across gold, forex, indices and crypto, with the context behind each move.",
+          "Intelligence and Economic Calendar (Pro): the daily pre-session brief and the high-impact news ahead.",
+          "Journal and Mind (Pro): log every trade, run Challenge Mode, and build discipline.",
+        ]}
         visual={<HowItWorksVideo />}
         location="how_it_works"
       />
