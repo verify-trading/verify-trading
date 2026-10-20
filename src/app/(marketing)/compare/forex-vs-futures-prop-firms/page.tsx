@@ -220,10 +220,10 @@ export default async function ForexVsFuturesPropFirmsPage() {
                         </Link>
                       ) : (
                         <Link
-                          href="/compare/prop-firms"
+                          href={`/compare/prop-firms?q=${encodeURIComponent(name)}`}
                           className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-300 transition-colors hover:text-white"
                         >
-                          Browse prop firm records
+                          Find {name} in the prop firm list
                         </Link>
                       )}
                     </div>

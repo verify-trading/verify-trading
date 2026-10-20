@@ -122,12 +122,13 @@ export default async function ForexPropFirmsPage() {
         eyebrow="Compare"
         title="Compare Forex Prop Firms: Fees, Rules & Drawdown"
         lede="Forex prop firms run evaluation challenges with different fees, profit targets, drawdown limits and profit splits — and a lower fee does not make a firm easier to pass or more likely to pay out. Compare the top firms on their actual programme rules, then check each one's independent verification record on Verify Trading before you commit."
-        primary={{ label: "Compare Prop Firms", href: "/compare/prop-firms" }}
+        primary={{ label: "See the Comparison Table", href: "#comparison" }}
         secondary={{ label: "Verify a Prop Firm", href: "/verify" }}
         location="forex_prop_firms"
       />
 
       <Section
+        id="comparison"
         eyebrow="Comparison"
         title="Forex Prop Firm Comparison Table"
         intro="The table below compares each firm's standard 2-step $100,000 evaluation using published programme terms. We lead with our independent Verify Trading verdict, not the fee."
@@ -210,10 +211,10 @@ export default async function ForexPropFirmsPage() {
                   </Link>
                 ) : (
                   <Link
-                    href="/compare/prop-firms"
+                    href={`/compare/prop-firms?q=${encodeURIComponent(firm.name)}`}
                     className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-300 transition-colors hover:text-white"
                   >
-                    Browse prop firm records
+                    Find {firm.name} in the prop firm list
                   </Link>
                 )}
               </div>
