@@ -1,0 +1,14 @@
+{
+  "name": "verify.trading",
+  "short_name": "verify.trading",
+  "description": "Verify before you trade. Independent broker and prop firm checks, markets and AI second opinion.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0F20",
+  "theme_color": "#0B0F20",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
