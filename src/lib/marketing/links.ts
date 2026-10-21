@@ -29,6 +29,8 @@ export const LINKS = {
   riskReward: { href: "/tools/risk-reward-calculator", title: "Risk to reward calculator", body: "Ratio and break-even win rate for any entry, stop and target.", tag: "Free" },
   pipValue: { href: "/tools/pip-value-calculator", title: "Pip value calculator", body: "What one pip is worth for your pair and lot size.", tag: "Free" },
   margin: { href: "/tools/margin-calculator", title: "Margin calculator", body: "Margin required for a position at your leverage.", tag: "Free" },
+  profitLoss: { href: "/tools/profit-loss-calculator", title: "Profit / Loss calculator", body: "What a trade was worth, in the pair's quote currency.", tag: "Free" },
+  compoundGrowth: { href: "/tools/compound-growth-calculator", title: "Compound growth calculator", body: "How a starting balance grows at a monthly return.", tag: "Free" },
   pricing: { href: "/pricing", title: "Pricing", body: "Free and Pro plans compared.", tag: "Plans" },
   about: { href: "/about", title: "About", body: "Who runs verify.trading and why it is independent.", tag: "Company" },
 } satisfies Record<string, LinkCard>;

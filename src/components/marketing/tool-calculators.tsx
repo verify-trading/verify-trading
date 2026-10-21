@@ -260,3 +260,111 @@ export function MarginCalculator() {
     </Shell>
   );
 }
+
+/* ─── Profit / Loss ─── */
+const DIRECTIONS = ["long", "short"] as const;
+
+export function ProfitLossCalculator() {
+  const [pair, setPair] = useState("EUR/USD");
+  const [direction, setDirection] = useState<"long" | "short">("long");
+  const [entry, setEntry] = useState("1.0850");
+  const [exit, setExit] = useState("1.0940");
+  const [lots, setLots] = useState("1");
+
+  const e = num(entry);
+  const x = num(exit);
+  const l = num(lots);
+  const quote = pair.split("/")[1] ?? "USD";
+  const pipSize = pair.includes("JPY") ? 0.01 : 0.0001;
+  const rawMove = direction === "long" ? x - e : e - x;
+  const pips = pipSize > 0 ? rawMove / pipSize : 0;
+  const pnl = e > 0 && x > 0 && l > 0 ? rawMove * l * 100_000 : null;
+  const positive = (pnl ?? 0) >= 0;
+
+  return (
+    <Shell>
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-8">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Pick label="Currency pair" value={pair} onChange={setPair} options={TOOL_PAIRS} />
+          <Pick label="Direction" value={direction} onChange={(v) => setDirection(v as "long" | "short")} options={DIRECTIONS} />
+          <Num label="Entry price" value={entry} onChange={setEntry} />
+          <Num label="Exit price" value={exit} onChange={setExit} />
+          <div className="sm:col-span-2">
+            <Num label="Lot size" value={lots} onChange={setLots} step="0.01" hint="1 lot = 100,000 units." />
+          </div>
+        </div>
+        <div className="flex flex-col gap-4 rounded-xl border border-white/[0.06] bg-black/25 p-5">
+          {pnl !== null ? (
+            <>
+              <Hero value={`${pnl >= 0 ? "+" : "-"}${money(Math.abs(pnl), quote)}`} unit={positive ? "profit" : "loss"} tone={positive ? "green" : "coral"} />
+              <div className="grid grid-cols-2 gap-2">
+                <Stat label="Pips moved" value={`${pips >= 0 ? "+" : ""}${pips.toFixed(1)}`} />
+                <Stat label="Direction" value={direction === "long" ? "Long" : "Short"} />
+              </div>
+            </>
+          ) : (
+            <Hint>Enter entry, exit and lot size to see the profit or loss.</Hint>
+          )}
+          <p className="text-xs leading-relaxed text-[var(--vt-muted)]">Result is in the pair&apos;s quote currency. For a different account currency, convert at your broker&apos;s rate.</p>
+        </div>
+      </div>
+    </Shell>
+  );
+}
+
+/* ─── Compound growth ─── */
+export function CompoundGrowthCalculator() {
+  const [start, setStart] = useState("10000");
+  const [rate, setRate] = useState("5");
+  const [months, setMonths] = useState("12");
+  const [add, setAdd] = useState("0");
+  const [cur, setCur] = useState("USD");
+
+  const s = num(start);
+  const r = num(rate);
+  const m = Math.max(0, Math.min(600, Math.round(num(months))));
+  const a = num(add);
+
+  let projected = s;
+  for (let i = 0; i < m; i++) {
+    projected += a;
+    projected *= 1 + r / 100;
+  }
+  const contributed = s + a * m;
+  const net = projected - contributed;
+  const totalReturn = contributed > 0 ? (net / contributed) * 100 : 0;
+
+  const ready = s >= 0 && m > 0;
+
+  return (
+    <Shell>
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-8">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Num label="Starting balance" value={start} onChange={setStart} />
+          <Pick label="Account currency" value={cur} onChange={setCur} options={ACCOUNT_CURRENCIES} />
+          <Num label="Monthly % return" value={rate} onChange={setRate} step="0.1" hint="Average monthly return, after costs." />
+          <Num label="Months" value={months} onChange={setMonths} hint="Up to 600." />
+          <div className="sm:col-span-2">
+            <Num label="Monthly deposit" value={add} onChange={setAdd} hint="Added at the start of each month." />
+          </div>
+        </div>
+        <div className="flex flex-col gap-4 rounded-xl border border-white/[0.06] bg-black/25 p-5">
+          {ready ? (
+            <>
+              <Hero value={money(projected, cur)} unit={`balance after ${m} ${m === 1 ? "month" : "months"}`} tone={net >= 0 ? "green" : "coral"} />
+              <div className="grid grid-cols-2 gap-2">
+                <Stat label="Contributed" value={money(contributed, cur)} />
+                <Stat label="Net profit" value={`${net >= 0 ? "+" : "-"}${money(Math.abs(net), cur)}`} />
+                <Stat label="Total return" value={`${totalReturn.toFixed(1)}%`} />
+                <Stat label="Monthly rate" value={`${r.toFixed(2)}%`} />
+              </div>
+            </>
+          ) : (
+            <Hint>Enter a starting balance and a number of months.</Hint>
+          )}
+          <p className="text-xs leading-relaxed text-[var(--vt-muted)]">A projection, not a forecast. Real returns vary month to month and losses compound against you.</p>
+        </div>
+      </div>
+    </Shell>
+  );
+}
