@@ -122,6 +122,20 @@ export const PAGE_FAQS = {
       { q: "What leverage limits apply to retail traders?", a: "They depend on your regulator and the instrument. UK and EU retail rules cap leverage on major forex pairs at 30:1, but check your own broker's terms, since limits vary by entity." },
       { q: "What is a margin call?", a: "A broker warning, or automatic closure, when your account equity falls too far below the margin needed to keep positions open. Keeping position sizes small is the way to stay clear of it." },
     ],
+    profitLoss: [
+      { q: "How do I calculate profit or loss on a forex trade?", a: "Take the move in the pair's quote currency, multiply by the units you traded. For a 1 lot EUR/USD long from 1.0850 to 1.0940, the move is 0.0090 x 100,000 = 900 USD." },
+      { q: "Why is the result in the quote currency?", a: "A forex trade's profit lands in the pair's second (quote) currency. For a USD-quoted pair that is already USD; for others, convert at the broker's rate to see it in your account currency." },
+      { q: "Does the calculator include spread or commission?", a: "No. It uses the entry and exit price you type. To include costs, add the spread to a long entry (or subtract from a short) and subtract commissions from the result." },
+      { q: "How do pips convert to money?", a: "Pips measure the move in the pair's smallest standard unit (0.0001 for most pairs, 0.01 for yen pairs). The money value of a pip is set by lot size and the pair's quote currency." },
+      { q: "Is this exact to the cent?", a: "It's a planning figure. Slippage, swaps and commission shift the real P&L; your broker's statement is the record." },
+    ],
+    compoundGrowth: [
+      { q: "How does compound growth work for a trading account?", a: "Each period's gain is added to the balance before the next period, so the next period earns on a larger base. Over time this grows faster than a straight percentage of the starting balance." },
+      { q: "What monthly return is realistic?", a: "There is no safe number. Many profitable traders target low single-digit monthly returns after costs; higher consistent figures are rare and usually mean higher risk. This calculator is a projection, not a forecast." },
+      { q: "What about losing months?", a: "Losses compound too. A 20% drawdown needs a 25% gain to break even; a 50% drawdown needs a 100% gain. Model losing months by entering a negative rate for a few months to see the dent." },
+      { q: "Does it account for prop firm payouts and splits?", a: "No. Payout schedules, profit splits, resets and fees change the real figure. Use the output as the gross before those adjustments." },
+      { q: "Why is monthly deposit added before the gain?", a: "A conservative choice: the deposit earns the month's return. If you deposit at month-end instead, drop the rate slightly or add fewer months to approximate." },
+    ],
   },
   hub: [
     { q: "What is verify.trading?", a: "An independent verification and decision-support tool for retail traders. It checks brokers, prop firms and educators against regulator and court records, runs risk maths, and gives market context." },

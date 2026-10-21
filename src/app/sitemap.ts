@@ -36,6 +36,8 @@ const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]
   ["/tools/risk-reward-calculator", 0.7, TOOLS_REVIEWED],
   ["/tools/pip-value-calculator", 0.7, TOOLS_REVIEWED],
   ["/tools/margin-calculator", 0.7, TOOLS_REVIEWED],
+  ["/tools/profit-loss-calculator", 0.7, TOOLS_REVIEWED],
+  ["/tools/compound-growth-calculator", 0.7, TOOLS_REVIEWED],
   ["/about", 0.5],
   ["/careers", 0.3],
   ["/affiliates", 0.6],
