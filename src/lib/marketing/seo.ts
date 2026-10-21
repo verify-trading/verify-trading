@@ -162,3 +162,24 @@ export function collectionPageSchema(input: { name: string; description: string;
     isPartOf: { "@type": "WebSite", name: getAppName(), url: getSiteUrl() },
   };
 }
+
+/** VideoObject for a short calculator walkthrough. uploadDate is required; Google uses it. */
+export function videoObjectSchema(input: {
+  name: string;
+  description: string;
+  contentUrl: string;
+  thumbnailUrl: string;
+  uploadDate: string;
+  duration?: string;
+}): SchemaOrgObject {
+  return {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    name: input.name,
+    description: input.description,
+    contentUrl: input.contentUrl.startsWith("http") ? input.contentUrl : abs(input.contentUrl),
+    thumbnailUrl: input.thumbnailUrl.startsWith("http") ? input.thumbnailUrl : abs(input.thumbnailUrl),
+    uploadDate: input.uploadDate,
+    ...(input.duration ? { duration: input.duration } : {}),
+  };
+}

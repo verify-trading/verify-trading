@@ -34,6 +34,7 @@ export default function Page() {
         "Margin = 108,500 / 30 = 3,616.67 USD held while the trade is open.",
         "At 10:1 the same trade needs 10,850 USD, which is why lower leverage limits how big a position you can open.",
       ]}
+      video={{ src: "/videos/margin.mp4", title: "How to use the margin calculator", description: "A short walkthrough: pair, lot size, price and leverage, and the margin your broker holds while the trade is open.", uploadDate: "2026-10-21" }}
       faqs={[...PAGE_FAQS.tools.margin]}
     />
   );

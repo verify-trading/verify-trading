@@ -34,6 +34,7 @@ export default function Page() {
         "Lots = 100 / (20 x 10) = 0.50 lots.",
         "Widen the stop to 50 pips and the size falls to 100 / (50 x 10) = 0.20 lots.",
       ]}
+      video={{ src: "/videos/lot-size.mp4", title: "How to use the position size calculator", description: "A 30-second walkthrough of the forex lot size calculator: enter account size, risk and stop in pips to get your lots.", uploadDate: "2026-10-21" }}
       faqs={[...PAGE_FAQS.tools.positionSize]}
     />
   );

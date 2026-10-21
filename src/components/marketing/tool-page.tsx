@@ -12,7 +12,7 @@ import { SectionEyebrow } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import type { Faq } from "@/lib/marketing/faqs";
-import { toolSchema } from "@/lib/marketing/seo";
+import { toolSchema, videoObjectSchema } from "@/lib/marketing/seo";
 
 export const TOOLS_REVIEWED = "2026-09-29";
 
@@ -33,10 +33,24 @@ export function ToolPage(p: {
   formula: string;
   workedExample: string[];
   faqs: Faq[];
+  /** Short walkthrough video shown under the calculator; also published as VideoObject schema. */
+  video?: { src: string; poster?: string; title: string; description: string; uploadDate: string; duration?: string };
 }) {
   return (
     <>
       <JsonLd data={toolSchema({ name: p.name, description: p.description, path: p.path })} />
+      {p.video ? (
+        <JsonLd
+          data={videoObjectSchema({
+            name: p.video.title,
+            description: p.video.description,
+            contentUrl: p.video.src,
+            thumbnailUrl: p.video.poster ?? p.video.src,
+            uploadDate: p.video.uploadDate,
+            duration: p.video.duration,
+          })}
+        />
+      ) : null}
       <Breadcrumbs crumbs={[{ name: "Calculators", path: "/resources" }, { name: p.name, path: p.path }]} />
 
       <section className="relative overflow-hidden border-b border-white/[0.06] bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(76,110,245,0.12),transparent_60%),var(--vt-navy)] pt-10 pb-14 sm:pt-14 sm:pb-16">
@@ -56,6 +70,23 @@ export function ToolPage(p: {
           {p.calculator}
         </div>
         {p.tldr?.length ? <Tldr items={p.tldr} className="mx-auto mt-6 max-w-4xl" /> : null}
+        {p.video ? (
+          <figure className="mx-auto mt-8 w-full max-w-4xl px-4 sm:px-6">
+            <div className="overflow-hidden rounded-2xl border border-white/[0.09] bg-black/40">
+              <video
+                className="aspect-video w-full"
+                src={p.video.src}
+                poster={p.video.poster}
+                controls
+                playsInline
+                preload="metadata"
+              >
+                <track kind="captions" />
+              </video>
+            </div>
+            <figcaption className="mt-2 text-xs text-[var(--vt-muted)]">{p.video.title}</figcaption>
+          </figure>
+        ) : null}
       </section>
 
       {/* Short explainer: Formula & Worked Example */}
