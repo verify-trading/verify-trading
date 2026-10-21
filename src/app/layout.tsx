@@ -20,16 +20,18 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
-  // Only site-wide OG fields live here. Per-page title/description/url are
-  // intentionally omitted so each route's own <title>/description drive its
-  // social card (Next inherits the whole openGraph object, not field-by-field).
-  // The opengraph-image.tsx route supplies og:image + twitter:image site-wide.
+  // Site-wide OG defaults. Pages that export their own metadata via
+  // pageMetadata() replace this whole openGraph object (Next inherits the
+  // whole object, not field-by-field) — pageMetadata re-attaches the shared
+  // OG image so every page has one.
   openGraph: {
     type: "website",
     siteName: appName,
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: `${appName} — Verify before you trade.` }],
   },
   twitter: {
     card: "summary_large_image",
+    images: ["/opengraph-image"],
   },
   icons: {
     icon: "/favicon.svg?v=4",

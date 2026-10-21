@@ -4,9 +4,22 @@ import type { SchemaOrgObject } from "@/lib/seo/schema";
 import { getAppName, getSiteUrl } from "@/lib/site-config";
 
 /**
+ * Shared og:image + twitter:image for every page that uses pageMetadata().
+ * Next replaces (not merges) the `openGraph` object, so the root
+ * src/app/opengraph-image.tsx is NOT inherited once a child route sets
+ * `openGraph` of its own. We re-attach it here so every page carries the
+ * site OG card. `/opengraph-image` is the route Next exposes for that file.
+ */
+const OG_IMAGE = {
+  url: "/opengraph-image",
+  width: 1200,
+  height: 630,
+  alt: `${getAppName()} — Verify before you trade.`,
+};
+
+/**
  * Per-page metadata for the marketing routes. The root layout only sets site-wide
- * OG fields, and Next replaces (not merges) `openGraph`, so each page states its own
- * title/description/url here. og:image comes from src/app/opengraph-image.tsx.
+ * OG fields; each page states its own title/description/url + the shared OG image here.
  */
 export function pageMetadata(input: {
   title: string;
@@ -16,6 +29,7 @@ export function pageMetadata(input: {
   publishedTime?: string;
 }): Metadata {
   const { title, description, path, type = "website", publishedTime } = input;
+  const fullTitle = `${title} | ${getAppName()}`;
   return {
     title,
     description,
@@ -23,12 +37,18 @@ export function pageMetadata(input: {
     openGraph: {
       type,
       siteName: getAppName(),
-      title: `${title} | ${getAppName()}`,
+      title: fullTitle,
       description,
       url: path,
+      images: [OG_IMAGE],
       ...(publishedTime ? { publishedTime } : {}),
     },
-    twitter: { card: "summary_large_image", title: `${title} | ${getAppName()}`, description },
+    twitter: {
+      card: "summary_large_image",
+      title: fullTitle,
+      description,
+      images: [OG_IMAGE.url],
+    },
   };
 }
 
