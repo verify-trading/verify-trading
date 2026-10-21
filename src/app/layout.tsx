@@ -33,10 +33,20 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     images: ["/opengraph-image"],
   },
+  // Favicons: Google Search picks from <link rel="icon"> (needs a 48px+
+  // raster — SVG alone was being ignored on the SERP, which is why results
+  // were showing the globe fallback). PNG icons cover the modern browsers,
+  // favicon.ico covers legacy crawlers, apple-icon covers iOS.
   icons: {
-    icon: "/favicon.svg?v=4",
-    apple: "/favicon.svg?v=4",
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
+  manifest: "/manifest.webmanifest",
   other: {
     "facebook-domain-verification": "ix9zqdtuj297rwy9b3pbptd4mq1ahu",
   },
