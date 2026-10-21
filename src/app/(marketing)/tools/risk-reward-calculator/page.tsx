@@ -34,7 +34,7 @@ export default function Page() {
         "Break-even win rate = 1 / (1 + 3) = 25% before spread and commission.",
         "At 1:1 you would need to win 50% of trades just to break even.",
       ]}
-      video={{ src: "/videos/risk-reward.mp4", title: "How to use the risk / reward calculator", description: "A short walkthrough of the risk reward calculator: enter entry, stop and target for the ratio and break-even win rate.", uploadDate: "2026-10-21" }}
+      video={{ src: "/videos/risk-reward.mp4", poster: "/videos/risk-reward.jpg", title: "How to use the risk / reward calculator", description: "A short walkthrough of the risk reward calculator: enter entry, stop and target for the ratio and break-even win rate.", uploadDate: "2026-10-21", duration: "PT22S" }}
       faqs={[...PAGE_FAQS.tools.riskReward]}
     />
   );

@@ -34,7 +34,7 @@ export default function Page() {
         "Pip value = 100,000 x 0.0001 = 10 USD per pip.",
         "USD/JPY at 150, 1 lot: 100,000 x 0.01 = 1,000 JPY per pip, which is 1,000 / 150 = 6.67 USD.",
       ]}
-      video={{ src: "/videos/pip-value.mp4", title: "How to use the pip value calculator", description: "A short walkthrough: pick a pair, lot size and account currency to see the money value of a single pip.", uploadDate: "2026-10-21" }}
+      video={{ src: "/videos/pip-value.mp4", poster: "/videos/pip-value.jpg", title: "How to use the pip value calculator", description: "A short walkthrough: pick a pair, lot size and account currency to see the money value of a single pip.", uploadDate: "2026-10-21", duration: "PT26S" }}
       faqs={[...PAGE_FAQS.tools.pipValue]}
     />
   );
