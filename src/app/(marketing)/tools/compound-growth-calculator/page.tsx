@@ -26,7 +26,7 @@ export default function Page() {
         "This is a projection, not a forecast. Spreads, slippage, prop firm splits and fees shift the real number.",
       ]}
       calculator={<CompoundGrowthCalculator />}
-      video={{ src: "/videos/compound-growth.mp4", title: "How to use the compound growth calculator", description: "A short walkthrough: starting balance, monthly return, months and deposits to see the projected balance.", uploadDate: "2026-10-21" }}
+      video={{ src: "/videos/compound-growth.mp4", poster: "/videos/compound-growth.jpg", title: "How to use the compound growth calculator", description: "A short walkthrough: starting balance, monthly return, months and deposits to see the projected balance.", uploadDate: "2026-10-21", duration: "PT27S" }}
       formulaTitle="Balance_n = (Balance_(n−1) + Deposit) × (1 + Rate)"
       formula="Final = Σ months of: (balance + deposit) × (1 + monthlyRate/100)"
       workedExample={[

@@ -39,13 +39,14 @@ export function ToolPage(p: {
   return (
     <>
       <JsonLd data={toolSchema({ name: p.name, description: p.description, path: p.path })} />
-      {p.video ? (
+      {p.video && p.video.poster ? (
         <JsonLd
           data={videoObjectSchema({
             name: p.video.title,
             description: p.video.description,
             contentUrl: p.video.src,
-            thumbnailUrl: p.video.poster ?? p.video.src,
+            thumbnailUrl: p.video.poster,
+            embedUrl: p.path,
             uploadDate: p.video.uploadDate,
             duration: p.video.duration,
           })}

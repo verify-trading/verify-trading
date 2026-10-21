@@ -163,7 +163,15 @@ export function collectionPageSchema(input: { name: string; description: string;
   };
 }
 
-/** VideoObject for a short calculator walkthrough. uploadDate is required; Google uses it. */
+/**
+ * VideoObject for a short calculator walkthrough. Follows Google's video
+ * structured-data requirements:
+ *   - name, description, thumbnailUrl, uploadDate are required.
+ *   - thumbnailUrl must be an image URL (jpg/png/webp), never the .mp4.
+ *   - duration is ISO 8601 (e.g. "PT26S").
+ *   - embedUrl is the page where the video is embedded.
+ *   - publisher Organization matches the rest of the site's JSON-LD.
+ */
 export function videoObjectSchema(input: {
   name: string;
   description: string;
@@ -171,15 +179,31 @@ export function videoObjectSchema(input: {
   thumbnailUrl: string;
   uploadDate: string;
   duration?: string;
+  embedUrl?: string;
+  inLanguage?: string;
 }): SchemaOrgObject {
+  const siteUrl = getSiteUrl();
+  const resolve = (u: string) => (u.startsWith("http") ? u : abs(u));
   return {
     "@context": "https://schema.org",
     "@type": "VideoObject",
     name: input.name,
     description: input.description,
-    contentUrl: input.contentUrl.startsWith("http") ? input.contentUrl : abs(input.contentUrl),
-    thumbnailUrl: input.thumbnailUrl.startsWith("http") ? input.thumbnailUrl : abs(input.thumbnailUrl),
+    thumbnailUrl: resolve(input.thumbnailUrl),
+    contentUrl: resolve(input.contentUrl),
+    ...(input.embedUrl ? { embedUrl: resolve(input.embedUrl) } : {}),
     uploadDate: input.uploadDate,
     ...(input.duration ? { duration: input.duration } : {}),
+    inLanguage: input.inLanguage ?? "en",
+    isFamilyFriendly: true,
+    publisher: {
+      "@type": "Organization",
+      name: getAppName(),
+      url: siteUrl,
+      logo: {
+        "@type": "ImageObject",
+        url: `${siteUrl}/favicon.svg`,
+      },
+    },
   };
 }

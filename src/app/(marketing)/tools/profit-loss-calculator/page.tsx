@@ -26,7 +26,7 @@ export default function Page() {
         "Free and instant, uses the entry and exit prices you type and ignores spread, swaps and commission.",
       ]}
       calculator={<ProfitLossCalculator />}
-      video={{ src: "/videos/profit-loss.mp4", title: "How to use the profit / loss calculator", description: "A short walkthrough: pair, direction, entry, exit and lot size to see the P&L and pips moved.", uploadDate: "2026-10-21" }}
+      video={{ src: "/videos/profit-loss.mp4", poster: "/videos/profit-loss.jpg", title: "How to use the profit / loss calculator", description: "A short walkthrough: pair, direction, entry, exit and lot size to see the P&L and pips moved.", uploadDate: "2026-10-21", duration: "PT25S" }}
       formulaTitle="P&L = (exit − entry) × units × direction, in the quote currency"
       formula="P&L = (Exit − Entry) × Lots × 100,000  (long)   |   P&L = (Entry − Exit) × Lots × 100,000  (short)"
       workedExample={[
