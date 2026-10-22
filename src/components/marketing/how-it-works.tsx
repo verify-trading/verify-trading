@@ -18,24 +18,28 @@ export const HOW_IT_WORKS_VIDEO = {
 } as const;
 
 /** Privacy-enhanced embed: youtube-nocookie sets no cookies until the visitor presses play. */
-export function youtubeEmbedUrl(id: string) {
-  return `https://www.youtube-nocookie.com/embed/${id}?rel=0`;
+export function youtubeEmbedUrl(id: string, { autoplay = false }: { autoplay?: boolean } = {}) {
+  // Browsers only allow autoplay when muted; playsinline keeps iOS from forcing fullscreen.
+  const params = autoplay ? "rel=0&autoplay=1&mute=1&playsinline=1" : "rel=0";
+  return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
 }
 
-/** Hero video slot: a responsive 16:9 YouTube embed, or a "coming soon" poster when no id is set. */
+/** Hero video slot: a responsive 16:9 YouTube embed (muted autoplay), or a "coming soon" poster when no id is set. */
 export function HowItWorksVideo({
   youtubeId = HOW_IT_WORKS_VIDEO.youtubeId,
   title = HOW_IT_WORKS_VIDEO.title,
+  autoplay = true,
 }: {
   youtubeId?: string;
   title?: string;
+  autoplay?: boolean;
 }) {
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
       {youtubeId ? (
         <iframe
           className="absolute inset-0 size-full"
-          src={youtubeEmbedUrl(youtubeId)}
+          src={youtubeEmbedUrl(youtubeId, { autoplay })}
           title={title}
           loading="lazy"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
