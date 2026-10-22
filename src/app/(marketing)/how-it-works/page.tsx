@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 
-import { HowItWorksCtaBanner, HowItWorksSteps, HowItWorksVideo } from "@/components/marketing/how-it-works";
+import {
+  HOW_IT_WORKS_VIDEO,
+  HowItWorksCtaBanner,
+  HowItWorksSteps,
+  HowItWorksVideo,
+  youtubeEmbedUrl,
+} from "@/components/marketing/how-it-works";
 import { Breadcrumbs, FaqSection, PageHero } from "@/components/marketing/primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PAGE_FAQS } from "@/lib/marketing/faqs";
-import { pageMetadata, webPageSchema } from "@/lib/marketing/seo";
+import { pageMetadata, videoObjectSchema, webPageSchema } from "@/lib/marketing/seo";
 
 const path = "/how-it-works";
 const description =
@@ -16,6 +22,16 @@ export default function HowItWorksPage() {
   return (
     <>
       <JsonLd data={webPageSchema({ name: "How verify.trading works", description, path })} />
+      <JsonLd
+        data={videoObjectSchema({
+          name: HOW_IT_WORKS_VIDEO.title,
+          description: HOW_IT_WORKS_VIDEO.description,
+          contentUrl: `https://www.youtube.com/watch?v=${HOW_IT_WORKS_VIDEO.youtubeId}`,
+          embedUrl: youtubeEmbedUrl(HOW_IT_WORKS_VIDEO.youtubeId),
+          thumbnailUrl: `https://i.ytimg.com/vi/${HOW_IT_WORKS_VIDEO.youtubeId}/maxresdefault.jpg`,
+          uploadDate: HOW_IT_WORKS_VIDEO.uploadDate,
+        })}
+      />
       <Breadcrumbs crumbs={[{ name: "How it Works", path }]} />
       <PageHero
         eyebrow="How it works"

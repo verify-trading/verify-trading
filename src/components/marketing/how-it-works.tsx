@@ -8,15 +8,40 @@ import { Battery, BrandMark, SignalBars } from "@/components/landing/hero-ask-de
 import { SectionEyebrow, surface } from "@/components/landing/section-primitives";
 import { cn } from "@/lib/utils";
 
-/** Set to the hosted video file (mp4/webm URL or /public path) once the client delivers it. */
-export const HOW_IT_WORKS_VIDEO_SRC: string | undefined = undefined;
+/** YouTube walkthrough shown in the hero; also published as VideoObject schema on the page. */
+export const HOW_IT_WORKS_VIDEO = {
+  youtubeId: "cvXv4898Ldk",
+  title: "How verify.trading works",
+  description:
+    "A walkthrough of verify.trading: check any broker or prop firm with Ask, read the markets, get the daily Intelligence brief, and review your trading in Journal and Mind.",
+  uploadDate: "2026-10-22",
+} as const;
 
-/** Hero video slot. Renders the real player when `src` is set, otherwise a "coming soon" poster. */
-export function HowItWorksVideo({ src = HOW_IT_WORKS_VIDEO_SRC }: { src?: string }) {
+/** Privacy-enhanced embed: youtube-nocookie sets no cookies until the visitor presses play. */
+export function youtubeEmbedUrl(id: string) {
+  return `https://www.youtube-nocookie.com/embed/${id}?rel=0`;
+}
+
+/** Hero video slot: a responsive 16:9 YouTube embed, or a "coming soon" poster when no id is set. */
+export function HowItWorksVideo({
+  youtubeId = HOW_IT_WORKS_VIDEO.youtubeId,
+  title = HOW_IT_WORKS_VIDEO.title,
+}: {
+  youtubeId?: string;
+  title?: string;
+}) {
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-      {src ? (
-        <video className="size-full object-cover" src={src} controls playsInline preload="metadata" />
+      {youtubeId ? (
+        <iframe
+          className="absolute inset-0 size-full"
+          src={youtubeEmbedUrl(youtubeId)}
+          title={title}
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+        />
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
           <span className="flex size-14 items-center justify-center rounded-full bg-white/10">
