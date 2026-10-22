@@ -40,4 +40,16 @@ describe("videoObjectSchema", () => {
     expect(String(schema.thumbnailUrl)).not.toMatch(/\.mp4$/);
     expect(String(schema.thumbnailUrl)).toMatch(/\.(jpg|png|webp)$/);
   });
+
+  it("keeps absolute YouTube URLs as-is for embedded videos", () => {
+    const schema = videoObjectSchema({
+      ...base,
+      contentUrl: "https://www.youtube.com/watch?v=cvXv4898Ldk",
+      embedUrl: "https://www.youtube-nocookie.com/embed/cvXv4898Ldk?rel=0",
+      thumbnailUrl: "https://i.ytimg.com/vi/cvXv4898Ldk/maxresdefault.jpg",
+    });
+    expect(schema.contentUrl).toBe("https://www.youtube.com/watch?v=cvXv4898Ldk");
+    expect(schema.embedUrl).toBe("https://www.youtube-nocookie.com/embed/cvXv4898Ldk?rel=0");
+    expect(schema.thumbnailUrl).toBe("https://i.ytimg.com/vi/cvXv4898Ldk/maxresdefault.jpg");
+  });
 });
