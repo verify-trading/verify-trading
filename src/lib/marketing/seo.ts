@@ -172,6 +172,62 @@ export function toolSchema(input: { name: string; description: string; path: str
   };
 }
 
+/**
+ * Review of a broker or prop firm, with the entity modelled as a Product so
+ * Google can show the review stars and Ahrefs' "Product schema" check passes.
+ * Rating is on a 0–10 scale (our trust score); when the record is unrated
+ * we skip reviewRating rather than fabricate it.
+ */
+export function entityReviewSchema(input: {
+  name: string;
+  path: string;
+  description: string;
+  category: string;
+  verdict: string;
+  score: number | null;
+  updatedAt: string | null;
+  regulators: string[];
+  foundingDate: string | null;
+  itemType: "FinancialService" | "Organization";
+}): SchemaOrgObject {
+  const siteUrl = getSiteUrl();
+  const org = { "@type": "Organization", name: getAppName(), url: siteUrl };
+  const itemReviewed: Record<string, unknown> = {
+    "@type": ["Product", input.itemType],
+    "@id": `${abs(input.path)}#item`,
+    name: input.name,
+    description: input.description,
+    category: input.category,
+    brand: { "@type": "Brand", name: input.name },
+    ...(input.foundingDate ? { foundingDate: input.foundingDate } : {}),
+    ...(input.regulators.length ? { award: `Listed with ${input.regulators.join(", ")}` } : {}),
+  };
+  return {
+    "@context": "https://schema.org",
+    "@type": "Review",
+    "@id": `${abs(input.path)}#review`,
+    name: `${input.name} verdict: ${input.verdict}`,
+    headline: `Is ${input.name} safe?`,
+    reviewBody: input.description,
+    url: abs(input.path),
+    author: org,
+    publisher: org,
+    ...(input.updatedAt ? { datePublished: input.updatedAt, dateModified: input.updatedAt } : {}),
+    ...(input.score !== null
+      ? {
+          reviewRating: {
+            "@type": "Rating",
+            ratingValue: input.score.toFixed(1),
+            bestRating: "10",
+            worstRating: "0",
+            alternateName: input.verdict,
+          },
+        }
+      : {}),
+    itemReviewed,
+  };
+}
+
 export function collectionPageSchema(input: { name: string; description: string; path: string }): SchemaOrgObject {
   return {
     "@context": "https://schema.org",
