@@ -11,7 +11,7 @@ import type { PublicEntity } from "@/lib/compare/entities";
 import { entityFaqs, entityPath, pickAlternatives, vsPartners } from "@/lib/compare/insights";
 import { getRegulator } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
-import { webPageSchema } from "@/lib/marketing/seo";
+import { entityReviewSchema, webPageSchema } from "@/lib/marketing/seo";
 
 export const ENTITY_LIST_PATH = { broker: "/compare/brokers", propfirm: "/compare/prop-firms" } as const;
 const LIST_CRUMB = { broker: "Compare Brokers", propfirm: "Compare Prop Firms" } as const;
@@ -105,6 +105,20 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
   return (
     <>
       <JsonLd data={webPageSchema({ name: `${e.name} verification record`, description: entityDescription(e), path })} />
+      <JsonLd
+        data={entityReviewSchema({
+          name: e.name,
+          path,
+          description: entityDescription(e),
+          category: isBroker ? "Online broker" : "Proprietary trading firm",
+          verdict: e.verdict,
+          score: e.score,
+          updatedAt: e.updatedAt,
+          regulators: e.regulators,
+          foundingDate: e.yearFounded ? String(e.yearFounded) : null,
+          itemType: isBroker ? "FinancialService" : "Organization",
+        })}
+      />
       <Breadcrumbs crumbs={[{ name: LIST_CRUMB[e.type], path: listPath }, { name: e.name, path }]} />
 
       <section className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6">
