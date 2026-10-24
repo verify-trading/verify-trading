@@ -112,24 +112,44 @@ export function itemListSchema(input: {
   };
 }
 
+/**
+ * Shared "last reviewed" date for pages that don't carry their own.
+ * Keep this in sync with major site refreshes so Article's dateModified
+ * doesn't go stale. Pages with their own REVIEWED (compare categories, tools)
+ * pass that explicitly and override this fallback.
+ */
+export const SITE_REVIEWED = "2026-10-21";
+
 export function articleSchema(input: {
   headline: string;
   description: string;
   path: string;
   datePublished: string;
   dateModified?: string;
+  /** Narrower sub-type: "TechArticle" for how-tos / guides, "NewsArticle" for the daily brief. */
+  articleType?: "Article" | "TechArticle" | "NewsArticle";
 }): SchemaOrgObject {
+  const siteUrl = getSiteUrl();
+  const org = {
+    "@type": "Organization",
+    name: getAppName(),
+    url: siteUrl,
+    logo: { "@type": "ImageObject", url: `${siteUrl}/favicon.svg` },
+  };
   return {
     "@context": "https://schema.org",
-    "@type": "Article",
+    "@type": input.articleType ?? "Article",
     headline: input.headline,
     description: input.description,
-    mainEntityOfPage: abs(input.path),
+    mainEntityOfPage: { "@type": "WebPage", "@id": abs(input.path) },
     url: abs(input.path),
+    image: [`${siteUrl}/opengraph-image`],
     datePublished: input.datePublished,
     dateModified: input.dateModified ?? input.datePublished,
-    author: { "@type": "Organization", name: getAppName(), url: getSiteUrl() },
-    publisher: { "@type": "Organization", name: getAppName(), url: getSiteUrl() },
+    author: org,
+    publisher: org,
+    inLanguage: "en",
+    isAccessibleForFree: true,
   };
 }
 

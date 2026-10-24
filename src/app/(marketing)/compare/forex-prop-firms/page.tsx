@@ -6,7 +6,7 @@ import { ScoreBar, VerdictBadge, scoreLabel } from "@/components/marketing/entit
 import { Breadcrumbs, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
 import { entityPath, isSeoWorthy } from "@/lib/compare/insights";
 import { getPublicEntities, type PublicEntity } from "@/lib/compare/entities";
-import { pageMetadata } from "@/lib/marketing/seo";
+import { articleSchema, pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/forex-prop-firms";
@@ -121,6 +121,7 @@ export default async function ForexPropFirmsPage() {
         ]}
       />
       <JsonLd data={faqPageSchema(FAQS)} />
+      <JsonLd data={articleSchema({ headline: "Compare Forex Prop Firms: Fees, Rules & Drawdown", description: "FTMO, The5ers and FundingPips compared on their standard 2-step $100K challenges: fees, profit targets, drawdown and profit split, with the Verify Trading verdict for each.", path, datePublished: REVIEWED, articleType: "TechArticle" })} />
 
       <PageHero
         eyebrow="Compare"

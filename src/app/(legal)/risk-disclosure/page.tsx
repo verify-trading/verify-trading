@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { LegalDocument } from "@/components/legal/legal-document";
+import { JsonLd } from "@/components/seo/json-ld";
+import { articleSchema, SITE_REVIEWED } from "@/lib/marketing/seo";
 import { getAppName } from "@/lib/site-config";
 
 export const metadata: Metadata = {
@@ -11,6 +13,8 @@ export const metadata: Metadata = {
 
 export default function RiskDisclosurePage() {
   return (
+    <>
+    <JsonLd data={articleSchema({ headline: "Risk Disclosure", description: `Trading risk disclosure for ${getAppName()}.`, path: "/risk-disclosure", datePublished: SITE_REVIEWED, articleType: "Article" })} />
     <LegalDocument
       eyebrow="Risk"
       title="Risk Disclosure"
@@ -39,5 +43,6 @@ export default function RiskDisclosurePage() {
         },
       ]}
     />
+    </>
   );
 }

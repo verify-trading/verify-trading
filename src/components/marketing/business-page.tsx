@@ -15,7 +15,7 @@ import {
 import { JsonLd } from "@/components/seo/json-ld";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import type { Faq } from "@/lib/marketing/faqs";
-import { webPageSchema } from "@/lib/marketing/seo";
+import { articleSchema, SITE_REVIEWED, webPageSchema } from "@/lib/marketing/seo";
 
 /**
  * B2B business page anatomy:
@@ -45,6 +45,7 @@ export function BusinessPage(p: {
   return (
     <>
       <JsonLd data={webPageSchema({ name: p.name, description: p.description, path: p.path })} />
+      <JsonLd data={articleSchema({ headline: p.name, description: p.description, path: p.path, datePublished: SITE_REVIEWED, articleType: "TechArticle" })} />
       <Breadcrumbs crumbs={[{ name: p.name, path: p.path }]} />
       <PageHero
         eyebrow={p.eyebrow}
