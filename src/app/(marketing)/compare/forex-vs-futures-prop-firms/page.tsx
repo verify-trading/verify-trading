@@ -6,7 +6,7 @@ import { ScoreBar, VerdictBadge, scoreLabel } from "@/components/marketing/entit
 import { Breadcrumbs, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
 import { entityPath, isSeoWorthy } from "@/lib/compare/insights";
 import { getPublicEntities, type PublicEntity } from "@/lib/compare/entities";
-import { pageMetadata } from "@/lib/marketing/seo";
+import { articleSchema, pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/forex-vs-futures-prop-firms";
@@ -113,6 +113,7 @@ export default async function ForexVsFuturesPropFirmsPage() {
         ]}
       />
       <JsonLd data={faqPageSchema(FAQS)} />
+      <JsonLd data={articleSchema({ headline: "Forex vs Futures Prop Firms: Which Should You Choose?", description: "Forex and futures prop firms differ in the markets you trade, how drawdown is calculated and how you pay. Side-by-side comparison with verified firm examples from each side.", path, datePublished: REVIEWED, articleType: "TechArticle" })} />
 
       <PageHero
         eyebrow="Compare"

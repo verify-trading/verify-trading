@@ -6,7 +6,7 @@ import { ScoreBar, VerdictBadge, scoreLabel } from "@/components/marketing/entit
 import { Breadcrumbs, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
 import { entityPath, isSeoWorthy } from "@/lib/compare/insights";
 import { getPublicEntities, type PublicEntity } from "@/lib/compare/entities";
-import { pageMetadata } from "@/lib/marketing/seo";
+import { articleSchema, pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/futures-prop-firms";
@@ -133,6 +133,7 @@ export default async function FuturesPropFirmsPage() {
         ]}
       />
       <JsonLd data={faqPageSchema(FAQS)} />
+      <JsonLd data={articleSchema({ headline: "Compare Futures Prop Firms: Fees, Rules & Drawdown", description: "Five $50K futures evaluations compared on fees, profit targets, drawdown and consistency rules, with the Verify Trading verdict for each.", path, datePublished: REVIEWED, articleType: "TechArticle" })} />
 
       <PageHero
         eyebrow="Compare"

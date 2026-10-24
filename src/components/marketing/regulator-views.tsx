@@ -10,7 +10,7 @@ import type { PublicEntity } from "@/lib/compare/entities";
 import { entityPath, type HubStats } from "@/lib/compare/insights";
 import { REGULATORS, STANDING_LABEL, STANDING_NOTE, type Standing } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
-import { itemListSchema, webPageSchema } from "@/lib/marketing/seo";
+import { articleSchema, itemListSchema, SITE_REVIEWED, webPageSchema } from "@/lib/marketing/seo";
 
 const STANDINGS: Standing[] = ["major", "regional", "offshore", "registration"];
 const ROW_CAP = 60;
@@ -59,6 +59,7 @@ export function RegulatorsIndex({ hubs, total }: { hubs: HubStats[]; total: numb
   return (
     <>
       <JsonLd data={webPageSchema({ name: "Broker regulators", description: "Regulators listed in the verify.trading register, what each protects and how to check its register.", path })} />
+      <JsonLd data={articleSchema({ headline: "Broker regulators", description: "Regulators listed in the verify.trading register, what each protects and how to check its register.", path, datePublished: SITE_REVIEWED, articleType: "TechArticle" })} />
       <JsonLd data={itemListSchema({ name: "Broker regulators", items: shown.map((h) => ({ name: h.regulator.name, path: `/regulators/${h.regulator.slug}` })) })} />
       <Breadcrumbs crumbs={[{ name: "Regulators", path }]} />
       <section className="mx-auto w-full max-w-6xl px-4 pb-6 pt-4 sm:px-6">
@@ -157,6 +158,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
   return (
     <>
       <JsonLd data={webPageSchema({ name: `Brokers regulated by ${r.code}`, description: r.summary, path })} />
+      <JsonLd data={articleSchema({ headline: `Brokers regulated by ${r.code}`, description: r.summary, path, datePublished: SITE_REVIEWED, articleType: "TechArticle" })} />
       <JsonLd data={itemListSchema({ name: `Brokers listing ${r.code}`, items: entities.slice(0, ROW_CAP).map((e) => ({ name: e.name, path: entityPath(e) })) })} />
       <Breadcrumbs crumbs={[{ name: "Regulators", path: "/regulators" }, { name: r.code, path }]} />
 

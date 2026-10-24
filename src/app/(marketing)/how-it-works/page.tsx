@@ -10,7 +10,7 @@ import {
 import { Breadcrumbs, FaqSection, PageHero } from "@/components/marketing/primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PAGE_FAQS } from "@/lib/marketing/faqs";
-import { pageMetadata, videoObjectSchema, webPageSchema } from "@/lib/marketing/seo";
+import { articleSchema, pageMetadata, SITE_REVIEWED, videoObjectSchema, webPageSchema } from "@/lib/marketing/seo";
 
 const path = "/how-it-works";
 const description =
@@ -22,6 +22,7 @@ export default function HowItWorksPage() {
   return (
     <>
       <JsonLd data={webPageSchema({ name: "How verify.trading works", description, path })} />
+      <JsonLd data={articleSchema({ headline: "How to Verify a Trading Broker or Prop Firm", description, path, datePublished: SITE_REVIEWED, articleType: "TechArticle" })} />
       <JsonLd
         data={videoObjectSchema({
           name: HOW_IT_WORKS_VIDEO.title,
