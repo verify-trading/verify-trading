@@ -25,12 +25,17 @@ export function isIndexable(e: PublicEntity): boolean {
 
 /**
  * Stricter filter for the sitemap and robots index tag. With zero domain authority only the
- * strongest pages should be indexed: "Strongly Trusted" brokers and "Trusted" prop firms.
+ * strongest broker pages should be indexed: "Strongly Trusted" brokers.
+ *
+ * Prop firms index at every verdict — users search "[firm] didn't pay" and "[firm] scam" for
+ * Caution/Avoid firms as much as "[firm] review" for Trusted ones; an authoritative verdict is
+ * worth indexing either way. isIndexable already requires a score and a real verdict.
+ *
  * Pages that pass isIndexable but not isSeoWorthy stay live (no 404) but get noindex.
  */
 export function isSeoWorthy(e: PublicEntity): boolean {
   if (!isIndexable(e)) return false;
-  if (e.type === "propfirm") return e.verdict === "Trusted" || e.verdict === "Strongly Trusted";
+  if (e.type === "propfirm") return true;
   return e.verdict === "Strongly Trusted";
 }
 

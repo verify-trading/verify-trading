@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { toPublicEntity, parseRegulatorRefs, type PublicEntity } from "@/lib/compare/entities";
-import { entityFaqs, isIndexable, isIndexedPair, pairKey, pickAlternatives, vsPairs } from "@/lib/compare/insights";
+import { entityFaqs, isIndexable, isIndexedPair, isSeoWorthy, pairKey, pickAlternatives, vsPairs } from "@/lib/compare/insights";
 import { findRegulator, getRegulator } from "@/lib/compare/regulators";
 
 const broker = (slug: string, over: Record<string, unknown> = {}) =>
@@ -33,6 +33,24 @@ describe("isIndexable (thin-page rule)", () => {
     expect(isIndexable(p({ trust_score: null, firm_status: "Operating" }))).toBe(false);
     expect(isIndexable(p({ trust_score: 7.5, firm_status: "Operating" }))).toBe(true);
     expect(isIndexable(p({ trust_score: 7.5, firm_status: "Closed down" }))).toBe(true);
+  });
+});
+
+describe("isSeoWorthy (sitemap + robots gate)", () => {
+  const prop = (o: Record<string, unknown>) => toPublicEntity({ slug: "p", name: "P", entity_type: "propfirm", firm_status: "Operating", ...o })!;
+
+  it("indexes every rated prop firm regardless of verdict", () => {
+    // Trusted + Strongly Trusted have always indexed; the widened rule adds Caution/Avoid.
+    for (const score of [9.0, 7.5, 5.5, 3.5, 1.5]) {
+      expect(isSeoWorthy(prop({ trust_score: score }))).toBe(true);
+    }
+  });
+  it("still excludes prop firms that fail the thin-page gate (no score)", () => {
+    expect(isSeoWorthy(prop({ trust_score: null }))).toBe(false);
+  });
+  it("only indexes Strongly Trusted brokers", () => {
+    expect(isSeoWorthy(broker("st", { final_tier: "Tier 1", founder_verified: true }))).toBe(true);
+    expect(isSeoWorthy(broker("t", { final_tier: "Tier 2", founder_verified: true }))).toBe(false);
   });
 });
 
