@@ -39,14 +39,12 @@ describe("isIndexable (thin-page rule)", () => {
 describe("isSeoWorthy (sitemap + robots gate)", () => {
   const prop = (o: Record<string, unknown>) => toPublicEntity({ slug: "p", name: "P", entity_type: "propfirm", firm_status: "Operating", ...o })!;
 
-  it("indexes every rated prop firm regardless of verdict", () => {
-    // Trusted + Strongly Trusted have always indexed; the widened rule adds Caution/Avoid.
+  it("indexes every prop firm, rated or not — brand-query opportunity outweighs thin-content risk", () => {
     for (const score of [9.0, 7.5, 5.5, 3.5, 1.5]) {
       expect(isSeoWorthy(prop({ trust_score: score }))).toBe(true);
     }
-  });
-  it("still excludes prop firms that fail the thin-page gate (no score)", () => {
-    expect(isSeoWorthy(prop({ trust_score: null }))).toBe(false);
+    // "Not yet rated" prop firms also index (brand-name queries).
+    expect(isSeoWorthy(prop({ trust_score: null }))).toBe(true);
   });
   it("only indexes Strongly Trusted brokers", () => {
     expect(isSeoWorthy(broker("st", { final_tier: "Tier 1", founder_verified: true }))).toBe(true);
