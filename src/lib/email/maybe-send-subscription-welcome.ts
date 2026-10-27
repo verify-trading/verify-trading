@@ -1,18 +1,13 @@
-import {
-  formatBillingPlanLabel,
-  readBillingPlanKeyFromStripeInterval,
-  type BillingPlanKey,
-} from "@/lib/billing/config";
-import { isEmailConfigured } from "@/lib/email/config";
 import { logEmailError } from "@/lib/email/log-email-error";
-import { sendSubscriptionWelcomeEmail } from "@/lib/email/send-subscription-welcome";
+import { POLICY } from "@/lib/email/lifecycle/config";
+import { firstNameFrom } from "@/lib/email/lifecycle/pick";
+import { sendLifecycleEmail } from "@/lib/email/lifecycle/send";
+import { wait } from "@/lib/http/fetch-with-retry";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type MaybeSendSubscriptionWelcomeEmailInput = {
   userId: string;
   stripeSubscriptionId: string;
-  interval?: string | null;
-  appOrigin: string;
 };
 
 type BillingWelcomeRow = {
@@ -26,8 +21,6 @@ type ProfileNameRow = {
 export async function maybeSendSubscriptionWelcomeEmail({
   userId,
   stripeSubscriptionId,
-  interval,
-  appOrigin,
 }: MaybeSendSubscriptionWelcomeEmailInput): Promise<void> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
@@ -54,8 +47,6 @@ export async function maybeSendSubscriptionWelcomeEmail({
     return;
   }
 
-  const planKey: BillingPlanKey = readBillingPlanKeyFromStripeInterval(interval) ?? "monthly";
-
   const [{ data: profileData, error: profileError }, authUserResult] = await Promise.all([
     supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
     supabase.auth.admin.getUserById(userId),
@@ -81,58 +72,58 @@ export async function maybeSendSubscriptionWelcomeEmail({
   }
 
   const profile = profileData as ProfileNameRow | null;
-  if (!isEmailConfigured()) {
+  // email_sends' unique (user_id, "c5:<sub>") claim is the real dedupe; welcome_email_sent_at only
+  // short-circuits subscriptions that already got a welcome (including ones from before email_sends).
+  const result = await sendLifecycleEmail({
+    userId,
+    to: email,
+    emailId: "c5",
+    dedupeKey: `c5:${stripeSubscriptionId}`,
+    kind: "transactional",
+    variant: null,
+    vars: { firstName: firstNameFrom(profile?.display_name ?? null) },
+  });
+
+  // "duplicate" now means a completed send. An active lease returns "skipped", so a failed
+  // subscription stamp can be repaired without mistaking an in-flight send for a delivery.
+  if (result !== "sent" && result !== "duplicate") {
+    logEmailError("Failed to send subscription welcome email.", { userId, stripeSubscriptionId }, result);
     return;
   }
 
-  const claimedAt = new Date().toISOString();
-  const { data: claimedSubscription, error: claimError } = await supabase
+  const { error: stampError } = await supabase
     .from("billing_subscriptions")
-    .update({ welcome_email_sent_at: claimedAt })
-    .eq("stripe_subscription_id", stripeSubscriptionId)
-    .is("welcome_email_sent_at", null)
-    .select("welcome_email_sent_at")
-    .maybeSingle();
+    .update({ welcome_email_sent_at: new Date().toISOString() })
+    .eq("stripe_subscription_id", stripeSubscriptionId);
 
-  if (claimError) {
+  if (stampError) {
     logEmailError(
-      "Failed to claim subscription welcome email send.",
+      "Failed to record subscription welcome email send.",
       { stripeSubscriptionId },
-      claimError,
+      stampError,
     );
-    return;
   }
+}
 
-  if (!claimedSubscription) {
-    return;
-  }
-
-  try {
-    await sendSubscriptionWelcomeEmail({
-      email,
-      displayName: profile?.display_name ?? null,
-      planKey,
-      appOrigin,
+/** Billing rows survive webhook failures, including failures before an email could be claimed. */
+export async function retrySubscriptionWelcomeEmails(limit: number): Promise<number> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return 0;
+  const { data, error } = await supabase.rpc("lifecycle_pending_subscription_welcomes", {
+    p_since: POLICY.startDate,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  const rows = (data ?? []) as Array<{ user_id: string; stripe_subscription_id: string }>;
+  for (const [index, row] of rows.entries()) {
+    if (index > 0) await wait(POLICY.sendGapMs);
+    // A transient failure for one subscription must not prevent retries for the others.
+    await maybeSendSubscriptionWelcomeEmail({
+      userId: row.user_id,
+      stripeSubscriptionId: row.stripe_subscription_id,
+    }).catch((error) => {
+      logEmailError("Subscription welcome retry failed.", { stripeSubscriptionId: row.stripe_subscription_id }, error);
     });
-  } catch (sendError) {
-    logEmailError(
-      "Failed to send subscription welcome email.",
-      { userId, stripeSubscriptionId, plan: formatBillingPlanLabel(planKey) },
-      sendError,
-    );
-    const { error: releaseError } = await supabase
-      .from("billing_subscriptions")
-      .update({ welcome_email_sent_at: null })
-      .eq("stripe_subscription_id", stripeSubscriptionId)
-      .eq("welcome_email_sent_at", claimedAt);
-
-    if (releaseError) {
-      logEmailError(
-        "Failed to release subscription welcome email claim.",
-        { stripeSubscriptionId },
-        releaseError,
-      );
-    }
-    return;
   }
+  return rows.length;
 }

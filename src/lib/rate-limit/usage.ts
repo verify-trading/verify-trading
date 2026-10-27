@@ -1,3 +1,4 @@
+// Also hard-coded as `>= 5` in supabase/migration_35_lifecycle_email.sql (lifecycle_user_facts.capped_today): changing it needs a migration.
 export const FREE_DAILY_ASK_LIMIT = 5;
 export const PRO_DAILY_ASK_LIMIT = 20;
 

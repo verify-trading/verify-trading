@@ -15,7 +15,7 @@ import type { AskStreamData } from "@/lib/ask/stream";
 
 export const suggestionPrompts = [
   "Is Pepperstone safe for UK retail CFD?",
-  "Gold: key levels before London open",
+  "Gold: what's driving it before London open",
   "Position size: 1% risk, £8k, 22 pip stop",
   "24-month projection: £10k start, £400/month",
 ];

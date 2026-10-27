@@ -79,7 +79,7 @@ function WelcomeBlock({ className = "" }: { className?: string }) {
         What can I help with?
       </h1>
       <p className="mx-auto mt-2 max-w-md text-sm leading-snug text-white/50 sm:mt-2.5 sm:text-base sm:leading-relaxed">
-        Brokers, markets, sizing, charts, and projections. Ask in plain English.
+        Brokers, markets, sizing and charts. Ask in plain English.
       </p>
     </div>
   );

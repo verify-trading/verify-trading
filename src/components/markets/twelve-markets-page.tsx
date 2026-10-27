@@ -135,7 +135,7 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
 
   function openAssetInAsk(symbol: string) {
     const assetName = ASK_ASSET_NAMES[symbol] ?? symbol;
-    openAskWithPrefill(`Brief me on ${assetName} before this session. Key levels, bias and what to watch.`);
+    openAskWithPrefill(`Brief me on ${assetName}: what's driving it today and what events are coming up?`);
   }
 
   return (

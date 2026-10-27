@@ -1,7 +1,8 @@
 import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 import { readOptionalEnv } from "@/lib/env";
 
-export type BillingPlanKey = "weekly" | "monthly" | "annual";
+export const BILLING_PLAN_KEYS = ["weekly", "monthly", "annual"] as const;
+export type BillingPlanKey = (typeof BILLING_PLAN_KEYS)[number];
 
 type PublicBillingPlan = {
   badge: string;
@@ -66,7 +67,7 @@ function readRequiredEnv(name: string): string {
   return value;
 }
 
-function formatGbp(amount: number): string {
+export function formatGbp(amount: number): string {
   return (Number.isInteger(amount) ? GBP_FORMATTER : GBP_WITH_PENCE_FORMATTER).format(amount);
 }
 
@@ -152,19 +153,6 @@ export function getStripeWebhookSecret(): string {
 
 export function getStripePortalConfigurationId(): string | null {
   return readOptionalEnv("STRIPE_PORTAL_CONFIGURATION_ID");
-}
-
-export function formatBillingPlanLabel(planKey: BillingPlanKey): string {
-  switch (planKey) {
-    case "weekly":
-      return "Pro Weekly";
-    case "monthly":
-      return "Pro Monthly";
-    case "annual":
-      return "Pro Annual";
-    default:
-      return "Pro";
-  }
 }
 
 const STRIPE_INTERVAL_TO_PLAN_KEY: Record<string, BillingPlanKey> = {

@@ -151,8 +151,6 @@ describe("POST /api/stripe/webhook", () => {
     expect(maybeSendSubscriptionWelcomeEmail).toHaveBeenCalledWith({
       userId: "user-1",
       stripeSubscriptionId: "sub_created",
-      interval: "month",
-      appOrigin: "http://localhost",
     });
     expect(markStripeWebhookEventProcessed).toHaveBeenCalledWith(
       "evt_created",

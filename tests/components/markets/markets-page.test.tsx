@@ -196,7 +196,7 @@ describe("TwelveMarketsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /EUR\/USD/i }));
 
     expect(mockRouterPush).toHaveBeenCalledWith(
-      "/ask?prefill=Brief%20me%20on%20EUR%2FUSD%20before%20this%20session.%20Key%20levels%2C%20bias%20and%20what%20to%20watch.",
+      "/ask?prefill=Brief%20me%20on%20EUR%2FUSD%3A%20what's%20driving%20it%20today%20and%20what%20events%20are%20coming%20up%3F",
     );
   });
 

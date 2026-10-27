@@ -261,6 +261,12 @@ function SignupPageContent() {
             >
               {isSubmitting ? "Creating…" : "Create account with email"}
             </Button>
+            <p className="text-center text-xs text-(--vt-muted)">
+              We&apos;ll send a few emails to help you get started. You can unsubscribe any time.{" "}
+              <Link href="/privacy" className={authSecondaryLinkClass}>
+                Privacy
+              </Link>
+            </p>
           </form>
         </>
       )}

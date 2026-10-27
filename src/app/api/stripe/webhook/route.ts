@@ -101,8 +101,6 @@ export async function POST(request: Request) {
         const subscription = event.data.object as Stripe.Subscription;
         const syncResult = await syncStripeSubscriptionById(subscription.id);
         if (billingStatusGrantsProAccess(syncResult.status)) {
-          const interval = subscription.items.data[0]?.price?.recurring?.interval ?? null;
-          const origin = new URL(request.url).origin;
           await tagPaidMemberFromSubscription(stripe, subscription).catch((kitError) => {
             logger.warn("Failed to tag paid member in Kit.", {
               userId: syncResult.userId,
@@ -113,8 +111,6 @@ export async function POST(request: Request) {
           await maybeSendSubscriptionWelcomeEmail({
             userId: syncResult.userId,
             stripeSubscriptionId: subscription.id,
-            interval,
-            appOrigin: origin,
           }).catch(() => undefined);
         }
         break;

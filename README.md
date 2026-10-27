@@ -26,7 +26,7 @@ npm run build
 
 ## Environment variables
 
-See `.env.example` for all keys. **Never commit `.env` or `.env.local`** (they are gitignored).
+See `.env.example` for all keys. Lifecycle email behavior is specified in `docs/lifecycle-emails-spec.md`. **Never commit `.env` or `.env.local`** (they are gitignored).
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -48,6 +48,7 @@ See `.env.example` for all keys. **Never commit `.env` or `.env.local`** (they a
 | `RESEND_API_KEY` | For welcome emails | Resend transactional email API key |
 | `EMAIL_FROM_SIGNUP` | For signup welcome | Default `verify.trading <ai@verify.trading>` |
 | `EMAIL_FROM_SUBSCRIPTION` | For Pro welcome | Default `verify.trading <pro@verify.trading>` |
+| `LIFECYCLE_EMAIL_TEST_TO` | No | Test mode / pause: only these comma-separated emails get lifecycle mail. Unset = live for signups after `POLICY.startDate` |
 | `FMP_API_KEY` | For live market tools | Financial Modeling Prep |
 | `NEXT_PUBLIC_APP_NAME` | No | Product name in UI + system prompt (default `verify.trading`) |
 | `NEXT_PUBLIC_SITE_TITLE` | No | `<title>` override |
@@ -86,6 +87,16 @@ select fetched_at, payload
 from market_cache
 where cache_key = 'cron:markets:last-run';
 ```
+
+### Lifecycle email rollout
+
+Apply `supabase/migration_35_lifecycle_email.sql`, then `supabase/migrations/20261026153725_lifecycle_email_recovery.sql` in the Supabase SQL editor **before deploying the recovery code**. These scripts are safe to re-run. This repository's older SQL scripts are applied manually; the new migration file alone is not a complete CLI migration baseline.
+
+Marketing requires a confirmed address and observes a 24-hour gap after the signup welcome. Failed Pro welcomes retry from the 15-minute lifecycle cron, independently of the marketing budget and test allowlist. Interrupted sends reuse the saved payload and idempotency key after a five-minute lease expires.
+
+Ambiguous attempts stop after 23 hours, before Resend's 24-hour idempotency window expires. Check `email_sends` rows with `status = 'blocked'` in the Resend dashboard before reconciling them; existing pre-migration rows are preserved as sent to avoid unsafe replays. Definitively rejected first attempts (for example, HTTP 429) remain retryable. Full behavior and rollout checks are in [the lifecycle spec](docs/lifecycle-emails-spec.md).
+
+Database regression checks: `psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/sql/lifecycle-email-recovery.sql` against a test database with both migrations applied. The checks roll back their fixtures.
 
 ### Fresh branding (no client-specific origins in code)
 
