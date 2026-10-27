@@ -7,9 +7,9 @@ import { softwareApplicationSchema } from "@/lib/seo/schema";
 import { getAppName } from "@/lib/site-config";
 
 export const metadata: Metadata = {
-  title: { absolute: `${getAppName()} | AI trading second opinion` },
+  title: { absolute: `Broker & Prop Firm Checks. AI Tools | ${getAppName()}` },
   description:
-    "Verify brokers and prop firms against regulator records, check your trades and risk, and get an AI second opinion — before you place the trade.",
+    "Look beyond the promises. Check brokers and prop firms with independent, sourced records. Explore AI trade analysis, market insights and risk tools.",
   alternates: { canonical: "/" },
 };
 
