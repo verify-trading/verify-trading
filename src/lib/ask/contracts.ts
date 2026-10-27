@@ -493,7 +493,17 @@ function sanitizeNaturalLanguageField(
     return value;
   }
 
-  const normalized = stripAskInternalCitationMarkers(value)
+  // Source links are not prose: keep their dots, hyphens and query strings out of
+  // the punctuation normalizer and sentence limiter. Leave sentence punctuation outside.
+  const sourceUrls: string[] = [];
+  const protectedValue = value.replace(/https?:\/\/[^\s<>"'`]+/gu, (match) => {
+    const punctuation = match.match(/[.!?,;:]+$/u)?.[0] ?? "";
+    const url = punctuation ? match.slice(0, -punctuation.length) : match;
+    const placeholder = `__ASK_SOURCE_URL_${sourceUrls.length}__`;
+    sourceUrls.push(url);
+    return placeholder + punctuation;
+  });
+  const normalized = stripAskInternalCitationMarkers(protectedValue)
     .replace(/[\u2010-\u2015]/g, ",")
     .replace(/\s+-\s+/g, ", ")
     .replace(/(?<=\p{L})-(?=\p{L})/gu, " ")
@@ -511,9 +521,10 @@ function sanitizeNaturalLanguageField(
       ? normalized
       : limitSentences(normalized, limits.maxSentences);
 
-  return limits.maxWords === undefined
+  const limited = limits.maxWords === undefined
     ? sentenceLimited
     : trimToWordLimit(sentenceLimited, limits.maxWords);
+  return limited.replace(/__ASK_SOURCE_URL_(\d+)__/g, (match, index: string) => sourceUrls[Number(index)] ?? match);
 }
 
 function sanitizeCardNaturalLanguage(card: AskCard): AskCard {

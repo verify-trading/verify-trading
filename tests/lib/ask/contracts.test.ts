@@ -69,6 +69,20 @@ describe("ask contracts", () => {
     expect(card.verdict).toBe("First verdict sentence stays. Second verdict sentence stays.");
   });
 
+  it("preserves complete source URLs while limiting prose sentences", () => {
+    const url = "https://www.wiz.io/blog/php2shell-exploitation-so-far?source=hn&view=live";
+    const card = sanitizeCard({
+      type: "insight",
+      headline: "Source Checked",
+      body: `The source is current. Read ${url}. Confirm the publication date. Extra sentence should be removed.`,
+      verdict: `Use the original source at ${url}.`,
+    });
+    expect(card.type).toBe("insight");
+    if (card.type !== "insight") throw new Error("Expected insight");
+    expect(card.body).toBe(`The source is current. Read ${url}. Confirm the publication date.`);
+    expect(card.verdict).toBe(`Use the original source at ${url}.`);
+  });
+
   it("removes dash punctuation from natural language response fields", () => {
     const card = sanitizeCard({
       type: "briefing",
