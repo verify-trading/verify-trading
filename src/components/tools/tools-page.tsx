@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowUpRight,
   ChevronDown,
   Coins,
   LineChart,
@@ -9,6 +10,7 @@ import {
   Shield,
   TrendingUp,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -26,12 +28,12 @@ import {
 /* ─── Calculator registry ────────────────────────────────────── */
 
 const CALCULATORS = [
-  { id: "lot-size", label: "Lot Size", icon: Scale },
-  { id: "risk-reward", label: "Risk / Reward", icon: Shield },
-  { id: "pip-value", label: "Pip Value", icon: Coins },
-  { id: "margin", label: "Margin", icon: Percent },
-  { id: "profit-loss", label: "Profit / Loss", icon: TrendingUp },
-  { id: "compound", label: "Compound Growth", icon: LineChart },
+  { id: "lot-size", label: "Lot Size", icon: Scale, guide: "/tools/position-size-calculator" },
+  { id: "risk-reward", label: "Risk / Reward", icon: Shield, guide: "/tools/risk-reward-calculator" },
+  { id: "pip-value", label: "Pip Value", icon: Coins, guide: "/tools/pip-value-calculator" },
+  { id: "margin", label: "Margin", icon: Percent, guide: "/tools/margin-calculator" },
+  { id: "profit-loss", label: "Profit / Loss", icon: TrendingUp, guide: "/tools/profit-loss-calculator" },
+  { id: "compound", label: "Compound Growth", icon: LineChart, guide: "/tools/compound-growth-calculator" },
 ] as const;
 
 type CalculatorId = (typeof CALCULATORS)[number]["id"];
@@ -479,10 +481,46 @@ export function ToolsPage() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-col gap-5 p-4 sm:p-6">
                 <ActiveCalculator id={active} />
+                <Link
+                  href={activeMeta.guide}
+                  className="group inline-flex items-center justify-between gap-3 rounded-xl border border-[color:var(--vt-border)] bg-[var(--vt-card-alt)] px-4 py-3 text-left text-[13px] font-semibold text-white transition-colors hover:border-[var(--vt-blue)]"
+                >
+                  <span className="min-w-0">
+                    Learn how the {activeMeta.label.toLowerCase()} calculator works
+                    <span className="mt-0.5 block text-[11px] font-medium text-[var(--vt-muted)]">
+                      Formula, examples, and when to use it
+                    </span>
+                  </span>
+                  <ArrowUpRight size={16} className="shrink-0 text-[var(--vt-muted)] transition-colors group-hover:text-[var(--vt-blue)]" aria-hidden />
+                </Link>
               </div>
             </div>
           </div>
         </div>
+
+        {/* ── Guides index: SEO-crawlable list of all tool pages ── */}
+        <section aria-labelledby="tool-guides-heading" className="mt-8">
+          <h2 id="tool-guides-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--vt-muted)]">
+            Calculator guides
+          </h2>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {CALCULATORS.map((c) => {
+              const Icon = c.icon;
+              return (
+                <li key={c.id}>
+                  <Link
+                    href={c.guide}
+                    className="group flex items-center gap-3 rounded-xl border border-[color:var(--vt-border)] bg-[var(--vt-card)] px-3.5 py-3 text-[13px] font-semibold text-white transition-colors hover:border-[var(--vt-blue)]"
+                  >
+                    <Icon size={16} className="shrink-0 text-[var(--vt-muted)] transition-colors group-hover:text-[var(--vt-blue)]" aria-hidden />
+                    <span className="min-w-0 flex-1">{c.label} calculator guide</span>
+                    <ArrowUpRight size={14} className="shrink-0 text-[var(--vt-muted)]" aria-hidden />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       </main>
     </div>
   );
