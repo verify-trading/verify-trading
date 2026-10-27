@@ -30,11 +30,13 @@ See `.env.example` for all keys. Lifecycle email behavior is specified in `docs/
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENAI_BASE_URL` | Yes (for Ask) | Gateway base URL (pikachu.hueling.cc) |
-| `OPENAI_API_KEY` | Yes (for Ask) | Gateway API key |
-| `ASK_MODEL` | Optional | Ask model (default `gpt-5.6-terra`) |
-| `ASK_SIMPLE_MODEL` | Optional | Journal/challenge writer model (default `gpt-5.4-mini`) |
-| `ASK_COACH_MODEL` | Optional | Mind coach model (default `gpt-5.6-terra`) |
+| `ANTHROPIC_BASE_URL` | For Claude | Claude gateway base URL; falls back to `OPENAI_BASE_URL` |
+| `ANTHROPIC_API_KEY` | Yes (for Claude) | Claude gateway key, separate from the GPT key |
+| `OPENAI_BASE_URL` | For GPT overrides | GPT gateway base URL (pikachu.hueling.cc) |
+| `OPENAI_API_KEY` | For GPT overrides | GPT gateway API key |
+| `ASK_MODEL` | Optional | Ask model (default `claude-sonnet-5-5`) |
+| `ASK_SIMPLE_MODEL` | Optional | Journal/challenge writer model (default `claude-sonnet-5-5`) |
+| `ASK_COACH_MODEL` | Optional | Mind coach model (default `claude-sonnet-5-5`) |
 | `NEXT_PUBLIC_SUPABASE_URL` | For Auth + chat history | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | For Auth (browser + SSR) | Anon key (safe to expose) |
 | `SUPABASE_SERVICE_ROLE_KEY` | For chat history + admin tasks | Service role (server only) |

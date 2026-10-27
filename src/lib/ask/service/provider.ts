@@ -3,8 +3,10 @@ import { createOpenAI } from "@ai-sdk/openai";
 import {
   defaultSettingsMiddleware,
   wrapLanguageModel,
+  tool,
   type LanguageModelMiddleware,
 } from "ai";
+import { z } from "zod";
 
 // Everything below fronts one third-party gateway (OPENAI_BASE_URL). It is quirky and
 // prompt-hostile in ways that are all measured, not guessed — the notes here are what stops
@@ -12,48 +14,42 @@ import {
 
 // The SDK appends "/responses", so the base URL must carry the version segment or every
 // request 404s. Unset means the real OpenAI API, which fails loudly on a gateway key.
-function resolveOpenAIBaseURL() {
-  const raw = process.env.OPENAI_BASE_URL?.trim();
+function resolveBaseURL(value = process.env.OPENAI_BASE_URL) {
+  const raw = value?.trim();
   if (!raw) return undefined;
   const trimmed = raw.replace(/\/+$/, "");
   return /\/v\d+$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
 }
 
-// Ask, the coach, the daily brief and the simple writers. The Claude route can't serve Ask:
-// it does not implement the SERVER-side web_search/web_fetch tools, and silently strips them —
-// HTTP 200 with an uncited answer invented from memory (measured 0 real searches vs 7/8).
-export const codexProvider = createOpenAI({ baseURL: resolveOpenAIBaseURL() });
+// Kept for explicit GPT overrides. Its gateway upstream is currently unavailable.
+export const codexProvider = createOpenAI({ baseURL: resolveBaseURL() });
 
-// The gateway's NATIVE Anthropic route (/v1/messages), taken only when ASK_MODEL or
-// ASK_COACH_MODEL names a `claude-` model. It runs Anthropic's own server-side web_search —
-// measured 2026-09-15: real searches, cited URLs resolve, ~15-30 s a turn. Kept as an escape
-// hatch; the gpt/codex route above is the default.
+// Native Claude messages support normal replies and our client tools. The gateway did not
+// pass live web-search verification on 2026-10-27, so that capability is disabled below.
 const anthropicProvider = createAnthropic({
-  baseURL: resolveOpenAIBaseURL(),
+  baseURL: resolveBaseURL(process.env.ANTHROPIC_BASE_URL ?? process.env.OPENAI_BASE_URL),
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-/** Primary model for Ask. Fastest of the gateway's models that reliably searches. A `claude-`
- *  id takes the Anthropic route; anything else, the codex one. */
-export const DEFAULT_ASK_MODEL = "gpt-5.6-terra";
+/** Temporary Claude default while the GPT gateway upstream is unavailable. */
+export const DEFAULT_ASK_MODEL = "claude-sonnet-5-5";
 
 const isClaude = (modelId: string) => modelId.startsWith("claude-");
 
-/** Cheaper tier for the non-conversational writers (journal insight, challenge status). */
-export const DEFAULT_ASK_SIMPLE_MODEL = "gpt-5.4-mini";
+/** Model for the non-conversational writers (journal insight, challenge status). */
+export const DEFAULT_ASK_SIMPLE_MODEL = "claude-sonnet-5-5";
 
 // Separate KEY GROUP, not just a separate model: with OPENAI_API_KEY every claude model
 // answers "Upstream service temporarily unavailable".
 const coachProvider = createOpenAI({
-  baseURL: resolveOpenAIBaseURL(),
+  baseURL: resolveBaseURL(process.env.ANTHROPIC_BASE_URL ?? process.env.OPENAI_BASE_URL),
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 // The Mind coach only. Not ASK_SIMPLE_MODEL: that one also feeds the journal/challenge
 // writers, which are not voice and should not follow the coach's tradeoffs. Same model as
-// Ask; reasoning is pinned low at the call site below, because on a voice call the thinking
-// is dead air.
-export const DEFAULT_COACH_MODEL = "gpt-5.6-terra";
+// Ask; GPT overrides pin reasoning low because on a voice call the thinking is dead air.
+export const DEFAULT_COACH_MODEL = "claude-sonnet-5-5";
 
 export function getAskPrimaryModelId() {
   return process.env.ASK_MODEL ?? DEFAULT_ASK_MODEL;
@@ -107,28 +103,39 @@ export function getAskModel() {
   return isClaude(modelId) ? anthropicProvider(modelId) : askModel(modelId);
 }
 
-/** The live-web tool that matches getAskModel's route: each provider only runs its own. */
+export function isAskWebSearchAvailable() {
+  return !isClaude(getAskPrimaryModelId());
+}
+
+/** Explicitly report unavailable research rather than accepting an unverified gateway answer. */
 export function getAskWebSearchTool() {
-  if (isClaude(getAskPrimaryModelId())) {
-    return anthropicProvider.tools.webSearch_20250305({ maxUses: 5, userLocation: { type: "approximate", country: "GB" } });
+  if (!isAskWebSearchAvailable()) {
+    return tool({
+      description: "Live web research is temporarily unavailable. Use reviewed records, news, market or calendar tools instead, and disclose any current claims you cannot verify.",
+      inputSchema: z.object({ query: z.string() }),
+      execute: async () => ({
+        available: false,
+        message: "Live web research is unavailable. Do not invent search results, source URLs or newly verified facts. Explain this limitation to the user when it affects your answer.",
+      }),
+    });
   }
   return codexProvider.tools.webSearch({ searchContextSize: "medium", userLocation: { type: "approximate", country: "GB" } });
 }
 
-// Chat-completions unlike Ask: the gateway injects the whole Codex CLI system prompt
-// (~4,400 tokens, never cached) into every Responses-API call, and these writers use no
-// server tools. Measured injection-free here. Ask must stay on Responses for web_search.
+// GPT overrides use chat completions for writers that need no server-side tools.
 export function getAskSimpleModel() {
+  const modelId = getAskSimpleModelId();
+  if (isClaude(modelId)) return anthropicProvider(modelId);
   return wrapLanguageModel({
-    model: codexProvider.chat(getAskSimpleModelId()),
+    model: codexProvider.chat(modelId),
     middleware: process.env.OPENAI_BASE_URL?.trim() ? [dropUnsupportedParams] : [],
   });
 }
 
 /**
  * A `claude-` id takes the gateway's Claude route, where `.chat()` is load-bearing: the SDK
- * defaults to the Responses API, which serves no claude model there (/v1/messages is blocked
- * for our group too). That path is raw, no askModel middleware — `store`/`reasoningEffort` are
+ * defaults to the Responses API, which serves no claude model there. That path is raw,
+ * no askModel middleware — `store`/`reasoningEffort` are
  * OpenAI-isms, and stripping maxOutputTokens is pointless because `max_tokens` is silently
  * IGNORED there (asked 5, got 169). The gpt models take the codex (Responses) route like Ask.
  *

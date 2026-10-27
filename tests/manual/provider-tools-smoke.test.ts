@@ -25,6 +25,7 @@ import { describe, expect, it } from "vitest";
 import { loadDotEnvLocal } from "./env-local";
 
 loadDotEnvLocal();
+const { isAskWebSearchAvailable } = await import("@/lib/ask/service/provider");
 
 const RUN = process.env.RUN_PROVIDER_SMOKE === "1";
 
@@ -78,7 +79,7 @@ describe.skipIf(!RUN)("provider tool support", () => {
   // the tool blocks while still running the search — so ask for a fact that
   // cannot be in any training set (a story posted minutes ago) and check it
   // against the source.
-  it("server tool: web_search really executes", async () => {
+  it.skipIf(!isAskWebSearchAvailable())("server tool: web_search really executes", async () => {
     const { getAskModel, getAskWebSearchTool } = await import("@/lib/ask/service/provider");
 
     // Accept any front-page story, not the current #1. Ranks churn by the minute

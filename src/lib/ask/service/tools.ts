@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getAskWebSearchTool } from "@/lib/ask/service/provider";
+import { getAskWebSearchTool, isAskWebSearchAvailable } from "@/lib/ask/service/provider";
 
 import {
   httpUrlSchema,
@@ -785,7 +785,9 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       description:
         "Persist a newly discovered prop firm immediately after web_search returns at least one direct source URL. Use only for a prop firm that verify_entity did not find. Put only official, regulator, or independent-tracker facts in confirmed; Trustpilot, Reddit, review-site, and forum allegations MUST go in unconfirmed. Leave the score unfinalized, and include Trustpilot only when the source explicitly shows both rating and review count. After saving, call verify_entity again so the final card comes from the stored developing record.",
       inputSchema: persistDiscoveredPropFirmInputSchema,
-      execute: async (input) => upsertDevelopingPropFirm(input),
+      execute: async (input) => isAskWebSearchAvailable()
+        ? upsertDevelopingPropFirm(input)
+        : { error: "Live web research is unavailable; a newly researched firm cannot be saved without verified sources." },
     }),
     list_verified_entities: tool({
       description:
@@ -855,10 +857,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         }
       },
     }),
-    // Server-side web tool: live web, no key or quota of our own, for anything our data
-    // doesn't cover. The provider runs it and decides per turn whether to search, open a
-    // page, or find text within one — so this single tool covers what used to be
-    // web_search + web_fetch. Typical turn lands in 4-12s.
+    // Provider research when supported; otherwise returns an explicit unavailable result.
     web_search: getAskWebSearchTool(),
     get_economic_calendar: tool({
       description:
