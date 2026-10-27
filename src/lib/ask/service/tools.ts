@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getAskWebSearchTool, isAskWebSearchAvailable } from "@/lib/ask/service/provider";
+import { getAskWebSearchTool } from "@/lib/ask/service/provider";
 
 import {
   httpUrlSchema,
@@ -785,9 +785,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       description:
         "Persist a newly discovered prop firm immediately after web_search returns at least one direct source URL. Use only for a prop firm that verify_entity did not find. Put only official, regulator, or independent-tracker facts in confirmed; Trustpilot, Reddit, review-site, and forum allegations MUST go in unconfirmed. Leave the score unfinalized, and include Trustpilot only when the source explicitly shows both rating and review count. After saving, call verify_entity again so the final card comes from the stored developing record.",
       inputSchema: persistDiscoveredPropFirmInputSchema,
-      execute: async (input) => isAskWebSearchAvailable()
-        ? upsertDevelopingPropFirm(input)
-        : { error: "Live web research is unavailable; a newly researched firm cannot be saved without verified sources." },
+      execute: async (input) => upsertDevelopingPropFirm(input),
     }),
     list_verified_entities: tool({
       description:
@@ -857,7 +855,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         }
       },
     }),
-    // Provider research when supported; otherwise returns an explicit unavailable result.
+    // Provider-run research; gateway search traces may be omitted from the response.
     web_search: getAskWebSearchTool(),
     get_economic_calendar: tool({
       description:

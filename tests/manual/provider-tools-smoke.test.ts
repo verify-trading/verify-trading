@@ -8,11 +8,11 @@
  * first while silently dropping the second:
  *   - client-side tools (verify_entity, submit_ask_card, …) — we execute them,
  *     the model only emits tool calls.
- *   - the server-side web_search tool — the PROVIDER executes it. A relay that
- *     doesn't implement it strips the declaration, and the model then answers
- *     from memory with no source. Nothing errors; the answer is just invented.
- *     persist_discovered_prop_firm writes those "sources" to Supabase, so this
- *     must be checked before pointing production at a new base URL.
+ *   - provider-side web research — verify fresh facts independently. Some relays
+ *     omit search traces while still retrieving live pages; others silently ignore
+ *     the tool. Neither HTTP 200 nor a citation alone proves current web access.
+ *     persist_discovered_prop_firm writes sourced facts to Supabase, so verify
+ *     research before pointing production at a new base URL.
  *
  * Two SDK facts these tests rely on:
  *   - generateText defaults to stopWhen: stepCountIs(1); the loop is opt-in.
@@ -25,7 +25,6 @@ import { describe, expect, it } from "vitest";
 import { loadDotEnvLocal } from "./env-local";
 
 loadDotEnvLocal();
-const { isAskWebSearchAvailable } = await import("@/lib/ask/service/provider");
 
 const RUN = process.env.RUN_PROVIDER_SMOKE === "1";
 
@@ -73,61 +72,34 @@ describe.skipIf(!RUN)("provider tool support", () => {
     expect(r.text).toMatch(/75/);
   }, 120_000);
 
-  // The one that catches a relay pretending to implement the provider's server
-  // tools: a stripped web_search still returns HTTP 200 with a confident,
-  // uncited, invented answer. Citations can't be the proof — a gateway can strip
-  // the tool blocks while still running the search — so ask for a fact that
-  // cannot be in any training set (a story posted minutes ago) and check it
-  // against the source.
-  it.skipIf(!isAskWebSearchAvailable())("server tool: web_search really executes", async () => {
+  // Pikachu omits native search events even when it fetches live pages. Prove access
+  // with a fresh item whose title and original article URL are withheld from the model.
+  it("server tool retrieves fresh source facts, even when the gateway omits search traces", async () => {
     const { getAskModel, getAskWebSearchTool } = await import("@/lib/ask/service/provider");
+    const ids = await fetch("https://hacker-news.firebaseio.com/v0/topstories.json")
+      .then((res) => res.json()) as number[];
+    type Story = { id: number; title: string; url: string; time: number };
+    const stories = await Promise.all(ids.slice(0, 30).map((id) =>
+      fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+        .then((res) => res.json() as Promise<Story>),
+    ));
+    const story = stories.filter((item) => item?.title && item.url && Date.now() - item.time * 1000 < 6 * 3600000)
+      .sort((a, b) => b.time - a.time)[0];
+    expect(story, "The probe needs a source published within six hours").toBeTruthy();
 
-    // Accept any front-page story, not the current #1. Ranks churn by the minute
-    // and the search index serves a snapshot up to an hour old, so pinning to #1
-    // fails a provider that genuinely searched. The front page is still proof:
-    // every one of these was posted today and cannot come from training data.
-    const topIds = (await fetch(
-      "https://hacker-news.firebaseio.com/v0/topstories.json",
-    ).then((res) => res.json())) as number[];
-    const top = await Promise.all(
-      topIds.slice(0, 30).map((id) =>
-        fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`).then(
-          (res) => res.json() as Promise<{ title: string }>,
-        ),
-      ),
-    );
-
-    const r = await generateText({
+    const result = await generateText({
       model: getAskModel(),
-      prompt:
-        "Search news.ycombinator.com and give me the exact verbatim title of one story currently on the Hacker News front page. Reply with the title and nothing else.",
-      // Same cast the pipeline uses: a provider-executed tool has no input
-      // schema of ours, so the tools record needs the call's own type.
-      tools: {
-        // Identical config to production (ask/service/tools.ts).
-        web_search: getAskWebSearchTool(),
-      } as Parameters<typeof generateText>[0]["tools"],
+      prompt: `Use live web search to open https://news.ycombinator.com/item?id=${story.id}. Return JSON with its exact title and the full original article URL as sourceUrl. Neither is provided here. Actually look it up; do not guess.`,
+      tools: { web_search: getAskWebSearchTool() } as Parameters<typeof generateText>[0]["tools"],
       stopWhen: stepCountIs(5),
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(120000),
     });
-
-    // Two proofs, either is enough. The front page is the strong one: every story there was
-    // posted today. But the search index can lag the live page by days (measured 4 on the
-    // Anthropic route), so a story that IS on HN — per its own search API — also passes, as
-    // long as the provider actually ran the tool.
-    const searched = r.steps.some((step) => step.toolCalls.some((call) => call.toolName === "web_search" && call.providerExecuted));
-    const answer = r.text.toLowerCase().replace(/\s+/g, " ");
-    const onFrontPage = top.some((story) =>
-      answer.includes(story.title.toLowerCase().split(/\s+/).slice(0, 5).join(" ")),
-    );
-    const hn = (await fetch(
-      `https://hn.algolia.com/api/v1/search?tags=story&query=${encodeURIComponent(r.text.replace(/["']/g, "").slice(0, 80))}`,
-    ).then((res) => res.json())) as { hits: { title: string }[] };
-    // Either way round: models drop a leading "The" or add quotes.
-    const answerSlice = answer.replace(/^(the )?/, "").split(" ").slice(0, 5).join(" ");
-    const onHn = hn.hits.some((hit) => hit.title.toLowerCase().includes(answerSlice));
-    expect(
-      searched && (onFrontPage || onHn),
-      `the provider at ${process.env.OPENAI_BASE_URL ?? "the default base URL"} did not really search (tool ran: ${searched}) — answer: ${r.text.slice(0, 200)}`,
-    ).toBe(true);
+    const json = result.text.match(/\{[\s\S]*\}/)?.[0];
+    expect(json, "The model must return the requested source facts").toBeTruthy();
+    const answer = JSON.parse(json!) as { title: string; sourceUrl: string };
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    expect(normalize(answer.title)).toBe(normalize(story.title));
+    expect(answer.sourceUrl.replace(/\/$/, "")).toBe(story.url.replace(/\/$/, ""));
   }, 180_000);
 });

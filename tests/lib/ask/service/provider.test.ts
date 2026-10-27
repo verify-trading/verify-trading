@@ -46,13 +46,10 @@ describe("ask provider helpers", () => {
     expect(getPsychologyCoachModel().provider).toBe("openai.responses");
   });
 
-  it("reports unavailable Claude research instead of pretending to search", async () => {
-    vi.stubEnv("ASK_MODEL", "claude-sonnet-5");
-    const webSearch = getAskWebSearchTool();
-    expect(webSearch.execute).toBeTypeOf("function");
-    const response = await webSearch.execute?.({ query: "new firm regulatory status" }, {
-      toolCallId: "search-test", messages: [],
-    });
-    expect(response).toMatchObject({ available: false, message: expect.stringContaining("Do not invent") });
+  it("uses Anthropic web search for Claude and OpenAI web search for GPT overrides", () => {
+    vi.stubEnv("ASK_MODEL", "claude-sonnet-5-5");
+    expect(getAskWebSearchTool()).toMatchObject({ type: "provider", id: "anthropic.web_search_20250305" });
+    vi.stubEnv("ASK_MODEL", "gpt-5.6-terra");
+    expect(getAskWebSearchTool()).toMatchObject({ type: "provider", id: "openai.web_search" });
   });
 });

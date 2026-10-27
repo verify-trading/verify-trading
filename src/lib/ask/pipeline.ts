@@ -36,7 +36,6 @@ import {
   createSystemMessage,
   getAskModel,
   getAskPrimaryModelId,
-  isAskWebSearchAvailable,
 } from "@/lib/ask/service/provider";
 import { createAskTools, resolveVerificationToolResult } from "@/lib/ask/service/tools";
 import type {
@@ -143,13 +142,10 @@ function buildAskMessages({
         ],
       }
     : { role: "user", content: normalizedMessage };
-  const researchNotice = isAskWebSearchAvailable()
-    ? ""
-    : "\nLive web research is temporarily unavailable. Use reviewed records and the news, market and calendar tools where relevant. Clearly state when you cannot verify a current claim. Never invent search results or source URLs, and do not persist newly researched entities.";
 
   return [
     // Single cached static block — one stable cache breakpoint.
-    createSystemMessage(expandPromptTemplate(askSystemPrompt) + researchNotice),
+    createSystemMessage(expandPromptTemplate(askSystemPrompt)),
     // Volatile context stays uncached so it never invalidates the prefix.
     ...(sessionMemoryMessage ? [plainSystemMessage(sessionMemoryMessage)] : []),
     ...(image ? [plainSystemMessage(askImageResponseGuide)] : []),

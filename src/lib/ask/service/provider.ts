@@ -3,10 +3,8 @@ import { createOpenAI } from "@ai-sdk/openai";
 import {
   defaultSettingsMiddleware,
   wrapLanguageModel,
-  tool,
   type LanguageModelMiddleware,
 } from "ai";
-import { z } from "zod";
 
 // Everything below fronts one third-party gateway (OPENAI_BASE_URL). It is quirky and
 // prompt-hostile in ways that are all measured, not guessed — the notes here are what stops
@@ -24,8 +22,8 @@ function resolveBaseURL(value = process.env.OPENAI_BASE_URL) {
 // Kept for explicit GPT overrides. Its gateway upstream is currently unavailable.
 export const codexProvider = createOpenAI({ baseURL: resolveBaseURL() });
 
-// Native Claude messages support normal replies and our client tools. The gateway did not
-// pass live web-search verification on 2026-10-27, so that capability is disabled below.
+// Native Claude messages support our client tools and live web research. Pikachu omits
+// native search traces; verify against fresh page facts, not just providerExecuted events.
 const anthropicProvider = createAnthropic({
   baseURL: resolveBaseURL(process.env.ANTHROPIC_BASE_URL ?? process.env.OPENAI_BASE_URL),
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -103,21 +101,10 @@ export function getAskModel() {
   return isClaude(modelId) ? anthropicProvider(modelId) : askModel(modelId);
 }
 
-export function isAskWebSearchAvailable() {
-  return !isClaude(getAskPrimaryModelId());
-}
-
-/** Explicitly report unavailable research rather than accepting an unverified gateway answer. */
+/** Match the server-side web tool to the selected model's API. */
 export function getAskWebSearchTool() {
-  if (!isAskWebSearchAvailable()) {
-    return tool({
-      description: "Live web research is temporarily unavailable. Use reviewed records, news, market or calendar tools instead, and disclose any current claims you cannot verify.",
-      inputSchema: z.object({ query: z.string() }),
-      execute: async () => ({
-        available: false,
-        message: "Live web research is unavailable. Do not invent search results, source URLs or newly verified facts. Explain this limitation to the user when it affects your answer.",
-      }),
-    });
+  if (isClaude(getAskPrimaryModelId())) {
+    return anthropicProvider.tools.webSearch_20250305({ maxUses: 5, userLocation: { type: "approximate", country: "GB" } });
   }
   return codexProvider.tools.webSearch({ searchContextSize: "medium", userLocation: { type: "approximate", country: "GB" } });
 }

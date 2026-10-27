@@ -75,18 +75,6 @@ function createDeferred<T>() {
 }
 
 describe("createAskTools", () => {
-  it("does not save newly discovered firms while live research is unavailable", async () => {
-    vi.stubEnv("ASK_MODEL", "claude-sonnet-5");
-    try {
-      const result = await createAskTools({}).persist_discovered_prop_firm.execute?.({
-        name: "Unverified Test Firm",
-        confirmed: [{ text: "Unsupported claim", sourceLabel: "Unverified", sourceUrl: "https://example.com" }],
-      }, { toolCallId: "discovery-test", messages: [] });
-      expect(result).toEqual({ error: expect.stringContaining("cannot be saved") });
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
   it("uses the live quote when margin price is missing", async () => {
     const tools = createAskTools({
       getMarketQuoteImpl: vi.fn().mockResolvedValue({
