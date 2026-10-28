@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { HomepageSections } from "@/components/landing/homepage-sections";
 import { LandingPage } from "@/components/landing/landing-page";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getHeroGoldBriefing } from "@/lib/landing/hero-gold";
@@ -18,7 +19,9 @@ export default async function Home() {
   return (
     <>
       <JsonLd data={softwareApplicationSchema()} />
-      <LandingPage liveGold={liveGold} />
+      <LandingPage liveGold={liveGold}>
+        <HomepageSections />
+      </LandingPage>
     </>
   );
 }
