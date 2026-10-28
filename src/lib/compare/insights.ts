@@ -1,5 +1,5 @@
 import { getRegulator, REGULATORS, type Regulator } from "@/lib/compare/regulators";
-import type { PublicEntity, Verdict } from "@/lib/compare/entities";
+import type { PublicEntity, PublicEntityType, Verdict } from "@/lib/compare/entities";
 
 /** Best first. Used to order alternatives and to say which record rates higher. */
 export const VERDICT_RANK: Record<Verdict, number> = {
@@ -103,12 +103,33 @@ export const hubFor = (brokers: PublicEntity[], slug: string): HubStats | null =
 /** Canonical order of a pair: alphabetical by slug. */
 export const pairKey = (a: string, b: string) => (a < b ? [a, b] : [b, a]) as [string, string];
 
+/** The one place the "X vs Y" URL shape lives: /compare/<type>/<a>-vs-<b>, slugs sorted. */
+export const vsBasePath = (type: PublicEntityType) => (type === "propfirm" ? "/compare/prop-firms" : "/compare/brokers");
+export const vsPath = (type: PublicEntityType, aSlug: string, bSlug: string) => {
+  const [x, y] = pairKey(aSlug, bSlug);
+  return `${vsBasePath(type)}/${x}-vs-${y}`;
+};
+
+/** Split a "<a>-vs-<b>" segment into its two slugs (first "-vs-" wins). Null when malformed or self-pair. */
+export function parseVsPair(segment: string): [string, string] | null {
+  const i = segment.indexOf("-vs-");
+  if (i <= 0) return null;
+  const a = segment.slice(0, i);
+  const b = segment.slice(i + "-vs-".length);
+  if (!a || !b || a === b) return null;
+  return [a, b];
+}
+
 export const VS_PER_REGULATOR = 6;
-export const VS_CAP = 0;
+/** Overall cap on indexed broker vs pages. The rest of a real pairing still renders, but noindex. */
+export const VS_CAP = 80;
+/** Prop firms have no regulators, so the indexed set is the top-scoring firms paired with each other. */
+export const PROP_VS_TOP = 12;
+export const PROP_VS_CAP = 60;
 
 /**
- * Bounded set of "X vs Y" pages worth indexing: for each regulator with a reference entry, the top-scoring
- * indexable brokers that hold it, paired with each other. Capped overall.
+ * Bounded set of broker "X vs Y" pages worth indexing: for each regulator with a reference entry, the
+ * top-scoring indexable brokers that hold it, paired with each other. Capped overall.
  */
 export function vsPairs(brokers: PublicEntity[]): Array<[PublicEntity, PublicEntity]> {
   const seen = new Set<string>();
@@ -117,9 +138,10 @@ export function vsPairs(brokers: PublicEntity[]): Array<[PublicEntity, PublicEnt
     const top = hub.entities.filter((e) => isIndexable(e) && e.score !== null && !e.fcaWarning).slice(0, VS_PER_REGULATOR);
     for (let i = 0; i < top.length; i++) {
       for (let j = i + 1; j < top.length; j++) {
+        if (out.length >= VS_CAP) return out;
         const [a, b] = pairKey(top[i].slug, top[j].slug);
         const key = `${a}|${b}`;
-        if (seen.has(key) || out.length >= VS_CAP) continue;
+        if (seen.has(key)) continue;
         seen.add(key);
         out.push(top[i].slug === a ? [top[i], top[j]] : [top[j], top[i]]);
       }
@@ -128,14 +150,36 @@ export function vsPairs(brokers: PublicEntity[]): Array<[PublicEntity, PublicEnt
   return out;
 }
 
-export const isIndexedPair = (brokers: PublicEntity[], a: string, b: string) => {
+/** Prop-firm indexed pairs: the top firms by score, paired with each other. No regulator dimension. */
+export function propVsPairs(propFirms: PublicEntity[]): Array<[PublicEntity, PublicEntity]> {
+  const top = propFirms
+    .filter((e) => isIndexable(e) && e.score !== null && !e.closed)
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name))
+    .slice(0, PROP_VS_TOP);
+  const out: Array<[PublicEntity, PublicEntity]> = [];
+  for (let i = 0; i < top.length; i++) {
+    for (let j = i + 1; j < top.length; j++) {
+      if (out.length >= PROP_VS_CAP) return out;
+      const [a] = pairKey(top[i].slug, top[j].slug);
+      out.push(top[i].slug === a ? [top[i], top[j]] : [top[j], top[i]]);
+    }
+  }
+  return out;
+}
+
+/** The indexed pair set for a register type. Brokers pair by shared regulator; prop firms by score. */
+export function pairsForType(type: PublicEntityType, entities: PublicEntity[]): Array<[PublicEntity, PublicEntity]> {
+  return type === "propfirm" ? propVsPairs(entities) : vsPairs(entities);
+}
+
+export const isIndexedVsPair = (type: PublicEntityType, entities: PublicEntity[], a: string, b: string) => {
   const [x, y] = pairKey(a, b);
-  return vsPairs(brokers).some(([p, q]) => p.slug === x && q.slug === y);
+  return pairsForType(type, entities).some(([p, q]) => p.slug === x && q.slug === y);
 };
 
-/** Top-scoring comparison partners for an entity, taken from the indexed pair set. */
-export function vsPartners(entity: PublicEntity, brokers: PublicEntity[], limit = 3): PublicEntity[] {
-  return vsPairs(brokers)
+/** Top comparison partners for an entity, taken from its type's indexed pair set. */
+export function vsPartners(entity: PublicEntity, entities: PublicEntity[], limit = 3): PublicEntity[] {
+  return pairsForType(entity.type, entities)
     .filter(([a, b]) => a.slug === entity.slug || b.slug === entity.slug)
     .map(([a, b]) => (a.slug === entity.slug ? b : a))
     .slice(0, limit);

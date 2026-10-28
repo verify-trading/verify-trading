@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getPublicEntities } from "@/lib/compare/entities";
-import { entityPath, isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
+import { entityPath, isSeoWorthy, listableEntities, pairsForType, regulatorHubs, vsPath } from "@/lib/compare/insights";
 
 /** Every SEO-worthy data-driven URL: top entity records and major regulator hubs only. */
 export async function getCompareSitemapEntries(baseUrl: string): Promise<MetadataRoute.Sitemap> {
@@ -24,5 +24,10 @@ export async function getCompareSitemapEntries(baseUrl: string): Promise<Metadat
       changeFrequency: "weekly" as const,
       priority: 0.6,
     })),
+    // Curated "X vs Y" comparison pages (canonical slug order only; the rest render noindex).
+    ...[
+      ...pairsForType("broker", brokers).map(([a, b]) => vsPath("broker", a.slug, b.slug)),
+      ...pairsForType("propfirm", propFirms).map(([a, b]) => vsPath("propfirm", a.slug, b.slug)),
+    ].map((path) => ({ url: url(path), changeFrequency: "weekly" as const, priority: 0.6 })),
   ];
 }
