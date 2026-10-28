@@ -55,7 +55,7 @@ const BASE_POSTS: BlogPost[] = [
     terms: ["fca-register", "fscs", "clone-firm", "warning-list"],
     related: [
       { href: "/verify", label: "Verify a broker" },
-      { href: "/compare/brokers", label: "Compare brokers" },
+      { href: "/verify/brokers", label: "Compare brokers" },
       { href: "/methodology", label: "How we verify" },
     ],
     body: [
@@ -100,7 +100,7 @@ const BASE_POSTS: BlogPost[] = [
     related: [
       { href: "/prop-firm-traders", label: "For prop firm traders" },
       { href: "/economic-calendar", label: "Economic calendar" },
-      { href: "/compare/prop-firms", label: "Compare prop firms" },
+      { href: "/verify/prop-firms", label: "Compare prop firms" },
     ],
     body: [
       { type: "p", text: "Most prop firm challenges are not failed by bad analysis. They are failed by a rule the trader did not fully understand. The rules differ between firms and change over time, so this guide explains the common types and what to check. Always read the firm's own current rules, because those are what will be applied to your account." },

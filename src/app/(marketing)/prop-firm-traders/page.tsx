@@ -27,7 +27,7 @@ export default function PropFirmTradersPage() {
         "Track the challenge in the journal and catch the habits behind daily loss breaches.",
       ]}
       primary={{ label: "Check a prop firm", href: "/ask", event: "ask" }}
-      secondary={{ label: "Compare prop firms", href: "/compare/prop-firms" }}
+      secondary={{ label: "Compare prop firms", href: "/verify/prop-firms" }}
       helpTitle="Tools designed around prop firm evaluation rules"
       help={[
         {

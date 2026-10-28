@@ -24,7 +24,7 @@ export default function BrokersPage() {
         "The same fixed model is applied to every broker, with the citation shown on the record.",
         "The outcome is not for sale. You can ask for a correction.",
       ]}
-      compareHref="/compare/brokers"
+      compareHref="/verify/brokers"
       compareLabel="Compare Brokers"
       entityNoun="broker"
       faqs={[...PAGE_FAQS.brokers]}

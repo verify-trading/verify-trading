@@ -13,7 +13,7 @@ import { getRegulator } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { entityReviewSchema, webPageSchema } from "@/lib/marketing/seo";
 
-export const ENTITY_LIST_PATH = { broker: "/compare/brokers", propfirm: "/compare/prop-firms" } as const;
+export const ENTITY_LIST_PATH = { broker: "/verify/brokers", propfirm: "/verify/prop-firms" } as const;
 const LIST_CRUMB = { broker: "Compare Brokers", propfirm: "Compare Prop Firms" } as const;
 
 export function entityDescription(e: PublicEntity): string {

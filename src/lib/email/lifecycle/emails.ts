@@ -81,7 +81,7 @@ const TOPICS: Record<TopicBranch, TopicCopy> = {
   other: {
     label: "trading",
     nextQuestion: "Is the broker I trade with properly regulated?",
-    link: { label: "Compare brokers", href: "/compare/brokers" },
+    link: { label: "Compare brokers", href: "/verify/brokers" },
   },
 };
 
@@ -127,7 +127,7 @@ function content(id: LifecycleEmailId, vars: EmailVars): EmailContent {
             ],
           },
           { type: "button", link: { label: "Ask now", href: "/ask" } },
-          { type: "link", link: { label: "Or browse broker records first", href: "/compare/brokers" } },
+          { type: "link", link: { label: "Or browse broker records first", href: "/verify/brokers" } },
         ],
       };
 
@@ -177,7 +177,7 @@ function content(id: LifecycleEmailId, vars: EmailVars): EmailContent {
             text: "It takes 10 seconds to check the broker you actually trade with: who regulates it, what the register says, and whether there are any warnings.",
           },
           { type: "p", text: "Search it once and you'll know." },
-          { type: "button", link: { label: "Check my broker", href: "/compare/brokers" } },
+          { type: "button", link: { label: "Check my broker", href: "/verify/brokers" } },
           {
             type: "link",
             link: {

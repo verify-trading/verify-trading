@@ -26,34 +26,28 @@ export function isIndexable(e: PublicEntity): boolean {
 /**
  * Sitemap and robots index tag.
  *
- * Prop firms: index every record, even "Not yet rated" ones. Brand-name queries ("[firm]
- * review", "is [firm] legit") have high intent and we are often the only authoritative source
- * — an honest "we have not rated this yet, here is what the record says" page is still useful
- * content, not thin.
- *
- * Brokers: only "Strongly Trusted" index for now. With zero domain authority we don't want to
- * publish 777 broker pages, and most queries for brokers aren't brand-only.
- *
- * Pages that pass this stay live and reach from the listing; the rest keep noindex.
+ * Every broker and prop firm gets a reachable, indexed detail page — even "Not yet rated"
+ * records. Brand-name queries ("[firm] review", "is [firm] legit") have high intent and we are
+ * often the only independent source, so an honest "here is what the record says, rated or not"
+ * page is useful content, not thin. The "look before you deposit" promise also depends on every
+ * name on the list resolving to a record rather than a dead end.
  */
-export function isSeoWorthy(e: PublicEntity): boolean {
-  if (e.type === "propfirm") return true;
-  if (!isIndexable(e)) return false;
-  return e.verdict === "Strongly Trusted";
+export function isSeoWorthy(_e: PublicEntity): boolean {
+  return true;
 }
 
 /**
  * SEO PAGE GATE, not a visibility filter. Records that pass isSeoWorthy get a detail page;
  * the rest 404 and are dropped from regulator hubs and alternatives.
  *
- * Never use this to filter the Compare directory (/compare/brokers, /compare/prop-firms): that
+ * Never use this to filter the Compare directory (/verify/brokers, /verify/prop-firms): that
  * lists every record in Supabase and only links these. Filtering it here once made the directory
  * fall from 777 brokers to 20; tests/components/site/compare-view.test.tsx guards against it.
  */
 export const listableEntities = (entities: PublicEntity[]): PublicEntity[] => entities.filter(isSeoWorthy);
 
 export const entityPath = (e: Pick<PublicEntity, "type" | "slug">) =>
-  `${e.type === "broker" ? "/compare/brokers" : "/compare/prop-firms"}/${e.slug}`;
+  `${e.type === "broker" ? "/verify/brokers" : "/verify/prop-firms"}/${e.slug}`;
 
 const hubSlugs = (e: PublicEntity) => e.regulatorDetails.flatMap((r) => (r.slug ? [r.slug] : []));
 

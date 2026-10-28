@@ -46,9 +46,11 @@ describe("isSeoWorthy (sitemap + robots gate)", () => {
     // "Not yet rated" prop firms also index (brand-name queries).
     expect(isSeoWorthy(prop({ trust_score: null }))).toBe(true);
   });
-  it("only indexes Strongly Trusted brokers", () => {
+  it("indexes every broker, rated or not — same brand-query reasoning as prop firms", () => {
     expect(isSeoWorthy(broker("st", { final_tier: "Tier 1", founder_verified: true }))).toBe(true);
-    expect(isSeoWorthy(broker("t", { final_tier: "Tier 2", founder_verified: true }))).toBe(false);
+    expect(isSeoWorthy(broker("t", { final_tier: "Tier 2", founder_verified: true }))).toBe(true);
+    expect(isSeoWorthy(broker("warn", { fca_warning: true }))).toBe(true);
+    expect(isSeoWorthy(broker("none", {}))).toBe(true);
   });
 });
 

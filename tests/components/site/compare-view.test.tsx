@@ -53,10 +53,10 @@ describe("Compare directory", () => {
     for (const f of PROP_FIRMS) expect(html).toContain(f.name);
   });
 
-  it("links only records that have a live detail page", async () => {
+  it("links every broker row to its detail page — including unrated and cautioned records", async () => {
     const html = renderToStaticMarkup(await CompareView({ type: "broker", searchParams: {} }));
-    expect(html).toContain('href="/compare/brokers/strong"');
-    expect(html).not.toContain('href="/compare/brokers/trusted"');
-    expect(html).not.toContain('href="/compare/brokers/avoid"');
+    for (const b of BROKERS) {
+      expect(html).toContain(`href="/verify/brokers/${b.slug}"`);
+    }
   });
 });

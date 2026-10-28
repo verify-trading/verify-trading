@@ -227,7 +227,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
               {entities.slice(0, ROW_CAP).map((e) => <HubRow key={e.slug} e={e} hub={r.code} />)}
             </ul>
             {n > ROW_CAP && uniqueCode ? (
-              <Link href={`/compare/brokers?regulator=${encodeURIComponent(r.code)}`} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[var(--vt-blue)] hover:underline">
+              <Link href={`/verify/brokers?regulator=${encodeURIComponent(r.code)}`} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[var(--vt-blue)] hover:underline">
                 Browse all {n.toLocaleString("en-GB")} in Compare Brokers <ArrowRight className="size-3.5" aria-hidden />
               </Link>
             ) : null}

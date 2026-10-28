@@ -26,8 +26,8 @@ verify.trading publishes records and analysis, not financial advice. It takes no
 - [Pricing](${base}/pricing): Free entity checks and trade analysis; Pro raises Ask to 20 chats/day and adds morning market briefings and the economic calendar.
 - [How it works](${base}/how-it-works): How a check works end to end, and the three mistakes that end most trading accounts.
 - [Verify](${base}/verify): Free checks of brokers, prop firms and educators against regulator and court records.
-- [Compare brokers](${base}/compare/brokers): Searchable broker verdicts with regulators and last-updated dates; one page per broker.
-- [Compare prop firms](${base}/compare/prop-firms): Searchable prop firm verdicts and status; one page per firm.
+- [Compare brokers](${base}/verify/brokers): Searchable broker verdicts with regulators and last-updated dates; one page per broker.
+- [Compare prop firms](${base}/verify/prop-firms): Searchable prop firm verdicts and status; one page per firm.
 - [Intelligence](${base}/intelligence): Daily pre-session market brief (Pro).
 - [Economic calendar](${base}/economic-calendar): Seven days of economic events with impact levels (Pro).
 - [Journal](${base}/journal): Trading journal with broker import and a weekly insight (Pro).

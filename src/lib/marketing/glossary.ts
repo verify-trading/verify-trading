@@ -330,7 +330,7 @@ export const GLOSSARY: GlossaryTerm[] = [
     ],
     points: ["Paid test with rules and targets.", "One or two phases at many firms.", "Fee is normally at risk."],
     related: ["funded-account", "profit-target", "daily-loss-limit"],
-    links: [{ href: "/verify", label: "Verify a prop firm" }, { href: "/compare/prop-firms", label: "Compare prop firms" }],
+    links: [{ href: "/verify", label: "Verify a prop firm" }, { href: "/verify/prop-firms", label: "Compare prop firms" }],
   },
   {
     slug: "funded-account",
@@ -380,7 +380,7 @@ export const GLOSSARY: GlossaryTerm[] = [
     ],
     points: ["Covers eligible clients of CySEC-licensed firms.", "Up to 20,000 euros per person.", "Not for trading losses."],
     related: ["fscs", "segregated-funds", "regulated-broker"],
-    links: [{ href: "/regulators/cysec", label: "CySEC-regulated brokers" }, { href: "/verify", label: "Verify a broker" }, { href: "/compare/brokers", label: "Compare brokers" }],
+    links: [{ href: "/regulators/cysec", label: "CySEC-regulated brokers" }, { href: "/verify", label: "Verify a broker" }, { href: "/verify/brokers", label: "Compare brokers" }],
   },
   {
     slug: "segregated-funds",

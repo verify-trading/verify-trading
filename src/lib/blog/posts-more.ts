@@ -17,7 +17,7 @@ export const MORE_POSTS: BlogPost[] = [
     terms: ["clone-firm", "warning-list", "regulated-broker", "negative-balance-protection"],
     related: [
       { href: "/verify", label: "Verify a broker" },
-      { href: "/compare/brokers", label: "Compare brokers" },
+      { href: "/verify/brokers", label: "Compare brokers" },
       { href: "/glossary/clone-firm", label: "What is a clone firm?" },
     ],
     body: [
@@ -78,7 +78,7 @@ export const MORE_POSTS: BlogPost[] = [
     related: [
       { href: "/verify", label: "Verify a broker" },
       { href: "/glossary/fscs", label: "FSCS explained" },
-      { href: "/compare/brokers", label: "Compare brokers" },
+      { href: "/verify/brokers", label: "Compare brokers" },
     ],
     body: [
       { type: "p", text: "When traders ask if a broker is safe, they usually mean two different things: will my money be protected if the broker fails, and can I lose more than I put in. Different rules answer each one, and none of them protects you from ordinary trading losses. This guide explains the main protections and how to check which ones apply to your account." },

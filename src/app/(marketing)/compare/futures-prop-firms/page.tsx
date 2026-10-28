@@ -128,7 +128,7 @@ export default async function FuturesPropFirmsPage() {
     <>
       <Breadcrumbs
         crumbs={[
-          { name: "Compare", path: "/compare/prop-firms" },
+          { name: "Compare", path: "/verify/prop-firms" },
           { name: "Futures Prop Firms", path },
         ]}
       />
@@ -231,7 +231,7 @@ export default async function FuturesPropFirmsPage() {
                   </Link>
                 ) : (
                   <Link
-                    href={`/compare/prop-firms?q=${encodeURIComponent(firm.name)}`}
+                    href={`/verify/prop-firms?q=${encodeURIComponent(firm.name)}`}
                     className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-300 transition-colors hover:text-white"
                   >
                     Find {firm.name} in the prop firm list
@@ -348,7 +348,7 @@ export default async function FuturesPropFirmsPage() {
       <CtaBand
         title="Compare Futures Prop Firms With More Confidence"
         body="Choosing a futures evaluation requires understanding the complete programme, not simply selecting the lowest fee or largest advertised account. Compare the rules, explore the verification records and make a more informed decision."
-        primary={{ label: "Compare All Prop Firms", href: "/compare/prop-firms" }}
+        primary={{ label: "Compare All Prop Firms", href: "/verify/prop-firms" }}
         secondary={{ label: "Create Your Verify Trading Account", href: "/signup" }}
         location="futures_prop_firms"
       />

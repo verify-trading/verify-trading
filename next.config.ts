@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
       // The blog lives at /blog; people (and the BabyLoveGrowth dashboard) also try /blogs.
       { source: "/blogs", destination: "/blog", permanent: true },
       { source: "/blogs/:slug", destination: "/blog/:slug", permanent: true },
+      // Verify restructure: broker and prop-firm registers moved under /verify. Side-by-side
+      // category pages (futures/forex/forex-vs-futures prop firms) stay under /compare.
+      { source: "/compare/brokers", destination: "/verify/brokers", permanent: true },
+      { source: "/compare/brokers/:slug", destination: "/verify/brokers/:slug", permanent: true },
+      { source: "/compare/prop-firms", destination: "/verify/prop-firms", permanent: true },
+      { source: "/compare/prop-firms/:slug", destination: "/verify/prop-firms/:slug", permanent: true },
     ];
   },
   async headers() {
