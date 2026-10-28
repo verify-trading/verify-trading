@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * before anyone notices the Compare pages shrinking.
  */
 export async function GET() {
-  const types: PublicEntityType[] = ["broker", "propfirm"];
+  const types: PublicEntityType[] = ["broker", "propfirm", "guru"];
   const counts: Partial<Record<PublicEntityType, number | null>> = {};
   let ok = true;
   for (const type of types) {

@@ -20,6 +20,13 @@ export const BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
   { verdict: "Not yet rated", text: "We hold a record but have not assigned a score. Not a judgement." },
 ];
 
+/** Separate scale for people: no numeric score, three tiers, each one defensible. */
+export const GURU_BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
+  { verdict: "Verified", text: "A public track record we have independently confirmed. Not an endorsement of any strategy." },
+  { verdict: "Unverified", text: "The neutral default. Record is published but no verified track record is on file. Not an accusation." },
+  { verdict: "Caution", text: "A documented regulator or court action is on file, with the source cited on the record." },
+];
+
 const barTone: Record<string, string> = {
   "Strongly Trusted": "bg-[var(--vt-green)]",
   Trusted: "bg-[var(--vt-green)]/70",
@@ -27,11 +34,16 @@ const barTone: Record<string, string> = {
   "High Risk": "bg-[var(--vt-coral)]/80",
   Avoid: "bg-[var(--vt-coral)]",
   "Not yet rated": "bg-slate-500",
+  Verified: "bg-[var(--vt-green)]",
+  Unverified: "bg-slate-500",
+  Caution: "bg-[var(--vt-amber)]",
 };
 
 /** The verdict scale: hairline-separated rows, one line per band. */
-export function VerdictBands({ current, counts, propFirms = false }: { current?: Verdict; counts?: Partial<Record<Verdict, number>>; propFirms?: boolean }) {
-  const bands = BAND_INFO.filter((b) => propFirms || (b.verdict !== "High Risk" && b.verdict !== "Not yet rated"));
+export function VerdictBands({ current, counts, propFirms = false, gurus = false }: { current?: Verdict; counts?: Partial<Record<Verdict, number>>; propFirms?: boolean; gurus?: boolean }) {
+  const bands = gurus
+    ? GURU_BAND_INFO
+    : BAND_INFO.filter((b) => propFirms || (b.verdict !== "High Risk" && b.verdict !== "Not yet rated"));
   return (
     <ul className="divide-y divide-white/10 border-y border-white/10">
       {bands.map((b) => (

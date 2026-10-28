@@ -37,7 +37,16 @@ const CONFIG = {
     h1: "Compare prop firms",
     intro: "Independent verdicts for every prop firm in our register. Search by name, filter by verdict or status, and open a record for its score, status, how to verify the firm yourself and comparable firms.",
   },
+  guru: {
+    path: "/verify/traders",
+    crumb: "Verify Traders",
+    plural: "traders",
+    h1: "Verify traders",
+    intro: "Independent records for traders and educators we have reviewed. Verified means we have confirmed a public track record; Caution flags a documented regulator or court action with the source cited; Unverified is the neutral default. We never score a person on a 10-point scale.",
+  },
 } as const;
+
+const GURU_VERDICTS = ["Verified", "Unverified", "Caution"] as const;
 
 const LIST_FAQS: Record<PublicEntityType, Array<{ q: string; a: string }>> = {
   broker: [
@@ -52,6 +61,12 @@ const LIST_FAQS: Record<PublicEntityType, Array<{ q: string; a: string }>> = {
     { q: "Are prop firms regulated?", a: "Many prop firms sell evaluations on simulated accounts and are not regulated brokers. Read each firm's terms, and check who the legal entity behind the brand is." },
     { q: "Can a prop firm pay to change its verdict?", a: "No. We take no affiliate commissions from prop firms, and verdicts are computed from records, not sold." },
     { q: "How often are records updated?", a: "Pages refresh hourly from the register, and each record shows the date it was last updated." },
+  ],
+  guru: [
+    { q: "Why only three tiers for a trader?", a: "Because a numeric score on a person implies a precision we cannot defend. Three plain tiers — Verified, Unverified, Caution — map directly to the evidence we hold, and only to that evidence." },
+    { q: "What stops a Caution from being defamation?", a: "A Caution is only published when the record carries a cited regulator or court action; the resolver drops a Caution to Unverified if the citation URL is missing or malformed. Identity has to be confirmed before any row is listed." },
+    { q: "Is Unverified an accusation?", a: "No. Unverified is the neutral default when we hold a record but have not confirmed a public track record. It is not a negative judgement and should not be read as one." },
+    { q: "How often are records updated?", a: "Records refresh hourly from the registry. Each record shows the date it was last updated." },
   ],
 };
 
@@ -124,6 +139,11 @@ const chipOn = "border-[var(--vt-coral)]/50 bg-[var(--vt-coral)]/15 text-white";
 const chipOff = "border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.07] hover:text-white";
 
 function RegulatorTags({ e }: { e: PublicEntity }) {
+  if (e.type === "guru") {
+    return (
+      <span className="text-sm text-slate-400">{e.reviewed ? "Identity confirmed" : "Identity pending"}</span>
+    );
+  }
   if (e.type === "propfirm") {
     return (
       <span className="text-sm text-slate-400">
@@ -179,7 +199,10 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
 
   // Verdict chips carry counts for the other active filters, so a chip never leads to an empty list by surprise.
   const scoped = filterEntities(all, { ...filters, verdict: undefined });
-  const verdicts = VERDICTS.filter((v) => type === "propfirm" || (v !== "High Risk" && v !== "Not yet rated"));
+  const verdicts: readonly string[] =
+    type === "guru"
+      ? GURU_VERDICTS
+      : VERDICTS.filter((v) => type === "propfirm" || (v !== "High Risk" && v !== "Not yet rated"));
   const start = (page - 1) * PAGE_SIZE;
   const sortLabel = SORTS.find((s) => s.key === view.sort)?.label ?? "";
   const th = (label: string, key: SortKey | null, className?: string) =>
@@ -264,7 +287,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                     ...regulators.map((r) => ({ label: r, href: href({ regulator: r }), active: filters.regulator === r })),
                   ]}
                 />
-              ) : (
+              ) : type === "propfirm" ? (
                 <FilterMenu
                   label="Status"
                   value={STATUSES.find((s) => s.key === filters.status)?.label.split(" (")[0] ?? "Any"}
@@ -274,12 +297,12 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                     ...STATUSES.map((s) => ({ label: s.label, href: href({ status: s.key }), active: filters.status === s.key })),
                   ]}
                 />
-              )}
+              ) : null}
               <FilterMenu
                 label="Sort"
                 value={sortLabel.split(",")[0]}
                 align="right"
-                options={SORTS.map((s) => ({ label: s.label, href: href({ sort: s.key }), active: view.sort === s.key }))}
+                options={SORTS.filter((s) => s.key !== "score" || type !== "guru").map((s) => ({ label: s.label, href: href({ sort: s.key }), active: view.sort === s.key }))}
               />
             </div>
           </div>
@@ -318,8 +341,8 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
             <div className={cn("sticky top-[57px] z-20 hidden gap-x-4 rounded-t-xl border border-white/[0.08] bg-[#0c1035] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 md:grid", COLS)} role="presentation">
               {th("Name", "name")}
               {th("Verdict", null)}
-              {th("Score", "score")}
-              {th(type === "broker" ? "Regulators" : "Status", null)}
+              {th(type === "guru" ? "Basis" : "Score", type === "guru" ? null : "score")}
+              {th(type === "broker" ? "Regulators" : type === "propfirm" ? "Status" : "Identity", null)}
               {th("Updated", "updated")}
               <span className="sr-only">Actions</span>
             </div>
@@ -435,18 +458,24 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                 <p>
                   {type === "broker"
                     ? "A broker's verdict starts from the strength of the regulator behind it: a licence from a major regulator ranks above an offshore one, and a firm with no licence ranks lowest. The same facts always give the same result."
-                    : "A prop firm's verdict is a score out of 10 computed from the evidence we hold. Closed firms are rated Avoid, and firms we have not scored yet show as Not yet rated, which is not a judgement."}{" "}
+                    : type === "propfirm"
+                      ? "A prop firm's verdict is a score out of 10 computed from the evidence we hold. Closed firms are rated Avoid, and firms we have not scored yet show as Not yet rated, which is not a judgement."
+                      : "A person is never scored out of 10. Each trader or educator sits in one of three tiers: Verified means we have confirmed a public track record; Unverified is the neutral default; Caution is only ever published when a documented regulator or court action backs it, with the source cited."}{" "}
                   Read <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">how we verify</Link> for the sources and limits.
                   {newest ? ` The most recent record update is dated ${formatRecordDate(newest)}.` : null}
                 </p>
                 <p>{INDEPENDENCE_STATEMENT}</p>
                 <p>
-                  A record can be out of date. Check the regulator&apos;s own register before you deposit, and{" "}
+                  A record can be out of date. Check the primary source before acting, and{" "}
                   <Link href="/contact" className="text-[var(--vt-blue)] hover:underline">tell us</Link> if something is wrong.
                 </p>
               </div>
             </div>
-            <VerdictBands counts={Object.fromEntries(VERDICTS.map((v) => [v, all.filter((e) => e.verdict === v).length]))} propFirms={type === "propfirm"} />
+            <VerdictBands
+              counts={Object.fromEntries(VERDICTS.map((v) => [v, all.filter((e) => e.verdict === v).length]))}
+              propFirms={type === "propfirm"}
+              gurus={type === "guru"}
+            />
           </div>
 
           {type === "broker" ? (

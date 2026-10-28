@@ -9,10 +9,10 @@ import { pageMetadata } from "@/lib/marketing/seo";
 export async function entityMetadata(type: PublicEntityType, slug: string): Promise<Metadata> {
   const entity = await getPublicEntity(type, slug);
   if (!entity) return { title: "Not found", robots: { index: false } };
-  const meta = pageMetadata({
-    title: `Is ${entity.name} safe? Regulation and verdict`,
-    description: entityDescription(entity),
-    path: entityPath(entity),
-  });
+  const title =
+    entity.type === "guru"
+      ? `Is ${entity.name} legit? Trader and educator record`
+      : `Is ${entity.name} safe? Regulation and verdict`;
+  const meta = pageMetadata({ title, description: entityDescription(entity), path: entityPath(entity) });
   return isSeoWorthy(entity) ? meta : { ...meta, robots: { index: false, follow: true } };
 }

@@ -208,7 +208,7 @@ export function entityReviewSchema(input: {
   updatedAt: string | null;
   regulators: string[];
   foundingDate: string | null;
-  itemType: "FinancialService" | "Organization";
+  itemType: "FinancialService" | "Organization" | "Person";
 }): SchemaOrgObject {
   const siteUrl = getSiteUrl();
   const org = { "@type": "Organization", name: getAppName(), url: siteUrl };

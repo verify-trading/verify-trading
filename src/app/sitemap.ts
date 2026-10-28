@@ -20,6 +20,7 @@ const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]
   ["/mind", 0.7],
   ["/verify/brokers", 0.8],
   ["/verify/prop-firms", 0.8],
+  ["/verify/traders", 0.8],
   ["/compare/futures-prop-firms", 0.8, FUTURES_REVIEWED],
   ["/compare/forex-prop-firms", 0.8, FOREX_REVIEWED],
   ["/compare/forex-vs-futures-prop-firms", 0.7, FOREX_VS_FUTURES_REVIEWED],

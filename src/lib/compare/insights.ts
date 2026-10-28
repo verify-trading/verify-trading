@@ -9,6 +9,10 @@ export const VERDICT_RANK: Record<Verdict, number> = {
   "High Risk": 3,
   Avoid: 4,
   "Not yet rated": 5,
+  // Guru tiers rank separately (used only within the guru register).
+  Verified: 0,
+  Unverified: 1,
+  Caution: 2,
 };
 
 /**
@@ -17,6 +21,11 @@ export const VERDICT_RANK: Record<Verdict, number> = {
  * prop firms need a score. Everything else stays reachable (linked, canonical) but noindex.
  */
 export function isIndexable(e: PublicEntity): boolean {
+  if (e.type === "guru") {
+    // Only publishable guru rows reach the register, and the three tiers are each substantive
+    // (Verified = confirmed track record; Unverified = neutral default; Caution = cited action).
+    return true;
+  }
   if (e.verdict === "Not yet rated") return false;
   if (e.type === "propfirm") return e.score !== null;
   if (e.provisional) return false;
@@ -46,13 +55,17 @@ export function isSeoWorthy(_e: PublicEntity): boolean {
  */
 export const listableEntities = (entities: PublicEntity[]): PublicEntity[] => entities.filter(isSeoWorthy);
 
-export const entityPath = (e: Pick<PublicEntity, "type" | "slug">) =>
-  `${e.type === "broker" ? "/verify/brokers" : "/verify/prop-firms"}/${e.slug}`;
+export const entityPath = (e: Pick<PublicEntity, "type" | "slug">) => {
+  const base = e.type === "broker" ? "/verify/brokers" : e.type === "guru" ? "/verify/traders" : "/verify/prop-firms";
+  return `${base}/${e.slug}`;
+};
 
 const hubSlugs = (e: PublicEntity) => e.regulatorDetails.flatMap((r) => (r.slug ? [r.slug] : []));
 
 /** Same-type entities that share a regulator (brokers) and rate at least as well, best evidence first. */
 export function pickAlternatives(entity: PublicEntity, all: PublicEntity[], limit = 4): PublicEntity[] {
+  // Gurus are people; "alternatives" is a shopping metaphor that does not fit — no cross-recommendations.
+  if (entity.type === "guru") return [];
   const mine = new Set(hubSlugs(entity));
   const floor = entity.score ?? -1;
   return all
@@ -147,6 +160,21 @@ export function entityFaqs(e: PublicEntity): Array<{ q: string; a: string }> {
       verdictQ,
       { q: `Is ${e.name} regulated?`, a: e.regulators.length ? `Our record lists these regulators for ${e.name}: ${list(e.regulators)}.` : `Our record lists no regulator for ${e.name}. Many prop firms sell evaluations on simulated accounts and are not regulated brokers, so the firm's own terms matter more.` },
       ...(e.yearFounded ? [{ q: `When was ${e.name} founded?`, a: `Our record gives ${e.yearFounded} as the founding year of ${e.name}.` }] : []),
+      updatedQ,
+    ];
+  }
+
+  if (e.type === "guru") {
+    const tierExplainer: Record<string, string> = {
+      Verified: `We have confirmed a public track record for ${e.name}. Verified is not an endorsement of any strategy — it means the evidence we hold is defensible, not that any trade or signal is a good idea.`,
+      Unverified: `Unverified is the neutral default when we hold a record but have not confirmed a public track record. It is not an accusation, and it does not mean a person is a scammer.`,
+      Caution: `A Caution is only issued when a documented regulator or court action backs it, with the source cited. ${e.citationUrl ? `See the source on our record.` : ""}`.trim(),
+    };
+    return [
+      { q: `Is ${e.name} legit?`, a: `Our record rates ${e.name} "${e.verdict}". ${tierExplainer[e.verdict] ?? ""} Read the methodology for how a Caution has to be cited to be published.`.trim() },
+      { q: `What does the ${e.verdict} verdict mean?`, a: tierExplainer[e.verdict] ?? `Our record gives ${e.name} a verdict of "${e.verdict}".` },
+      { q: `Do you score ${e.name} out of 10?`, a: `No. We never put a numeric score on a person. A number implies a precision we cannot defend about an individual's conduct or results. Only brokers and prop firms carry a 10-point score.` },
+      { q: `Has ${e.name}'s identity been checked?`, a: e.reviewed ? `Yes — our record is only listed once a person's public identity has been confirmed. Everything else published about ${e.name} is derived from public sources.` : `Our record for ${e.name} is listed once identity has been confirmed and research is complete; otherwise the row is held back from the register.` },
       updatedQ,
     ];
   }

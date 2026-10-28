@@ -13,10 +13,14 @@ import { getRegulator } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { entityReviewSchema, webPageSchema } from "@/lib/marketing/seo";
 
-export const ENTITY_LIST_PATH = { broker: "/verify/brokers", propfirm: "/verify/prop-firms" } as const;
-const LIST_CRUMB = { broker: "Compare Brokers", propfirm: "Compare Prop Firms" } as const;
+export const ENTITY_LIST_PATH = { broker: "/verify/brokers", propfirm: "/verify/prop-firms", guru: "/verify/traders" } as const;
+const LIST_CRUMB = { broker: "Compare Brokers", propfirm: "Compare Prop Firms", guru: "Verify Traders" } as const;
 
 export function entityDescription(e: PublicEntity): string {
+  if (e.type === "guru") {
+    const text = `Independent trader and educator check for ${e.name}: verdict ${e.verdict}. See the record, its basis and last update. Sourced from public records, not paid placement.`;
+    return text.length <= 160 ? text : `${text.slice(0, 157).trimEnd()}...`;
+  }
   const noun = e.type === "broker" ? "broker" : "prop firm";
   const reg = e.regulators.length ? ` Listed regulators: ${e.regulators.slice(0, 3).join(", ")}.` : "";
   const text = `Independent ${noun} check for ${e.name}: verdict ${e.verdict}.${reg} See the record, its basis and last update. Sourced from public records, not paid placement.`;
@@ -36,6 +40,7 @@ function lede(e: PublicEntity): string {
 const basisLabel = (e: PublicEntity) => (e.reviewed ? "Reviewed and locked" : e.provisional ? "Provisional, awaiting a register check" : "Awaiting a live register re-check");
 
 export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: PublicEntity[] }) {
+  if (e.type === "guru") return <GuruDetail entity={e} />;
   const listPath = ENTITY_LIST_PATH[e.type];
   const path = entityPath(e);
   const isBroker = e.type === "broker";
@@ -281,6 +286,183 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
         primary={{ label: "Run full check", href: askCheckHref(e.name), event: "ask" }}
         secondary={{ label: "How we verify", href: "/methodology" }}
         location={`entity_${e.type}`}
+      />
+    </>
+  );
+}
+
+/**
+ * Separate render path for people. Gurus never show a numeric score, a regulator table or
+ * "alternatives": a person is not a comparable product. The verdict comes from the guru
+ * resolver and a Caution only renders here if the citation URL made it onto the record
+ * (belt and braces — the resolver already downgrades to Unverified when the URL is missing).
+ */
+function GuruDetail({ entity: e }: { entity: PublicEntity }) {
+  const path = entityPath(e);
+  const listPath = ENTITY_LIST_PATH.guru;
+  // Belt-and-braces: never render Caution without a citation.
+  const safeVerdict = e.verdict === "Caution" && !e.citationUrl ? "Unverified" : e.verdict;
+  const faqs = entityFaqs(e).slice(0, 5);
+
+  const highlights: Array<[string, string]> = [
+    ["Verdict", safeVerdict],
+    ["Identity", e.reviewed ? "Confirmed" : "Pending"],
+    ["Source", safeVerdict === "Caution" ? "Regulator or court" : safeVerdict === "Verified" ? "Public track record" : "Public records"],
+    ["Updated", formatRecordDate(e.updatedAt)],
+  ];
+
+  const facts: Array<[string, string]> = [
+    ["Verdict", safeVerdict],
+    ["Numeric score", "No score (person)"],
+    ["Identity", e.reviewed ? "Confirmed" : "Pending"],
+    ...(safeVerdict === "Caution" && e.citationUrl ? ([["Citation", e.citationUrl]] as Array<[string, string]>) : []),
+    ["Record updated", formatRecordDate(e.updatedAt)],
+  ];
+
+  const toc = [
+    { id: "verdict", label: "What the verdict means" },
+    ...(e.bioSummary ? [{ id: "about", label: `About ${e.name}` }] : []),
+    { id: "verify", label: "How to verify" },
+    ...(safeVerdict === "Caution" && e.citationUrl ? [{ id: "citation", label: "Cited source" }] : []),
+    { id: "record", label: "The record" },
+    { id: "faq", label: "FAQ" },
+  ];
+
+  return (
+    <>
+      <JsonLd data={webPageSchema({ name: `${e.name} verification record`, description: entityDescription(e), path })} />
+      <JsonLd
+        data={entityReviewSchema({
+          name: e.name,
+          path,
+          description: entityDescription(e),
+          category: "Trading educator",
+          verdict: safeVerdict,
+          score: null,
+          updatedAt: e.updatedAt,
+          regulators: [],
+          foundingDate: null,
+          itemType: "Person",
+        })}
+      />
+      <Breadcrumbs crumbs={[{ name: LIST_CRUMB.guru, path: listPath }, { name: e.name, path }]} />
+
+      <section className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6">
+        <div className={`${surface} overflow-hidden rounded-2xl`}>
+          <div className="bg-[radial-gradient(ellipse_70%_100%_at_0%_0%,rgba(76,110,245,0.10),transparent_60%)] p-6 sm:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start gap-4">
+                  <EntityAvatar name={e.name} verdict={safeVerdict} className="size-14 text-lg" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]">Trader and educator check</p>
+                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white sm:text-3xl lg:text-4xl">Is {e.name} legit?</h1>
+                  </div>
+                </div>
+                <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-300">
+                  Our record rates {e.name} &quot;{safeVerdict}&quot;. No numeric score is published for a person. {safeVerdict === "Caution" ? "A Caution is only issued when backed by a documented regulator or court action with the source cited below." : safeVerdict === "Verified" ? "Verified means we have independently confirmed a public track record — not an endorsement of any strategy." : "Unverified is the neutral default where we hold a record but no verified track record is on file. It is not an accusation."}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-4 rounded-xl border border-white/[0.08] bg-black/25 px-5 py-4 lg:flex-col lg:items-start lg:gap-3">
+                <VerdictBadge verdict={safeVerdict} className="px-3 py-1 text-xs" />
+              </div>
+            </div>
+            <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
+              {highlights.map(([k, v]) => (
+                <div key={k} className="bg-[#0b0f36] px-3.5 py-3">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{k}</dt>
+                  <dd className="mt-0.5 truncate text-sm font-semibold text-slate-100" title={v}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <CtaLink href={askCheckHref(e.name)} event="ask" location="entity_guru_summary" className="h-10">
+                Run full check <ArrowRight aria-hidden />
+              </CtaLink>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_14rem] lg:gap-12 lg:py-16">
+        <div className="min-w-0 space-y-12">
+          <Block id="verdict" title="What the verdict means" intro={`${e.name} is rated "${safeVerdict}". Verdicts for people come from a fixed three-tier model applied identically to every record.`}>
+            <VerdictBands current={safeVerdict} gurus />
+            <p className="mt-3 text-xs text-slate-400">
+              See the <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">methodology</Link> for the full gate on a Caution verdict.
+            </p>
+          </Block>
+
+          {e.bioSummary ? (
+            <Block id="about" title={`About ${e.name}`}>
+              <p className="text-[15px] leading-7 text-slate-300">{e.bioSummary}</p>
+            </Block>
+          ) : null}
+
+          <Block id="verify" title="How to verify this yourself" intro="Take a few minutes to check public sources directly:">
+            <ol className="divide-y divide-white/10 border-y border-white/10">
+              {[
+                `Search the person's name on their own regulator's public register, if any (for example the FCA Financial Services Register for UK-authorised individuals).`,
+                "Check court-record databases and official press releases for named enforcement actions, rather than relying on social-media summaries.",
+                "Look for independent evidence of a track record on neutral platforms, not the person's own site or affiliate network.",
+                "Confirm the person's identity matches the social profiles that promote them.",
+              ].map((s, i) => (
+                <li key={s} className="flex gap-4 py-4 sm:gap-6 sm:py-5">
+                  <span className="shrink-0 font-mono text-xs font-semibold text-[var(--vt-coral)] tabular-nums">{String(i + 1).padStart(2, "0")}</span>
+                  <p className="text-[15px] leading-7 text-slate-300">{s}</p>
+                </li>
+              ))}
+            </ol>
+          </Block>
+
+          {safeVerdict === "Caution" && e.citationUrl ? (
+            <Block id="citation" title="Cited source" intro="A Caution is only published with a documented regulator or court action. The source is cited here:">
+              <a href={e.citationUrl} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--vt-blue)] hover:underline">
+                {e.citationUrl} <ExternalLink className="size-3.5" aria-hidden />
+              </a>
+            </Block>
+          ) : null}
+
+          <Block id="record" title="The record" intro="Public verification fields held for this person:">
+            <dl className={`${surface} divide-y divide-white/[0.06] rounded-xl overflow-hidden`}>
+              {facts.map(([k, v]) => (
+                <div key={k} className="grid gap-1 px-4 py-3 sm:grid-cols-[11rem_1fr] sm:gap-4">
+                  <dt className="text-xs uppercase tracking-wider text-slate-400">{k}</dt>
+                  <dd className="text-sm font-medium text-slate-100">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-4 space-y-2 text-xs leading-relaxed text-slate-400">
+              <p>{INDEPENDENCE_STATEMENT}</p>
+              <p className="text-[var(--vt-muted)]">{NOT_ADVICE_STATEMENT}</p>
+            </div>
+          </Block>
+
+          <Block id="faq" title={`${e.name}: questions answered`}>
+            <FaqBlock items={faqs} />
+          </Block>
+
+          <nav aria-label="Related" className="flex flex-wrap gap-x-5 gap-y-2 border-t border-white/[0.06] pt-6 text-sm">
+            <Link href={listPath} className="inline-flex items-center gap-1 font-medium text-[var(--vt-blue)] hover:underline">
+              <ArrowRight className="size-3.5 rotate-180" aria-hidden /> {LIST_CRUMB.guru}
+            </Link>
+            <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">How we verify</Link>
+          </nav>
+        </div>
+
+        <aside className="hidden lg:block">
+          <div className="sticky top-24">
+            <TocNav items={toc} />
+          </div>
+        </aside>
+      </div>
+
+      <CtaBand
+        title={`Run the full check on ${e.name}`}
+        body="Ask answers from the verified registry with sources, and covers anything this record does not."
+        primary={{ label: "Run full check", href: askCheckHref(e.name), event: "ask" }}
+        secondary={{ label: "How we verify", href: "/methodology" }}
+        location="entity_guru"
       />
     </>
   );

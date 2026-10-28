@@ -32,7 +32,8 @@ export function formatRecordDate(iso: string | null): string {
 
 export const askCheckHref = (name: string) => `/ask?prefill=${encodeURIComponent(`Is ${name} safe?`)}`;
 
-export function scoreLabel(e: { score: number | null; provisional: boolean }): string {
+export function scoreLabel(e: { score: number | null; provisional: boolean; type?: string }): string {
+  if (e.type === "guru") return "No numeric score (person)";
   if (e.provisional) return "Provisional";
   return e.score === null ? "Not yet rated" : `${e.score.toFixed(1)} / 10`;
 }

@@ -31,12 +31,21 @@ const brokerRow = {
 
 describe("public entity mapper", () => {
   it("never selects or outputs internal columns", () => {
-    for (const col of ["notes", "founder_notes", "internal_notes", "card_facts", "bio_summary", "prop_terms", "guru_profile", "aliases"]) {
+    // Columns that must stay off the SELECT list. bio_summary was moved to the allowlist
+    // when the guru register went live — it is a short public biography shown on the
+    // trader detail page — so it is intentionally not listed here. Every other sensitive
+    // column (notes, founder_notes, internal_notes, card_facts, prop_terms, guru_profile,
+    // aliases) must still be blocked.
+    const BLOCKED = ["notes", "founder_notes", "internal_notes", "card_facts", "prop_terms", "guru_profile", "aliases"] as const;
+    for (const col of BLOCKED) {
       expect(PUBLIC_ENTITY_COLUMNS.split(", ")).not.toContain(col);
     }
     const out = toPublicEntity(brokerRow)!;
     expect(JSON.stringify(out)).not.toMatch(/SECRET/);
     expect(Object.keys(out)).not.toContain("notes");
+    // Belt and braces: brokers never carry a bio_summary on the public shape, even though
+    // the column is allowlisted for gurus. (bioSummary is only read inside the guru branch.)
+    expect(Object.keys(out)).not.toContain("bioSummary");
   });
 
   it("scores brokers and parses regulators", () => {
@@ -54,9 +63,22 @@ describe("public entity mapper", () => {
     expect(closed).toMatchObject({ verdict: "Avoid", closed: true });
   });
 
-  it("drops gurus and malformed rows", () => {
-    expect(toPublicEntity({ ...brokerRow, entity_type: "guru" })).toBeNull();
+  it("maps gurus through the resolver and drops malformed rows", () => {
+    const g = toPublicEntity({
+      slug: "a-trader",
+      name: "A Trader",
+      entity_type: "guru",
+      guru_tier: "Unverified",
+      research_status: "researched",
+      identity_confirmed: true,
+      updated_at: "2026-10-01T00:00:00Z",
+    })!;
+    expect(g.type).toBe("guru");
+    expect(g.verdict).toBe("Unverified");
+    expect(g.score).toBeNull();
+    expect(g.publishable).toBe(true);
     expect(toPublicEntity({ ...brokerRow, slug: "" })).toBeNull();
+    expect(toPublicEntity({ ...brokerRow, entity_type: "mystery" })).toBeNull();
   });
 });
 
