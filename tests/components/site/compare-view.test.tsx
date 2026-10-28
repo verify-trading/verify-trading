@@ -33,9 +33,25 @@ const BROKERS = [
 
 const PROP_FIRMS = [entity("ftmo", "Trusted", "propfirm"), entity("risky", "High Risk", "propfirm"), entity("new", "Not yet rated", "propfirm")];
 
+const guru = (slug: string, verdict: PublicEntity["verdict"]): PublicEntity => ({
+  ...entity(slug, verdict, "guru"),
+  score: null,
+  regulators: [],
+  regulatorDetails: [],
+  fcaRegistered: false,
+  publishable: true,
+  reviewed: true,
+  citationUrl: verdict === "Caution" ? "https://www.sec.gov/example" : null,
+  bioSummary: null,
+});
+
+const GURUS = [guru("alice-verified", "Verified"), guru("bob-unverified", "Unverified"), guru("carol-caution", "Caution")];
+
 vi.mock("@/lib/compare/entities", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/compare/entities")>()),
-  getPublicEntities: vi.fn(async (type: string) => (type === "broker" ? BROKERS : PROP_FIRMS)),
+  getPublicEntities: vi.fn(async (type: string) =>
+    type === "broker" ? BROKERS : type === "propfirm" ? PROP_FIRMS : GURUS,
+  ),
 }));
 
 const { CompareView } = await import("@/components/marketing/compare-view");
@@ -57,6 +73,15 @@ describe("Compare directory", () => {
     const html = renderToStaticMarkup(await CompareView({ type: "broker", searchParams: {} }));
     for (const b of BROKERS) {
       expect(html).toContain(`href="/verify/brokers/${b.slug}"`);
+    }
+  });
+
+  it("lists every trader (guru register) and links each row to /verify/traders/[slug]", async () => {
+    const html = renderToStaticMarkup(await CompareView({ type: "guru", searchParams: {} }));
+    expect(html).toContain(`${GURUS.length} traders`);
+    for (const g of GURUS) {
+      expect(html).toContain(g.name);
+      expect(html).toContain(`href="/verify/traders/${g.slug}"`);
     }
   });
 });

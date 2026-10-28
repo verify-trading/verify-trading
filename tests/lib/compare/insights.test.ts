@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { toPublicEntity, parseRegulatorRefs, type PublicEntity } from "@/lib/compare/entities";
-import { entityFaqs, isIndexable, isIndexedPair, isSeoWorthy, pairKey, pickAlternatives, vsPairs } from "@/lib/compare/insights";
+import { toPublicEntity, parseRegulatorRefs, verdictTone, type PublicEntity } from "@/lib/compare/entities";
+import { entityFaqs, entityPath, isIndexable, isIndexedPair, isSeoWorthy, pairKey, pickAlternatives, VERDICT_RANK, vsPairs } from "@/lib/compare/insights";
 import { findRegulator, getRegulator } from "@/lib/compare/regulators";
 
 const broker = (slug: string, over: Record<string, unknown> = {}) =>
@@ -81,6 +81,69 @@ describe("entityFaqs", () => {
   it("answers from the record only", () => {
     const faqs = entityFaqs(broker("x", { fca_registered: true, fca_reference: "999" }));
     expect(faqs.find((f) => f.q.includes("FCA"))?.a).toContain("999");
+    expect(faqs.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("guru register", () => {
+  const guru = (slug: string, over: Record<string, unknown> = {}) =>
+    toPublicEntity({
+      slug,
+      name: slug.toUpperCase(),
+      entity_type: "guru",
+      guru_tier: "Verified",
+      verified_track_record: "Yes (confirmed)",
+      research_status: "researched",
+      identity_confirmed: true,
+      updated_at: "2026-10-01T00:00:00Z",
+      ...over,
+    })!;
+
+  it("maps verdicts via the guru resolver and routes to /verify/traders", () => {
+    const g = guru("steady");
+    expect(g.type).toBe("guru");
+    expect(g.verdict).toBe("Verified");
+    expect(g.score).toBeNull();
+    expect(entityPath(g)).toBe("/verify/traders/steady");
+  });
+
+  it("drops a Caution to Unverified when the citation URL is missing or invalid", () => {
+    const bad = guru("bad", { guru_tier: "Caution", regulator_flag_source: "not a url" });
+    expect(bad.verdict).toBe("Unverified");
+    expect(bad.citationUrl).toBeNull();
+    const ok = guru("ok", { guru_tier: "Caution", regulator_flag_source: "https://www.sec.gov/litreleases/example.htm" });
+    expect(ok.verdict).toBe("Caution");
+    expect(ok.citationUrl).toBe("https://www.sec.gov/litreleases/example.htm");
+  });
+
+  it("exposes publishable as a loader guard — unpublishable rows still map but will be filtered by loadEntities", () => {
+    const hidden = guru("hidden", { identity_confirmed: false });
+    expect(hidden.publishable).toBe(false);
+    const live = guru("live");
+    expect(live.publishable).toBe(true);
+  });
+
+  it("indexes every publishable guru (brand-query reasoning)", () => {
+    expect(isSeoWorthy(guru("v"))).toBe(true);
+    expect(isSeoWorthy(guru("u", { guru_tier: "Unverified", verified_track_record: null }))).toBe(true);
+    expect(isIndexable(guru("v"))).toBe(true);
+  });
+
+  it("gives each guru tier its own tone and rank", () => {
+    expect(verdictTone("Verified")).toBe("green");
+    expect(verdictTone("Unverified")).toBe("slate");
+    expect(verdictTone("Caution")).toBe("amber");
+    expect(VERDICT_RANK.Verified).toBeLessThan(VERDICT_RANK.Unverified);
+    expect(VERDICT_RANK.Unverified).toBeLessThan(VERDICT_RANK.Caution);
+  });
+
+  it("has no alternatives (people are not comparable products)", () => {
+    expect(pickAlternatives(guru("g"), [guru("h"), guru("i")])).toEqual([]);
+  });
+
+  it("writes FAQs that lead with the tier meaning, not a numeric score", () => {
+    const faqs = entityFaqs(guru("alice", { name: "Alice" }));
+    expect(faqs.find((f) => f.q.toLowerCase().includes("score"))?.a).toContain("never");
     expect(faqs.length).toBeGreaterThanOrEqual(4);
   });
 });
