@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { LegalDocument } from "@/components/legal/legal-document";
 import { getAppName } from "@/lib/site-config";
@@ -21,6 +22,11 @@ export default function TermsPage() {
           paragraphs: [
             `${getAppName()} provides educational market commentary, calculators, and structured trading guidance. It does not execute trades, manage user capital, or provide personalised financial advice.`,
             "Users remain fully responsible for how they interpret and act on any content shown in the app, including guides, chat answers, and calculator outputs.",
+            <>
+              Our{" "}
+              <Link href="/cookies" className="text-[var(--vt-blue)] hover:underline">Cookie Policy</Link>{" "}
+              explains how cookies and browser storage support the website.
+            </>,
           ],
         },
         {

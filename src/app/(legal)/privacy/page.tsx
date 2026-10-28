@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { LegalDocument } from "@/components/legal/legal-document";
 import { getAppName } from "@/lib/site-config";
@@ -72,6 +73,15 @@ export default function PrivacyPage() {
             "MetaApi — MT4 and MT5 broker connectivity, used only if you connect a broker. Receives the credentials you supply for that connection and returns your trade history.",
             "Cloudflare Turnstile — bot and abuse detection on sign-up forms. Receives technical signals from your browser.",
             "Market and reference data providers, including Twelve Data, Financial Modeling Prep, NewsAPI, Firecrawl, and the FCA Financial Services Register, receive the symbol or firm name being looked up. They do not receive your identity or your account data.",
+          ],
+        },
+        {
+          title: "Cookies and browser storage",
+          paragraphs: [
+            <>
+              For details about cookies, browser storage and your consent choices, read our{" "}
+              <Link href="/cookies" className="text-[var(--vt-blue)] hover:underline">Cookie Policy</Link>.
+            </>,
           ],
         },
         {

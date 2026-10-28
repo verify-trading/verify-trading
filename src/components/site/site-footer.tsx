@@ -72,6 +72,7 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
     title: "Legal",
     links: [
       ["Privacy Policy", "/privacy"],
+      ["Cookie Policy", "/cookies"],
       ["Terms of Service", "/terms"],
       ["Disclaimer", "/risk-disclosure"],
     ],

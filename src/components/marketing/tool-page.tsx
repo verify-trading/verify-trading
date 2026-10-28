@@ -32,6 +32,8 @@ export function ToolPage(p: {
   formulaTitle: string;
   formula: string;
   workedExample: string[];
+  /** One-sentence cross-link rendered under the worked example (e.g. "Try our X calculator"). */
+  nextStep?: ReactNode;
   faqs: Faq[];
   /** Short walkthrough video shown under the calculator; also published as VideoObject schema. */
   video?: { src: string; poster?: string; title: string; description: string; uploadDate: string; duration?: string };
@@ -102,6 +104,9 @@ export function ToolPage(p: {
             <ol className="mt-4 space-y-2.5 text-[15px] leading-7 text-slate-300">
               {p.workedExample.map((line) => <li key={line}>{line}</li>)}
             </ol>
+            {p.nextStep ? (
+              <p className="mt-5 text-[15px] leading-7 text-slate-300">{p.nextStep}</p>
+            ) : null}
           </div>
         </div>
       </Section>

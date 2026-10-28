@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PipValueCalculator } from "@/components/marketing/tool-calculators";
 import { ToolPage } from "@/components/marketing/tool-page";
@@ -35,6 +36,12 @@ export default function Page() {
         "USD/JPY at 150, 1 lot: 100,000 x 0.01 = 1,000 JPY per pip, which is 1,000 / 150 = 6.67 USD.",
       ]}
       video={{ src: "/videos/pip-value.mp4", poster: "/videos/pip-value.jpg", title: "How to use the pip value calculator", description: "A short walkthrough: pick a pair, lot size and account currency to see the money value of a single pip.", uploadDate: "2026-10-21", duration: "PT26S" }}
+      nextStep={
+        <>
+          To estimate a forex trade&rsquo;s monetary result from your entry price, exit price and lot size, use our{" "}
+          <Link href="/tools/profit-loss-calculator" className="text-[var(--vt-blue)] hover:underline">forex profit and loss calculator</Link>.
+        </>
+      }
       faqs={[...PAGE_FAQS.tools.pipValue]}
     />
   );
