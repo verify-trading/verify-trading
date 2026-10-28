@@ -55,8 +55,8 @@ describe("Compare directory", () => {
 
   it("links only records that have a live detail page", async () => {
     const html = renderToStaticMarkup(await CompareView({ type: "broker", searchParams: {} }));
-    expect(html).toContain('href="/compare/brokers/strong"');
-    expect(html).not.toContain('href="/compare/brokers/trusted"');
-    expect(html).not.toContain('href="/compare/brokers/avoid"');
+    expect(html).toContain('href="/verify/brokers/strong"');
+    expect(html).not.toContain('href="/verify/brokers/trusted"');
+    expect(html).not.toContain('href="/verify/brokers/avoid"');
   });
 });

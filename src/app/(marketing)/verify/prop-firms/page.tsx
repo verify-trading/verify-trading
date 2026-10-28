@@ -3,10 +3,10 @@ import type { Metadata } from "next";
 import { CompareView, type CompareSearchParams } from "@/components/marketing/compare-view";
 import { pageMetadata } from "@/lib/marketing/seo";
 
-const path = "/compare/brokers";
+const path = "/verify/prop-firms";
 const base = pageMetadata({
-  title: "Compare Brokers: Verdicts and Regulators",
-  description: "Search and compare brokers by name, verdict and regulator. Each record shows its basis and last update, computed from regulator records and not for sale.",
+  title: "Compare Prop Firms: Verdicts and Status",
+  description: "Search and compare prop firms by name, verdict and status. Each record shows its basis and last update, computed from public sources and not for sale.",
   path,
 });
 
@@ -16,6 +16,6 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   return Object.keys(sp).length ? { ...base, robots: { index: false, follow: true } } : base;
 }
 
-export default async function CompareBrokersPage({ searchParams }: { searchParams: Promise<CompareSearchParams> }) {
-  return <CompareView type="broker" searchParams={await searchParams} />;
+export default async function ComparePropFirmsPage({ searchParams }: { searchParams: Promise<CompareSearchParams> }) {
+  return <CompareView type="propfirm" searchParams={await searchParams} />;
 }

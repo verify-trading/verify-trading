@@ -24,14 +24,14 @@ import { cn } from "@/lib/utils";
 
 const CONFIG = {
   broker: {
-    path: "/compare/brokers",
+    path: "/verify/brokers",
     crumb: "Compare Brokers",
     plural: "brokers",
     h1: "Compare brokers",
     intro: "Independent verdicts for every broker in our register. Search by name, filter by verdict or regulator, and open a record for what each regulator means, how to verify the licence yourself and comparable brokers.",
   },
   propfirm: {
-    path: "/compare/prop-firms",
+    path: "/verify/prop-firms",
     crumb: "Compare Prop Firms",
     plural: "prop firms",
     h1: "Compare prop firms",

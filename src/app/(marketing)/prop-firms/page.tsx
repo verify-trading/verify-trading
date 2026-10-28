@@ -24,7 +24,7 @@ export default function PropFirmsPage() {
         "Records not yet scored show as Not yet rated; closed firms are clearly marked.",
         "The outcome is not for sale. You can ask for a correction.",
       ]}
-      compareHref="/compare/prop-firms"
+      compareHref="/verify/prop-firms"
       compareLabel="Compare Prop Firms"
       entityNoun="prop firm"
       faqs={[...PAGE_FAQS.propFirmsBusiness]}

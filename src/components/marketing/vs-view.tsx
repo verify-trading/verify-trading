@@ -53,7 +53,7 @@ export function VsView({ a, b }: { a: PublicEntity; b: PublicEntity }) {
   return (
     <>
       <JsonLd data={webPageSchema({ name: `${a.name} vs ${b.name}`, description: vsSummary(a, b), path })} />
-      <Breadcrumbs crumbs={[{ name: "Compare Brokers", path: "/compare/brokers" }, { name: `${a.name} vs ${b.name}`, path }]} />
+      <Breadcrumbs crumbs={[{ name: "Compare Brokers", path: "/verify/brokers" }, { name: `${a.name} vs ${b.name}`, path }]} />
       <section className="mx-auto w-full max-w-5xl px-4 pb-14 pt-4 sm:px-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">Broker comparison</p>
         <h1 className="mt-1 text-2xl font-bold tracking-[-0.03em] text-white sm:text-4xl">{a.name} vs {b.name}</h1>

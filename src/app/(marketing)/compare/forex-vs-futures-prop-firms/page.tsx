@@ -108,7 +108,7 @@ export default async function ForexVsFuturesPropFirmsPage() {
     <>
       <Breadcrumbs
         crumbs={[
-          { name: "Compare", path: "/compare/prop-firms" },
+          { name: "Compare", path: "/verify/prop-firms" },
           { name: "Forex vs Futures Prop Firms", path },
         ]}
       />
@@ -235,7 +235,7 @@ export default async function ForexVsFuturesPropFirmsPage() {
                         </Link>
                       ) : (
                         <Link
-                          href={`/compare/prop-firms?q=${encodeURIComponent(name)}`}
+                          href={`/verify/prop-firms?q=${encodeURIComponent(name)}`}
                           className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-300 transition-colors hover:text-white"
                         >
                           Find {name} in the prop firm list
@@ -270,7 +270,7 @@ export default async function ForexVsFuturesPropFirmsPage() {
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <Link
-            href="/compare/prop-firms"
+            href="/verify/prop-firms"
             className="inline-flex items-center justify-center rounded-xl bg-[var(--vt-blue)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--vt-blue)]/90"
           >
             Explore prop firm verifications
