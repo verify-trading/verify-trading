@@ -179,6 +179,7 @@ const BASE_POSTS: BlogPost[] = [
           "A 50% loss needs a 100% gain.",
         ],
       },
+      { type: "p", text: "To see how the same percentages work the other way — compounding a steady return month on month — use our [trading compound growth calculator](/tools/compound-growth-calculator)." },
       { type: "h2", text: "Choosing a risk percentage" },
       { type: "p", text: "There is no universal number. Many traders keep the risk on a single trade to a small single-digit percentage or less of their account, and lower still when they are new or trading a prop firm account with a strict drawdown limit. The right figure depends on your strategy's win rate, your drawdown tolerance and any rules you must follow. This is general education, not a recommendation." },
       { type: "h2", text: "Common mistakes" },
@@ -191,7 +192,7 @@ const BASE_POSTS: BlogPost[] = [
           "Ignoring spreads, slippage and fees, which make the real loss larger than planned.",
         ],
       },
-      { type: "callout", text: "Use a calculator to check your maths every time. Our free risk calculators cover lot size, pip value, margin and risk/reward." },
+      { type: "callout", text: "Use a calculator to check your maths every time. Our [free trading calculators](/tools) cover lot size, pip value, margin and risk/reward." },
     ],
   },
 ];

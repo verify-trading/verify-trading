@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { CompoundGrowthCalculator } from "@/components/marketing/tool-calculators";
 import { ToolPage } from "@/components/marketing/tool-page";
@@ -27,6 +28,13 @@ export default function Page() {
       ]}
       calculator={<CompoundGrowthCalculator />}
       video={{ src: "/videos/compound-growth.mp4", poster: "/videos/compound-growth.jpg", title: "How to use the compound growth calculator", description: "A short walkthrough: starting balance, monthly return, months and deposits to see the projected balance.", uploadDate: "2026-10-21", duration: "PT27S" }}
+      nextStep={
+        <>
+          For individual forex trade results, use our{" "}
+          <Link href="/tools/profit-loss-calculator" className="text-[var(--vt-blue)] hover:underline">forex profit calculator</Link>{" "}
+          with your entry price, exit price and lot size.
+        </>
+      }
       formulaTitle="Balance_n = (Balance_(n−1) + Deposit) × (1 + Rate)"
       formula="Final = Σ months of: (balance + deposit) × (1 + monthlyRate/100)"
       workedExample={[

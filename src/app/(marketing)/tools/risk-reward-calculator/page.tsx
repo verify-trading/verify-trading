@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { RiskRewardCalculator } from "@/components/marketing/tool-calculators";
 import { ToolPage } from "@/components/marketing/tool-page";
@@ -35,6 +36,13 @@ export default function Page() {
         "At 1:1 you would need to win 50% of trades just to break even.",
       ]}
       video={{ src: "/videos/risk-reward.mp4", poster: "/videos/risk-reward.jpg", title: "How to use the risk / reward calculator", description: "A short walkthrough of the risk reward calculator: enter entry, stop and target for the ratio and break-even win rate.", uploadDate: "2026-10-21", duration: "PT22S" }}
+      nextStep={
+        <>
+          Once you have compared the risk and reward distances, use our{" "}
+          <Link href="/tools/profit-loss-calculator" className="text-[var(--vt-blue)] hover:underline">profit and loss calculator</Link>{" "}
+          to estimate the monetary result at a chosen exit price.
+        </>
+      }
       faqs={[...PAGE_FAQS.tools.riskReward]}
     />
   );

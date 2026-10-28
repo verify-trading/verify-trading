@@ -1,7 +1,29 @@
+import Link from "next/link";
+import type { ReactNode } from "react";
+
 import type { Block } from "@/lib/blog/posts";
 
 export const slugify = (text: string) =>
   text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** Renders inline `[label](/href)` as internal Links; everything else stays plain text. */
+function renderInline(text: string): ReactNode {
+  const parts: ReactNode[] = [];
+  const re = /\[([^\]]+)\]\((\/[^\s)]+)\)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(
+      <Link key={`${m.index}-${m[2]}`} href={m[2]} className="text-[var(--vt-blue)] hover:underline">
+        {m[1]}
+      </Link>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length ? parts : text;
+}
 
 /** H2 headings become the table of contents. */
 export const tocFromBlocks = (blocks: Block[]) =>
@@ -32,7 +54,7 @@ export function ArticleBody({ blocks }: { blocks: Block[] }) {
           case "p":
             return (
               <p key={i} className="text-[17px] leading-8 text-slate-300">
-                {block.text}
+                {renderInline(block.text)}
               </p>
             );
           case "ul":
@@ -50,7 +72,7 @@ export function ArticleBody({ blocks }: { blocks: Block[] }) {
           case "callout":
             return (
               <aside key={i} className="my-8 border-l-2 border-[var(--vt-amber)] pl-6 py-2 text-[17px] leading-8 text-slate-200">
-                {block.text}
+                {renderInline(block.text)}
               </aside>
             );
         }

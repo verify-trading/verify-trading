@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { ProfitLossCalculator } from "@/components/marketing/tool-calculators";
 import { ToolPage } from "@/components/marketing/tool-page";
@@ -35,6 +36,12 @@ export default function Page() {
         "The same trade from the short side would show −900 USD.",
         "In pips: 0.0090 / 0.0001 = 90 pips. For a yen pair the pip size is 0.01 and the quote currency is yen, so convert to see dollars.",
       ]}
+      nextStep={
+        <>
+          To project how a balance could change over several months, try our{" "}
+          <Link href="/tools/compound-growth-calculator" className="text-[var(--vt-blue)] hover:underline">trading compound growth calculator</Link>.
+        </>
+      }
       faqs={[...PAGE_FAQS.tools.profitLoss]}
     />
   );

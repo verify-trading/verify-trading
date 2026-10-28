@@ -43,6 +43,31 @@ export default function ResourcesPage() {
         items={latest.map((p) => postCard(p.slug))}
         band
       />
+      <LinkGrid
+        eyebrow="Calculators"
+        title="Try a free trading calculator"
+        band={false}
+        items={[
+          {
+            href: "/tools/compound-growth-calculator",
+            title: "Compound growth calculator",
+            body: "Project how a trading balance grows month by month from a return rate and regular deposits.",
+            tag: "Tool",
+          },
+          {
+            href: "/tools/profit-loss-calculator",
+            title: "Profit & loss calculator",
+            body: "Estimate the monetary result of a forex trade from entry, exit and lot size.",
+            tag: "Tool",
+          },
+          {
+            href: "/tools",
+            title: "All trading calculators",
+            body: "Position size, pip value, risk-to-reward, margin and more — free and instant.",
+            tag: "Hub",
+          },
+        ]}
+      />
       <CtaBand
         title="Learn it, then check it"
         body="Run a free check on a broker or prop firm before you deposit."
