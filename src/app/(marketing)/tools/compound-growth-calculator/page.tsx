@@ -7,7 +7,7 @@ import { pageMetadata } from "@/lib/marketing/seo";
 
 const path = "/tools/compound-growth-calculator";
 const description =
-  "Free trading compound growth calculator: enter a starting balance, monthly return, months and deposits to see the projected balance, net profit and total return.";
+  "Use our free trading compound growth calculator to project your balance, net profit and returns from monthly growth rates and regular deposits.";
 
 export const metadata: Metadata = pageMetadata({ title: "Trading Compound Growth Calculator", description, path });
 
