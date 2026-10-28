@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 
 import { HeroAskDemoLazy } from "@/components/landing/hero-ask-demo/lazy";
@@ -180,13 +181,14 @@ function HeroSection({ liveGold }: { liveGold: HeroLiveBriefing | null }) {
 
 /* ─── Page ─── */
 
-export function LandingPage({ liveGold }: { liveGold: HeroLiveBriefing | null }) {
+export function LandingPage({ liveGold, children }: { liveGold: HeroLiveBriefing | null; children?: ReactNode }) {
   return (
     <div className="min-h-screen bg-[var(--vt-navy)] text-white">
       <SiteNav slim />
       <TrackViewContent />
       <main>
         <HeroSection liveGold={liveGold} />
+        {children}
       </main>
       <SiteFooter />
     </div>
