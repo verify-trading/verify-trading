@@ -7,55 +7,85 @@ import { Block, FaqBlock, WarningBanner } from "@/components/marketing/entity-se
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import type { PublicEntity } from "@/lib/compare/entities";
-import { entityPath, VERDICT_RANK } from "@/lib/compare/insights";
+import { entityPath, VERDICT_RANK, vsPath } from "@/lib/compare/insights";
 import { getRegulator } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { webPageSchema } from "@/lib/marketing/seo";
 
 const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
+const statusOf = (e: PublicEntity) => (e.closed ? "closed" : e.developing ? "developing, not yet rated" : "operating");
+
 /** The one-sentence answer, built from the two records. Never a recommendation. */
 export function vsSummary(a: PublicEntity, b: PublicEntity): string {
-  const shared = a.regulators.filter((r) => b.regulators.includes(r));
   const rankA = VERDICT_RANK[a.verdict];
   const rankB = VERDICT_RANK[b.verdict];
   const rating =
     rankA === rankB
       ? `Both are rated "${a.verdict}" in our records${a.score !== null && b.score !== null && a.score !== b.score ? `, with ${(a.score > b.score ? a : b).name} scoring higher (${Math.max(a.score, b.score).toFixed(1)} against ${Math.min(a.score, b.score).toFixed(1)})` : ""}.`
       : `${rankA < rankB ? a.name : b.name} holds the higher verdict in our records ("${rankA < rankB ? a.verdict : b.verdict}" against "${rankA < rankB ? b.verdict : a.verdict}").`;
+  if (a.type === "propfirm") {
+    const states =
+      statusOf(a) === statusOf(b)
+        ? ` Both are recorded as ${statusOf(a)}.`
+        : ` ${a.name} is recorded as ${statusOf(a)}, ${b.name} as ${statusOf(b)}.`;
+    return `${rating}${states} This is a comparison of records, not a recommendation.`;
+  }
+  const shared = a.regulators.filter((r) => b.regulators.includes(r));
   const regs = shared.length ? ` They share ${list(shared)} as a listed regulator.` : " They have no listed regulator in common.";
   return `${rating}${regs} This is a comparison of records, not a recommendation.`;
 }
 
 export function VsView({ a, b }: { a: PublicEntity; b: PublicEntity }) {
-  const path = `${entityPath(a)}/vs/${b.slug}`;
+  const isBroker = a.type === "broker";
+  const path = vsPath(a.type, a.slug, b.slug);
+  const crumb = isBroker ? { name: "Compare Brokers", path: "/verify/brokers" } : { name: "Compare Prop Firms", path: "/verify/prop-firms" };
+  const eyebrow = isBroker ? "Broker comparison" : "Prop firm comparison";
+
   const shared = a.regulators.filter((r) => b.regulators.includes(r));
   const onlyA = a.regulators.filter((r) => !b.regulators.includes(r));
   const onlyB = b.regulators.filter((r) => !a.regulators.includes(r));
   const regs = (e: PublicEntity) => (e.regulators.length ? e.regulators.join(", ") : "None listed");
-  const rows: Array<[string, string, string]> = [
-    ["Verdict", a.verdict, b.verdict],
-    ["Score", scoreLabel(a), scoreLabel(b)],
-    ["Regulators listed", regs(a), regs(b)],
-    ["Number of regulators", String(a.regulators.length), String(b.regulators.length)],
-    ["FCA register", a.fcaRegistered ? "Registered" : "Not listed", b.fcaRegistered ? "Registered" : "Not listed"],
-    ["FCA warning", a.fcaWarning ? "On the warning list" : "None recorded", b.fcaWarning ? "On the warning list" : "None recorded"],
-    ["Record basis", a.reviewed ? "Reviewed" : a.provisional ? "Provisional" : "Awaiting re-check", b.reviewed ? "Reviewed" : b.provisional ? "Provisional" : "Awaiting re-check"],
-    ["Record updated", formatRecordDate(a.updatedAt), formatRecordDate(b.updatedAt)],
-  ];
-  const faqs = [
-    { q: `Is ${a.name} or ${b.name} better regulated?`, a: `Regulation depends on the licensed entity, not the brand. In our records ${a.name} lists ${a.regulators.length ? list(a.regulators) : "no regulator"} and ${b.name} lists ${b.regulators.length ? list(b.regulators) : "no regulator"}. Check each licence on the regulator's register.` },
-    { q: `Which has the higher verdict, ${a.name} or ${b.name}?`, a: vsSummary(a, b) },
-    { q: `Do ${a.name} and ${b.name} share a regulator?`, a: shared.length ? `Yes: ${list(shared)}.` : "Not in our records." },
-  ];
+
+  const rows: Array<[string, string, string]> = isBroker
+    ? [
+        ["Verdict", a.verdict, b.verdict],
+        ["Score", scoreLabel(a), scoreLabel(b)],
+        ["Regulators listed", regs(a), regs(b)],
+        ["Number of regulators", String(a.regulators.length), String(b.regulators.length)],
+        ["FCA register", a.fcaRegistered ? "Registered" : "Not listed", b.fcaRegistered ? "Registered" : "Not listed"],
+        ["FCA warning", a.fcaWarning ? "On the warning list" : "None recorded", b.fcaWarning ? "On the warning list" : "None recorded"],
+        ["Record basis", a.reviewed ? "Reviewed" : a.provisional ? "Provisional" : "Awaiting re-check", b.reviewed ? "Reviewed" : b.provisional ? "Provisional" : "Awaiting re-check"],
+        ["Record updated", formatRecordDate(a.updatedAt), formatRecordDate(b.updatedAt)],
+      ]
+    : [
+        ["Verdict", a.verdict, b.verdict],
+        ["Score", scoreLabel(a), scoreLabel(b)],
+        ["Status", a.closed ? "Closed" : a.developing ? "Developing" : "Operating", b.closed ? "Closed" : b.developing ? "Developing" : "Operating"],
+        ["Founded", a.yearFounded ? String(a.yearFounded) : "Not recorded", b.yearFounded ? String(b.yearFounded) : "Not recorded"],
+        ["Record updated", formatRecordDate(a.updatedAt), formatRecordDate(b.updatedAt)],
+      ];
+
+  const faqs = isBroker
+    ? [
+        { q: `Is ${a.name} or ${b.name} better regulated?`, a: `Regulation depends on the licensed entity, not the brand. In our records ${a.name} lists ${a.regulators.length ? list(a.regulators) : "no regulator"} and ${b.name} lists ${b.regulators.length ? list(b.regulators) : "no regulator"}. Check each licence on the regulator's register.` },
+        { q: `Which has the higher verdict, ${a.name} or ${b.name}?`, a: vsSummary(a, b) },
+        { q: `Do ${a.name} and ${b.name} share a regulator?`, a: shared.length ? `Yes: ${list(shared)}.` : "Not in our records." },
+      ]
+    : [
+        { q: `Is ${a.name} or ${b.name} better rated?`, a: vsSummary(a, b) },
+        { q: `Are ${a.name} and ${b.name} regulated?`, a: `Many prop firms sell evaluations on simulated accounts and are not regulated brokers. Read each firm's own rules, fees and payout terms, and confirm the legal entity behind the brand.` },
+        { q: `Which is bigger, ${a.name} or ${b.name}?`, a: `Our records hold a founding year (${a.yearFounded ?? "not recorded"} for ${a.name}, ${b.yearFounded ?? "not recorded"} for ${b.name}) but not firm size. Size is not part of our verdict.` },
+      ];
+
   const names = [a, b];
 
   return (
     <>
       <JsonLd data={webPageSchema({ name: `${a.name} vs ${b.name}`, description: vsSummary(a, b), path })} />
-      <Breadcrumbs crumbs={[{ name: "Compare Brokers", path: "/verify/brokers" }, { name: `${a.name} vs ${b.name}`, path }]} />
+      <Breadcrumbs crumbs={[crumb, { name: `${a.name} vs ${b.name}`, path }]} />
       <section className="mx-auto w-full max-w-5xl px-4 pb-14 pt-4 sm:px-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">Broker comparison</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">{eyebrow}</p>
         <h1 className="mt-1 text-2xl font-bold tracking-[-0.03em] text-white sm:text-4xl">{a.name} vs {b.name}</h1>
         <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-slate-300">{vsSummary(a, b)}</p>
 
@@ -75,7 +105,7 @@ export function VsView({ a, b }: { a: PublicEntity; b: PublicEntity }) {
           ))}
         </div>
 
-        {a.fcaWarning || b.fcaWarning ? (
+        {isBroker && (a.fcaWarning || b.fcaWarning) ? (
           <div className="mt-5"><WarningBanner title="FCA warning on record">{[a, b].filter((e) => e.fcaWarning).map((e) => e.name).join(" and ")} {a.fcaWarning && b.fcaWarning ? "have" : "has"} an FCA warning in our record. Read it on the FCA&apos;s site before you deposit.</WarningBanner></div>
         ) : null}
 
@@ -99,28 +129,30 @@ export function VsView({ a, b }: { a: PublicEntity; b: PublicEntity }) {
             </div>
           </Block>
 
-          <Block id="regulators" title="Regulators compared">
-            <div className="grid gap-6 sm:grid-cols-3">
-              {([["Shared", shared], [`Only ${a.name}`, onlyA], [`Only ${b.name}`, onlyB]] as Array<[string, string[]]>).map(([t, xs]) => (
-                <div key={t} className="border-t border-white/10 pt-4">
-                  <p className="font-mono text-xs font-semibold uppercase tracking-wider text-slate-400">{t}</p>
-                  <p className="mt-2 text-sm text-slate-200">{xs.length ? xs.join(", ") : "None"}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-sm leading-relaxed text-slate-400">
-              What each licence means for clients is on the regulator pages, for example the{" "}
-              {[...new Set([...a.regulatorDetails, ...b.regulatorDetails].flatMap((r) => (r.slug ? [r.slug] : [])))].slice(0, 4).map((s, i) => (
-                <span key={s}>{i > 0 ? ", " : ""}<Link href={`/regulators/${s}`} className="text-[var(--vt-blue)] hover:underline">{getRegulator(s)?.code ?? s}</Link></span>
-              ))}{" "}
-              pages, or browse <Link href="/regulators" className="text-[var(--vt-blue)] hover:underline">all regulators</Link>.
-            </p>
-          </Block>
+          {isBroker ? (
+            <Block id="regulators" title="Regulators compared">
+              <div className="grid gap-6 sm:grid-cols-3">
+                {([["Shared", shared], [`Only ${a.name}`, onlyA], [`Only ${b.name}`, onlyB]] as Array<[string, string[]]>).map(([t, xs]) => (
+                  <div key={t} className="border-t border-white/10 pt-4">
+                    <p className="font-mono text-xs font-semibold uppercase tracking-wider text-slate-400">{t}</p>
+                    <p className="mt-2 text-sm text-slate-200">{xs.length ? xs.join(", ") : "None"}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-4 text-sm leading-relaxed text-slate-400">
+                What each licence means for clients is on the regulator pages, for example the{" "}
+                {[...new Set([...a.regulatorDetails, ...b.regulatorDetails].flatMap((r) => (r.slug ? [r.slug] : [])))].slice(0, 4).map((s, i) => (
+                  <span key={s}>{i > 0 ? ", " : ""}<Link href={`/regulators/${s}`} className="text-[var(--vt-blue)] hover:underline">{getRegulator(s)?.code ?? s}</Link></span>
+                ))}{" "}
+                pages, or browse <Link href="/regulators" className="text-[var(--vt-blue)] hover:underline">all regulators</Link>.
+              </p>
+            </Block>
+          ) : null}
 
           <Block id="faq" title="Frequently asked questions"><FaqBlock items={faqs} /></Block>
 
           <div className="space-y-2 text-sm leading-relaxed text-slate-400">
-            <p>Compared on record fields only. We hold no spreads, fees or user ratings for these brokers, so this page does not compare them. See <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">how we verify</Link>.</p>
+            <p>Compared on record fields only. We hold no spreads, fees or user ratings for these {isBroker ? "brokers" : "firms"}, so this page does not compare them. See <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">how we verify</Link>.</p>
             <p>{INDEPENDENCE_STATEMENT}</p>
             <p className="text-xs text-[var(--vt-muted)]">{NOT_ADVICE_STATEMENT}</p>
           </div>

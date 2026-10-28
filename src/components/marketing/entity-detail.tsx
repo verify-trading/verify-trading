@@ -8,7 +8,7 @@ import { Block, EntityMiniCard, FaqBlock, RegulatorCard, TocNav, VerdictBands, W
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import type { PublicEntity } from "@/lib/compare/entities";
-import { entityFaqs, entityPath, pickAlternatives, vsPartners } from "@/lib/compare/insights";
+import { entityFaqs, entityPath, pickAlternatives, vsPartners, vsPath } from "@/lib/compare/insights";
 import { getRegulator } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { entityReviewSchema, webPageSchema } from "@/lib/marketing/seo";
@@ -45,7 +45,7 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
   const path = entityPath(e);
   const isBroker = e.type === "broker";
   const alternatives = pickAlternatives(e, all).slice(0, 4);
-  const partners = isBroker ? vsPartners(e, all).slice(0, 3) : [];
+  const partners = vsPartners(e, all).slice(0, 3);
   const faqs = entityFaqs(e).slice(0, 5);
   const refs = e.regulatorDetails;
   const primary = refs.map((r) => (r.slug ? getRegulator(r.slug) : null)).find((r) => r?.registerUrl) ?? null;
@@ -226,15 +226,12 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
               {partners.length ? (
                 <p className="mt-3 text-xs text-slate-400">
                   Head to head:{" "}
-                  {partners.map((p, i) => {
-                    const [x, y] = e.slug < p.slug ? [e, p] : [p, e];
-                    return (
-                      <span key={p.slug}>
-                        {i > 0 ? ", " : ""}
-                        <Link href={`${entityPath(x)}/vs/${y.slug}`} className="text-[var(--vt-blue)] hover:underline">{e.name} vs {p.name}</Link>
-                      </span>
-                    );
-                  })}
+                  {partners.map((p, i) => (
+                    <span key={p.slug}>
+                      {i > 0 ? ", " : ""}
+                      <Link href={vsPath(e.type, e.slug, p.slug)} className="text-[var(--vt-blue)] hover:underline">{e.name} vs {p.name}</Link>
+                    </span>
+                  ))}
                 </p>
               ) : null}
             </Block>

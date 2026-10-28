@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { toPublicEntity, parseRegulatorRefs, verdictTone, type PublicEntity } from "@/lib/compare/entities";
-import { entityFaqs, entityPath, isIndexable, isIndexedPair, isSeoWorthy, pairKey, pickAlternatives, VERDICT_RANK, vsPairs } from "@/lib/compare/insights";
+import { entityFaqs, entityPath, isIndexable, isIndexedVsPair, isSeoWorthy, pairKey, parseVsPair, pickAlternatives, propVsPairs, VERDICT_RANK, vsPairs, vsPath } from "@/lib/compare/insights";
 import { findRegulator, getRegulator } from "@/lib/compare/regulators";
 
 const broker = (slug: string, over: Record<string, unknown> = {}) =>
@@ -69,11 +69,48 @@ describe("alternatives and vs pairs", () => {
     expect(alts).not.toContain("me");
     expect(alts).not.toContain("other");
   });
-  it("produces no indexed vs pairs (VS pages removed for SEO)", () => {
-    expect(vsPairs(all)).toEqual([]);
+  it("produces canonical, deduped, bounded broker vs pairs", () => {
+    const pairs = vsPairs(all);
+    expect(pairs.length).toBeGreaterThan(0);
+    // Every pair is stored in canonical (alphabetical by slug) order.
+    for (const [a, b] of pairs) expect(a.slug < b.slug).toBe(true);
+    // No duplicates across orderings.
+    const keys = pairs.map(([a, b]) => `${a.slug}|${b.slug}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    // "warn" (FCA warning) is never paired.
+    expect(pairs.some(([a, b]) => a.slug === "warn" || b.slug === "warn")).toBe(false);
+    // isIndexedVsPair agrees with membership, in either requested order.
+    const [first] = pairs;
+    expect(isIndexedVsPair("broker", all, first[0].slug, first[1].slug)).toBe(true);
+    expect(isIndexedVsPair("broker", all, first[1].slug, first[0].slug)).toBe(true);
+    expect(isIndexedVsPair("broker", all, "hi", "warn")).toBe(false);
+  });
+
+  it("pairKey sorts, vsPath builds the canonical /compare URL, parseVsPair round-trips", () => {
     expect(pairKey("z", "a")).toEqual(["a", "z"]);
-    expect(isIndexedPair(all, "hi", "me")).toBe(false);
-    expect(isIndexedPair(all, "hi", "other")).toBe(false);
+    expect(vsPath("broker", "zeta", "alpha")).toBe("/compare/brokers/alpha-vs-zeta");
+    expect(vsPath("propfirm", "topstep", "ftmo")).toBe("/compare/prop-firms/ftmo-vs-topstep");
+    expect(parseVsPair("alpha-vs-zeta")).toEqual(["alpha", "zeta"]);
+    expect(parseVsPair("same-vs-same")).toBeNull(); // self-pair rejected
+    expect(parseVsPair("no-delimiter")).toBeNull();
+    expect(parseVsPair("-vs-b")).toBeNull();
+  });
+
+  it("pairs prop firms by score, excluding closed and unscored", () => {
+    const prop = (slug: string, o: Record<string, unknown>) => toPublicEntity({ slug, name: slug.toUpperCase(), entity_type: "propfirm", firm_status: "Operating", ...o })!;
+    const firms = [
+      prop("ftmo", { trust_score: 8.5 }),
+      prop("topstep", { trust_score: 7.9 }),
+      prop("apex", { trust_score: 7.2 }),
+      prop("closed", { trust_score: 9.0, firm_status: "Closed down" }),
+      prop("unrated", { trust_score: null }),
+    ];
+    const pairs = propVsPairs(firms);
+    expect(pairs.length).toBe(3); // ftmo, topstep, apex → 3 pairs
+    for (const [a, b] of pairs) expect(a.slug < b.slug).toBe(true);
+    expect(pairs.some(([a, b]) => a.slug === "closed" || b.slug === "closed")).toBe(false);
+    expect(pairs.some(([a, b]) => a.slug === "unrated" || b.slug === "unrated")).toBe(false);
+    expect(isIndexedVsPair("propfirm", firms, "topstep", "ftmo")).toBe(true);
   });
 });
 
