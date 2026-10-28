@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { getAppName } from "@/lib/site-config";
 
@@ -6,7 +7,8 @@ type LegalSection = {
   /** Optional anchor id for in-page links. */
   id?: string;
   title: string;
-  paragraphs: string[];
+  /** String or ReactNode so a paragraph can embed an inline Link. */
+  paragraphs: ReactNode[];
 };
 
 export function LegalDocument({

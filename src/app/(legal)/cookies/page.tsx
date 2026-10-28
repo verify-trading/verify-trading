@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { LegalDocument } from "@/components/legal/legal-document";
-import { getAppName } from "@/lib/site-config";
+import { pageMetadata } from "@/lib/marketing/seo";
 
-export const metadata: Metadata = {
-  title: "Cookie Notice",
-  description: `Cookie and storage information for ${getAppName()}.`,
-  alternates: { canonical: "/cookies" },
-};
+export const metadata: Metadata = pageMetadata({
+  title: "Cookie Policy and Browser Storage",
+  description:
+    "Read verify.trading's Cookie Policy for details on essential and optional cookies, browser storage, and how to manage your cookie consent preferences.",
+  path: "/cookies",
+});
 
 export default function CookiesPage() {
   return (
@@ -21,6 +23,10 @@ export default function CookiesPage() {
           paragraphs: [
             "Cookies and similar technologies help keep users signed in, protect sessions, and support core product functionality.",
             "The app may use browser storage for short-term UI behaviour, for example remembering that a promotional banner was dismissed for the current session.",
+            <>
+              For more information about how we collect and handle personal data, read our{" "}
+              <Link href="/privacy" className="text-[var(--vt-blue)] hover:underline">Privacy Policy</Link>.
+            </>,
           ],
         },
         {
@@ -33,8 +39,7 @@ export default function CookiesPage() {
         {
           title: "Your controls",
           paragraphs: [
-            "Use the cookie banner on first visit to choose Essential only or Accept all. To withdraw consent, clear cookies and local storage for this site in your browser — you will see the banner again on the next visit.",
-            "Disabling essential storage in the browser may break sign-in or other features.",
+            "Use the cookie banner on the first visit to choose Essential only or Accept all. To withdraw consent, clear cookies and local storage for this site in your browser — you will see the banner again on the next visit. Disabling essential storage in the browser may break sign-in or other features.",
           ],
         },
       ]}

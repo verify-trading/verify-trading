@@ -7,7 +7,7 @@ import { pageMetadata } from "@/lib/marketing/seo";
 
 const path = "/tools/profit-loss-calculator";
 const description =
-  "Free forex profit/loss calculator: enter the pair, direction, entry, exit and lot size to see the P&L in the pair's quote currency and the move in pips.";
+  "Use our free trading profit and loss calculator to estimate monetary results from entry, exit and lot size across major forex pairs.";
 
 export const metadata: Metadata = pageMetadata({ title: "Profit / Loss Calculator (Forex P&L)", description, path });
 

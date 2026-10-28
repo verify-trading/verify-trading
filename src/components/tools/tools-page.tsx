@@ -421,6 +421,12 @@ export function ToolsPage() {
   return (
     <div className="min-h-0 flex-1">
       <main className="mx-auto w-full max-w-4xl px-4 pb-12 pt-6 sm:px-6 sm:pt-8">
+        <header className="mb-6 sm:mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Free Trading Calculators</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--vt-muted)] sm:text-base sm:leading-7">
+            Calculate position size, risk-to-reward ratios, pip value, margin requirements, potential profit or loss, and compound growth with verify.trading&rsquo;s free trading calculators. Choose a calculator below and enter your inputs to review the results.
+          </p>
+        </header>
         {/* ── Mobile: dropdown selector ──────────────────────── */}
         <div className="mb-4 md:hidden">
           <div className="relative">
@@ -500,7 +506,7 @@ export function ToolsPage() {
 
         {/* ── Guides index: SEO-crawlable list of all tool pages ── */}
         <section aria-labelledby="tool-guides-heading" className="mt-8">
-          <h2 id="tool-guides-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--vt-muted)]">
+          <h2 id="tool-guides-heading" className="px-1 text-base font-semibold text-white sm:text-lg">
             Calculator guides
           </h2>
           <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
