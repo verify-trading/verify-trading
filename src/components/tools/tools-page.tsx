@@ -400,7 +400,7 @@ function CompoundCalc() {
 
 /* ─── Render map ─────────────────────────────────────────────── */
 
-function ActiveCalculator({ id }: { id: CalculatorId }) {
+function CalculatorView({ id }: { id: CalculatorId }) {
   switch (id) {
     case "lot-size": return <LotSizeCalc />;
     case "risk-reward": return <RiskRewardCalc />;
@@ -419,7 +419,8 @@ export function ToolsPage() {
   const ActiveIcon = activeMeta.icon;
 
   return (
-    <div className="min-h-0 flex-1">
+    // The app shell is h-dvh + overflow-hidden, so this wrapper owns page scroll.
+    <div className="min-h-0 flex-1 overflow-y-auto">
       <main className="mx-auto w-full max-w-4xl px-4 pb-12 pt-6 sm:px-6 sm:pt-8">
         <header className="mb-6 sm:mb-8">
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Free Trading Calculators</h1>
@@ -486,7 +487,25 @@ export function ToolsPage() {
             {/* ── Calculator body ────────────────────────────── */}
             <div className="min-w-0 flex-1">
               <div className="flex flex-col gap-5 p-4 sm:p-6">
-                <ActiveCalculator id={active} />
+                {/* All calculators share one grid cell so the card keeps the tallest
+                    one's height on desktop and doesn't jump when switching tabs.
+                    On mobile only the active one renders, to avoid blank space. */}
+                <div className="grid">
+                  {CALCULATORS.map((c) => {
+                    const isActive = c.id === active;
+                    return (
+                      <div
+                        key={c.id}
+                        data-calculator={c.id}
+                        aria-hidden={!isActive}
+                        inert={!isActive}
+                        className={cn("flex flex-col gap-5 [grid-area:1/1]", !isActive && "hidden md:invisible md:flex")}
+                      >
+                        <CalculatorView id={c.id} />
+                      </div>
+                    );
+                  })}
+                </div>
                 <Link
                   href={activeMeta.guide}
                   className="group inline-flex items-center justify-between gap-3 rounded-xl border border-[color:var(--vt-border)] bg-[var(--vt-card-alt)] px-4 py-3 text-left text-[13px] font-semibold text-white transition-colors hover:border-[var(--vt-blue)]"
