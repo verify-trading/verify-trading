@@ -19,9 +19,9 @@ import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 export const GUIDE_PATH = "/guide";
 export const GUIDE_PDF_PATH = "/guide-pdf";
 export const GUIDE_REVIEWED = "2026-10-29";
-export const GUIDE_TITLE = "Platform Guide + AI Trading Prompt Library";
+export const GUIDE_TITLE = "AI Trading Prompts and Platform Guide";
 export const GUIDE_DESCRIPTION =
-  "How to use verify.trading: set up a free account, learn the BTS, ITVE and TTS engines, and copy ready-made prompts to check brokers, trades and gurus.";
+  "Copy-ready AI trading prompts to check brokers, prop firms, trades and gurus, plus a step-by-step verify.trading platform guide to get set up in a minute.";
 
 export const GUIDE_SETUP_STEPS = [
   {
@@ -154,8 +154,8 @@ const SLIDES = {
   engines: { src: "/guide/bts-itve-tts-engines.webp", alt: "The three verify.trading engines: BTS Broker Trust Score, ITVE trade verification and TTS trader trust score" },
   setup: { src: "/guide/five-step-setup.webp", alt: "Five steps to get started on verify.trading, from visiting the site to your first broker check" },
   routing: { src: "/guide/ask-tab-routing.webp", alt: "How the verify.trading Ask tab routes a question to BTS, ITVE, TTS, the market brief, calculators or projections" },
-  brokerPrompts: { src: "/guide/broker-verification-prompts.webp", alt: "Broker verification prompt library for the BTS engine" },
-  tradePrompts: { src: "/guide/trade-verification-and-market-brief-prompts.webp", alt: "Trade verification prompts for ITVE and pre-session market brief prompts" },
+  brokerPrompts: { src: "/guide/broker-verification-prompts.webp", alt: "AI trading prompts for broker and prop firm verification with the BTS engine" },
+  tradePrompts: { src: "/guide/trade-verification-and-market-brief-prompts.webp", alt: "AI trading prompts for ITVE trade verification and pre-session market briefs" },
   sizingPrompts: { src: "/guide/position-size-and-guru-check-prompts.webp", alt: "Position sizing prompts and guru and signal group verification prompts for TTS" },
   powerPrompts: { src: "/guide/power-user-prompts.webp", alt: "Power user prompts that combine broker, trade and guru checks in one question" },
   intelligence: { src: "/guide/market-intelligence-economic-calendar.webp", alt: "verify.trading Market Intelligence pre-session brief and economic calendar on mobile" },
@@ -240,18 +240,18 @@ export function GuideArticle() {
         eyebrow="Platform guide"
         title={
           <>
-            verify.trading Platform Guide
+            AI Trading Prompts
             <br />
-            <span className="text-[var(--vt-coral)]">+ AI Trading Prompt Library</span>
+            <span className="text-[var(--vt-coral)]">+ verify.trading Platform Guide</span>
           </>
         }
-        lede="Everything you need to get real value from verify.trading: how to set up, what the three engines do, and the exact prompts to type into Ask to check a broker, a trade or a guru."
+        lede="Copy-ready AI trading prompts for checking a broker, a prop firm, a trade or a guru, plus everything you need to get real value from verify.trading: how to set up and what the three engines do."
         primary={{ label: "Start free", href: "/signup", event: "signup" }}
         secondary={{ label: "Download the PDF", href: GUIDE_PDF_PATH, event: "guide" }}
         tldr={[
           `Free account in under a minute, ${FREE_DAILY_ASK_LIMIT} Ask chats a day, no card needed.`,
           "Ask routes every question to the right engine: BTS for brokers and prop firms, ITVE for trades, TTS for gurus and signal groups.",
-          "Copy a prompt below, replace the [brackets] with your details, and send it in plain English.",
+          "Copy an AI trading prompt below, replace the [brackets] with your details, and send it in plain English.",
           "Pro adds the daily Intelligence brief, economic calendar, Journal, Mind coaching and the community.",
         ]}
         tldrNote="Updated 29 October 2026"
@@ -367,7 +367,7 @@ export function GuideArticle() {
       <Section
         id="prompts"
         eyebrow="Prompt library"
-        title="Copy, replace, get your answer: the prompt library"
+        title="AI trading prompts: copy, replace, get your answer"
         intro="Replace all text in [brackets] with your own details. Natural language works; no special syntax is needed."
       >
         <div className="grid gap-5 lg:grid-cols-2">

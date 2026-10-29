@@ -20,7 +20,7 @@ export default function GuidePage() {
     <div className="min-h-0 flex-1 overflow-y-auto">
       <JsonLd
         data={articleSchema({
-          headline: `verify.trading ${GUIDE_TITLE}`,
+          headline: "AI Trading Prompts and verify.trading Platform Guide",
           description: GUIDE_DESCRIPTION,
           path: GUIDE_PATH,
           datePublished: GUIDE_REVIEWED,
