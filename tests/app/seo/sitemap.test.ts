@@ -4,6 +4,7 @@ vi.mock("@/lib/compare/sitemap", () => ({ getCompareSitemapEntries: async () => 
 vi.mock("@/lib/blog/feed", () => ({ getRemoteSitemapEntries: async () => [] }));
 
 import sitemap from "@/app/sitemap";
+import { GLOSSARY } from "@/lib/marketing/glossary";
 
 describe("sitemap", () => {
   it("lists each URL once", async () => {
@@ -13,9 +14,14 @@ describe("sitemap", () => {
 
   it("leaves out noindex and thin auth pages", async () => {
     const paths = (await sitemap()).map((e) => new URL(e.url).pathname);
-    expect(paths).not.toContain("/glossary");
     expect(paths).not.toContain("/signup");
     expect(paths).toContain("/contact");
+  });
+
+  it("lists the glossary hub and every glossary term", async () => {
+    const paths = (await sitemap()).map((e) => new URL(e.url).pathname);
+    expect(paths).toContain("/glossary");
+    for (const t of GLOSSARY) expect(paths).toContain(`/glossary/${t.slug}`);
   });
 
   it("never stamps the request time as lastmod", async () => {

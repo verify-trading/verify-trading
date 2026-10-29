@@ -20,11 +20,11 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const t = getTerm((await params).term);
   if (!t) return {};
-  return { ...pageMetadata({
+  return pageMetadata({
     title: `What is ${t.term}? Definition & Example`,
     description: t.short.length > 160 ? `${t.short.slice(0, 157)}...` : t.short,
     path: `/glossary/${t.slug}`,
-  }), robots: { index: false, follow: true } };
+  });
 }
 
 export default async function GlossaryTermPage({ params }: Props) {

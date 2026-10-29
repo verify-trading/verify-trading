@@ -7,6 +7,7 @@ import { REVIEWED as FOREX_REVIEWED } from "@/app/(marketing)/compare/forex-prop
 import { REVIEWED as FOREX_VS_FUTURES_REVIEWED } from "@/app/(marketing)/compare/forex-vs-futures-prop-firms/page";
 import { TOOLS_REVIEWED } from "@/components/marketing/tool-page";
 import { getCompareSitemapEntries } from "@/lib/compare/sitemap";
+import { GLOSSARY, GLOSSARY_REVIEWED } from "@/lib/marketing/glossary";
 import { getSiteUrl } from "@/lib/site-config";
 
 /** Pages with a real review date get it as lastmod; the rest omit lastmod rather than claim "changed today" on every crawl. */
@@ -29,7 +30,7 @@ const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]
   ["/brokers", 0.5],
   ["/prop-firms", 0.5],
   ["/blog", 0.7],
-  // /glossary is noindex, so it stays out of the sitemap.
+  ["/glossary", 0.6, GLOSSARY_REVIEWED],
   ["/resources", 0.7],
   ["/faq", 0.6],
   ["/trust", 0.6],
@@ -80,6 +81,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(e.updated_at),
       changeFrequency: "monthly" as const,
       priority: 0.6,
+    })),
+    ...GLOSSARY.map((t) => ({
+      url: `${baseUrl}/glossary/${t.slug}`,
+      lastModified: new Date(GLOSSARY_REVIEWED),
+      changeFrequency: "yearly" as const,
+      priority: 0.5,
     })),
     ...compareEntries,
     ...OTHER_PATHS.map(([path, priority, changeFrequency]) => ({
