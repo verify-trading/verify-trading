@@ -153,6 +153,30 @@ export function articleSchema(input: {
   };
 }
 
+/** Step-by-step setup instructions. Steps are the same text the page shows, never extra. */
+export function howToSchema(input: {
+  name: string;
+  description: string;
+  path: string;
+  steps: ReadonlyArray<{ title: string; body: string }>;
+  totalTime?: string;
+}): SchemaOrgObject {
+  return {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    name: input.name,
+    description: input.description,
+    url: abs(input.path),
+    ...(input.totalTime ? { totalTime: input.totalTime } : {}),
+    step: input.steps.map((s, i) => ({
+      "@type": "HowToStep",
+      position: i + 1,
+      name: s.title,
+      text: s.body,
+    })),
+  };
+}
+
 export const GLOSSARY_PATH = "/glossary";
 
 export function definedTermSetSchema(input: { terms: Array<{ term: string; slug: string }> }): SchemaOrgObject {

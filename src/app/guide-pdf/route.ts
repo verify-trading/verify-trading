@@ -11,6 +11,8 @@ export async function GET() {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'inline; filename="verify-trading-guide.pdf"',
         "Cache-Control": "public, max-age=3600",
+        // Image-only PDF: /guide is the indexable HTML version of the same guide.
+        "X-Robots-Tag": "noindex",
       },
     });
   } catch {
