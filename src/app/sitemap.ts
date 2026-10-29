@@ -5,6 +5,7 @@ import { POSTS } from "@/lib/blog/posts";
 import { REVIEWED as FUTURES_REVIEWED } from "@/app/(marketing)/compare/futures-prop-firms/page";
 import { REVIEWED as FOREX_REVIEWED } from "@/app/(marketing)/compare/forex-prop-firms/page";
 import { REVIEWED as FOREX_VS_FUTURES_REVIEWED } from "@/app/(marketing)/compare/forex-vs-futures-prop-firms/page";
+import { GUIDE_REVIEWED } from "@/components/guide/guide-article";
 import { TOOLS_REVIEWED } from "@/components/marketing/tool-page";
 import { getCompareSitemapEntries } from "@/lib/compare/sitemap";
 import { GLOSSARY, GLOSSARY_REVIEWED } from "@/lib/marketing/glossary";
@@ -14,6 +15,7 @@ import { getSiteUrl } from "@/lib/site-config";
 
 const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]> = [
   ["/how-it-works", 0.8],
+  ["/guide", 0.7, GUIDE_REVIEWED],
   ["/verify", 0.8],
   ["/intelligence", 0.7],
   ["/economic-calendar", 0.7],
