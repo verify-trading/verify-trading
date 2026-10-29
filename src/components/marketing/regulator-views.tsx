@@ -190,7 +190,6 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
       </section>
 
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_14rem] lg:gap-12 lg:py-16">
-        <aside className="hidden lg:block"><div className="sticky top-24"><TocNav items={toc} /></div></aside>
         <div className="min-w-0 space-y-12">
           <Block id="about" title={`What ${r.code} protection means`} intro="General facts about the regime. What applies to you depends on the licensed entity and your client category.">
             <div className="border-t border-white/10 pt-4">
@@ -255,6 +254,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
           ) : null}
           <p className="text-xs leading-relaxed text-[var(--vt-muted)]">{INDEPENDENCE_STATEMENT} {NOT_ADVICE_STATEMENT}</p>
         </div>
+        <aside className="hidden lg:block"><div className="sticky top-24"><TocNav items={toc} /></div></aside>
       </div>
 
       <CtaBand
