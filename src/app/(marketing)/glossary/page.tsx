@@ -11,7 +11,7 @@ const path = "/glossary";
 const description =
   "A plain-English trading glossary: pip, lot size, leverage, drawdown, daily loss limit, consistency rule, FSCS, CySEC ICF, red-folder news and more, each with an example.";
 
-export const metadata: Metadata = { ...pageMetadata({ title: "Trading & Prop Firm Glossary (A-Z)", description, path }), robots: { index: false, follow: true } };
+export const metadata: Metadata = pageMetadata({ title: "Trading & Prop Firm Glossary (A-Z)", description, path });
 
 export default function GlossaryIndexPage() {
   const sorted = sortedGlossary();
