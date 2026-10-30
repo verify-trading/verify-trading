@@ -217,10 +217,14 @@ export function toolSchema(input: { name: string; description: string; path: str
 }
 
 /**
- * Review of a broker or prop firm, with the entity modelled as a Product so
- * Google can show the review stars and Ahrefs' "Product schema" check passes.
- * Rating is on a 0–10 scale (our trust score); when the record is unrated
- * we skip reviewRating rather than fabricate it.
+ * Review of a broker, prop firm or trader. The reviewed entity is typed by what
+ * it actually is (FinancialService / Organization / Person), NOT as a Product:
+ * Google's Product rich-result check requires offers/review/aggregateRating on
+ * the Product node, which a reviewed third party does not carry, so a dual
+ * ["Product", …] type flagged "Either 'offers', 'review' or 'aggregateRating'
+ * should be specified" in the Rich Results Test. The review stars come from the
+ * Review + reviewRating markup below. Rating is on a 0–10 scale (our trust
+ * score); when the record is unrated we skip reviewRating rather than fabricate it.
  */
 export function entityReviewSchema(input: {
   name: string;
@@ -237,7 +241,7 @@ export function entityReviewSchema(input: {
   const siteUrl = getSiteUrl();
   const org = { "@type": "Organization", name: getAppName(), url: siteUrl };
   const itemReviewed: Record<string, unknown> = {
-    "@type": ["Product", input.itemType],
+    "@type": input.itemType,
     "@id": `${abs(input.path)}#item`,
     name: input.name,
     description: input.description,

@@ -54,6 +54,10 @@ describe("public entity mapper", () => {
     expect(out.regulators).toEqual(["FCA", "CySEC"]);
     expect(out.reviewed).toBe(true);
     expect(parseRegulators("NONE (Requires Additional Regulation)")).toEqual([]);
+    // Placeholder tokens from the source data must not become fake regulators.
+    expect(parseRegulators("NULL")).toEqual([]);
+    expect(parseRegulators("N/A")).toEqual([]);
+    expect(parseRegulators("FCA (United Kingdom), NULL")).toEqual(["FCA"]);
   });
 
   it("marks unscored prop firms as not yet rated and closed firms as avoid", () => {
