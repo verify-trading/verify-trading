@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Calendar, CalendarClock, Check, FileCheck2, LineChart, MessageSquareText, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Calendar, CalendarClock, FileCheck2, Info, LineChart, MessageSquareText, ShieldCheck, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { CtaLink } from "@/components/marketing/cta-link";
@@ -551,7 +551,7 @@ export function HomepageSections() {
       {/* One honest, page-wide disclosure for all the illustrative previews above. */}
       <div className="mx-auto w-full max-w-3xl px-4 pb-14 pt-2 text-center sm:px-6">
         <p className="flex items-center justify-center gap-2 text-[12px] leading-6 text-[var(--vt-muted)]">
-          <Check className="size-3.5 shrink-0 text-[var(--vt-green)]" aria-hidden />
+          <Info className="size-3.5 shrink-0 text-[var(--vt-muted)]" aria-hidden />
           The charts, conversations, records and journal entries shown on this page are illustrative examples, not live data, trading advice or a prediction of results.
         </p>
       </div>
