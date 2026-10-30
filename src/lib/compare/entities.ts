@@ -118,14 +118,17 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** "FCA (United Kingdom), CySEC (Cyprus)" -> ["FCA", "CySEC"]. "NONE ..." -> []. */
+/** Placeholder tokens that mean "no value" in the source data (e.g. a literal "NULL" string). */
+const isSentinel = (s: string) => /^(none|null|n\/?a|tbd|unknown|-|–|—)$/i.test(s.trim());
+
+/** "FCA (United Kingdom), CySEC (Cyprus)" -> ["FCA", "CySEC"]. "NONE ..."/"NULL" -> []. */
 export function parseRegulators(listed: string | null): string[] {
-  if (!listed || /^none\b/i.test(listed.trim())) return [];
+  if (!listed || isSentinel(listed) || /^none\b/i.test(listed.trim())) return [];
   const out = new Set<string>();
   // Split on commas that are not inside parentheses.
   for (const part of listed.split(/,(?![^(]*\))/)) {
     const code = part.replace(/\(.*?\)/g, "").trim();
-    if (code && code.length <= 24) out.add(code);
+    if (code && code.length <= 24 && !isSentinel(code)) out.add(code);
   }
   return [...out];
 }
@@ -133,11 +136,11 @@ export function parseRegulators(listed: string | null): string[] {
 /** "FCA (United Kingdom), FSC (Mauritius)" -> code, country and hub slug per regulator. */
 export function parseRegulatorRefs(listed: string | null, fcaRegistered = false): RegulatorRef[] {
   const out: RegulatorRef[] = [];
-  if (listed && !/^none\b/i.test(listed.trim())) {
+  if (listed && !isSentinel(listed) && !/^none\b/i.test(listed.trim())) {
     for (const part of listed.split(/,(?![^(]*\))/)) {
       const code = part.replace(/\(.*?\)/g, "").trim();
       const country = part.match(/\((.*?)\)/)?.[1]?.trim() || null;
-      if (!code || code.length > 24 || out.some((r) => r.code === code && r.country === country)) continue;
+      if (!code || code.length > 24 || isSentinel(code) || out.some((r) => r.code === code && r.country === country)) continue;
       out.push({ code, country, slug: findRegulator(code, country)?.slug ?? null });
     }
   }

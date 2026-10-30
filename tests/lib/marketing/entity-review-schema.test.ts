@@ -16,11 +16,12 @@ describe("entityReviewSchema", () => {
     itemType: "FinancialService" as const,
   };
 
-  it("models the broker as a Product so the review check passes", () => {
+  it("types the reviewed entity by what it is, not as a Product (avoids the Product rich-result error)", () => {
     const s = entityReviewSchema(base);
     expect(s["@type"]).toBe("Review");
     const item = s.itemReviewed as Record<string, unknown>;
-    expect(item["@type"]).toEqual(["Product", "FinancialService"]);
+    expect(item["@type"]).toBe("FinancialService");
+    expect(item["@type"]).not.toContain("Product");
     expect(item.name).toBe("FxPro");
     expect(item.brand).toEqual({ "@type": "Brand", name: "FxPro" });
     expect(item.category).toBe("Online broker");
