@@ -258,8 +258,8 @@ export default function PropFirmMatchVsVerifyTradingPage() {
       {/* Illustration provided by the founder; sits between the two sections it summarises. */}
       <figure className="mx-auto w-full max-w-6xl px-4 sm:px-6">
         <Image
-          src="/images/two-models-two-masters.webp"
-          alt="Diagram of the two business models: an affiliate-funded directory ranks firms and earns a commission when a click on a firm or promo code converts, while verify.trading is paid by traders and publishes evidence-based verification with a transparent methodology."
+          src="/images/prop-firm-match-vs-verify-trading.webp"
+          alt="Prop Firm Match vs Verify Trading business models compared: Prop Firm Match is affiliate-funded and earns commissions from the firms it lists, while verify.trading is paid by traders and publishes evidence-based verification with a transparent methodology."
           width={1600}
           height={533}
           sizes="(min-width: 1152px) 1104px, 100vw"
