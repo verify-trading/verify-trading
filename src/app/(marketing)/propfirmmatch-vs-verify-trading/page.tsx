@@ -1,22 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { Check, ExternalLink, X } from "lucide-react";
 
 import { JsonLd } from "@/components/seo/json-ld";
-import { Breadcrumbs, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
+import { Breadcrumbs, Byline, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
 import { articleSchema, pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
+import { cn } from "@/lib/utils";
 
-const path = "/compare/propfirmmatch-vs-verify-trading";
+const path = "/propfirmmatch-vs-verify-trading";
 /** When the facts on this page were last verified against the cited sources. The sitemap and the TL;DR both read this. */
 export const REVIEWED = "2026-11-01";
 const REVIEWED_LABEL = `Reviewed ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(REVIEWED))}`;
 
 const description =
-  "PropFirmMatch vs Verify Trading compared: who pays each platform, what the October 2026 affiliate-tracking controversy established, and which model protects traders choosing a prop firm.";
+  "PropFirmMatch is paid by the prop firms it lists. verify.trading is paid by traders. Compare the models, the 2026 controversy and which protects you.";
 
 export const metadata: Metadata = pageMetadata({
-  title: "PropFirmMatch vs Verify Trading",
+  title: "PropFirmMatch vs Verify Trading: 2026 Guide",
   description,
   path,
 });
@@ -33,49 +34,66 @@ export const metadata: Metadata = pageMetadata({
 const FM_ARTICLE =
   "https://www.financemagnates.com/forex/prop-firm-match-faces-affiliate-tracking-allegations-topstep-apex-tradeify-and-goat-funded-cut-ties/";
 
+/** One table cell: text plus a tone marker (good = green check, bad = coral cross, neutral = none). */
+type Cell = { text: string; tone?: "good" | "bad" };
+
 /** At-a-glance comparison rows, shown at the very top of the page. */
-const GLANCE: Array<{ dimension: string; pfm: string; vt: string }> = [
+const GLANCE: Array<{ dimension: string; pfm: Cell; vt: Cell }> = [
   {
     dimension: "What it is",
-    pfm: "Prop firm directory built around rankings, offers and discount codes",
-    vt: "Independent verification platform for brokers, prop firms and trading educators",
+    pfm: { text: "Prop firm directory built around rankings, offers and discount codes" },
+    vt: { text: "Independent verification platform for brokers, prop firms and trading educators" },
   },
   {
     dimension: "Who pays the platform",
-    pfm: "The listed prop firms, via affiliate commissions on challenge purchases",
-    vt: "Traders, via Pro subscriptions — no income from any entity we rate",
+    pfm: { text: "The listed prop firms, via affiliate commissions on challenge purchases", tone: "bad" },
+    vt: { text: "Traders, via Pro subscriptions — no income from any entity we rate", tone: "good" },
   },
   {
     dimension: "Commissions from listed firms",
-    pfm: "Yes — the core of the business model",
-    vt: "No. Rated entities cannot be our affiliates, by policy",
+    pfm: { text: "Yes — the core of the business model", tone: "bad" },
+    vt: { text: "No — rated entities cannot be our affiliates, by policy", tone: "good" },
   },
   {
     dimension: "Incentive when a firm looks risky",
-    pfm: "A warning costs referral revenue from that firm",
-    vt: "A warning costs nothing — verdicts aren't tied to firm payments",
+    pfm: { text: "A warning costs referral revenue from that firm", tone: "bad" },
+    vt: { text: "A warning costs nothing — verdicts aren't tied to firm payments", tone: "good" },
   },
   {
     dimension: "How firms are assessed",
-    pfm: "Rankings and community reviews shown alongside affiliate offers",
-    vt: "Evidence-based verdicts with cited sources and a visible review date",
+    pfm: { text: "Rankings and community reviews shown alongside affiliate offers" },
+    vt: { text: "Evidence-based verdicts with cited sources and a visible review date", tone: "good" },
   },
   {
     dimension: "Affiliate-tracking record",
-    pfm: "Oct 2026: admitted opening firms' sites through its own affiliate link on internal clicks — “This should not have happened”; several firms cut ties",
-    vt: "Not applicable — no affiliate links to the firms we rate",
+    pfm: { text: "Oct 2026: admitted internal clicks opened firms' sites through its affiliate link — “This should not have happened”; several firms cut ties", tone: "bad" },
+    vt: { text: "No affiliate links to the firms we rate", tone: "good" },
   },
   {
     dimension: "Discount codes",
-    pfm: "Yes — central feature",
-    vt: "No coupons; fees shown as list prices with a reviewed date",
+    pfm: { text: "Yes — central feature" },
+    vt: { text: "No coupons; fees shown as list prices with a reviewed date" },
   },
   {
     dimension: "Beyond the directory",
-    pfm: "Deals, drops and firm news",
-    vt: "Ask AI, market analysis, economic calendar, risk calculators, trading journal",
+    pfm: { text: "Deals, drops and firm news" },
+    vt: { text: "Ask AI, market analysis, economic calendar, risk calculators, trading journal", tone: "good" },
   },
 ];
+
+/** Table cell content with its tone marker. */
+function GlanceCell({ cell }: { cell: Cell }) {
+  return (
+    <span className="flex items-start gap-2">
+      {cell.tone === "good" ? (
+        <Check className="mt-1 size-3.5 shrink-0 text-[var(--vt-green)]" aria-hidden />
+      ) : cell.tone === "bad" ? (
+        <X className="mt-1 size-3.5 shrink-0 text-[var(--vt-coral)]" aria-hidden />
+      ) : null}
+      <span>{cell.text}</span>
+    </span>
+  );
+}
 
 const FAQS = [
   {
@@ -97,6 +115,10 @@ const FAQS = [
   {
     q: "Which should I use to choose a prop firm?",
     a: "Use whichever helps — they do different jobs. A deals directory is useful for seeing offers; an independent record is for checking the company behind the offer before you pay. If you only do one thing, read the firm's verification record and its cited sources before buying an evaluation.",
+  },
+  {
+    q: "Can't I just ask ChatGPT or Perplexity if a prop firm is safe?",
+    a: "You can, and general assistants like ChatGPT, Gemini, Perplexity and Claude are good starting points — but they answer from training data and open-web text that can be months old or seeded by the firm's own marketing. verify.trading's Ask is grounded in the verification registers themselves, so an answer cites the firm's current record, its sources and its review date. Whichever assistant you use, ask it for the primary sources and check the regulator's register yourself.",
   },
 ];
 
@@ -171,21 +193,29 @@ export default function PropFirmMatchVsVerifyTradingPage() {
         title="PropFirmMatch vs Verify Trading"
         intro="The side-by-side facts. The deepest difference is the first money row: who pays the platform decides whose interest it serves."
       >
-        <div className="overflow-x-auto rounded-2xl border border-white/[0.08]">
-          <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-white/[0.08] bg-white/[0.015]">
+          <table className="w-full min-w-[680px] border-collapse text-left text-sm">
             <thead>
-              <tr className="border-b border-white/[0.08] text-xs uppercase tracking-wider text-[var(--vt-muted)]">
-                <th scope="col" className="px-4 py-3 font-semibold">Dimension</th>
-                <th scope="col" className="px-4 py-3 font-semibold">PropFirmMatch</th>
-                <th scope="col" className="px-4 py-3 font-semibold text-white">verify.trading</th>
+              <tr className="border-b border-white/[0.1] text-xs uppercase tracking-wider text-[var(--vt-muted)]">
+                <th scope="col" className="w-[22%] px-4 py-3.5 font-semibold sm:px-5">Dimension</th>
+                <th scope="col" className="w-[39%] px-4 py-3.5 font-semibold sm:px-5">PropFirmMatch</th>
+                <th scope="col" className="w-[39%] border-l border-[var(--vt-blue)]/25 bg-[var(--vt-blue)]/[0.08] px-4 py-3.5 font-semibold text-white sm:px-5">
+                  verify.trading
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.06]">
-              {GLANCE.map((row) => (
-                <tr key={row.dimension} className="align-top text-slate-300">
-                  <td className="px-4 py-4 font-medium text-white">{row.dimension}</td>
-                  <td className="px-4 py-4">{row.pfm}</td>
-                  <td className="px-4 py-4 text-slate-200">{row.vt}</td>
+              {GLANCE.map((row, i) => (
+                <tr key={row.dimension} className={cn("align-top text-slate-300", i % 2 === 1 && "bg-white/[0.015]")}>
+                  <th scope="row" className="px-4 py-4 text-left align-top font-medium leading-snug text-white sm:px-5">
+                    {row.dimension}
+                  </th>
+                  <td className="px-4 py-4 leading-relaxed sm:px-5">
+                    <GlanceCell cell={row.pfm} />
+                  </td>
+                  <td className="border-l border-[var(--vt-blue)]/25 bg-[var(--vt-blue)]/[0.06] px-4 py-4 leading-relaxed text-slate-100 sm:px-5">
+                    <GlanceCell cell={row.vt} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -197,6 +227,9 @@ export default function PropFirmMatchVsVerifyTradingPage() {
           <Link href="/trust" className="text-[var(--vt-blue)] hover:underline">Trust &amp; independence</Link> and{" "}
           <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">Methodology</Link>. {REVIEWED_LABEL}.
         </p>
+        <div className="mt-4">
+          <Byline updated={REVIEWED} extra="Sources cited in-page" />
+        </div>
       </Section>
 
       <Section

@@ -19,6 +19,8 @@ const nextConfig: NextConfig = {
       // category pages (futures/forex/forex-vs-futures prop firms) stay under /compare.
       { source: "/compare/brokers", destination: "/verify/brokers", permanent: true },
       { source: "/compare/brokers/:slug", destination: "/verify/brokers/:slug", permanent: true },
+      // Brand comparison pages live at the root; the page briefly shipped under /compare.
+      { source: "/compare/propfirmmatch-vs-verify-trading", destination: "/propfirmmatch-vs-verify-trading", permanent: true },
       { source: "/compare/prop-firms", destination: "/verify/prop-firms", permanent: true },
       { source: "/compare/prop-firms/:slug", destination: "/verify/prop-firms/:slug", permanent: true },
     ];
