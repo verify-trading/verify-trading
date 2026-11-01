@@ -157,12 +157,7 @@ function ExternalCite({ href, children }: { href: string; children: React.ReactN
 export default function PropFirmMatchVsVerifyTradingPage() {
   return (
     <>
-      <Breadcrumbs
-        crumbs={[
-          { name: "Compare", path: "/verify/prop-firms" },
-          { name: "Prop Firm Match vs Verify Trading", path },
-        ]}
-      />
+      <Breadcrumbs crumbs={[{ name: "Prop Firm Match vs Verify Trading", path }]} />
       <JsonLd data={faqPageSchema(FAQS)} />
       <JsonLd
         data={articleSchema({
