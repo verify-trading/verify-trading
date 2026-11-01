@@ -154,6 +154,7 @@ export function Section({
   narrow = false,
   id,
   summary,
+  tight = false,
 }: {
   eyebrow?: string;
   title: string;
@@ -164,9 +165,11 @@ export function Section({
   id?: string;
   /** Key takeaway shown up front; the body then folds into "Read more" (still in the HTML, so still indexed). */
   summary?: string;
+  /** Roughly half the vertical padding — for pages whose sections are short (e.g. collapsed behind "Read more"), where the default rhythm reads as empty space. */
+  tight?: boolean;
 }) {
   return (
-    <section id={id} className={cn("scroll-mt-20 py-14 sm:py-20", band && "bg-[linear-gradient(180deg,transparent,rgba(5,7,30,0.5)_18%,rgba(5,7,30,0.5)_82%,transparent)]")}>
+    <section id={id} className={cn("scroll-mt-20", tight ? "py-8 sm:py-12" : "py-14 sm:py-20", band && "bg-[linear-gradient(180deg,transparent,rgba(5,7,30,0.5)_18%,rgba(5,7,30,0.5)_82%,transparent)]")}>
       <div className={cn("mx-auto w-full px-4 sm:px-6", narrow ? "max-w-3xl" : "max-w-6xl")}>
         <div className="max-w-2xl">
           {eyebrow ? <SectionEyebrow>{eyebrow}</SectionEyebrow> : null}
@@ -306,15 +309,18 @@ export function CtaBand({
   primary,
   secondary,
   location,
+  tight = false,
 }: {
   title: string;
   body: string;
   primary: Cta;
   secondary?: Cta;
   location: string;
+  /** Matches Section's tight rhythm on short pages. */
+  tight?: boolean;
 }) {
   return (
-    <section className="py-14 sm:py-20">
+    <section className={tight ? "py-8 sm:py-12" : "py-14 sm:py-20"}>
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
         <div className="rounded-3xl border border-white/[0.12] bg-[linear-gradient(110deg,rgba(76,110,245,0.2),rgba(139,92,246,0.14)_55%,rgba(242,109,109,0.2))] px-6 py-10 text-center shadow-[0_0_60px_rgba(76,110,245,0.15)] sm:px-10 sm:py-14">
           <h2 className="mx-auto max-w-2xl text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h2>
@@ -387,16 +393,19 @@ export function FaqSection({
   intro,
   schema = true,
   band = true,
+  tight = false,
 }: {
   items: Array<{ q: string; a: string }>;
   title?: string;
   intro?: string;
   schema?: boolean;
   band?: boolean;
+  /** Matches Section's tight rhythm on short pages. */
+  tight?: boolean;
 }) {
   const visible = items.slice(0, 6);
   return (
-    <section id="faq" className={cn("scroll-mt-20 py-14 sm:py-20", band && "bg-[linear-gradient(180deg,transparent,rgba(5,7,30,0.5)_18%,rgba(5,7,30,0.5)_82%,transparent)]")}>
+    <section id="faq" className={cn("scroll-mt-20", tight ? "py-8 sm:py-12" : "py-14 sm:py-20", band && "bg-[linear-gradient(180deg,transparent,rgba(5,7,30,0.5)_18%,rgba(5,7,30,0.5)_82%,transparent)]")}>
       {schema ? <JsonLd data={faqPageSchema(visible)} /> : null}
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.8fr_1.4fr] lg:gap-14">
         <div>
