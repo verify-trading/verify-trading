@@ -5,7 +5,7 @@ import { POSTS } from "@/lib/blog/posts";
 import { REVIEWED as FUTURES_REVIEWED } from "@/app/(marketing)/compare/futures-prop-firms/page";
 import { REVIEWED as FOREX_REVIEWED } from "@/app/(marketing)/compare/forex-prop-firms/page";
 import { REVIEWED as FOREX_VS_FUTURES_REVIEWED } from "@/app/(marketing)/compare/forex-vs-futures-prop-firms/page";
-import { REVIEWED as PFM_VS_VT_REVIEWED } from "@/app/(marketing)/compare/propfirmmatch-vs-verify-trading/page";
+import { REVIEWED as PFM_VS_VT_REVIEWED } from "@/app/(marketing)/propfirmmatch-vs-verify-trading/page";
 import { GUIDE_REVIEWED } from "@/components/guide/guide-article";
 import { TOOLS_REVIEWED } from "@/components/marketing/tool-page";
 import { getCompareSitemapEntries } from "@/lib/compare/sitemap";
@@ -28,7 +28,7 @@ const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]
   ["/compare/futures-prop-firms", 0.8, FUTURES_REVIEWED],
   ["/compare/forex-prop-firms", 0.8, FOREX_REVIEWED],
   ["/compare/forex-vs-futures-prop-firms", 0.7, FOREX_VS_FUTURES_REVIEWED],
-  ["/compare/propfirmmatch-vs-verify-trading", 0.7, PFM_VS_VT_REVIEWED],
+  ["/propfirmmatch-vs-verify-trading", 0.7, PFM_VS_VT_REVIEWED],
   ["/retail-traders", 0.7],
   ["/prop-firm-traders", 0.7],
   ["/brokers", 0.5],
