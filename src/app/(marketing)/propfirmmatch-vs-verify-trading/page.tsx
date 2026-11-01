@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { Check, ExternalLink, X } from "lucide-react";
 
@@ -125,7 +126,7 @@ const FAQS = [
 ];
 
 /** Dated, sourced timeline of the October 2026 events. */
-const TIMELINE: Array<{ date: string; what: string }> = [
+const TIMELINE: Array<{ date: string; what: string; source?: { href: string; label: string } }> = [
   {
     date: "29 Oct 2026",
     what: "A trader known as Trader Kane alleges in a widely shared X post that clicking internal features on Prop Firm Match — firm profiles and promo-code buttons — triggered its affiliate links, redirecting the original tab through an affiliate URL while the intended page opened in a new tab.",
@@ -133,6 +134,7 @@ const TIMELINE: Array<{ date: string; what: string }> = [
   {
     date: "30 Oct 2026",
     what: "Prop Firm Match confirms the behaviour in a public statement: “Until yesterday, when someone clicked on a firm or a code on our site, a new tab would open the firm's site through our affiliate link … This should not have happened. We take full responsibility for it.”",
+    source: { href: FM_ARTICLE, label: "Finance Magnates" },
   },
   {
     date: "30 Oct 2026",
@@ -253,6 +255,21 @@ export default function PropFirmMatchVsVerifyTradingPage() {
         </div>
       </Section>
 
+      {/* Illustration provided by the founder; sits between the two sections it summarises. */}
+      <figure className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+        <Image
+          src="/images/two-models-two-masters.webp"
+          alt="Diagram of the two business models: an affiliate-funded directory ranks firms and earns a commission when a click on a firm or promo code converts, while verify.trading is paid by traders and publishes evidence-based verification with a transparent methodology."
+          width={1600}
+          height={533}
+          sizes="(min-width: 1152px) 1104px, 100vw"
+          className="w-full rounded-2xl border border-white/[0.08]"
+        />
+        <figcaption className="mt-3 text-center text-xs text-[var(--vt-muted)]">
+          Two models, two masters: an affiliate directory earns from firms per purchase; verify.trading is paid by traders.
+        </figcaption>
+      </figure>
+
       <Section
         eyebrow="October 2026"
         title="The Affiliate-Tracking Controversy, With Sources"
@@ -264,7 +281,14 @@ export default function PropFirmMatchVsVerifyTradingPage() {
           {TIMELINE.map((item) => (
             <li key={item.what} className="flex gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 sm:p-5">
               <span className="shrink-0 font-mono text-xs font-semibold uppercase tracking-wider text-[var(--vt-coral)]">{item.date}</span>
-              <p className="text-[15px] leading-7 text-slate-300">{item.what}</p>
+              <div>
+                <p className="text-[15px] leading-7 text-slate-300">{item.what}</p>
+                {item.source ? (
+                  <p className="mt-2 text-xs text-slate-400">
+                    Source: <ExternalCite href={item.source.href}>{item.source.label}</ExternalCite>
+                  </p>
+                ) : null}
+              </div>
             </li>
           ))}
         </ol>
@@ -275,7 +299,7 @@ export default function PropFirmMatchVsVerifyTradingPage() {
             {" describes the alleged mechanism: the original browser tab was reportedly redirected through an affiliate link to the prop firm's website while the intended page opened in a new tab — meaning Prop Firm Match could be credited with sales it didn't send, or with sales another affiliate sent. Prop Firm Match's own affiliate terms prohibit forced cookies and hidden redirects."}
           </p>
           <p className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-sm leading-7 text-slate-400">
-            {"To be fair about the limits of the record: Prop Firm Match apologised, said it had reached out to partners to reconcile inaccuracies, and the behaviour was reported disabled by 30 October. How many referrals were affected, how much commission was involved, and whether it was intentional have "}
+            {"To be fair about the limits of the record: Prop Firm Match apologised, said it had reached out to partners to reconcile inaccuracies, and the behaviour was reported disabled by 30 October. Prop Firm Match also says its ranking positions cannot be purchased or commercially influenced, and nothing on this page asserts otherwise — our point is about the incentive structure of affiliate funding, not about rankings being sold. How many referrals were affected, how much commission was involved, and whether it was intentional have "}
             <strong className="font-semibold text-slate-300">not</strong>
             {" been established publicly. We hold this page to the same standard as our verification records: dated claims, cited sources, and no conclusions the evidence doesn't support."}
           </p>
@@ -346,7 +370,7 @@ export default function PropFirmMatchVsVerifyTradingPage() {
 
       <CtaBand
         title="Verify the Firm Before You Buy the Deal"
-        body="Discounts change weekly; the company behind them is what decides whether you ever see a payout. Check the independent record, read its sources, then decide — on evidence, not on a ranking the firm paid for."
+        body="Discounts change weekly; the company behind them is what decides whether you ever see a payout. Check the independent record, read its sources, then decide — on evidence, from a platform that takes no commission from the firms it rates."
         primary={{ label: "Check a prop firm now", href: "/verify/prop-firms" }}
         secondary={{ label: "How we verify", href: "/methodology" }}
         location="propfirmmatch_vs_verify_trading"
