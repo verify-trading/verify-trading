@@ -2,6 +2,7 @@ import { generateText } from "ai";
 
 import { getActiveAnalysisRules } from "@/lib/ask/analysis-rules";
 import { getFcaStatus } from "@/lib/ask/fca";
+import type { getBtsAskContext, getBtsAskContextByBrand, listBtsRanked } from "@/lib/compare/bts-data";
 import { lookupVerifiedEntity } from "@/lib/ask/entities";
 import { getMarketQuote, getMarketSeries } from "@/lib/ask/market";
 import { fetchNewsEverything } from "@/lib/ask/newsdata";
@@ -22,6 +23,11 @@ export interface AskServiceDependencies {
   getActiveAnalysisRulesImpl?: typeof getActiveAnalysisRules;
   lookupVerifiedEntityImpl?: typeof lookupVerifiedEntity;
   getFcaStatusImpl?: typeof getFcaStatus;
+  getBtsAskContextImpl?: typeof getBtsAskContext;
+  listBtsRankedImpl?: typeof listBtsRanked;
+  getBtsAskContextByBrandImpl?: typeof getBtsAskContextByBrand;
+  /** User's country (ISO-2) when known outside a web request (e.g. tests, mobile); else read from the request. */
+  country?: string;
   getMarketQuoteImpl?: typeof getMarketQuote;
   getMarketSeriesImpl?: typeof getMarketSeries;
   fetchNewsEverythingImpl?: typeof fetchNewsEverything;

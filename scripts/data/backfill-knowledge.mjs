@@ -40,28 +40,24 @@ const ENTITY_TYPE_LABELS = {
 
 function entityToDocument(row) {
   const aliases = expandEntityAliases(row.name, row.aliases ?? []);
-  const isBroker = row.entity_type === "broker";
-  // BTS broker rows store inputs and compute the score on read, so trust_score
-  // is often null — only state a hard score when one is actually stored.
-  const hasScore = row.trust_score !== null && row.trust_score !== undefined;
-  const lines = [
-    `${row.name} is a ${ENTITY_TYPE_LABELS[row.entity_type] ?? "entity"} with status "${row.status}"${
-      hasScore ? ` and trust score ${Number(row.trust_score).toFixed(1)}/10` : ""
-    }.`,
-    isBroker && row.final_tier
-      ? `BTS tier: ${row.final_tier}${row.founder_verified ? " (founder-verified, locked)" : ""}.${
-          row.leverage ? ` Advertised max retail leverage ${row.leverage}.` : ""
-        }`
-      : null,
-    isBroker && row.regulators_listed
-      ? `Regulators listed (unverified research; the live register is the source of truth): ${row.regulators_listed}.`
-      : null,
-    isBroker
-      ? `FCA registered: ${row.fca_registered ? `yes${row.fca_reference ? ` (FRN ${row.fca_reference})` : ""}` : "not confirmed"}.${row.fca_warning ? " The FCA has published a warning about this firm." : ""}`
-      : null,
-    row.founder_notes ? `Founder note: ${row.founder_notes}` : null,
-    row.notes && row.notes !== row.founder_notes ? row.notes : null,
-  ];
+  const isGuru = row.entity_type === "guru";
+  // Brokers and prop firms: the BTS engine row is the only source of verdict and score. Old score
+  // columns (trust_score, final_tier, status) are never written into the index.
+  const bts = row.bts ?? null;
+  const verdict = isGuru ? row.status : (bts?.verdict ?? "UNDER REVIEW");
+  const score = !isGuru && bts && !["UNDER REVIEW", "NOT ACTIVE"].includes(bts.verdict) ? bts.global_score : null;
+  const lines = isGuru
+    ? [
+        `${row.name} is a ${ENTITY_TYPE_LABELS[row.entity_type] ?? "entity"} with status "${row.status}".`,
+        row.founder_notes ? `Founder note: ${row.founder_notes}` : null,
+        row.notes && row.notes !== row.founder_notes ? row.notes : null,
+      ]
+    : [
+        `${row.name} is a ${ENTITY_TYPE_LABELS[row.entity_type] ?? "entity"}. BTS global verdict: ${verdict}${score !== null && score !== undefined ? `, score ${score}/100` : ", no score shown"}. Call verify_entity for the verdict in the user's country.`,
+        bts?.verdict_reason ? `Reason: ${bts.verdict_reason}.` : null,
+        bts?.details?.active_verified_licences ? `Licences verified on a register: ${bts.details.active_verified_licences}.` : null,
+        row.fca_warning ? "The FCA has published a warning about this firm." : null,
+      ];
 
   return {
     kind: "entity",
@@ -69,12 +65,9 @@ function entityToDocument(row) {
     content: lines.filter(Boolean).join("\n"),
     tags: {
       entity_type: row.entity_type,
-      status: row.status,
-      fca_registered: Boolean(row.fca_registered),
+      status: verdict,
       fca_warning: Boolean(row.fca_warning),
-      final_tier: row.final_tier ?? null,
-      founder_verified: Boolean(row.founder_verified),
-      ...(hasScore ? { trust_score: Number(row.trust_score) } : {}),
+      ...(score !== null && score !== undefined ? { bts_score: score } : {}),
     },
     aliases,
     searchable_text: [normalizeEntityText(row.name), ...aliases].join(" "),
@@ -107,7 +100,7 @@ function ruleToDocument(row) {
  */
 export async function backfillKnowledge(client) {
   const [entities, rules] = await Promise.all([
-    client.from("verified_entities").select("*"),
+    client.from("verified_entities").select("*, bts:bts_scores(verdict, global_score, verdict_reason, details)").range(0, 9999),
     client.from("analysis_rules").select("*").eq("active", true),
   ]);
 

@@ -1,12 +1,13 @@
 "use client";
 
-import { MessageSquarePlus, PanelLeftClose, PanelLeft, Search, Trash2 } from "lucide-react";
+import { History, MessageSquarePlus, PanelLeftClose, PanelLeft, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AskSessionListSkeleton,
   AskSessionLoadMoreSkeleton,
 } from "@/components/ask/ask-skeletons";
+import { Logo } from "@/components/site/logo";
 import { Button } from "@/components/ui/button";
 import type { AskSessionListItem } from "@/lib/ask/contracts";
 
@@ -147,20 +148,34 @@ export function AskSessionSidebar({
         Inner min-width matches expanded aside per breakpoint so the clip animation stays aligned.
       */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-[20rem] xl:min-w-[24rem] lg:flex-row">
-          <div className="flex h-12 shrink-0 flex-row items-center justify-between gap-2 border-white/[0.06] bg-white/[0.02] px-3 py-0 max-lg:border-b lg:h-auto lg:w-14 lg:bg-transparent lg:px-0 lg:py-3 lg:flex-col lg:justify-start lg:gap-3 lg:border-b-0 lg:border-r">
+          {/* Phones: the app's Ask header (logo, title, saved count; history and new chat on the right). lg+: icon rail. */}
+          <div className="flex h-14 shrink-0 flex-row items-center justify-between gap-2 border-white/[0.06] px-4 py-0 lg:h-auto lg:w-14 lg:px-0 lg:py-3 lg:flex-col lg:justify-start lg:gap-3 lg:border-r">
+          <div className="flex min-w-0 items-center gap-2.5 lg:hidden">
+            <Logo size="avatar" innerWordmark={false} />
+            <div className="min-w-0">
+              <p className="text-[24px] font-bold leading-tight tracking-[-0.5px] text-white">Ask</p>
+              {sessions.length ? (
+                <p className="truncate text-[11px] text-[var(--vt-muted)]">
+                  {sessions.length} saved conversation{sessions.length === 1 ? "" : "s"}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 lg:contents">
           <Button
             type="button"
             variant="ghost"
             size="icon"
             onClick={onToggleCollapse}
-            className="size-10 rounded-xl text-[var(--vt-muted)] hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
-            aria-label={state.collapsed ? "Open sidebar" : "Close sidebar"}
+            className="size-10 rounded-full border border-white/10 text-[var(--vt-muted)] hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg lg:border-0"
+            aria-label={state.collapsed ? "Conversation history" : "Close conversation history"}
             aria-expanded={!state.collapsed}
           >
+            <History className="size-[18px] lg:hidden" strokeWidth={1.8} aria-hidden />
             {state.collapsed ? (
-              <PanelLeft className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
+              <PanelLeft className="size-4 max-lg:hidden" strokeWidth={1.8} aria-hidden />
             ) : (
-              <PanelLeftClose className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
+              <PanelLeftClose className="size-4 max-lg:hidden" strokeWidth={1.8} aria-hidden />
             )}
           </Button>
           <Button
@@ -168,11 +183,12 @@ export function AskSessionSidebar({
             variant="ghost"
             size="icon"
             onClick={onNewSession}
-            className="size-10 rounded-xl text-[var(--vt-muted)] hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg"
+            className="size-10 rounded-full border border-white/10 text-[var(--vt-muted)] hover:bg-white/5 hover:text-white lg:size-8 lg:rounded-lg lg:border-0"
             aria-label="New chat"
           >
             <MessageSquarePlus className="size-[18px] lg:size-4" strokeWidth={1.8} aria-hidden />
           </Button>
+          </div>
         </div>
 
         <div

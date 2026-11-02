@@ -37,12 +37,10 @@ const GENERAL_FAQS = [
 /** Segmented bar of verdict counts. Decorative: the counts are also written out beside it. */
 function VerdictSplit({ verdicts, total }: { verdicts: HubStats["verdicts"]; total: number }) {
   const tones: Array<[keyof HubStats["verdicts"], string]> = [
-    ["Strongly Trusted", "bg-[var(--vt-green)]"],
-    ["Trusted", "bg-[var(--vt-green)]/60"],
-    ["Proceed With Caution", "bg-[var(--vt-amber)]"],
-    ["High Risk", "bg-[var(--vt-coral)]/70"],
-    ["Avoid", "bg-[var(--vt-coral)]"],
-    ["Not yet rated", "bg-slate-500"],
+    ["Verified", "bg-[var(--vt-green)]"],
+    ["Caution", "bg-[var(--vt-amber)]"],
+    ["High risk", "bg-[var(--vt-coral)]"],
+    ["Insufficient data", "bg-slate-500"],
   ];
   return (
     <div aria-hidden className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/10">
@@ -66,7 +64,7 @@ export function RegulatorsIndex({ hubs, total }: { hubs: HubStats[]; total: numb
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">Regulators</p>
         <h1 className="mt-1 text-2xl font-bold tracking-[-0.03em] text-white sm:text-4xl">Broker regulators, and what a licence means</h1>
         <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-slate-400">
-          {shown.length} regulators appear in our register across {total.toLocaleString("en-GB")} brokers. For each: who they are, what protection a client gets, how to check the register, and every broker in our data that lists them.
+          {shown.length} regulators appear in our register across {total.toLocaleString("en-GB")} brokers. For each: who they are, what protection a client gets, how to check the register, and every broker with an active licence from them in our latest research.
         </p>
 
         <div className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -137,7 +135,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
   const top = entities.filter((e) => e.score !== null);
   const faqs = [
     { q: `What protection does a ${r.code} licence give clients?`, a: `${r.protections.join(" ")} These are general facts about the regime; what applies to you depends on the licensed entity and your client category.` },
-    { q: `How many brokers list ${r.code} in your register?`, a: `${n.toLocaleString("en-GB")} of the brokers in our register list ${r.name} (${r.code}). Records are refreshed as new regulator information is checked, and a listing here is a pointer, not proof of a current licence.` },
+    { q: `How many brokers hold a ${r.code} licence in your register?`, a: `${n.toLocaleString("en-GB")} of the brokers in our register have an active ${r.name} (${r.code}) licence verified on the register in our latest research. Licences change, so check the register yourself before you deposit.` },
     { q: `How do I check a ${r.code} licence?`, a: r.registerUrl ? `Open the ${r.registerLabel} and search for ${r.lookupHint}. Confirm the licensed legal entity matches the company in your account terms and that its status is current.` : `Find ${r.name}'s official website and its register, and search for ${r.lookupHint}. Confirm the licensed legal entity matches the company in your account terms.` },
     ...GENERAL_FAQS.slice(1, 2),
   ];
@@ -171,13 +169,13 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-white sm:text-4xl">{r.code} regulated brokers</h1>
           <p className="mt-1 text-sm text-slate-500">{r.name}, {r.country}</p>
           <p className="mt-4 max-w-3xl text-[15px] leading-relaxed text-slate-300">
-            {n.toLocaleString("en-GB")} {n === 1 ? "broker lists" : "brokers list"} {r.code} in our register. {r.summary}
+            {n.toLocaleString("en-GB")} {n === 1 ? "broker holds" : "brokers hold"} an active {r.code} licence in our register. {r.summary}
           </p>
           <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
             {([
-              ["Brokers listed", n.toLocaleString("en-GB")],
-              ["Trusted or better", String((verdicts["Strongly Trusted"] ?? 0) + (verdicts.Trusted ?? 0))],
-              ["Caution or worse", String((verdicts["Proceed With Caution"] ?? 0) + (verdicts["High Risk"] ?? 0) + (verdicts.Avoid ?? 0))],
+              ["Licensed brokers", n.toLocaleString("en-GB")],
+              ["Verified", String(verdicts.Verified ?? 0)],
+              ["Caution or high risk", String((verdicts.Caution ?? 0) + (verdicts["High risk"] ?? 0))],
               ["Regulator country", r.country.replace(/ \(.*\)/, "")],
             ] as Array<[string, string]>).map(([k, v]) => (
               <div key={k} className="bg-[#0b0f36] px-3.5 py-3">
@@ -221,7 +219,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
             ) : null}
           </Block>
 
-          <Block id="brokers" title={`Brokers that list ${r.code}`} intro={`Sorted by score, best first${n > ROW_CAP ? `. Showing ${ROW_CAP} of ${n.toLocaleString("en-GB")}` : ""}. A listing is a pointer to check, not proof of a current licence.`}>
+          <Block id="brokers" title={`Brokers licensed by ${r.code}`} intro={`Brokers with an active ${r.code} licence verified on the register in our latest research. Sorted by score, best first${n > ROW_CAP ? `. Showing ${ROW_CAP} of ${n.toLocaleString("en-GB")}` : ""}.`}>
             <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
               {entities.slice(0, ROW_CAP).map((e) => <HubRow key={e.slug} e={e} hub={r.code} />)}
             </ul>
@@ -233,8 +231,8 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
             {top.length === 0 ? <p className="mt-3 text-sm text-slate-500">None of these records has a score yet.</p> : null}
           </Block>
 
-          <Block id="verdicts" title={`Verdicts for ${r.code} brokers`} intro="How the brokers that list this regulator are spread across our verdict bands.">
-            <VerdictBands counts={verdicts} propFirms />
+          <Block id="verdicts" title={`Verdicts for ${r.code} brokers`} intro="How the brokers licensed by this regulator are spread across our verdicts.">
+            <VerdictBands counts={verdicts} />
           </Block>
 
           <Block id="faq" title={`${r.code}: frequently asked questions`}><FaqBlock items={faqs} /></Block>

@@ -1,19 +1,22 @@
 import { getRegulator, REGULATORS, type Regulator } from "@/lib/compare/regulators";
+import { UNLISTED, type BtsVerdict } from "@/lib/compare/bts";
 import type { PublicEntity, PublicEntityType, Verdict } from "@/lib/compare/entities";
 
-/** Best first. Used to order alternatives and to say which record rates higher. */
+/** Best first. Used to say which record rates higher. */
 export const VERDICT_RANK: Record<Verdict, number> = {
-  "Strongly Trusted": 0,
-  Trusted: 1,
-  "Proceed With Caution": 2,
-  "High Risk": 3,
-  Avoid: 4,
-  "Not yet rated": 5,
-  // Guru tiers rank separately (used only within the guru register).
   Verified: 0,
-  Unverified: 1,
-  Caution: 2,
+  Caution: 1,
+  "Insufficient data": 2,
+  "High risk": 3,
+  "Under review": 4,
+  "Not available": 5,
+  "Not active": 6,
+  // Guru-only tier.
+  Unverified: 0.5,
 };
+
+/** Shown in lists and rankings: not Under review, Not active or Not available. */
+export const isListed = (e: { verdict: Verdict }) => !UNLISTED.has(e.verdict as BtsVerdict);
 
 /**
  * Thin-page rule. A record is indexable only when it has something beyond a name and a verdict:
@@ -26,16 +29,13 @@ export function isIndexable(e: PublicEntity): boolean {
     // (Verified = confirmed track record; Unverified = neutral default; Caution = cited action).
     return true;
   }
-  if (e.verdict === "Not yet rated") return false;
-  if (e.type === "propfirm") return e.score !== null;
-  if (e.provisional) return false;
-  return e.regulators.length > 0 || e.fcaRegistered || e.fcaWarning;
+  return e.score !== null;
 }
 
 /**
  * Sitemap and robots index tag.
  *
- * Every broker and prop firm gets a reachable, indexed detail page — even "Not yet rated"
+ * Every broker and prop firm gets a reachable, indexed detail page — even "Under review"
  * records. Brand-name queries ("[firm] review", "is [firm] legit") have high intent and we are
  * often the only independent source, so an honest "here is what the record says, rated or not"
  * page is useful content, not thin. The "look before you deposit" promise also depends on every
@@ -69,7 +69,7 @@ export function pickAlternatives(entity: PublicEntity, all: PublicEntity[], limi
   const mine = new Set(hubSlugs(entity));
   const floor = entity.score ?? -1;
   return all
-    .filter((o) => o.slug !== entity.slug && o.type === entity.type && isIndexable(o) && !o.closed && !o.fcaWarning && o.score !== null && o.score >= floor)
+    .filter((o) => o.slug !== entity.slug && o.type === entity.type && isIndexable(o) && isListed(o) && !o.fcaWarning && o.score !== null && o.score >= floor)
     .map((o) => ({ o, shared: hubSlugs(o).filter((s) => mine.has(s)).length }))
     .filter(({ shared }) => entity.type === "propfirm" || shared > 0 || mine.size === 0)
     .sort((a, b) => b.shared - a.shared || (b.o.score ?? 0) - (a.o.score ?? 0) || a.o.name.localeCompare(b.o.name))
@@ -79,11 +79,11 @@ export function pickAlternatives(entity: PublicEntity, all: PublicEntity[], limi
 
 export type HubStats = { regulator: Regulator; entities: PublicEntity[]; verdicts: Partial<Record<Verdict, number>> };
 
-/** Brokers listing each reference regulator, best score first. */
+/** Brokers with an active licence from each regulator in the engine data, best score first. Unlisted verdicts are left out. */
 export function regulatorHubs(brokers: PublicEntity[]): HubStats[] {
   return REGULATORS.map((regulator) => {
     const entities = brokers
-      .filter((b) => b.regulatorDetails.some((r) => r.slug === regulator.slug))
+      .filter((b) => isListed(b) && b.bts?.licences.some((l) => regulator.engine.includes(l.code)))
       .sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name));
     const verdicts: HubStats["verdicts"] = {};
     for (const e of entities) verdicts[e.verdict] = (verdicts[e.verdict] ?? 0) + 1;
@@ -135,7 +135,7 @@ export function vsPairs(brokers: PublicEntity[]): Array<[PublicEntity, PublicEnt
   const seen = new Set<string>();
   const out: Array<[PublicEntity, PublicEntity]> = [];
   for (const hub of regulatorHubs(brokers)) {
-    const top = hub.entities.filter((e) => isIndexable(e) && e.score !== null && !e.fcaWarning).slice(0, VS_PER_REGULATOR);
+    const top = hub.entities.filter((e) => isIndexable(e) && !e.fcaWarning).slice(0, VS_PER_REGULATOR);
     for (let i = 0; i < top.length; i++) {
       for (let j = i + 1; j < top.length; j++) {
         if (out.length >= VS_CAP) return out;
@@ -153,7 +153,7 @@ export function vsPairs(brokers: PublicEntity[]): Array<[PublicEntity, PublicEnt
 /** Prop-firm indexed pairs: the top firms by score, paired with each other. No regulator dimension. */
 export function propVsPairs(propFirms: PublicEntity[]): Array<[PublicEntity, PublicEntity]> {
   const top = propFirms
-    .filter((e) => isIndexable(e) && e.score !== null && !e.closed)
+    .filter((e) => isIndexable(e) && isListed(e))
     .sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name))
     .slice(0, PROP_VS_TOP);
   const out: Array<[PublicEntity, PublicEntity]> = [];
@@ -192,15 +192,15 @@ const fmt = (iso: string | null) => (iso && Number.isFinite(Date.parse(iso)) ? n
 
 export function entityFaqs(e: PublicEntity): Array<{ q: string; a: string }> {
   const updated = fmt(e.updatedAt);
-  const updatedQ = { q: `When was the ${e.name} record last updated?`, a: updated ? `The ${e.name} record was last updated on ${updated}. Records are refreshed as new regulator information is checked.` : `We do not have a recorded update date for ${e.name}.` };
+  const updatedQ = { q: `When was the ${e.name} record last checked?`, a: updated ? `The ${e.name} record was last checked on ${updated}. Scores are updated when new research is approved.` : `We do not have a recorded update date for ${e.name}.` };
   const verdictQ = {
     q: `What is the verdict for ${e.name}?`,
-    a: `Our record gives ${e.name} a verdict of "${e.verdict}"${e.score !== null ? ` with a score of ${e.score.toFixed(1)} out of 10` : ""}. The verdict is computed from the regulator information we hold and is not a guarantee about the future.`,
+    a: `Our record gives ${e.name} a verdict of "${e.verdict}"${e.score !== null ? ` with a global score of ${e.score} out of 100` : ""}${e.bts?.reason ? ` (${e.bts.reason})` : ""}. Verdicts come from a fixed scoring method applied to every firm, never from payment, and are not a guarantee about the future.`,
   };
 
   if (e.type === "propfirm") {
     return [
-      { q: `Is ${e.name} legit?`, a: e.closed ? `Our record marks ${e.name} as closed, so it is rated "${e.verdict}". Check the firm's own site and public sources before acting.` : `Our record rates ${e.name} "${e.verdict}"${e.score !== null ? ` (${e.score.toFixed(1)} / 10)` : ""}. A rating is not a guarantee: read the firm's rules and payout terms before you buy an evaluation.` },
+      { q: `Is ${e.name} legit?`, a: e.closed ? `Our record marks ${e.name} as not active (inactive, redirected or merged), so no score is shown. Check the firm's own site and public sources before acting.` : `Our record rates ${e.name} "${e.verdict}"${e.score !== null ? ` (${e.score} / 100)` : ""}. A rating is not a guarantee: read the firm's rules and payout terms before you buy an evaluation.` },
       verdictQ,
       { q: `Is ${e.name} regulated?`, a: e.regulators.length ? `Our record lists these regulators for ${e.name}: ${list(e.regulators)}.` : `Our record lists no regulator for ${e.name}. Many prop firms sell evaluations on simulated accounts and are not regulated brokers, so the firm's own terms matter more.` },
       ...(e.yearFounded ? [{ q: `When was ${e.name} founded?`, a: `Our record gives ${e.yearFounded} as the founding year of ${e.name}.` }] : []),
@@ -217,7 +217,7 @@ export function entityFaqs(e: PublicEntity): Array<{ q: string; a: string }> {
     return [
       { q: `Is ${e.name} legit?`, a: `Our record rates ${e.name} "${e.verdict}". ${tierExplainer[e.verdict] ?? ""} Read the methodology for how a Caution has to be cited to be published.`.trim() },
       { q: `What does the ${e.verdict} verdict mean?`, a: tierExplainer[e.verdict] ?? `Our record gives ${e.name} a verdict of "${e.verdict}".` },
-      { q: `Do you score ${e.name} out of 10?`, a: `No. We never put a numeric score on a person. A number implies a precision we cannot defend about an individual's conduct or results. Only brokers and prop firms carry a 10-point score.` },
+      { q: `Do you give ${e.name} a numeric score?`, a: `No. We never put a numeric score on a person. A number implies a precision we cannot defend about an individual's conduct or results. Only brokers, prop firms and tools carry a score out of 100.` },
       { q: `Has ${e.name}'s identity been checked?`, a: e.reviewed ? `Yes — our record is only listed once a person's public identity has been confirmed. Everything else published about ${e.name} is derived from public sources.` : `Our record for ${e.name} is listed once identity has been confirmed and research is complete; otherwise the row is held back from the register.` },
       updatedQ,
     ];

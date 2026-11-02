@@ -14,7 +14,7 @@ import { webPageSchema } from "@/lib/marketing/seo";
 
 const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
-const statusOf = (e: PublicEntity) => (e.closed ? "closed" : e.developing ? "developing, not yet rated" : "operating");
+const statusOf = (e: PublicEntity) => (e.closed ? "not active" : "operating");
 
 /** The one-sentence answer, built from the two records. Never a recommendation. */
 export function vsSummary(a: PublicEntity, b: PublicEntity): string {
@@ -22,7 +22,7 @@ export function vsSummary(a: PublicEntity, b: PublicEntity): string {
   const rankB = VERDICT_RANK[b.verdict];
   const rating =
     rankA === rankB
-      ? `Both are rated "${a.verdict}" in our records${a.score !== null && b.score !== null && a.score !== b.score ? `, with ${(a.score > b.score ? a : b).name} scoring higher (${Math.max(a.score, b.score).toFixed(1)} against ${Math.min(a.score, b.score).toFixed(1)})` : ""}.`
+      ? `Both are rated "${a.verdict}" in our records${a.score !== null && b.score !== null && a.score !== b.score ? `, with ${(a.score > b.score ? a : b).name} scoring higher (${Math.max(a.score, b.score)} against ${Math.min(a.score, b.score)} out of 100)` : ""}.`
       : `${rankA < rankB ? a.name : b.name} holds the higher verdict in our records ("${rankA < rankB ? a.verdict : b.verdict}" against "${rankA < rankB ? b.verdict : a.verdict}").`;
   if (a.type === "propfirm") {
     const states =
@@ -55,15 +55,15 @@ export function VsView({ a, b }: { a: PublicEntity; b: PublicEntity }) {
         ["Number of regulators", String(a.regulators.length), String(b.regulators.length)],
         ["FCA register", a.fcaRegistered ? "Registered" : "Not listed", b.fcaRegistered ? "Registered" : "Not listed"],
         ["FCA warning", a.fcaWarning ? "On the warning list" : "None recorded", b.fcaWarning ? "On the warning list" : "None recorded"],
-        ["Record basis", a.reviewed ? "Reviewed" : a.provisional ? "Provisional" : "Awaiting re-check", b.reviewed ? "Reviewed" : b.provisional ? "Provisional" : "Awaiting re-check"],
-        ["Record updated", formatRecordDate(a.updatedAt), formatRecordDate(b.updatedAt)],
+        ["Why this score", a.bts?.reason ?? "Not scored yet", b.bts?.reason ?? "Not scored yet"],
+        ["Last checked", formatRecordDate(a.updatedAt), formatRecordDate(b.updatedAt)],
       ]
     : [
         ["Verdict", a.verdict, b.verdict],
         ["Score", scoreLabel(a), scoreLabel(b)],
-        ["Status", a.closed ? "Closed" : a.developing ? "Developing" : "Operating", b.closed ? "Closed" : b.developing ? "Developing" : "Operating"],
+        ["Status", a.closed ? "Not active" : "Operating", b.closed ? "Not active" : "Operating"],
         ["Founded", a.yearFounded ? String(a.yearFounded) : "Not recorded", b.yearFounded ? String(b.yearFounded) : "Not recorded"],
-        ["Record updated", formatRecordDate(a.updatedAt), formatRecordDate(b.updatedAt)],
+        ["Last checked", formatRecordDate(a.updatedAt), formatRecordDate(b.updatedAt)],
       ];
 
   const faqs = isBroker

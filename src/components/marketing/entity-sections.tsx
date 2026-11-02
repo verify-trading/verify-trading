@@ -10,14 +10,14 @@ import type { PublicEntity, RegulatorRef, Verdict } from "@/lib/compare/entities
 import { STANDING_LABEL, getRegulator, type Standing } from "@/lib/compare/regulators";
 import { cn } from "@/lib/utils";
 
-/** What each verdict band means, in plain words. No claims beyond the band. */
+/** What each BTS verdict means, in the approved method's words. No claims beyond the rule. */
 export const BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
-  { verdict: "Strongly Trusted", text: "A strong regulatory basis or track record on the evidence we hold." },
-  { verdict: "Trusted", text: "A reasonable regulatory basis or track record on the evidence we hold." },
-  { verdict: "Proceed With Caution", text: "Mixed or thin evidence, often an offshore licence. Check the register yourself." },
-  { verdict: "High Risk", text: "The evidence points to material risk. Prop firms only." },
-  { verdict: "Avoid", text: "Serious concerns, such as no regulatory basis or a confirmed closure." },
-  { verdict: "Not yet rated", text: "We hold a record but have not assigned a score. Not a judgement." },
+  { verdict: "Verified", text: "Score 75+, research complete, and an active tier 1 or 2 licence held by the entity serving retail clients." },
+  { verdict: "Caution", text: "Active, with enough evidence to score, but short of Verified. Read the reason before you deposit." },
+  { verdict: "High risk", text: "Verified adverse evidence only: a regulator warning, or a licence revoked or suspended in the last 2 years." },
+  { verdict: "Insufficient data", text: "Not enough verified evidence yet to rate. Not a judgement either way." },
+  { verdict: "Under review", text: "Our researchers are re-checking this record. No score is shown until they finish." },
+  { verdict: "Not active", text: "Inactive, redirected or merged. No score is shown." },
 ];
 
 /** Separate scale for people: no numeric score, three tiers, each one defensible. */
@@ -28,22 +28,14 @@ export const GURU_BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
 ];
 
 const barTone: Record<string, string> = {
-  "Strongly Trusted": "bg-[var(--vt-green)]",
-  Trusted: "bg-[var(--vt-green)]/70",
-  "Proceed With Caution": "bg-[var(--vt-amber)]",
-  "High Risk": "bg-[var(--vt-coral)]/80",
-  Avoid: "bg-[var(--vt-coral)]",
-  "Not yet rated": "bg-slate-500",
   Verified: "bg-[var(--vt-green)]",
-  Unverified: "bg-slate-500",
   Caution: "bg-[var(--vt-amber)]",
+  "High risk": "bg-[var(--vt-coral)]",
 };
 
 /** The verdict scale: hairline-separated rows, one line per band. */
-export function VerdictBands({ current, counts, propFirms = false, gurus = false }: { current?: Verdict; counts?: Partial<Record<Verdict, number>>; propFirms?: boolean; gurus?: boolean }) {
-  const bands = gurus
-    ? GURU_BAND_INFO
-    : BAND_INFO.filter((b) => propFirms || (b.verdict !== "High Risk" && b.verdict !== "Not yet rated"));
+export function VerdictBands({ current, counts, gurus = false }: { current?: Verdict; counts?: Partial<Record<Verdict, number>>; gurus?: boolean }) {
+  const bands = gurus ? GURU_BAND_INFO : BAND_INFO;
   return (
     <ul className="divide-y divide-white/10 border-y border-white/10">
       {bands.map((b) => (
@@ -56,7 +48,7 @@ export function VerdictBands({ current, counts, propFirms = false, gurus = false
           aria-current={current === b.verdict ? "true" : undefined}
         >
           <div className="flex items-center gap-2.5">
-            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", barTone[b.verdict])} />
+            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", barTone[b.verdict] ?? "bg-slate-500")} />
             <VerdictBadge verdict={b.verdict} />
             {current === b.verdict ? <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--vt-coral)]">This record</span> : null}
           </div>

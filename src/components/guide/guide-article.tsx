@@ -297,8 +297,8 @@ export function GuideArticle() {
               <h3 className="text-lg font-semibold tracking-tight text-white">BTS: Broker Trust Score</h3>
               <p className="mt-2 max-w-2xl text-[15px] leading-7 text-slate-400">
                 Checks a broker or prop firm against regulator records: authorisation status, warnings and restrictions,
-                and entity details such as domain and contact information. The result is a trust score and a plain
-                verdict, from Strongly Trusted to Avoid. Browse every rated name on the{" "}
+                and entity details such as domain and contact information. The result is a score out of 100 and a plain
+                verdict, from Verified to High risk, adjusted for your country. Browse every rated name on the{" "}
                 <Link href="/verify/brokers" className="text-[var(--vt-blue)] hover:underline">broker register</Link> and the{" "}
                 <Link href="/verify/prop-firms" className="text-[var(--vt-blue)] hover:underline">prop firm register</Link>.
               </p>

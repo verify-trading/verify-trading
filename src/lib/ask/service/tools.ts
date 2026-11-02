@@ -25,6 +25,7 @@ import {
   normalizeForexPair,
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
+import { getBtsAskContext, getBtsAskContextByBrand, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
 import {
   findEntityCandidates,
   listVerifiedEntities,
@@ -52,6 +53,11 @@ import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
 
 const verifyEntityInputSchema = z.object({
   name: z.string().min(1).describe("Broker, prop firm, guru, or brand name to verify."),
+  country: z
+    .string()
+    .length(2)
+    .optional()
+    .describe("ISO country code ONLY when the user asks about a specific country (e.g. 'is IG safe in South Africa' -> ZA). Omit it to use the user's own country."),
 });
 
 const persistDiscoveredPropFirmInputSchema = z.object({
@@ -82,6 +88,11 @@ const listVerifiedEntitiesInputSchema = z.object({
   type: z
     .enum(["broker", "propfirm", "guru"])
     .describe("Which kind of reviewed entity to list."),
+  country: z
+    .string()
+    .length(2)
+    .optional()
+    .describe("ISO country code ONLY when the user asks for a specific country (e.g. 'best brokers in South Africa' -> ZA). Omit it to use the user's own country."),
   limit: z
     .number()
     .int()
@@ -631,7 +642,8 @@ function withCard(card: AskCard, uiMeta?: AskUiMeta) {
   return uiMeta ? { card, uiMeta } : { card };
 }
 
-type VerificationToolResponse =
+/** Any verification result can carry the BTS engine's evidence for the firm. */
+type VerificationToolResponse = (
   | ReturnType<typeof withCard>
   | {
       fcaData: {
@@ -644,7 +656,8 @@ type VerificationToolResponse =
         source: string;
       };
     }
-  | { coverage: CoverageEvidence };
+  | { coverage: CoverageEvidence }
+) & { bts?: BtsAskContext };
 
 /**
  * No confident record for the queried name. We hand the model the facts — the
@@ -667,10 +680,12 @@ interface CoverageEvidence {
 }
 
 function candidateStanding(candidate: EntityCandidate): string {
-  if (candidate.entity.guruTier === "Caution") return "regulator warning on file";
-  if (candidate.entity.status === "avoid") return "rated Avoid";
-  if (candidate.entity.status === "warning") return "flagged";
-  return "reviewed record on file";
+  if (candidate.entity.type === "guru") {
+    if (candidate.entity.guruTier === "Caution") return "regulator warning on file";
+    return "reviewed record on file";
+  }
+  // Brokers and prop firms: the verdict comes from the BTS engine via verify_entity, not old record fields.
+  return "record on file; call verify_entity for its verdict";
 }
 
 async function coverageEvidence(
@@ -779,7 +794,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       description:
         "Verify a SINGLE named broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks on a specific firm. Pass the name EXACTLY as the user wrote it — the resolver already handles misspellings, spacing, and run-together words, so never correct it, normalize it, or substitute a different/similar-looking firm name you guessed. It returns reviewed entity data plus live FCA confirmation as EVIDENCE — it is not your reply. After calling it you must still call submit_ask_card with the final card (echo the exact score and status) and 2-3 followups. Never end your turn on the raw verify_entity result.",
       inputSchema: verifyEntityInputSchema,
-      execute: async ({ name }) => resolveVerificationToolResult(name, dependencies),
+      execute: async ({ name, country }) => resolveVerificationToolResult(name, dependencies, country ?? dependencies.country),
     }),
     persist_discovered_prop_firm: tool({
       description:
@@ -791,9 +806,10 @@ export function createAskTools(dependencies: AskServiceDependencies) {
       description:
         "List the top reviewed brokers, prop firms, or trading gurus from our database, ranked by trust score. Use this whenever the user asks for the top / best / safest / recommended ones, or 'which … are good', or to list them, and has NOT named a specific firm. For a single named firm use verify_entity instead. Summarize the returned list in your own words: lead with the highest-trust names, give each a quick reason, and flag any marked avoid.",
       inputSchema: listVerifiedEntitiesInputSchema,
-      execute: async ({ type, limit }) => ({
-        entities: await listVerifiedEntities(type, limit ?? 8),
-      }),
+      execute: async ({ type, limit, country }) =>
+        type === "guru"
+          ? { entities: await listVerifiedEntities(type, limit ?? 8) }
+          : { bts: await (dependencies.listBtsRankedImpl ?? listBtsRanked)(type, limit ?? 8, country ?? dependencies.country) },
     }),
     get_market_briefing: tool({
       description:
@@ -936,9 +952,31 @@ export function createAskTools(dependencies: AskServiceDependencies) {
 
 export type AskToolSet = ReturnType<typeof createAskTools>;
 
+/**
+ * BTS engine card: the engine's verdict and score for the user's country, verbatim. Live FCA data
+ * and old record fields never change it ("code decides, Ask explains").
+ */
+function applyBtsToCard(card: BrokerCard, bts: BtsAskContext): BrokerCard {
+  const { verdict, score, note } = bts.shown;
+  const status = verdict === "Verified" ? "LEGITIMATE" : verdict === "High risk" || verdict === "Not active" ? "AVOID" : "WARNING";
+  const reason = bts.global.reason ? `${bts.global.reason.charAt(0).toUpperCase()}${bts.global.reason.slice(1)}.` : "";
+  const sameAsReason = note && bts.global.reason && note.toLowerCase().includes(bts.global.reason.toLowerCase());
+  return {
+    ...card,
+    score: score === null ? "No score" : `${score}/100`,
+    status,
+    // FCA standing from the engine's register-verified licences, not a live name search.
+    fca: /(^|\|)FCA:/.test(bts.global.licencesVerified) ? "Yes" : "No",
+    complaints: bts.conductRecord,
+    color: status === "LEGITIMATE" ? "green" : "red",
+    verdict: [`${verdict} ${bts.shown.global ? "(global rating)" : `for ${bts.userCountry}`}.`, reason, sameAsReason ? "" : (note ?? "")].filter(Boolean).join(" "),
+  };
+}
+
 export async function resolveVerificationToolResult(
   name: string,
   dependencies: AskServiceDependencies,
+  country?: string,
 ): Promise<VerificationToolResponse> {
   const lookupVerifiedEntityImpl =
     dependencies.lookupVerifiedEntityImpl ?? lookupVerifiedEntity;
@@ -947,13 +985,23 @@ export async function resolveVerificationToolResult(
   const normalized = normalizeVerificationName(name);
   const lookup = await lookupVerifiedEntityImpl(normalized.lookupName);
 
+  // No page on our site, but the engine may still have scored the firm (new brokers, tools).
+  const engineByBrand = async () =>
+    (await (dependencies.getBtsAskContextByBrandImpl ?? getBtsAskContextByBrand)(normalized.lookupName, country)) ?? undefined;
+
+  // Brokers and prop firms: the BTS engine's verdict and score go on the card verbatim.
+  const withEngine = async (result: ReturnType<typeof withCard>, slug: string) => {
+    const bts = await (dependencies.getBtsAskContextImpl ?? getBtsAskContext)(slug, country);
+    return bts && result.card.type === "broker" ? { ...result, card: applyBtsToCard(result.card, bts), bts } : result;
+  };
+
   if (lookup.found && lookup.entity) {
     if (lookup.entity.type === "guru") {
       const card = buildGuruCard(lookup);
       if (card) return withCard(card);
     } else if (lookup.entity.type === "propfirm") {
       const card = buildPropFirmCard(lookup);
-      if (card) return withCard(card, propFirmUiMeta(lookup));
+      if (card) return withEngine(withCard(card, propFirmUiMeta(lookup)), lookup.entity.id);
     } else {
       const fcaStatus = await getFcaStatusImpl({
         name: lookup.entity.name,
@@ -961,10 +1009,10 @@ export async function resolveVerificationToolResult(
       });
       const card = buildBrokerCard(lookup, fcaStatus);
       if (card) {
-        return withCard(card, {
-          verificationKind: "broker",
-          verificationSourceLabel: fcaStatus.available ? "Live FCA confirmed" : "Reviewed record",
-        });
+        return withEngine(
+          withCard(card, { verificationKind: "broker", verificationSourceLabel: fcaStatus.available ? "Live FCA confirmed" : "Reviewed record" }),
+          lookup.entity.id,
+        );
       }
     }
   } else if (!normalized.fromUrl) {
@@ -972,6 +1020,7 @@ export async function resolveVerificationToolResult(
     const fcaStatus = await getFcaStatusImpl({ name: normalized.lookupName, frn: undefined });
     if (fcaStatus.available && fcaStatus.statusText) {
       return {
+        bts: await engineByBrand(),
         fcaData: {
           queriedName: fcaStatus.queriedName,
           frn: fcaStatus.frn,
@@ -987,5 +1036,8 @@ export async function resolveVerificationToolResult(
 
   // No confident record: hand the model the closest labelled candidates and let
   // it write the reply ("did you mean X?" or ask for the exact name).
-  return coverageEvidence(normalized.fromUrl ? normalized.displayName : normalized.lookupName, normalized.fromUrl);
+  return {
+    ...(await coverageEvidence(normalized.fromUrl ? normalized.displayName : normalized.lookupName, normalized.fromUrl)),
+    bts: await engineByBrand(),
+  };
 }

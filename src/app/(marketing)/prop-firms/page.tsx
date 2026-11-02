@@ -21,7 +21,7 @@ export default function PropFirmsPage() {
       lede="Traders check a firm before they buy a challenge. This page explains what a prop firm record is built from, how to ask for a correction, and why the outcome is not for sale."
       tldr={[
         "Prop firm records cover operating status, published terms and documented payout complaint patterns.",
-        "Records not yet scored show as Not yet rated; closed firms are clearly marked.",
+        "Firms being re-checked show as Under review; firms that are no longer active are clearly marked.",
         "The outcome is not for sale. You can ask for a correction.",
       ]}
       compareHref="/verify/prop-firms"
@@ -29,7 +29,7 @@ export default function PropFirmsPage() {
       entityNoun="prop firm"
       faqs={[...PAGE_FAQS.propFirmsBusiness]}
       assessed={[
-        { title: "Operating status", body: "Whether a firm is operating, closed or still being monitored. Records not yet scored show as “Not yet rated”." },
+        { title: "Operating status", body: "Whether a firm is operating or no longer active. Firms being re-checked show as “Under review”." },
         { title: "Published terms", body: "Your own published rules, payout terms and licensing claims, as they appear on your site." },
         { title: "Documented complaint patterns", body: "Public, attributable records of withdrawal and payout issues, assessed for pattern and not for isolated reports." },
       ]}

@@ -1,0 +1,47 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { resolveVerificationToolResult } from "@/lib/ask/service/tools";
+import type { BtsAskContext } from "@/lib/compare/bts-data";
+
+const lookupVerifiedEntityImpl = vi.fn().mockResolvedValue({
+  found: true,
+  entity: { id: "ig", name: "IG", type: "broker", status: "warning", fcaRegistered: true, fcaReference: "195355", fcaWarning: false, trustScore: 6, notes: "", source: "", aliases: ["ig"] },
+  brokerCardHint: { name: "IG", score: "6.0", status: "WARNING", fca: "Yes", complaints: "Low", color: "red", provisional: false, band: "Proceed With Caution", founderNote: null },
+});
+
+// A live FCA lookup that disagrees (would normally downgrade the card to WARNING).
+const getFcaStatusImpl = vi.fn().mockResolvedValue({ available: true, queriedName: "IG", frn: "195355", authorised: false, warning: true, statusText: "Not authorised", source: "FCA", note: "Clone firm alert" });
+
+const context = (shown: BtsAskContext["shown"]): BtsAskContext =>
+  ({ rule: "", userCountry: "United Kingdom (GB)", shown, global: { verdict: "Verified", score: 93, reason: "licence verified on register" }, country: null }) as unknown as BtsAskContext;
+
+describe("Ask and the BTS engine", () => {
+  it("shows the engine's verdict and score verbatim, whatever old fields or live FCA data say", async () => {
+    const getBtsAskContextImpl = vi.fn().mockResolvedValue(context({ country: "GB", verdict: "Verified", score: 93, note: "Licensed by your country's regulator.", global: false }));
+    const r = await resolveVerificationToolResult("IG", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl }, "GB");
+    expect(getBtsAskContextImpl).toHaveBeenCalledWith("ig", "GB");
+    expect("card" in r && r.card).toMatchObject({ score: "93/100", status: "LEGITIMATE", color: "green" });
+    expect("bts" in r && r.bts?.shown.score).toBe(93);
+  });
+
+  it("never invents a number when the engine shows none", async () => {
+    const getBtsAskContextImpl = vi.fn().mockResolvedValue(context({ country: "US", verdict: "Not available", score: null, note: "Not offered in the US.", global: false }));
+    const r = await resolveVerificationToolResult("IG", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl });
+    expect("card" in r && r.card).toMatchObject({ score: "No score", status: "WARNING" });
+  });
+});
+
+describe("card score guard (firms the engine scored but the site has no page for)", () => {
+  const card = (name: string) => ({ type: "broker", name, score: "88", status: "LEGITIMATE", fca: "No", complaints: "Medium", verdict: "x", color: "green" }) as const;
+  const results = [{ toolName: "verify_entity", output: { coverage: {}, bts: { firm: "Binance", shown: { verdict: "Caution", score: 40 } } } }];
+
+  it("takes the engine's score and status, never the model's", async () => {
+    const { mergeToolOwnedNumbers } = await import("@/lib/ask/pipeline");
+    expect(mergeToolOwnedNumbers(card("Binance"), results as never)).toMatchObject({ score: "40/100", status: "WARNING", color: "red" });
+  });
+
+  it("forces N/A when the card names a different firm", async () => {
+    const { mergeToolOwnedNumbers } = await import("@/lib/ask/pipeline");
+    expect(mergeToolOwnedNumbers(card("Binance.US"), results as never)).toMatchObject({ score: "N/A" });
+  });
+});

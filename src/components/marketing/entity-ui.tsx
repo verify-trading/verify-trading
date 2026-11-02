@@ -1,5 +1,5 @@
+import { verdictTone } from "@/lib/compare/bts";
 import type { Verdict } from "@/lib/compare/entities";
-import { verdictTone } from "@/lib/compare/entities";
 import { cn } from "@/lib/utils";
 
 const toneClass = {
@@ -32,10 +32,9 @@ export function formatRecordDate(iso: string | null): string {
 
 export const askCheckHref = (name: string) => `/ask?prefill=${encodeURIComponent(`Is ${name} safe?`)}`;
 
-export function scoreLabel(e: { score: number | null; provisional: boolean; type?: string }): string {
+export function scoreLabel(e: { score: number | null; verdict?: string; type?: string }): string {
   if (e.type === "guru") return "No numeric score (person)";
-  if (e.provisional) return "Provisional";
-  return e.score === null ? "Not yet rated" : `${e.score.toFixed(1)} / 10`;
+  return e.score === null ? "No score shown" : `${e.score} / 100`;
 }
 
 const barClass = {
@@ -61,8 +60,8 @@ export function EntityAvatar({ name, verdict, className }: { name: string; verdi
   );
 }
 
-/** Score out of 10 with a thin bar. Unrated and provisional records show a text label and an empty track. */
-export function ScoreBar({ entity, className }: { entity: { score: number | null; provisional: boolean; verdict: Verdict }; className?: string }) {
+/** BTS score out of 100 with a thin bar. No score (Under review, Not active, Not available) shows a label and an empty track. */
+export function ScoreBar({ entity, className }: { entity: { score: number | null; verdict: Verdict }; className?: string }) {
   const { score } = entity;
   return (
     <div className={cn("min-w-0", className)}>
@@ -70,13 +69,13 @@ export function ScoreBar({ entity, className }: { entity: { score: number | null
         <span className="text-xs text-slate-400">{scoreLabel(entity)}</span>
       ) : (
         <span className="font-mono text-sm font-semibold text-white">
-          {score.toFixed(1)}
-          <span className="text-xs font-normal text-slate-500"> / 10</span>
+          {score}
+          <span className="text-xs font-normal text-slate-500"> / 100</span>
         </span>
       )}
       <div className="mt-1.5 h-1 w-full max-w-[6.5rem] overflow-hidden rounded-full bg-white/10" aria-hidden>
         {score === null ? null : (
-          <div className={cn("h-full rounded-full", barClass[verdictTone(entity.verdict)])} style={{ width: `${Math.max(0, Math.min(10, score)) * 10}%` }} />
+          <div className={cn("h-full rounded-full", barClass[verdictTone(entity.verdict)])} style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
         )}
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
   PROMO_OFFER_COOKIE_NAME,
   TUBMAN_OFFER_KEY,
 } from "@/lib/billing/promo-offers";
+import { GEO_COOKIE } from "@/lib/compare/bts";
 import { updateSession } from "@/lib/supabase/middleware";
 
 /**
@@ -49,6 +50,12 @@ export async function middleware(request: NextRequest) {
   }
 
   const { response, user } = await updateSession(request);
+
+  // Country guess for BTS country verdicts on cached pages: only the 2-letter code is kept, never the IP.
+  const ipCountry = request.headers.get("x-vercel-ip-country");
+  if (ipCountry && request.cookies.get(GEO_COOKIE)?.value !== ipCountry) {
+    response.cookies.set(GEO_COOKIE, ipCountry, { path: "/", sameSite: "lax", maxAge: 24 * 60 * 60 });
+  }
   const pathname = request.nextUrl.pathname;
   const isTubmanReferral = isTubmanReferralToken(
     request.nextUrl.searchParams.get("via"),

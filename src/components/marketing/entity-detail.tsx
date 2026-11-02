@@ -1,15 +1,18 @@
 import Link from "next/link";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink, Info } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Breadcrumbs, CtaBand } from "@/components/marketing/primitives";
 import { CtaLink } from "@/components/marketing/cta-link";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, scoreLabel, VerdictBadge } from "@/components/marketing/entity-ui";
+import { CountryVerdict } from "@/components/marketing/country-verdict";
 import { Block, EntityMiniCard, FaqBlock, RegulatorCard, TocNav, VerdictBands, WarningBanner } from "@/components/marketing/entity-sections";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
+import { pillarDisplay, type BtsVerdict, type CountryFitRow } from "@/lib/compare/bts";
 import type { PublicEntity } from "@/lib/compare/entities";
 import { entityFaqs, entityPath, pickAlternatives, vsPartners, vsPath } from "@/lib/compare/insights";
-import { getRegulator } from "@/lib/compare/regulators";
+import { getRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { entityReviewSchema, webPageSchema } from "@/lib/marketing/seo";
 
@@ -28,18 +31,18 @@ export function entityDescription(e: PublicEntity): string {
 }
 
 function lede(e: PublicEntity): string {
-  const rating = e.score !== null ? `${e.verdict}, ${e.score.toFixed(1)} out of 10` : e.provisional ? "provisional, awaiting a register check" : e.verdict;
+  const rating = e.score !== null ? `${e.verdict}, ${e.score} out of 100` : e.verdict;
   if (e.type === "propfirm") {
-    const state = e.closed ? "is recorded as closed" : e.developing ? "is a developing record that we have not rated yet" : "is recorded as operating";
-    return `${e.name} ${state}. Our verdict is ${rating}. Sourced from public operating records and published terms.`;
+    const state = e.closed ? "is recorded as not active" : "is recorded as operating";
+    return `${e.name} ${state}. Our global rating is ${rating}. Sourced from public operating records and published terms.`;
   }
-  const regs = e.regulators.length ? `listed with ${e.regulators.slice(0, 3).join(", ")}` : "not listed with any regulator in our record";
-  return `${e.name} is a broker ${regs}. Our verdict is ${rating}. Below: what each regulator means for client protection and how to verify.`;
+  const regs = e.regulators.length ? `licensed by ${e.regulators.slice(0, 3).join(", ")} (verified on the register)` : "without a licence verified on a regulator register in our research";
+  return `${e.name} is a broker ${regs}. Our global rating is ${rating}. Below: why it scores this way, what each regulator means for client protection, and how to verify.`;
 }
 
-const basisLabel = (e: PublicEntity) => (e.reviewed ? "Reviewed and locked" : e.provisional ? "Provisional, awaiting a register check" : "Awaiting a live register re-check");
+const LIMITED_EVIDENCE = 50;
 
-export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: PublicEntity[] }) {
+export function EntityDetail({ entity: e, all, countryRows = [] }: { entity: PublicEntity; all: PublicEntity[]; countryRows?: CountryFitRow[] }) {
   if (e.type === "guru") return <GuruDetail entity={e} />;
   const listPath = ENTITY_LIST_PATH[e.type];
   const path = entityPath(e);
@@ -51,7 +54,9 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
   const primary = refs.map((r) => (r.slug ? getRegulator(r.slug) : null)).find((r) => r?.registerUrl) ?? null;
   const hubLinks = refs.flatMap((r) => (r.slug ? [getRegulator(r.slug)!] : [])).slice(0, 3);
 
+  const bts = e.bts;
   const toc = [
+    { id: "why", label: "Why this score" },
     { id: "verdict", label: "What the verdict means" },
     ...(isBroker ? [{ id: "regulation", label: "Who regulates it" }] : []),
     { id: "verify", label: "How to verify" },
@@ -62,33 +67,31 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
 
   const highlights: Array<[string, string]> = isBroker
     ? [
-        ["Regulators", e.regulators.length ? e.regulators.slice(0, 3).join(", ") : "None listed"],
-        ["FCA", e.fcaWarning ? "Warning listed" : e.fcaRegistered ? "Registered" : "Not listed"],
-        ["Basis", e.reviewed ? "Reviewed" : e.provisional ? "Provisional" : "Awaiting re-check"],
-        ["Updated", formatRecordDate(e.updatedAt)],
+        ["Licences verified", e.regulators.length ? e.regulators.slice(0, 3).join(", ") : "None verified"],
+        ["Global score", scoreLabel(e)],
+        ["Evidence", e.score !== null && bts?.confidence != null ? `${bts.confidence} / 100` : "Not scored"],
+        ["Last checked", formatRecordDate(e.updatedAt)],
       ]
     : [
-        ["Status", e.closed ? "Closed" : e.developing ? "Developing" : "Operating"],
-        ["Founded", e.yearFounded ? String(e.yearFounded) : "Not recorded"],
-        ["Score", scoreLabel(e)],
-        ["Updated", formatRecordDate(e.updatedAt)],
+        ["Status", e.closed ? "Not active" : "Operating"],
+        ["Global score", scoreLabel(e)],
+        ["Evidence", e.score !== null && bts?.confidence != null ? `${bts.confidence} / 100` : "Not scored"],
+        ["Last checked", formatRecordDate(e.updatedAt)],
       ];
 
   const facts: Array<[string, string]> = [
-    ["Verdict", e.verdict],
-    ["Score", scoreLabel(e)],
-    ["Regulators listed", e.regulatorDetails.length ? e.regulatorDetails.map((r) => (r.country ? `${r.code} (${r.country})` : r.code)).join(", ") : "None listed"],
+    ["Global verdict", e.verdict],
+    ["Global score", scoreLabel(e)],
     ...(isBroker
       ? ([
-          ["FCA register", e.fcaRegistered ? `Registered${e.fcaReference ? `, reference ${e.fcaReference}` : ""}` : "Not listed on the FCA register in our record"],
+          ["Licences verified", bts?.licences.length ? bts.licences.map((l) => `${regulatorForEngineCode(l.code).code}${l.number ? ` ${l.number}` : ""}`).join(", ") : "None verified on a register"],
           ["FCA warning", e.fcaWarning ? "On the FCA warning list" : "None recorded"],
-          ["Record basis", basisLabel(e)],
         ] as Array<[string, string]>)
       : ([
-          ["Status", e.closed ? "Closed" : e.developing ? "Developing, not yet rated" : "Operating"],
+          ["Status", e.closed ? "Not active" : "Operating"],
           ...(e.yearFounded ? [["Founded", String(e.yearFounded)]] : []),
         ] as Array<[string, string]>)),
-    ["Record updated", formatRecordDate(e.updatedAt)],
+    ["Last checked", formatRecordDate(e.updatedAt)],
   ];
 
   const steps = isBroker
@@ -140,9 +143,21 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
                 </div>
                 <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-300">{lede(e)}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-4 rounded-xl border border-white/[0.08] bg-black/25 px-5 py-4 lg:flex-col lg:items-start lg:gap-3">
-                <VerdictBadge verdict={e.verdict} className="px-3 py-1 text-xs" />
-                <ScoreBar entity={e} className="w-32" />
+              <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-white/[0.08] bg-black/25 px-5 py-4">
+                {isBroker && bts ? (
+                  <CountryVerdict verdict={e.verdict as BtsVerdict} score={e.score} rows={countryRows} />
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <VerdictBadge verdict={e.verdict} className="px-3 py-1 text-xs" />
+                    <ScoreBar entity={e} className="w-32" />
+                  </div>
+                )}
+                {bts ? (
+                  <p className="border-t border-white/[0.06] pt-2.5 text-xs text-slate-400">
+                    Global rating: <span className="font-medium text-slate-200">{e.score !== null ? `${e.score} ${e.verdict}` : e.verdict}</span>
+                    {e.score !== null && bts.confidence !== null ? ` · evidence ${bts.confidence}/100` : ""}
+                  </p>
+                ) : null}
               </div>
             </div>
             <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
@@ -161,6 +176,17 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
                 </WarningBanner>
               </div>
             ) : null}
+            {bts?.cloneAlert ? (
+              <Notice title="Scammers have impersonated this brand">
+                Fake sites and apps have used the {e.name} name. This is not a warning about {e.name} itself. Only use its official website, and check the domain against the regulator&apos;s register before you log in or deposit.
+              </Notice>
+            ) : null}
+            {bts && e.score !== null && bts.confidence !== null && bts.confidence < LIMITED_EVIDENCE ? (
+              <Notice title="Limited verified evidence">
+                Only part of the picture has been verified so far (evidence {bts.confidence}/100). Check the regulator&apos;s register yourself before you deposit.
+              </Notice>
+            ) : null}
+            {!bts ? <Notice title="Under review">Our researchers have not finished scoring {e.name}, so no score is shown yet.</Notice> : null}
             <div className="mt-6 flex flex-wrap gap-3">
               <CtaLink href={askCheckHref(e.name)} event="ask" location={`entity_${e.type}_summary`} className="h-10">
                 Run full check <ArrowRight aria-hidden />
@@ -172,23 +198,44 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
 
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_14rem] lg:gap-12 lg:py-16">
         <div className="min-w-0 space-y-12">
-          {/* 1. What the verdict means */}
-          <Block id="verdict" title="What the verdict means" intro={`${e.name} is rated "${e.verdict}". Verdicts come from a fixed, rule-based model applied identically to every entity.`}>
-            <VerdictBands current={e.verdict} propFirms={!isBroker} />
+          {/* 1. Why this score */}
+          <Block id="why" title="Why this score" intro={bts ? `Global rating ${e.score !== null ? `${e.score} out of 100, ` : ""}${e.verdict}. Last checked ${formatRecordDate(bts.researchDate)}.` : `${e.name} has not been scored yet.`}>
+            {bts ? (
+              <>
+                <dl className={`${surface} divide-y divide-white/[0.06] overflow-hidden rounded-xl`}>
+                  {bts.reason ? <Row k="Reason" v={bts.reason.charAt(0).toUpperCase() + bts.reason.slice(1)} /> : null}
+                  {/* Under review and Not active show no score, so no cap or pillar points either. */}
+                  {e.score !== null ? (
+                    <>
+                      {bts.cap ? <Row k="Cap applied" v={`Score capped at ${bts.cap}`} /> : null}
+                      {bts.pillars.map((p) => <Row key={p.label} k={p.label} v={pillarDisplay(p)} muted={/not checked/i.test(p.value)} />)}
+                      {bts.confidence !== null ? <Row k="Evidence confidence" v={`${bts.confidence} / 100`} /> : null}
+                    </>
+                  ) : null}
+                </dl>
+                <p className="mt-3 text-xs leading-relaxed text-slate-400">
+                  Pillars marked &ldquo;Not yet checked&rdquo; are left out of the score rather than counted as zero; they lower evidence confidence instead. Nothing commercial affects a score, verdict or ranking.
+                </p>
+              </>
+            ) : null}
+          </Block>
+
+          {/* 2. What the verdict means */}
+          <Block id="verdict" title="What the verdict means" intro={`${e.name} is rated "${e.verdict}" globally. Verdicts come from a fixed, rule-based method applied identically to every firm.`}>
+            <VerdictBands current={e.verdict} />
             <p className="mt-3 text-xs text-slate-400">
-              {isBroker ? `Basis: ${basisLabel(e).toLowerCase()}. ` : ""}
-              See the <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">methodology</Link> for sources.
+              See the <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">methodology</Link> for how scores are built.
             </p>
           </Block>
 
           {/* 2. Who regulates it (compact list rows) */}
           {isBroker ? (
-            <Block id="regulation" title={`Who regulates ${e.name}`} intro={refs.length ? "Listed regulators from our records. Compact rows with register links:" : undefined}>
+            <Block id="regulation" title={`Who regulates ${e.name}`} intro={refs.length ? "Active licences verified on the regulator's register in our latest research:" : undefined}>
               {refs.length ? (
                 <div className="divide-y divide-white/10 border-y border-white/10">{refs.map((r) => <RegulatorCard key={`${r.code}-${r.country}`} r={r} entity={e} />)}</div>
               ) : (
-                <WarningBanner title="No regulator listed">
-                  Our record lists no regulator for {e.name}. Without a licence there is usually no client-money segregation or compensation scheme. Check with the regulator directly before depositing.
+                <WarningBanner title="No licence verified">
+                  Our research has not verified an active licence for {e.name} on a regulator&apos;s register. That does not prove it is unlicensed, but without a licence there is usually no client-money segregation or compensation scheme. Check with the regulator directly before depositing.
                 </WarningBanner>
               )}
             </Block>
@@ -285,6 +332,28 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
         location={`entity_${e.type}`}
       />
     </>
+  );
+}
+
+function Row({ k, v, muted = false }: { k: string; v: string; muted?: boolean }) {
+  return (
+    <div className="grid gap-1 px-4 py-3 sm:grid-cols-[11rem_1fr] sm:gap-4">
+      <dt className="text-xs uppercase tracking-wider text-slate-400">{k}</dt>
+      <dd className={muted ? "text-sm text-slate-400" : "text-sm font-medium text-slate-100"}>{v}</dd>
+    </div>
+  );
+}
+
+/** Neutral notice: information, not a warning about the firm. */
+function Notice({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div role="note" className="mt-5 flex gap-3 border-l-2 border-[var(--vt-blue)] bg-[var(--vt-blue)]/[0.06] p-4">
+      <Info className="mt-0.5 size-5 shrink-0 text-[var(--vt-blue)]" aria-hidden />
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-300">{children}</p>
+      </div>
+    </div>
   );
 }
 

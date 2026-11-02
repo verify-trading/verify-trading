@@ -110,17 +110,18 @@ function UserBubble({
   const bubbleWidthClasses =
     attachmentPreviewUrl != null
       ? "block w-full max-w-[min(100%,48rem)] lg:max-w-5xl"
-      : "inline-block max-w-[min(100%,28rem)] sm:max-w-lg lg:max-w-2xl align-top";
+      : "inline-block max-w-[86%] sm:max-w-lg lg:max-w-2xl align-top";
 
   return (
-    <div className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.015] sm:px-6">
+    <div className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.015] max-lg:py-2 sm:px-6">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-end gap-2">
+        {/* Phones show the bubble only, like the app. */}
+        <div className="flex items-center justify-end gap-2 max-lg:hidden">
           <TimestampLabel createdAt={message.createdAt} />
           <span className="text-[11px] font-semibold text-white/40">You</span>
         </div>
         {/* items-end + inline-block bubble: avoid block children forcing 100% width (w-fit alone was still stretching). */}
-        <div className="mt-1.5 flex w-full flex-col items-end">
+        <div className="mt-1.5 flex w-full flex-col items-end max-lg:mt-0">
           <div
             className={[
               "rounded-[18px_18px_4px_18px] bg-[var(--vt-coral)] text-left text-sm leading-relaxed text-white shadow-[0_8px_28px_rgba(242,109,109,0.18)] break-words",
@@ -152,7 +153,9 @@ function UserBubble({
           </div>
         </div>
       </div>
-      <UserAvatar />
+      <div className="max-lg:hidden">
+        <UserAvatar />
+      </div>
     </div>
   );
 }
@@ -202,16 +205,19 @@ function AssistantBubble({
   showFollowups: boolean;
 }) {
   return (
-    <div className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.015] sm:px-6">
-      <AssistantAvatar />
+    <div className="mx-1 flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.015] max-lg:py-2 sm:px-6">
+      <div className="max-lg:hidden">
+        <AssistantAvatar />
+      </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        {/* Phones show the answer card only, like the app. */}
+        <div className="flex items-center gap-2 max-lg:hidden">
           <span className="text-[11px] font-semibold text-white/40">
             {getAppName()}
           </span>
           <TimestampLabel createdAt={message.createdAt} />
         </div>
-        <div className="mt-1.5">
+        <div className="mt-1.5 max-lg:mt-0">
           {message.attachmentPreviewUrl ? (
             <ChatAttachmentPreview
               src={message.attachmentPreviewUrl}

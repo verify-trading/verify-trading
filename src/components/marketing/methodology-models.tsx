@@ -23,14 +23,14 @@ const MODELS: Model[] = [
     dot: "bg-emerald-400",
     subtitle: "Regulation-led",
     summary: "A broker holds your money, so who regulates it, and how well your funds are protected, matter most.",
-    noteLabel: "A signal we take seriously",
-    note: "Where a broker advertises leverage exceeding what a top-tier regulator legally permits, this typically indicates clients are onboarded to an offshore entity. In that case we assess the offshore entity, not the regulated brand name.",
+    noteLabel: "Country fit",
+    note: "We also check whether the broker holds a licence where you live. Without a local or passported licence your own country's protections may not apply, so the score you see for your country can be lower than the global one, or the broker can show as not available to you.",
     factors: [
-      ["Regulation", "Which authority licenses the entity, and at what tier. Top-tier oversight (e.g. FCA, ASIC) counts for far more than offshore registration. It's the single most important factor we consider."],
-      ["Fund safety", "Client-money protections: segregation of funds, compensation-scheme coverage, and the treatment of client money in the event of firm failure."],
-      ["Withdrawals", "Documented withdrawal and complaint patterns from public and regulatory sources."],
-      ["History", "Length and consistency of operating history."],
-      ["Sanctions", "Any regulatory sanctions, warnings or enforcement actions on record."],
+      ["Regulation (40)", "The best active licence verified on a regulator's register, and whether the entity that serves retail clients holds it. Top-tier oversight (e.g. FCA, ASIC) counts for far more than offshore licences, and a company registration is not a licence."],
+      ["Client protection (20)", "Segregation of client money, compensation-scheme cover and negative balance protection."],
+      ["Regulatory conduct (25)", "Fines, enforcement and warnings on record, weighted by how recent and how serious they are."],
+      ["Track record (10)", "Length of verifiable operating history."],
+      ["Transparency (5)", "Named legal and servicing entities, a working website and published withdrawal terms."],
     ],
   },
   {
@@ -39,17 +39,14 @@ const MODELS: Model[] = [
     dot: "bg-[var(--vt-blue)]",
     subtitle: "Stability and payout reliability",
     summary: "Prop firms usually aren't regulated like brokers, so we focus on what a funded trader actually needs: getting paid.",
-    noteLabel: "Automatic classification",
-    note: (
-      <>
-        A prop firm confirmed to have ceased operations is recorded as <strong className="font-semibold text-white">Avoid</strong>,
-        irrespective of prior reputation.
-      </>
-    ),
+    noteLabel: "Not active",
+    note: "A prop firm that is inactive, redirected or merged is recorded as Not active and shows no score, irrespective of prior reputation.",
     factors: [
-      ["Payouts", "Documented payout reliability, the central question for a funded trader."],
-      ["Stability", "Ownership transparency, operating history and any history of closure or restructuring."],
-      ["Rule fairness", "Whether trading rules are clearly stated and consistently applied, versus structured to enable payout denial on technicalities."],
+      ["Identity (20)", "Who the legal entity behind the brand is, where it is registered and how long it has operated."],
+      ["Transparency (25)", "Published payout terms, rules and fees, and whether accounts are simulated or live."],
+      ["Dispute record (20)", "Documented payout disputes. Trader reports alone stay allegations and weigh less."],
+      ["Regulatory conduct (25)", "Any regulator or court action against the firm."],
+      ["Rule disclosure (10)", "Whether trading rules are clearly stated before you pay."],
     ],
   },
   {

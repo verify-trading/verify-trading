@@ -9,11 +9,11 @@
 export type DemoBrokerCard = {
   type: "broker";
   name: string;
-  /** e.g. "8.6" — rendered as "8.6 / 10" with a fill bar. */
+  /** BTS score out of 100, e.g. "88" — rendered as "88 / 100" with a fill bar. */
   score: string;
   status: "LEGITIMATE" | "WARNING" | "AVOID";
   fca: "Yes" | "No";
-  complaints: "Low" | "Medium" | "High";
+  complaints: "Low" | "Medium" | "High" | "None found" | "On record" | "Not checked";
   /** "green" -> verified accent, otherwise coral. */
   color: "green" | "red";
   /** Small source pill, e.g. "Trustpilot 4.6 · 21k reviews". */
@@ -81,14 +81,14 @@ export const DEMO_EXCHANGES: DemoExchange[] = [
     card: {
       type: "broker",
       name: "Pepperstone",
-      score: "8.6",
+      score: "88",
       status: "LEGITIMATE",
       fca: "Yes",
-      complaints: "Low",
+      complaints: "None found",
       color: "green",
       source: "Trustpilot 4.6 · 21k reviews",
       verdict:
-        "FCA-authorised (No. 684312), client funds segregated. Safe for UK retail CFD trading.",
+        "Verified for the UK at 88/100: FCA licence (No. 684312) checked on the register. Open your account with the UK entity.",
     },
     followups: [
       "How does it compare to IC Markets?",

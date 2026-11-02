@@ -4,8 +4,19 @@ import { toPublicEntity, parseRegulatorRefs, verdictTone, type PublicEntity } fr
 import { entityFaqs, entityPath, isIndexable, isIndexedVsPair, isSeoWorthy, pairKey, parseVsPair, pickAlternatives, propVsPairs, VERDICT_RANK, vsPairs, vsPath } from "@/lib/compare/insights";
 import { findRegulator, getRegulator } from "@/lib/compare/regulators";
 
+/** A BTS engine row as the join returns it. */
+const bts = (verdict: string, score: number | null, licences = "FCA:1|CYSEC:2") => ({
+  entity_id: `BTS-${verdict}-${score}-${licences}`,
+  verdict,
+  global_score: score,
+  details: { active_verified_licences: licences },
+  pillars: {},
+  research_date: "2026-10-30",
+});
 const broker = (slug: string, over: Record<string, unknown> = {}) =>
-  toPublicEntity({ slug, name: slug.toUpperCase(), entity_type: "broker", status: "legitimate", final_tier: "Tier 1", founder_verified: true, regulators_listed: "FCA (United Kingdom), CySEC (Cyprus)", updated_at: "2026-06-18T12:00:00Z", ...over })!;
+  toPublicEntity({ slug, name: slug.toUpperCase(), entity_type: "broker", updated_at: "2026-06-18T12:00:00Z", bts: bts("VERIFIED", 90), ...over })!;
+const prop = (slug: string, over: Record<string, unknown> = {}) =>
+  toPublicEntity({ slug, name: slug.toUpperCase(), entity_type: "propfirm", ...over })!;
 
 describe("regulator mapping", () => {
   it("disambiguates codes by country", () => {
@@ -23,44 +34,37 @@ describe("regulator mapping", () => {
 });
 
 describe("isIndexable (thin-page rule)", () => {
-  it("indexes rated brokers with a regulator", () => expect(isIndexable(broker("a"))).toBe(true));
-  it("noindexes brokers with no regulator, no FCA data", () => expect(isIndexable(broker("b", { regulators_listed: null, final_tier: "Unregulated", founder_verified: false }))).toBe(false));
-  it("noindexes unrated and provisional brokers", () => {
-    expect(isIndexable(broker("c", { final_tier: null, trust_score: null }))).toBe(false);
+  it("indexes records with an engine score", () => {
+    expect(isIndexable(broker("a"))).toBe(true);
+    expect(isIndexable(prop("p", { bts: bts("CAUTION", 60, "") }))).toBe(true);
   });
-  it("noindexes unscored prop firms, indexes scored and closed ones", () => {
-    const p = (o: Record<string, unknown>) => toPublicEntity({ slug: "p", name: "P", entity_type: "propfirm", ...o })!;
-    expect(isIndexable(p({ trust_score: null, firm_status: "Operating" }))).toBe(false);
-    expect(isIndexable(p({ trust_score: 7.5, firm_status: "Operating" }))).toBe(true);
-    expect(isIndexable(p({ trust_score: 7.5, firm_status: "Closed down" }))).toBe(true);
+  it("noindexes records without a score: not scored, Under review or Not active", () => {
+    expect(isIndexable(broker("c", { bts: null }))).toBe(false);
+    expect(isIndexable(broker("d", { bts: bts("UNDER REVIEW", null) }))).toBe(false);
+    expect(isIndexable(prop("p", { bts: bts("NOT ACTIVE", 50, "") }))).toBe(false);
   });
 });
 
 describe("isSeoWorthy (sitemap + robots gate)", () => {
-  const prop = (o: Record<string, unknown>) => toPublicEntity({ slug: "p", name: "P", entity_type: "propfirm", firm_status: "Operating", ...o })!;
-
   it("indexes every prop firm, rated or not — brand-query opportunity outweighs thin-content risk", () => {
-    for (const score of [9.0, 7.5, 5.5, 3.5, 1.5]) {
-      expect(isSeoWorthy(prop({ trust_score: score }))).toBe(true);
-    }
-    // "Not yet rated" prop firms also index (brand-name queries).
-    expect(isSeoWorthy(prop({ trust_score: null }))).toBe(true);
+    for (const score of [90, 75, 55, 35, 15]) expect(isSeoWorthy(prop("p", { bts: bts("CAUTION", score, "") }))).toBe(true);
+    expect(isSeoWorthy(prop("p"))).toBe(true);
   });
   it("indexes every broker, rated or not — same brand-query reasoning as prop firms", () => {
-    expect(isSeoWorthy(broker("st", { final_tier: "Tier 1", founder_verified: true }))).toBe(true);
-    expect(isSeoWorthy(broker("t", { final_tier: "Tier 2", founder_verified: true }))).toBe(true);
+    expect(isSeoWorthy(broker("st"))).toBe(true);
     expect(isSeoWorthy(broker("warn", { fca_warning: true }))).toBe(true);
-    expect(isSeoWorthy(broker("none", {}))).toBe(true);
+    expect(isSeoWorthy(broker("none", { bts: null }))).toBe(true);
   });
 });
 
 describe("alternatives and vs pairs", () => {
   const all: PublicEntity[] = [
-    broker("me", { final_tier: "Tier 3", founder_verified: false }),
-    broker("hi", { final_tier: "Tier 1" }),
-    broker("other", { final_tier: "Tier 1", regulators_listed: "ASIC (Australia)" }),
+    broker("me", { bts: bts("CAUTION", 40) }),
+    broker("hi"),
+    broker("other", { bts: bts("VERIFIED", 95, "ASIC:1") }),
     broker("warn", { fca_warning: true }),
-    broker("low", { final_tier: "Tier 3", founder_verified: false }),
+    broker("low", { bts: bts("CAUTION", 30) }),
+    broker("gone", { bts: bts("NOT ACTIVE", null) }),
   ];
   it("picks same-regulator, equal-or-better, non-warned brokers", () => {
     const alts = pickAlternatives(all[0], all).map((e) => e.slug);
@@ -68,6 +72,7 @@ describe("alternatives and vs pairs", () => {
     expect(alts).not.toContain("warn");
     expect(alts).not.toContain("me");
     expect(alts).not.toContain("other");
+    expect(alts).not.toContain("gone");
   });
   it("produces canonical, deduped, bounded broker vs pairs", () => {
     const pairs = vsPairs(all);
@@ -97,13 +102,12 @@ describe("alternatives and vs pairs", () => {
   });
 
   it("pairs prop firms by score, excluding closed and unscored", () => {
-    const prop = (slug: string, o: Record<string, unknown>) => toPublicEntity({ slug, name: slug.toUpperCase(), entity_type: "propfirm", firm_status: "Operating", ...o })!;
     const firms = [
-      prop("ftmo", { trust_score: 8.5 }),
-      prop("topstep", { trust_score: 7.9 }),
-      prop("apex", { trust_score: 7.2 }),
-      prop("closed", { trust_score: 9.0, firm_status: "Closed down" }),
-      prop("unrated", { trust_score: null }),
+      prop("ftmo", { bts: bts("VERIFIED", 100, "") }),
+      prop("topstep", { bts: bts("VERIFIED", 85, "") }),
+      prop("apex", { bts: bts("CAUTION", 72, "") }),
+      prop("closed", { bts: bts("NOT ACTIVE", 90, "") }),
+      prop("unrated"),
     ];
     const pairs = propVsPairs(firms);
     expect(pairs.length).toBe(3); // ftmo, topstep, apex → 3 pairs
@@ -116,7 +120,7 @@ describe("alternatives and vs pairs", () => {
 
 describe("entityFaqs", () => {
   it("answers from the record only", () => {
-    const faqs = entityFaqs(broker("x", { fca_registered: true, fca_reference: "999" }));
+    const faqs = entityFaqs(broker("x", { bts: bts("VERIFIED", 90, "FCA:999") }));
     expect(faqs.find((f) => f.q.includes("FCA"))?.a).toContain("999");
     expect(faqs.length).toBeGreaterThanOrEqual(4);
   });

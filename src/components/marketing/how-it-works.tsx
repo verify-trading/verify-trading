@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { APP_ICONS, type AppIconKey } from "@/components/icons/app-icons";
@@ -8,55 +8,16 @@ import { Battery, BrandMark, SignalBars } from "@/components/landing/hero-ask-de
 import { SectionEyebrow, surface } from "@/components/landing/section-primitives";
 import { cn } from "@/lib/utils";
 
-/** YouTube walkthrough shown in the hero; also published as VideoObject schema on the page. */
+/** Self-hosted walkthrough; also published as VideoObject schema on /how-it-works. */
 export const HOW_IT_WORKS_VIDEO = {
-  youtubeId: "cvXv4898Ldk",
+  src: "/videos/how-it-works.mp4",
+  poster: "/videos/how-it-works.jpg",
   title: "How verify.trading works",
   description:
     "A walkthrough of verify.trading: check any broker or prop firm with Ask, read the markets, get the daily Intelligence brief, and review your trading in Journal and Mind.",
   uploadDate: "2026-10-22",
+  duration: "PT1M26S",
 } as const;
-
-/** Privacy-enhanced embed: youtube-nocookie sets no cookies until the visitor presses play. */
-export function youtubeEmbedUrl(id: string, { autoplay = false }: { autoplay?: boolean } = {}) {
-  // Browsers only allow autoplay when muted; playsinline keeps iOS from forcing fullscreen.
-  const params = autoplay ? "rel=0&autoplay=1&mute=1&playsinline=1" : "rel=0";
-  return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
-}
-
-/** Hero video slot: a responsive 16:9 YouTube embed (muted autoplay), or a "coming soon" poster when no id is set. */
-export function HowItWorksVideo({
-  youtubeId = HOW_IT_WORKS_VIDEO.youtubeId,
-  title = HOW_IT_WORKS_VIDEO.title,
-  autoplay = true,
-}: {
-  youtubeId?: string;
-  title?: string;
-  autoplay?: boolean;
-}) {
-  return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-      {youtubeId ? (
-        <iframe
-          className="absolute inset-0 size-full"
-          src={youtubeEmbedUrl(youtubeId, { autoplay })}
-          title={title}
-          loading="lazy"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
-          allowFullScreen
-        />
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
-          <span className="flex size-14 items-center justify-center rounded-full bg-white/10">
-            <Play className="size-6 translate-x-0.5 fill-white text-white" aria-hidden />
-          </span>
-          <p className="text-sm text-slate-400">Video coming soon</p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ─── Phone visuals ─── */
 /* Display-only app screens: app styling (tokens, tabs, cards), illustrative sample data. */
