@@ -1,12 +1,7 @@
 import type { Metadata } from "next";
 
-import {
-  HOW_IT_WORKS_VIDEO,
-  HowItWorksCtaBanner,
-  HowItWorksSteps,
-  HowItWorksVideo,
-  youtubeEmbedUrl,
-} from "@/components/marketing/how-it-works";
+import { HOW_IT_WORKS_VIDEO, HowItWorksCtaBanner, HowItWorksSteps } from "@/components/marketing/how-it-works";
+import { HowItWorksVideo } from "@/components/marketing/how-it-works-video";
 import { Breadcrumbs, FaqSection, PageHero } from "@/components/marketing/primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PAGE_FAQS } from "@/lib/marketing/faqs";
@@ -27,10 +22,10 @@ export default function HowItWorksPage() {
         data={videoObjectSchema({
           name: HOW_IT_WORKS_VIDEO.title,
           description: HOW_IT_WORKS_VIDEO.description,
-          contentUrl: `https://www.youtube.com/watch?v=${HOW_IT_WORKS_VIDEO.youtubeId}`,
-          embedUrl: youtubeEmbedUrl(HOW_IT_WORKS_VIDEO.youtubeId),
-          thumbnailUrl: `https://i.ytimg.com/vi/${HOW_IT_WORKS_VIDEO.youtubeId}/maxresdefault.jpg`,
+          contentUrl: HOW_IT_WORKS_VIDEO.src,
+          thumbnailUrl: HOW_IT_WORKS_VIDEO.poster,
           uploadDate: HOW_IT_WORKS_VIDEO.uploadDate,
+          duration: HOW_IT_WORKS_VIDEO.duration,
         })}
       />
       <Breadcrumbs crumbs={[{ name: "How it Works", path }]} />
