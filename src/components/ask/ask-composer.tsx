@@ -70,7 +70,7 @@ export function AskComposer({
   }, [disabled, focusSignal]);
 
   const shellClassName = [
-    "mx-auto w-full max-w-4xl rounded-2xl border px-2 py-1.5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:rounded-3xl sm:px-3 sm:py-2.5",
+    "mx-auto w-full max-w-4xl rounded-[26px] border px-2 py-1.5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 sm:rounded-3xl sm:px-3 sm:py-2.5",
     isDragActive
       ? "border-[rgba(242,109,109,0.45)] bg-[rgba(242,109,109,0.08)]"
       : disabled

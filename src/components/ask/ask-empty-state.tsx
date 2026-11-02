@@ -79,7 +79,7 @@ function WelcomeBlock({ className = "" }: { className?: string }) {
         What can I help with?
       </h1>
       <p className="mx-auto mt-2 max-w-md text-sm leading-snug text-white/50 sm:mt-2.5 sm:text-base sm:leading-relaxed">
-        Brokers, markets, sizing and charts. Ask in plain English.
+        Brokers, markets, sizing, charts, and projections. Ask in plain English.
       </p>
     </div>
   );
@@ -110,7 +110,17 @@ function PromptChips({
             onClick={() => onPromptClick(prompt)}
             className={askSuggestionChipClass}
           >
-            <span className="min-w-0 break-words text-pretty">{prompt}</span>
+            <span className="min-w-0 break-words text-pretty">
+              {/* "Gold: key levels" reads with a bold lead, as in the app. */}
+              {prompt.includes(":") ? (
+                <>
+                  <span className="font-semibold text-white">{prompt.slice(0, prompt.indexOf(":") + 1)}</span>
+                  {prompt.slice(prompt.indexOf(":") + 1)}
+                </>
+              ) : (
+                prompt
+              )}
+            </span>
           </Button>
         </li>
       ))}

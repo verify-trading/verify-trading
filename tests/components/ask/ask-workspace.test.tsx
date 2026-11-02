@@ -375,7 +375,7 @@ describe("AskWorkspace", () => {
 
     renderWithQueryClient(<AskWorkspace />);
 
-    const composer = screen.getAllByPlaceholderText("Ask anything…").at(-1);
+    const composer = screen.getAllByPlaceholderText("Ask anything about trading…").at(-1);
     if (!composer) {
       throw new Error("Missing Ask composer.");
     }
@@ -404,7 +404,7 @@ describe("AskWorkspace", () => {
 
     renderWithQueryClient(<AskWorkspace />);
 
-    const composer = screen.getAllByPlaceholderText("Ask anything…").at(-1);
+    const composer = screen.getAllByPlaceholderText("Ask anything about trading…").at(-1);
     if (!composer) {
       throw new Error("Missing Ask composer.");
     }
