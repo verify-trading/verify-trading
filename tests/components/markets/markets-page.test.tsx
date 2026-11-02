@@ -390,14 +390,15 @@ describe("TwelveMarketsPage", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /journal/i }));
 
-    expect(screen.getByText("Trading Journal")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Journal" })).toBeInTheDocument();
     expect(screen.getByTestId("journal-state-icon")).toBeInTheDocument();
-    expect(screen.queryByTestId("mind-state-orb")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Included with Pro" })).toHaveAttribute("href", "/pricing");
+    expect(screen.queryByTestId("mind-state-icon")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: /mind/i }));
 
-    expect(screen.getByText("Psychological AI")).toBeInTheDocument();
-    expect(screen.getByTestId("mind-state-orb")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mind" })).toBeInTheDocument();
+    expect(screen.getByTestId("mind-state-icon")).toBeInTheDocument();
     expect(screen.queryByTestId("journal-state-icon")).not.toBeInTheDocument();
   });
 });
