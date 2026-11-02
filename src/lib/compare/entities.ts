@@ -5,6 +5,7 @@ import { PILLARS, SCORELESS, parseLicences, toVerdict, type BtsRecord, type BtsV
 import { findRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { selectAll } from "@/lib/supabase/select-all";
 
 /**
  * Public view of the `verified_entities` table ("BTS") for the Verify register pages.
@@ -233,15 +234,13 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
     logger.warn("Compare register unavailable: Supabase admin is not configured.", { type });
     return [];
   }
-  const { data, error } = await client
-    .from("verified_entities")
-    .select(PUBLIC_ENTITY_COLUMNS)
-    .eq("entity_type", type)
-    .order("name")
-    .range(0, 4999);
   // Throw rather than return [] so a failed read is never cached for an hour as "0 brokers"
   // and detail pages answer 500 (retry) instead of 404 (gone) to search engines.
-  if (error || !data) throw new Error(`Compare register read failed for ${type}: ${error?.message ?? "no data"}`);
+  const data = await selectAll((from, to) =>
+    client.from("verified_entities").select(PUBLIC_ENTITY_COLUMNS).eq("entity_type", type).order("name").order("slug").range(from, to),
+  ).catch((error: Error) => {
+    throw new Error(`Compare register read failed for ${type}: ${error.message}`);
+  });
   const mapped = (data as unknown as Record<string, unknown>[])
     .map(toPublicEntity)
     .filter((e): e is PublicEntity => e !== null);

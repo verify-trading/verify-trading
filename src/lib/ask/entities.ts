@@ -7,6 +7,7 @@ import {
 import { computePropFirmScore, type PropFirmBand } from "@/lib/ask/prop-firms";
 import { resolveGuruTier, type GuruTier } from "@/lib/ask/gurus";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { selectAll } from "@/lib/supabase/select-all";
 
 export type VerifiedEntityType = "broker" | "guru" | "propfirm";
 export type VerifiedEntityStatus = "legitimate" | "warning" | "avoid";
@@ -427,8 +428,10 @@ async function loadVerifiedEntitiesFromSupabase(): Promise<VerifiedEntity[]> {
     return [];
   }
 
-  const { data, error } = await client.from("verified_entities").select(ENTITY_COLUMNS);
-  if (error || !data) {
+  const data = await selectAll((from, to) => client.from("verified_entities").select(ENTITY_COLUMNS).order("slug").range(from, to)).catch(
+    () => null,
+  );
+  if (!data) {
     return [];
   }
 

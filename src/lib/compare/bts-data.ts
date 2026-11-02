@@ -14,6 +14,7 @@ import {
   type CountryView,
 } from "@/lib/compare/bts";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { selectAll } from "@/lib/supabase/select-all";
 
 const COLUMNS = "entity_id, country, country_fit, country_score, country_verdict, applicable_licences, country_note";
 
@@ -29,8 +30,9 @@ const toRow = (r: Record<string, unknown>): CountryFitRow => ({
 async function query(column: "entity_id" | "country", value: string): Promise<Array<CountryFitRow & { entityId: string }>> {
   const client = getSupabaseAdminClient();
   if (!client) return [];
-  const { data, error } = await client.from("bts_country_fit").select(COLUMNS).eq(column, value).range(0, 4999);
-  if (error) throw new Error(`bts_country_fit read failed: ${error.message}`);
+  const data = await selectAll((from, to) =>
+    client.from("bts_country_fit").select(COLUMNS).eq(column, value).order("entity_id").order("country").range(from, to),
+  );
   return (data as Record<string, unknown>[]).map((r) => ({ ...toRow(r), entityId: String(r.entity_id) }));
 }
 
@@ -159,13 +161,15 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
   const client = getSupabaseAdminClient();
   if (!client) return { country: "unknown", firms: [] };
   const country = requestedCountry ? normalizeCountry(requestedCountry) : await getRequestCountrySafe();
-  const { data, error } = await client
-    .from("verified_entities")
-    .select("name, bts:bts_scores(entity_id, global_score, verdict, verdict_reason)")
-    .eq("entity_type", type)
-    .not("bts_entity_id", "is", null)
-    .range(0, 4999);
-  if (error) throw new Error(`BTS list read failed: ${error.message}`);
+  const data = await selectAll((from, to) =>
+    client
+      .from("verified_entities")
+      .select("name, bts:bts_scores(entity_id, global_score, verdict, verdict_reason)")
+      .eq("entity_type", type)
+      .not("bts_entity_id", "is", null)
+      .order("slug")
+      .range(from, to),
+  );
   const rows = type === "broker" && country !== "XX" ? Object.fromEntries((await query("country", country)).map(({ entityId, ...r }) => [entityId, r])) : {};
   // One entry per engine firm; duplicate site rows ("IG", "IG Group") keep the shortest name.
   const byFirm = new Map<string, { name: string; bts: Record<string, unknown> }>();

@@ -180,7 +180,7 @@ describe("lookupVerifiedEntity", () => {
     clearVerifiedEntitiesCache();
     vi.mocked(getSupabaseAdminClient).mockReturnValue({
       from: () => ({
-        select: () => Promise.resolve({ data: seedRows, error: null }),
+        select: () => ({ order: () => ({ range: () => Promise.resolve({ data: seedRows, error: null }) }) }),
       }),
     } as never);
   });
