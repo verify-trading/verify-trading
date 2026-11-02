@@ -99,10 +99,22 @@ function ruleToDocument(row) {
  * the retrieval index can never drift out of sync with the source tables.
  */
 export async function backfillKnowledge(client) {
-  const [entities, rules] = await Promise.all([
-    client.from("verified_entities").select("*, bts:bts_scores(verdict, global_score, verdict_reason, details)").range(0, 9999),
-    client.from("analysis_rules").select("*").eq("active", true),
-  ]);
+  // Supabase returns at most 1,000 rows per request: page through every entity.
+  const entities = { data: [], error: null };
+  for (let from = 0; ; from += 1000) {
+    const page = await client
+      .from("verified_entities")
+      .select("*, bts:bts_scores(verdict, global_score, verdict_reason, details)")
+      .order("slug")
+      .range(from, from + 999);
+    if (page.error) {
+      entities.error = page.error;
+      break;
+    }
+    entities.data.push(...page.data);
+    if (page.data.length < 1000) break;
+  }
+  const rules = await client.from("analysis_rules").select("*").eq("active", true);
 
   if (entities.error) {
     throw new Error(`Could not load verified_entities: ${entities.error.message}`);

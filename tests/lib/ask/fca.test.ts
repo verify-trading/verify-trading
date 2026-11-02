@@ -42,11 +42,11 @@ describe("getFcaStatus", () => {
         }
         if (table === "verified_entities") {
           return {
-            select: () =>
-              Promise.resolve({
-                data: [pepperstoneSupabaseRow],
-                error: null,
+            select: () => ({
+              order: () => ({
+                range: () => Promise.resolve({ data: [pepperstoneSupabaseRow], error: null }),
               }),
+            }),
           };
         }
         throw new Error(`Unexpected Supabase table in test: ${table}`);
