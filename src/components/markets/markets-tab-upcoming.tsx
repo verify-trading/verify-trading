@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen, Brain, Check, Smartphone, type LucideIcon } from "lucide-react";
+import { Check, FingerprintPattern, Smartphone } from "lucide-react";
+import Link from "next/link";
 import Image from "next/image";
 
 import { StoreBadges } from "@/components/site/store-badges";
@@ -8,7 +9,7 @@ import { StoreBadges } from "@/components/site/store-badges";
 /** What each feature does in the app (copy from the mobile app's own screens). */
 const COPY = {
   journal: {
-    title: "Trading Journal",
+    title: "Journal",
     body: "Your trading day in one place, so you can see what's actually working.",
     points: [
       "Log P&L, mood and the lesson every day",
@@ -16,10 +17,10 @@ const COPY = {
       "A weekly insight written from your own sessions",
       "Challenge mode tracks your prop firm target",
     ],
-    Icon: BookOpen,
+    Icon: JournalIcon,
   },
   mind: {
-    title: "Psychological AI",
+    title: "Mind",
     body: "Find out what your trading actually costs you, and talk it through.",
     points: [
       "A 30-question assessment of how you trade under pressure",
@@ -27,55 +28,43 @@ const COPY = {
       "Live voice calls with your AI companion",
       "Every call kept as a transcript you can reread",
     ],
-    Icon: Brain,
+    Icon: FingerprintPattern,
   },
 } as const;
 
-function JournalStateIcon({ Icon }: { Icon: LucideIcon }) {
+/** The app's Journal tab glyph (src/navigation/TabIcons.tsx in the mobile app), on lucide's 24-unit contract. */
+function JournalIcon({ className, strokeWidth = 2 }: { className?: string; strokeWidth?: number }) {
   return (
-    <div
-      data-testid="journal-state-icon"
-      className="relative mb-7 size-24 sm:size-28"
-      aria-hidden
-    >
-      <Image
-        src="/logo.svg"
-        alt=""
-        fill
-        sizes="9rem"
-        className="object-contain"
-      />
-      <div className="absolute inset-[18%] rounded-full bg-[rgb(10,13,46)] shadow-[0_0_22px_rgba(10,13,46,0.95)]" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Icon className="size-9 text-white sm:size-10" strokeWidth={2.7} />
-      </div>
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M14.5 2.5H8a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h9.5a2 2 0 0 0 2-2V7.5z" />
+      <path d="M14.5 2.5v3a2 2 0 0 0 2 2h3" />
+      <path d="M3.5 6.5H7M3.5 10.2H7M3.5 13.9H7M3.5 17.6H7" />
+      <path d="m10 14 2.4 2.4 4.6-5" />
+    </svg>
   );
 }
 
-function MindStateIcon() {
+/** Same ring for both tabs, with the app's own tab icon inside. */
+function StateIcon({ kind }: { kind: keyof typeof COPY }) {
+  const Icon = COPY[kind].Icon;
   return (
-    <div
-      data-testid="mind-state-orb"
-      className="relative mb-7 flex size-36 items-center justify-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_30%_80%,#1538ff_0%,transparent_48%),radial-gradient(circle_at_80%_20%,#ff5566_0%,transparent_42%),linear-gradient(135deg,#1530ff,#7a35ff_48%,#ff5566)] shadow-[0_0_42px_rgba(122,53,255,0.42)] sm:size-40"
-      aria-hidden
-    >
-      <div className="absolute inset-[2px] rounded-full border border-white/20" />
-      <div className="absolute h-[34%] w-[135%] -rotate-12 rounded-full bg-[#ff7ddf]/25 blur-md" />
-      <div className="absolute h-[28%] w-[130%] rotate-[-28deg] rounded-full bg-[#0c1d9c]/35 blur-lg" />
-      <div className="absolute inset-[18%] rounded-full bg-[rgb(10,13,46)]/20" />
-      <Brain className="relative size-10 text-white drop-shadow-[0_2px_12px_rgba(255,255,255,0.28)]" strokeWidth={2.4} />
+    <div data-testid={`${kind}-state-icon`} className="relative mb-7 size-24 sm:size-28" aria-hidden>
+      <Image src="/logo.svg" alt="" fill sizes="9rem" className="object-contain" />
+      <div className="absolute inset-[18%] rounded-full bg-[rgb(10,13,46)] shadow-[0_0_22px_rgba(10,13,46,0.95)]" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <Icon className="size-9 text-white sm:size-10" strokeWidth={2} />
+      </div>
     </div>
   );
 }
 
 /** Journal and Mind live in the mobile app: explain what they do and send people to the stores. */
 export function MarketsTabUpcoming({ kind }: { kind: keyof typeof COPY }) {
-  const { title, body, points, Icon } = COPY[kind];
+  const { title, body, points } = COPY[kind];
 
   return (
     <div className="flex flex-col items-center px-4 py-16 text-center sm:py-20">
-      {kind === "journal" ? <JournalStateIcon Icon={Icon} /> : <MindStateIcon />}
+      <StateIcon kind={kind} />
 
       <h2 className="text-xl font-bold tracking-tight text-white">{title}</h2>
 
@@ -99,7 +88,9 @@ export function MarketsTabUpcoming({ kind }: { kind: keyof typeof COPY }) {
         <StoreBadges location={`markets_${kind}_tab`} />
       </div>
 
-      <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--vt-green)]">Included with Pro</p>
+      <Link href="/pricing" className="mt-4 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--vt-green)] hover:underline">
+        Included with Pro
+      </Link>
     </div>
   );
 }
