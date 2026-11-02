@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const n = hub?.entities.length ?? 0;
   const meta = pageMetadata({
     title: `${reg.code} Regulated Brokers: List, Protection and Verdicts`,
-    description: `${n} brokers list ${reg.name} (${reg.code}) in our register. What ${reg.code} protects, how to check its register, and each broker's verdict.`.slice(0, 160),
+    description: `Check the ${n} brokers listed under ${reg.code}, what ${reg.name} protects and how to verify a broker's licence using official records.`.slice(0, 160),
     path: `/regulators/${slug}`,
   });
   const worthy = hub && reg.standing === "major" && hub.entities.length >= 3;

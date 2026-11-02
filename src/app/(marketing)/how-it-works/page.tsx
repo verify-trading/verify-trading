@@ -14,7 +14,7 @@ import { articleSchema, pageMetadata, SITE_REVIEWED, videoObjectSchema, webPageS
 
 const path = "/how-it-works";
 const description =
-  "How to verify a trading broker or prop firm in seconds: ask a name, get a sourced verdict from regulator records, and see how the three big trading mistakes are covered.";
+  "From broker and prop firm checks to AI-powered chart analysis and trade journaling, see how verify.trading supports more informed trading decisions.";
 
 export const metadata: Metadata = pageMetadata({ title: "How to Verify a Trading Broker or Prop Firm", description, path });
 
