@@ -45,7 +45,7 @@ export default function VerifyPage() {
           icon: Scale,
           theme: "amber",
           title: "Prop firms",
-          body: "Operating status, published challenge rules, and scores for assessed firms. Unscored firms show as Not yet rated, and closed firms are clearly marked.",
+          body: "Operating status, published challenge rules, and scores for assessed firms. Firms being re-checked show as Under review, and firms that are no longer active are clearly marked.",
         },
         {
           icon: GraduationCap,

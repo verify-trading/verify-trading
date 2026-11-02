@@ -1,9 +1,8 @@
 import { unstable_cache } from "next/cache";
 
-import { computeBrokerTrustScore } from "@/lib/ask/bts";
-import { computePropFirmScore, isClosedFirm } from "@/lib/ask/prop-firms";
 import { resolveGuruTier, type GuruTier } from "@/lib/ask/gurus";
-import { findRegulator } from "@/lib/compare/regulators";
+import { PILLARS, SCORELESS, parseLicences, toVerdict, type BtsRecord, type BtsVerdict } from "@/lib/compare/bts";
+import { findRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -12,10 +11,9 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
  *
  * SECURITY: the select list below is an explicit allowlist. `notes`, `founder_notes`,
  * `internal_notes`, `card_facts`, `prop_terms`, `guru_profile`, `aliases` and every other
- * column are never read. Some allowlisted columns are inputs to the score or verdict only and
- * never copied into `PublicEntity`:
- *   - brokers: `final_status`, `verification_method`, `founder_verified`, `leverage`, `trust_score`, `final_tier`, `status`
- *   - prop firms: `firm_status`, `trust_score`
+ * column are never read. Broker and prop-firm verdicts and scores come only from the BTS engine
+ * (`bts_scores`, joined via `bts_entity_id`); the old score columns are not read at all.
+ * Some allowlisted columns are inputs to the guru verdict only and never copied into `PublicEntity`:
  *   - gurus: `guru_tier`, `founder_tier_override`, `regulator_flag_source`, `verified_track_record`,
  *     `research_status`, `identity_confirmed` — all fed through `resolveGuruTier`.
  *
@@ -33,15 +31,8 @@ export const PUBLIC_ENTITY_COLUMNS = [
   "regulators_listed",
   "year_founded",
   "updated_at",
-  "status",
-  // score inputs only (not exposed):
-  "trust_score",
-  "final_tier",
-  "final_status",
-  "founder_verified",
-  "verification_method",
-  "leverage",
-  "firm_status",
+  // BTS engine output (brokers and prop firms):
+  "bts:bts_scores(entity_id, global_score, verdict, verdict_reason, cap_applied, evidence_confidence, pillars, details, research_date)",
   "research_status",
   // guru inputs (fed through resolveGuruTier; never exposed raw):
   "guru_tier",
@@ -58,42 +49,33 @@ export type RegulatorRef = { code: string; country: string | null; slug: string 
 export type PublicEntityType = "broker" | "propfirm" | "guru";
 
 export type GuruVerdict = GuruTier;
-export const VERDICTS = [
-  "Strongly Trusted",
-  "Trusted",
-  "Proceed With Caution",
-  "High Risk",
-  "Avoid",
-  "Not yet rated",
-  "Verified",
-  "Unverified",
-  "Caution",
-] as const;
-export type Verdict = (typeof VERDICTS)[number];
+/** Broker and prop-firm verdicts (BTS engine) plus the guru-only "Unverified". */
+export const VERDICTS = ["Verified", "Caution", "High risk", "Insufficient data", "Under review", "Not active", "Not available", "Unverified"] as const;
+export type Verdict = BtsVerdict | GuruVerdict;
 
 export type PublicEntity = {
   slug: string;
   name: string;
   type: PublicEntityType;
+  /** Global verdict from the BTS engine (brokers/prop firms) or the guru resolver. Country views override it per visitor. */
   verdict: Verdict;
-  /** Trust score out of 10, or null when unrated / provisional / a person. */
+  /** Global BTS score 0–100, or null (Under review, Not active, people). */
   score: number | null;
-  /** Broker with no regulatory basis or live register check yet. */
-  provisional: boolean;
+  /** BTS engine detail behind the verdict; null for people and for firms the engine has not scored. */
+  bts: BtsRecord | null;
   fcaRegistered: boolean;
   fcaReference: string | null;
   fcaWarning: boolean;
-  /** Regulator short names parsed from the listed regulators, e.g. ["FCA", "CySEC"]. */
+  /** Regulators with an active licence verified by the engine, e.g. ["FCA", "CySEC"]. */
   regulators: string[];
   /** Same regulators with country and the hub slug (null when we have no reference entry). */
   regulatorDetails: RegulatorRef[];
   yearFounded: number | null;
+  /** Engine verdict "Not active": inactive, redirected or merged. */
   closed: boolean;
-  /** Prop firm retained on discovery but not yet scored. */
-  developing: boolean;
-  /** True when a person has reviewed and locked the record. */
+  /** Guru only: identity confirmed. */
   reviewed: boolean;
-  /** ISO timestamp of the last update to the record. */
+  /** When the record was last checked: the BTS research date, else the row's last update. */
   updatedAt: string | null;
   /**
    * Guru only: cleared for public display (identity + research gate). Used by `loadEntities`
@@ -193,9 +175,8 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
       fcaWarning: false,
       verdict: resolution.tier,
       score: null,
-      provisional: false,
+      bts: null,
       closed: false,
-      developing: false,
       reviewed: Boolean(row.identity_confirmed),
       publishable: resolution.publishable,
       citationUrl: resolution.tier === "Caution" ? str(row.regulator_flag_source) : null,
@@ -203,46 +184,43 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     };
   }
 
-  if (type === "propfirm") {
-    const firmStatus = str(row.firm_status);
-    const prop = computePropFirmScore({
-      firmStatus,
-      autoScore: num(row.trust_score),
-      founderOverrideScore: null,
-    });
-    return {
-      ...base,
-      verdict: prop.band ?? "Not yet rated",
-      score: prop.score,
-      provisional: false,
-      closed: isClosedFirm(firmStatus),
-      developing: prop.notRated,
-      reviewed: false,
-    };
+  // Brokers and prop firms: the engine row is the only source of verdict and score.
+  const raw = row.bts && typeof row.bts === "object" ? (row.bts as Record<string, unknown>) : null;
+  if (!raw) {
+    // Not scored by the engine yet: no verdict claim, no number, no licence claim.
+    return { ...base, regulators: [], regulatorDetails: [], fcaRegistered: false, fcaReference: null, verdict: "Under review", score: null, bts: null, closed: false, reviewed: false };
   }
-
-  const founderVerified = Boolean(row.founder_verified);
-  const finalTier = str(row.final_tier);
-  const computed = finalTier
-    ? computeBrokerTrustScore({
-        finalTier,
-        finalStatus: str(row.final_status),
-        founderVerified,
-        leverage: str(row.leverage),
-        regulatorsListed: str(row.regulators_listed),
-        verificationMethod: str(row.verification_method),
-      })
-    : null;
-  const stored = num(row.trust_score);
-  const status = row.status === "avoid" ? "Avoid" : row.status === "warning" ? "Proceed With Caution" : "Trusted";
+  const verdict = toVerdict(str(raw.verdict));
+  const details = (raw.details ?? {}) as Record<string, unknown>;
+  const pillars = (raw.pillars ?? {}) as Record<string, unknown>;
+  const licences = parseLicences(str(details.active_verified_licences));
+  const regulatorDetails: RegulatorRef[] = [];
+  for (const l of licences) {
+    const ref = regulatorForEngineCode(l.code);
+    if (!regulatorDetails.some((r) => r.code === ref.code && r.country === ref.country)) regulatorDetails.push(ref);
+  }
+  const fca = licences.find((l) => l.code === "FCA");
   return {
     ...base,
-    verdict: computed ? computed.band : stored === null ? "Not yet rated" : status,
-    score: computed ? (computed.provisional ? null : computed.score) : stored,
-    provisional: computed?.provisional ?? false,
-    closed: false,
-    developing: false,
-    reviewed: founderVerified,
+    regulators: [...new Set(regulatorDetails.map((r) => r.code))],
+    regulatorDetails,
+    fcaRegistered: Boolean(fca),
+    fcaReference: fca?.number ?? null,
+    verdict,
+    score: SCORELESS.has(verdict) ? null : num(raw.global_score),
+    bts: {
+      entityId: String(raw.entity_id),
+      confidence: num(raw.evidence_confidence),
+      reason: str(raw.verdict_reason),
+      cap: str(raw.cap_applied),
+      pillars: PILLARS[type].map(([key, label, max]) => ({ label, max, value: str(pillars[key]) ?? "not checked" })),
+      cloneAlert: str(details.clone_alert) === "yes",
+      researchDate: str(raw.research_date),
+      licences,
+    },
+    closed: verdict === "Not active",
+    reviewed: false,
+    updatedAt: str(raw.research_date) ?? base.updatedAt,
   };
 }
 
@@ -278,7 +256,7 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
 }
 
 /** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */
-export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v3"], { revalidate: 3600 });
+export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v4"], { revalidate: 3600, tags: ["bts"] });
 
 export async function getPublicEntity(type: PublicEntityType, slug: string) {
   return (await getPublicEntities(type)).find((e) => e.slug === slug) ?? null;
@@ -298,8 +276,7 @@ export function filterEntities(entities: PublicEntity[], f: EntityFilters): Publ
     if (f.verdict && e.verdict !== f.verdict) return false;
     if (f.regulator && !e.regulators.includes(f.regulator)) return false;
     if (f.status === "closed" && !e.closed) return false;
-    if (f.status === "developing" && !e.developing) return false;
-    if (f.status === "operating" && (e.closed || e.developing)) return false;
+    if (f.status === "operating" && e.closed) return false;
     return true;
   });
 }
@@ -311,9 +288,5 @@ export function topRegulators(entities: PublicEntity[], limit = 12): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([r]) => r);
 }
 
-export const verdictTone = (v: Verdict): "green" | "amber" | "coral" | "slate" => {
-  if (v === "Strongly Trusted" || v === "Trusted" || v === "Verified") return "green";
-  if (v === "Proceed With Caution" || v === "Caution") return "amber";
-  if (v === "Not yet rated" || v === "Unverified") return "slate";
-  return "coral";
-};
+// Lives in the client-safe module so client components can colour verdicts without importing DB code.
+export { verdictTone } from "@/lib/compare/bts";

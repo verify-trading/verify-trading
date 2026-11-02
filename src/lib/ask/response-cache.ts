@@ -17,6 +17,7 @@ import {
 } from "@/lib/ask/entities";
 import { getAskPrimaryModelId } from "@/lib/ask/service/provider";
 import { logger } from "@/lib/observability/logger";
+import { getRequestCountrySafe } from "@/lib/compare/bts-data";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -39,7 +40,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 const CACHE_TABLE = "ask_response_cache";
 
 /** Bump when the card schema or system prompt changes what answers look like. */
-const CACHE_SCHEMA_VERSION = 1;
+const CACHE_SCHEMA_VERSION = 2; // v2: BTS engine verdicts, keyed per country
 
 /** How long a cached answer lives. The key already invalidates on any register
  * edit (see buildCacheKey), so these only guard slow off-register drift. */
@@ -167,12 +168,13 @@ async function resolveCacheableEntity(input: AskCacheRequest): Promise<VerifiedE
  * stale answers become unreachable the instant the register changes — we never
  * wait for the TTL to serve a corrected verdict.
  */
-export function buildAskResponseCacheKey(entity: VerifiedEntity, modelId: string): string {
+export function buildAskResponseCacheKey(entity: VerifiedEntity, modelId: string, country = "XX"): string {
   const fingerprint = createHash("sha256")
     .update(JSON.stringify(entity))
     .digest("hex")
     .slice(0, 16);
-  return `ask:v${CACHE_SCHEMA_VERSION}:${entity.id}:${modelId}:${fingerprint}`;
+  // BTS verdicts differ per country, so a UK answer is never served to a South African user.
+  return `ask:v${CACHE_SCHEMA_VERSION}:${entity.id}:${country}:${modelId}:${fingerprint}`;
 }
 
 // ── Read / write ──────────────────────────────────────────────────────────────
@@ -187,7 +189,7 @@ export async function readCachedAskResponse(input: AskCacheRequest): Promise<Cac
     const client = entity && getSupabaseAdminClient();
     if (!entity || !client) return null;
 
-    const cacheKey = buildAskResponseCacheKey(entity, getAskPrimaryModelId());
+    const cacheKey = buildAskResponseCacheKey(entity, getAskPrimaryModelId(), await getRequestCountrySafe());
     const { data, error } = await client
       .from(CACHE_TABLE)
       .select("payload")
@@ -239,7 +241,7 @@ export async function maybeCacheAskResponse(
       Boolean(entity.provisional);
     const ttlHours = developing ? TTL_HOURS_DEVELOPING : TTL_HOURS_STABLE;
     const modelId = getAskPrimaryModelId();
-    const cacheKey = buildAskResponseCacheKey(entity, modelId);
+    const cacheKey = buildAskResponseCacheKey(entity, modelId, await getRequestCountrySafe());
 
     const { error } = await client.from(CACHE_TABLE).upsert(
       {

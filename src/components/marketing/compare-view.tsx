@@ -4,7 +4,10 @@ import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, SearchX, ShieldCh
 import { Breadcrumbs } from "@/components/marketing/primitives";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { FaqBlock, VerdictBands } from "@/components/marketing/entity-sections";
-import { isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
+import { CountryPicker } from "@/components/marketing/country-verdict";
+import { isListed, isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
+import { countryView, type BtsVerdict } from "@/lib/compare/bts";
+import { getCountryRows, getRequestCountry } from "@/lib/compare/bts-data";
 import { FilterMenu } from "@/components/marketing/filter-menu";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -50,23 +53,23 @@ const GURU_VERDICTS = ["Verified", "Unverified", "Caution"] as const;
 
 const LIST_FAQS: Record<PublicEntityType, Array<{ q: string; a: string }>> = {
   broker: [
-    { q: "How do you decide a broker's verdict?", a: "From the regulator behind the broker, using a fixed rule-based model published in our methodology. A licence from a major regulator ranks above an offshore licence, and a broker with no licence ranks lowest. The same facts always produce the same verdict." },
-    { q: "Can a broker pay to change its verdict?", a: "No. We take no affiliate commissions from brokers, and verdicts are computed from regulator records, not sold." },
-    { q: "What does \"Awaiting a live register re-check\" mean?", a: "The record has not yet been re-confirmed against the regulator's live register. The verdict reflects the last confirmed information, so check the register yourself before you deposit." },
-    { q: "Why do some brokers show no regulator?", a: "Our record lists none for them. That does not prove a firm is unlicensed, but we have no licence to point to. Those records are kept out of search engines until they hold more evidence." },
-    { q: "How often are records updated?", a: "Pages refresh hourly from the register, and each record shows the date it was last updated." },
+    { q: "How do you decide a broker's verdict?", a: "A fixed scoring method gives every broker a score out of 100 from five pillars: regulation, client protection, regulatory conduct, track record and transparency. Verified needs 75 or more, complete research and an active tier 1 or 2 licence. The same evidence always gives the same result." },
+    { q: "Why is the verdict different in my country?", a: "We also check whether a broker is licensed where you are. Without a local licence, your own country's protections may not apply, so the country score can be lower. Some brokers do not accept clients from your country at all; they show as Not available and are left out of the list." },
+    { q: "Can a broker pay to change its verdict?", a: "No. Nothing commercial ever affects a score, a verdict or the order of a list." },
+    { q: "Why do some brokers show no licence?", a: "Our research has not verified an active licence for them on a regulator's register. That does not prove a firm is unlicensed, but we have no licence to point to." },
+    { q: "How often are records updated?", a: "Scores change when new research is approved. Each record shows the date it was last checked." },
   ],
   propfirm: [
-    { q: "How is a prop firm scored?", a: "The score is out of 10 and computed from the evidence we hold. Closed firms are rated Avoid. Firms we retain but have not scored show as Not yet rated, which is not a judgement either way." },
+    { q: "How is a prop firm scored?", a: "Out of 100, from five pillars: identity, transparency, dispute record, regulatory conduct and rule disclosure. Firms that are no longer active, or that are being re-checked, show no score and are left out of the list." },
     { q: "Are prop firms regulated?", a: "Many prop firms sell evaluations on simulated accounts and are not regulated brokers. Read each firm's terms, and check who the legal entity behind the brand is." },
-    { q: "Can a prop firm pay to change its verdict?", a: "No. We take no affiliate commissions from prop firms, and verdicts are computed from records, not sold." },
-    { q: "How often are records updated?", a: "Pages refresh hourly from the register, and each record shows the date it was last updated." },
+    { q: "Can a prop firm pay to change its verdict?", a: "No. Nothing commercial ever affects a score, a verdict or the order of a list." },
+    { q: "How often are records updated?", a: "Scores change when new research is approved. Each record shows the date it was last checked." },
   ],
   guru: [
     { q: "Why only three tiers for a trader?", a: "Because a numeric score on a person implies a precision we cannot defend. Three plain tiers — Verified, Unverified, Caution — map directly to the evidence we hold, and only to that evidence." },
     { q: "What stops a Caution from being defamation?", a: "A Caution is only published when the record carries a cited regulator or court action; the resolver drops a Caution to Unverified if the citation URL is missing or malformed. Identity has to be confirmed before any row is listed." },
     { q: "Is Unverified an accusation?", a: "No. Unverified is the neutral default when we hold a record but have not confirmed a public track record. It is not a negative judgement and should not be read as one." },
-    { q: "How often are records updated?", a: "Records refresh hourly from the registry. Each record shows the date it was last updated." },
+    { q: "How often are records updated?", a: "Records are updated as new research is checked. Each record shows the date it was last checked." },
   ],
 };
 
@@ -76,12 +79,6 @@ const SORTS = [
   { key: "updated", label: "Recently updated" },
 ] as const;
 type SortKey = (typeof SORTS)[number]["key"];
-
-const STATUSES = [
-  { key: "operating", label: "Operating" },
-  { key: "developing", label: "Developing (not rated)" },
-  { key: "closed", label: "Closed" },
-] as const;
 
 export type CompareSearchParams = Record<string, string | string[] | undefined>;
 type View = EntityFilters & { sort: SortKey };
@@ -99,20 +96,23 @@ export function parseCompareParams(sp: CompareSearchParams): EntityFilters {
   };
 }
 
-const parseSort = (sp: CompareSearchParams): SortKey => {
+/** Brokers and prop firms rank by score by default (country score for brokers); people by name. */
+const defaultSort = (type: PublicEntityType): SortKey => (type === "guru" ? "name" : "score");
+
+const parseSort = (sp: CompareSearchParams, type: PublicEntityType): SortKey => {
   const s = first(sp.sort);
-  return SORTS.some((o) => o.key === s) ? (s as SortKey) : "name";
+  return SORTS.some((o) => o.key === s) ? (s as SortKey) : defaultSort(type);
 };
 
 /** Builds a shareable URL. `patch` overrides filters; page resets unless given. */
-function hrefWith(path: string, v: View, patch: Partial<View> = {}) {
+function hrefWith(path: string, v: View, patch: Partial<View> = {}, sortDefault: SortKey = "name") {
   const f = { ...v, page: 1, ...patch };
   const params = new URLSearchParams();
   if (f.q) params.set("q", f.q);
   if (f.verdict) params.set("verdict", f.verdict);
   if (f.regulator) params.set("regulator", f.regulator);
   if (f.status) params.set("status", f.status);
-  if (f.sort !== "name") params.set("sort", f.sort);
+  if (f.sort !== sortDefault) params.set("sort", f.sort);
   if ((f.page ?? 1) > 1) params.set("page", String(f.page));
   const qs = params.toString();
   return qs ? `${path}?${qs}` : path;
@@ -147,11 +147,11 @@ function RegulatorTags({ e }: { e: PublicEntity }) {
   if (e.type === "propfirm") {
     return (
       <span className="text-sm text-slate-400">
-        {e.closed ? "Closed" : e.developing ? "Developing, not rated" : e.yearFounded ? `Founded ${e.yearFounded}` : "Operating"}
+        {e.closed ? "Not active" : e.yearFounded ? `Founded ${e.yearFounded}` : "Operating"}
       </span>
     );
   }
-  if (!e.regulators.length && !e.fcaWarning) return <span className="text-sm text-slate-500">No regulator listed</span>;
+  if (!e.regulators.length && !e.fcaWarning) return <span className="text-sm text-slate-500">No licence verified</span>;
   const shown = e.regulators.slice(0, 3);
   return (
     <span className="flex flex-wrap items-center gap-1.5">
@@ -184,25 +184,31 @@ const COLS = "md:grid-cols-[minmax(0,1.7fr)_9.5rem_7.5rem_minmax(0,1.3fr)_6.5rem
 export async function CompareView({ type, searchParams }: { type: PublicEntityType; searchParams: CompareSearchParams }) {
   const cfg = CONFIG[type];
   const filters = parseCompareParams(searchParams);
-  const view: View = { ...filters, sort: parseSort(searchParams) };
-  // The directory lists every record in the register; only records with a live detail page get a link to it.
-  const all = await getPublicEntities(type);
-  const matches = sortEntities(filterEntities(all, filters), view.sort);
+  const view: View = { ...filters, sort: parseSort(searchParams, type) };
+  // Brokers show the visitor's country verdict and score (BTS country layer); prop firms and people have none.
+  const country = type === "broker" ? await getRequestCountry() : "XX";
+  const countryRows = country !== "XX" ? await getCountryRows(country) : {};
+  const all = (await getPublicEntities(type)).map((e) => {
+    if (!e.bts || type !== "broker") return e;
+    const v = countryView({ verdict: e.verdict as BtsVerdict, score: e.score }, countryRows[e.bts.entityId], country);
+    return { ...e, verdict: v.verdict, score: v.score };
+  });
+  // Lists leave out Under review, Not active and Not available; a name search still finds them.
+  const listed = filters.q ? all : all.filter(isListed);
+  const matches = sortEntities(filterEntities(listed, filters), view.sort);
   const pages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
   const page = Math.min(filters.page ?? 1, pages);
   const rows = matches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const regulators = type === "broker" ? topRegulators(all) : [];
   const filtered = Boolean(filters.q || filters.verdict || filters.regulator || filters.status);
-  const newest = all.map((e) => e.updatedAt).filter(Boolean).sort().at(-1) ?? null;
+  // Brokers and prop firms: the latest research date; people: the latest record update.
+  const newest = all.map((e) => (e.bts ? e.bts.researchDate : e.type === "guru" ? e.updatedAt : null)).filter(Boolean).sort().at(-1) ?? null;
   const faqs = LIST_FAQS[type];
-  const href = (patch: Partial<View> = {}) => hrefWith(cfg.path, view, patch);
+  const href = (patch: Partial<View> = {}) => hrefWith(cfg.path, view, patch, defaultSort(type));
 
   // Verdict chips carry counts for the other active filters, so a chip never leads to an empty list by surprise.
-  const scoped = filterEntities(all, { ...filters, verdict: undefined });
-  const verdicts: readonly string[] =
-    type === "guru"
-      ? GURU_VERDICTS
-      : VERDICTS.filter((v) => type === "propfirm" || (v !== "High Risk" && v !== "Not yet rated"));
+  const scoped = filterEntities(listed, { ...filters, verdict: undefined });
+  const verdicts: readonly string[] = type === "guru" ? GURU_VERDICTS : VERDICTS.filter((v) => isListed({ verdict: v }) && v !== "Unverified");
   const start = (page - 1) * PAGE_SIZE;
   const sortLabel = SORTS.find((s) => s.key === view.sort)?.label ?? "";
   const th = (label: string, key: SortKey | null, className?: string) =>
@@ -238,13 +244,14 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
             <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-400">{cfg.intro}</p>
           </div>
           <p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
-            <span className="font-semibold text-white">{all.length.toLocaleString("en-GB")} {cfg.plural}</span>
+            <span className="font-semibold text-white">{listed.length.toLocaleString("en-GB")} {cfg.plural}</span>
             <span aria-hidden>·</span>
-            <span>Updated hourly</span>
+            <span>Last checked {formatRecordDate(newest)}</span>
             <span aria-hidden>·</span>
             <span>Independent, not for sale</span>
           </p>
         </header>
+        {type === "broker" ? <div className="mt-2"><CountryPicker country={country} refresh /></div> : null}
 
         <div className={cn(surface, "mt-5 p-3 sm:p-4")}>
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -285,16 +292,6 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                   options={[
                     { label: "Any regulator", href: href({ regulator: undefined }), active: !filters.regulator },
                     ...regulators.map((r) => ({ label: r, href: href({ regulator: r }), active: filters.regulator === r })),
-                  ]}
-                />
-              ) : type === "propfirm" ? (
-                <FilterMenu
-                  label="Status"
-                  value={STATUSES.find((s) => s.key === filters.status)?.label.split(" (")[0] ?? "Any"}
-                  active={Boolean(filters.status)}
-                  options={[
-                    { label: "Any status", href: href({ status: undefined }), active: !filters.status },
-                    ...STATUSES.map((s) => ({ label: s.label, href: href({ status: s.key }), active: filters.status === s.key })),
                   ]}
                 />
               ) : null}
@@ -343,7 +340,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
               {th("Verdict", null)}
               {th(type === "guru" ? "Basis" : "Score", type === "guru" ? null : "score")}
               {th(type === "broker" ? "Regulators" : type === "propfirm" ? "Status" : "Identity", null)}
-              {th("Updated", "updated")}
+              {th(type === "guru" ? "Updated" : "Last checked", "updated")}
               <span className="sr-only">Actions</span>
             </div>
             <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/[0.08] bg-white/[0.02] md:rounded-t-none md:border-t-0">
@@ -457,12 +454,12 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
               <div className="mt-4 space-y-4 text-sm leading-relaxed text-slate-400">
                 <p>
                   {type === "broker"
-                    ? "A broker's verdict starts from the strength of the regulator behind it: a licence from a major regulator ranks above an offshore one, and a firm with no licence ranks lowest. The same facts always give the same result."
+                    ? "Each broker gets a score out of 100 from a fixed method: regulation, client protection, regulatory conduct, track record and transparency. Then we check whether it is licensed in your country, which can lower the score you see. Pillars we have not checked yet are left out rather than counted against the firm."
                     : type === "propfirm"
-                      ? "A prop firm's verdict is a score out of 10 computed from the evidence we hold. Closed firms are rated Avoid, and firms we have not scored yet show as Not yet rated, which is not a judgement."
-                      : "A person is never scored out of 10. Each trader or educator sits in one of three tiers: Verified means we have confirmed a public track record; Unverified is the neutral default; Caution is only ever published when a documented regulator or court action backs it, with the source cited."}{" "}
+                      ? "Each prop firm gets a score out of 100 from a fixed method: identity, transparency, dispute record, regulatory conduct and rule disclosure. Pillars we have not checked yet are left out rather than counted against the firm."
+                      : "A person is never given a numeric score. Each trader or educator sits in one of three tiers: Verified means we have confirmed a public track record; Unverified is the neutral default; Caution is only ever published when a documented regulator or court action backs it, with the source cited."}{" "}
                   Read <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">how we verify</Link> for the sources and limits.
-                  {newest ? ` The most recent record update is dated ${formatRecordDate(newest)}.` : null}
+                  {newest ? ` Last checked ${formatRecordDate(newest)}.` : null}
                 </p>
                 <p>{INDEPENDENCE_STATEMENT}</p>
                 <p>
@@ -473,7 +470,6 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
             </div>
             <VerdictBands
               counts={Object.fromEntries(VERDICTS.map((v) => [v, all.filter((e) => e.verdict === v).length]))}
-              propFirms={type === "propfirm"}
               gurus={type === "guru"}
             />
           </div>

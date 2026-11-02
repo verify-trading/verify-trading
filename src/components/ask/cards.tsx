@@ -51,23 +51,28 @@ function formatAsOfDate(value: string): string {
 }
 
 /** A non-numeric score (e.g. "Provisional") shows the label only — a bar would render a NaN width. */
+/** "93/100" (BTS engine) -> 93 of 100; a bare legacy "7.7" -> 7.7 of 10; anything else is shown as text. */
+function parseScore(score: string) {
+  const m = score.match(/^\s*(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+))?\s*$/);
+  return m ? { value: Number(m[1]), max: Number(m[2] ?? 10) } : null;
+}
+
 function TrustScoreBar({ score, accent }: { score: string; accent: string }) {
-  const numericScore = Number.parseFloat(score);
-  const isNumeric = Number.isFinite(numericScore);
+  const parsed = parseScore(score);
 
   return (
     <>
       <div className="mt-3 flex items-center justify-between text-sm text-[var(--vt-muted)]">
         <span>Trust Score</span>
         <span className="font-black" style={{ color: accent }}>
-          {isNumeric ? `${score} / 10` : score}
+          {parsed ? `${parsed.value} / ${parsed.max}` : score}
         </span>
       </div>
-      {isNumeric ? (
+      {parsed ? (
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8">
           <div
             className="h-full rounded-full"
-            style={{ width: `${Math.max(0, Math.min(100, numericScore * 10))}%`, backgroundColor: accent }}
+            style={{ width: `${Math.max(0, Math.min(100, (parsed.value / parsed.max) * 100))}%`, backgroundColor: accent }}
           />
         </div>
       ) : null}

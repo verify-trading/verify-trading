@@ -16,8 +16,8 @@ export const PAGE_FAQS = {
   ],
   verify: [
     { q: "What does Verify actually check?", a: "For a broker: the regulators it lists, its register status and any warning-list entries. For a prop firm: its operating status and published terms, and a score where we hold a scored record. For an educator or signal group: whether there is a documented regulator or court action against them." },
-    { q: "What do the verdict labels mean?", a: "Brokers and prop firms get a score and band. Educators get one of three labels: Verified, Unverified or Caution. Prop firms we have not scored show “Not yet rated”, and firms that have shut down are marked closed." },
-    { q: "Is a “Trusted” band a guarantee the broker is safe?", a: "No. A band summarises the records we hold at the time of the last review. It is not an endorsement and not a guarantee of future conduct, and it is not investment advice." },
+    { q: "What do the verdict labels mean?", a: "Brokers and prop firms get a score out of 100 and a verdict: Verified, Caution, High risk or Insufficient data. Firms being re-checked show Under review and firms that have shut down show Not active, both without a score. Brokers also get a verdict for your country. Educators get one of three labels: Verified, Unverified or Caution." },
+    { q: "Is a “Verified” verdict a guarantee the broker is safe?", a: "No. A verdict summarises the records we hold at the time of the last review. It is not an endorsement and not a guarantee of future conduct, and it is not investment advice." },
     { q: "Can a firm pay to improve or remove its record?", a: "No. Records are computed from public sources and cannot be bought, improved or removed by their subject. A firm can request a correction by sending a primary source." },
     { q: "How often are records updated?", a: "Records are reviewed on a rolling basis and each one shows the date of its latest review, so check the date before relying on it. If something has changed sooner, tell us and send the source." },
     { q: "Why does a broker have several regulators?", a: "Many brokers run separate legal entities in different countries. The entity that holds your account decides which regulator and which protections apply, so check the entity you are actually onboarded to." },
@@ -65,7 +65,7 @@ export const PAGE_FAQS = {
     { q: "What are the most common ways a challenge is failed?", a: "Breaching a drawdown limit, trading through restricted news, and oversizing after a loss. These are process failures more often than analysis failures, which is why the tools here target process." },
     { q: "How does the journal help with a challenge?", a: "Challenge mode tracks cumulative profit against your target and your trading days against the minimum and maximum, based on your own entries, so you always know where you stand." },
     { q: "Does verify.trading endorse any prop firm?", a: "No. We show a verdict and the source behind it, take no commissions from firms and rated firms cannot be our affiliates. Read a firm's own rules before you pay." },
-    { q: "Can I see whether a prop firm has closed?", a: "Yes. Prop firm records show whether a firm is operating, closed or still being monitored, and firms we have not scored show as “Not yet rated”." },
+    { q: "Can I see whether a prop firm has closed?", a: "Yes. Prop firm records show whether a firm is operating or not active. Firms that are not active show no score." },
     { q: "How do I avoid breaching a news rule?", a: "Check the calendar for the week's high-impact events, read your firm's news policy for the exact window, and plan flat time or reduced size around those releases." },
     { q: "How much should I risk per trade on a challenge?", a: "That depends on your strategy and the drawdown limit, and we do not recommend a figure. A position size calculator shows what a given risk percentage means in lots for your stop distance." },
   ],
@@ -77,7 +77,7 @@ export const PAGE_FAQS = {
     { q: "Do you review the client's entity or the whole group?", a: "The entity that serves the client matters most, since it decides which regulator applies. Records name the entity and licence so they can be checked." },
   ],
   propFirmsBusiness: [
-    { q: "What does the operating status on a firm's record mean?", a: "Whether the firm is operating, closed or still being monitored. Firms we have not scored show as “Not yet rated”, which is not a negative finding." },
+    { q: "What does the operating status on a firm's record mean?", a: "Whether the firm is operating or not active (inactive, redirected or merged). Firms being re-checked show “Under review”, which is not a negative finding." },
     { q: "How are payout complaints assessed?", a: "We look for public, attributable records of withdrawal and payout issues and assess for pattern, not for isolated reports. A negative finding needs an official source." },
     { q: "How does a prop firm request a correction?", a: "Contact us with the record and a primary source. The same rules apply to every firm, and a record only changes when the evidence does." },
     { q: "Can a firm sponsor a listing?", a: "No. There are no paid placements, and firms cannot be affiliates while they are rated." },

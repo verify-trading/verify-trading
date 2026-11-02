@@ -38,6 +38,7 @@ import {
   getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
 import { createAskTools, resolveVerificationToolResult } from "@/lib/ask/service/tools";
+import type { BtsAskContext } from "@/lib/compare/bts-data";
 import type {
   AskGenerationCallbacks,
   AskServiceDependencies,
@@ -169,6 +170,18 @@ function buildAskMessages({
   ];
 }
 
+/** The engine context verify_entity returned for this card's firm (exact name match only), if any. */
+function findEngineVerdict(toolResults: ToolResultRecord[], cardName: string): BtsAskContext | null {
+  const name = cardName.trim().toLowerCase();
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const toolResult = toolResults[index];
+    if (toolResult.toolName !== "verify_entity" || !toolResult.output || typeof toolResult.output !== "object") continue;
+    const bts = (toolResult.output as { bts?: BtsAskContext }).bts;
+    if (bts && bts.firm.replace(/\s*\(.*\)$/, "").trim().toLowerCase() === name) return bts;
+  }
+  return null;
+}
+
 /**
  * Tool results own the numbers; the model owns the words. When the model's
  * final card matches the type of a card produced by a market/data tool this
@@ -231,7 +244,15 @@ export function mergeToolOwnedNumbers(
     // match (coverage miss, FCA-only, or a web-researched firm), the number is
     // not ours — force "N/A" so a model-assembled score never reads as a rating.
     const verifiedDbCard = findToolCard("verify_entity", "broker");
-    return { ...card, score: verifiedDbCard?.type === "broker" ? verifiedDbCard.score : "N/A" };
+    if (verifiedDbCard?.type === "broker") return { ...card, score: verifiedDbCard.score };
+    // A firm the engine scored but the site has no page for: the engine's number and verdict, verbatim.
+    const bts = findEngineVerdict(toolResults, card.name);
+    if (bts) {
+      const { verdict, score } = bts.shown;
+      const status = verdict === "Verified" ? "LEGITIMATE" : verdict === "High risk" || verdict === "Not active" ? "AVOID" : "WARNING";
+      return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: bts.conductRecord, color: status === "LEGITIMATE" ? "green" : "red" };
+    }
+    return { ...card, score: "N/A" };
   }
 
   return card;
@@ -424,11 +445,12 @@ export async function generateAskResponse(
   // A reviewed exact match already has a complete, deterministic card. Serving it here
   // avoids two slow gateway model turns (select verify_entity, then submit_ask_card) while
   // keeping fuzzy/unknown names on the model path where clarification and research matter.
-  const exactVerifiedEntity = !image && DIRECT_VERIFICATION_INTENT.test(normalizedMessage)
+  // A question about a place ("is IG safe in South Africa") goes to the model, which picks the country.
+  const exactVerifiedEntity = !image && DIRECT_VERIFICATION_INTENT.test(normalizedMessage) && !/\b(?:in|from)\s+\w/i.test(normalizedMessage)
     ? knowledge.entityCandidates.find((candidate) => candidate.matchType === "exact")
     : undefined;
   if (exactVerifiedEntity) {
-    const verification = await resolveVerificationToolResult(exactVerifiedEntity.title, dependencies);
+    const verification = await resolveVerificationToolResult(exactVerifiedEntity.title, dependencies, dependencies.country);
     if ("card" in verification) {
       return finalize(
         verification.card,

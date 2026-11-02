@@ -120,13 +120,13 @@ function BrokerCardView({ card }: { card: DemoBrokerCard }) {
           <div className="mt-2.5 flex items-center justify-between text-[12px] text-[var(--vt-muted)]">
             <span>Trust Score</span>
             <span className="text-[13px] font-black" style={{ color: accent }}>
-              {card.score} / 10
+              {card.score} / 100
             </span>
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
             <div
               className="h-full rounded-full"
-              style={{ width: `${score * 10}%`, backgroundColor: accent }}
+              style={{ width: `${score}%`, backgroundColor: accent }}
             />
           </div>
         </div>

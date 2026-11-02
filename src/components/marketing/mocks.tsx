@@ -30,16 +30,16 @@ export function VerifyCardMock() {
             <p className="mt-1 text-lg font-bold text-white">Example Markets Ltd</p>
           </div>
           <span className="inline-flex items-center gap-1 rounded-full border border-[var(--vt-green)]/40 bg-[var(--vt-green)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--vt-green)]">
-            <CheckCircle2 className="size-3" aria-hidden /> Trusted
+            <CheckCircle2 className="size-3" aria-hidden /> Verified
           </span>
         </div>
         <div className="mt-5">
           <div className="flex items-baseline justify-between text-sm">
             <span className="text-slate-400">Score</span>
-            <span className="font-semibold text-white">7.7 / 10</span>
+            <span className="font-semibold text-white">82 / 100</span>
           </div>
           <div className="mt-2 h-1.5 rounded-full bg-white/10">
-            <div className="h-full w-[77%] rounded-full bg-[var(--vt-green)]" />
+            <div className="h-full w-[82%] rounded-full bg-[var(--vt-green)]" />
           </div>
         </div>
         <dl className="mt-5 divide-y divide-white/[0.07] text-sm">

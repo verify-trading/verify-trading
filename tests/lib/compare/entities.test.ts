@@ -18,10 +18,18 @@ const brokerRow = {
   fca_reference: "123456",
   fca_warning: false,
   regulators_listed: "FCA (United Kingdom), CySEC (Cyprus)",
-  final_tier: "Tier 1",
-  founder_verified: true,
-  leverage: "1:30",
   updated_at: "2026-06-18T12:00:00Z",
+  bts: {
+    entity_id: "BTS-B-0001",
+    global_score: 88,
+    verdict: "VERIFIED",
+    verdict_reason: "licence verified on register, regulatory record checked",
+    cap_applied: null,
+    evidence_confidence: 90,
+    pillars: { regulation: "40", client_protection: "20", conduct: "not checked", track_record: "10", transparency: "5" },
+    details: { active_verified_licences: "FCA:684312|CYSEC:388/20 (note)", clone_alert: "yes" },
+    research_date: "2026-10-30",
+  },
   // internal fields that must never leak
   notes: "SECRET notes",
   founder_notes: "SECRET founder",
@@ -48,11 +56,14 @@ describe("public entity mapper", () => {
     expect(Object.keys(out)).not.toContain("bioSummary");
   });
 
-  it("scores brokers and parses regulators", () => {
+  it("takes verdict, score and licences from the BTS engine row only", () => {
     const out = toPublicEntity(brokerRow)!;
-    expect(out.verdict).toBe("Strongly Trusted");
+    expect(out).toMatchObject({ verdict: "Verified", score: 88, fcaRegistered: true, fcaReference: "684312", updatedAt: "2026-10-30" });
+    // Licences come from the engine's verified list, not the free-text regulators_listed column.
     expect(out.regulators).toEqual(["FCA", "CySEC"]);
-    expect(out.reviewed).toBe(true);
+    expect(out.bts).toMatchObject({ entityId: "BTS-B-0001", confidence: 90, cloneAlert: true });
+    expect(out.bts!.pillars.map((p) => p.label)).toEqual(["Regulation", "Client protection", "Regulatory conduct", "Track record", "Transparency"]);
+    expect(out.bts!.pillars[2].value).toBe("not checked");
     expect(parseRegulators("NONE (Requires Additional Regulation)")).toEqual([]);
     // Placeholder tokens from the source data must not become fake regulators.
     expect(parseRegulators("NULL")).toEqual([]);
@@ -60,11 +71,13 @@ describe("public entity mapper", () => {
     expect(parseRegulators("FCA (United Kingdom), NULL")).toEqual(["FCA"]);
   });
 
-  it("marks unscored prop firms as not yet rated and closed firms as avoid", () => {
-    const developing = toPublicEntity({ slug: "a", name: "A", entity_type: "propfirm", trust_score: null, firm_status: "Operating — monitoring" })!;
-    expect(developing).toMatchObject({ verdict: "Not yet rated", developing: true, score: null });
-    const closed = toPublicEntity({ slug: "b", name: "B", entity_type: "propfirm", trust_score: 6, firm_status: "Closed down" })!;
-    expect(closed).toMatchObject({ verdict: "Avoid", closed: true });
+  it("hides the score for Under review and Not active, and ignores old score columns", () => {
+    const unscored = toPublicEntity({ slug: "a", name: "A", entity_type: "propfirm", trust_score: 9.5, firm_status: "Operating" })!;
+    expect(unscored).toMatchObject({ verdict: "Under review", score: null, bts: null });
+    const inactive = toPublicEntity({ slug: "b", name: "B", entity_type: "propfirm", bts: { entity_id: "BTS-P-1", verdict: "NOT ACTIVE", global_score: 40 } })!;
+    expect(inactive).toMatchObject({ verdict: "Not active", closed: true, score: null });
+    const review = toPublicEntity({ ...brokerRow, bts: { ...brokerRow.bts, verdict: "UNDER REVIEW", global_score: null } })!;
+    expect(review).toMatchObject({ verdict: "Under review", score: null });
   });
 
   it("maps gurus through the resolver and drops malformed rows", () => {
@@ -89,14 +102,14 @@ describe("public entity mapper", () => {
 describe("filterEntities", () => {
   const list = [
     toPublicEntity(brokerRow)!,
-    toPublicEntity({ ...brokerRow, slug: "b2", name: "Beta FX", final_tier: "Unregulated", founder_verified: false, regulators_listed: null })!,
+    toPublicEntity({ ...brokerRow, slug: "b2", name: "Beta FX", bts: { ...brokerRow.bts, verdict: "HIGH RISK", global_score: 20, details: {} } })!,
   ] as PublicEntity[];
 
   it("filters by name ignoring punctuation and case", () => {
     expect(filterEntities(list, { q: "example-broker" }).map((e) => e.slug)).toEqual(["examplebroker"]);
   });
   it("filters by verdict and regulator", () => {
-    expect(filterEntities(list, { verdict: "Avoid" }).map((e) => e.slug)).toEqual(["b2"]);
+    expect(filterEntities(list, { verdict: "High risk" }).map((e) => e.slug)).toEqual(["b2"]);
     expect(filterEntities(list, { regulator: "CySEC" }).map((e) => e.slug)).toEqual(["examplebroker"]);
   });
 });

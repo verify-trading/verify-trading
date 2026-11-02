@@ -6,10 +6,10 @@ describe("entityReviewSchema", () => {
   const base = {
     name: "FxPro",
     path: "/verify/brokers/fxpro",
-    description: "Independent broker check for FxPro: verdict Trusted.",
+    description: "Independent broker check for FxPro: verdict Caution.",
     category: "Online broker",
-    verdict: "Trusted",
-    score: 7.9,
+    verdict: "Caution",
+    score: 74,
     updatedAt: "2026-09-29",
     regulators: ["FCA", "CySEC"],
     foundingDate: "2006",
@@ -28,14 +28,14 @@ describe("entityReviewSchema", () => {
     expect(item.foundingDate).toBe("2006");
   });
 
-  it("publishes the score as a 0-10 Rating when it exists", () => {
+  it("publishes the BTS score as a 0-100 Rating when it exists", () => {
     const s = entityReviewSchema(base);
     expect(s.reviewRating).toEqual({
       "@type": "Rating",
-      ratingValue: "7.9",
-      bestRating: "10",
+      ratingValue: "74",
+      bestRating: "100",
       worstRating: "0",
-      alternateName: "Trusted",
+      alternateName: "Caution",
     });
   });
 

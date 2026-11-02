@@ -265,8 +265,8 @@ export function entityReviewSchema(input: {
       ? {
           reviewRating: {
             "@type": "Rating",
-            ratingValue: input.score.toFixed(1),
-            bestRating: "10",
+            ratingValue: String(input.score),
+            bestRating: "100",
             worstRating: "0",
             alternateName: input.verdict,
           },

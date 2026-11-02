@@ -53,7 +53,8 @@ const brokerCardSchema = z.object({
   score: textFieldSchema,
   status: brokerStatusSchema,
   fca: booleanStringSchema,
-  complaints: z.enum(["Low", "Medium", "High"]),
+  // Low/Medium/High: public-source reads. None found/On record/Not checked: the BTS engine's conduct record.
+  complaints: z.enum(["Low", "Medium", "High", "None found", "On record", "Not checked"]),
   verdict: textFieldSchema,
   color: cardColorSchema,
 });
