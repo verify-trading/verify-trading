@@ -1,23 +1,35 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { BookOpen, Brain, Calendar, LineChart, Lock, Newspaper } from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
+import { Calendar, FingerprintPattern, LineChart, Lock, Newspaper } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+/** The app's Journal tab glyph (mobile src/navigation/TabIcons.tsx), on lucide's 24-unit contract. */
+export function JournalIcon({ size = 24, className, strokeWidth = 2 }: { size?: number; className?: string; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M14.5 2.5H8a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h9.5a2 2 0 0 0 2-2V7.5z" />
+      <path d="M14.5 2.5v3a2 2 0 0 0 2 2h3" />
+      <path d="M3.5 6.5H7M3.5 10.2H7M3.5 13.9H7M3.5 17.6H7" />
+      <path d="m10 14 2.4 2.4 4.6-5" />
+    </svg>
+  );
+}
 
 export type MarketsTabId = "charts" | "intelligence" | "calendar" | "journal" | "mind";
 
 const TABS: {
   id: MarketsTabId;
   label: string;
-  icon: typeof LineChart;
+  icon: ComponentType<{ size?: number; className?: string }>;
 }[] = [
   { id: "charts", label: "Markets", icon: LineChart },
   { id: "intelligence", label: "Intelligence", icon: Newspaper },
   { id: "calendar", label: "Economic Calendar", icon: Calendar },
-  { id: "journal", label: "Journal", icon: BookOpen },
-  { id: "mind", label: "Mind", icon: Brain },
+  { id: "journal", label: "Journal", icon: JournalIcon },
+  { id: "mind", label: "Mind", icon: FingerprintPattern },
 ];
 
 function tabPanelId(tab: MarketsTabId): string {

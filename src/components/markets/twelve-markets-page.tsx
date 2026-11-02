@@ -57,8 +57,6 @@ function isMarketsPaywallUiEnabled(): boolean {
 /** Tabs whose data is Pro-only (server-enforced); "charts" is the free teaser. */
 const PRO_TABS: MarketsTabId[] = ["intelligence", "calendar"];
 
-/** Tabs that are placeholders for everyone, Pro included. */
-const COMING_SOON_TABS: MarketsTabId[] = ["journal", "mind"];
 
 function lockedTabHeadline(tab: MarketsTabId): string {
   if (tab === "intelligence") return "Market Intelligence is a Pro feature.";
@@ -96,7 +94,6 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
   // Pro tabs are locked for resolved non-Pro users; charts stays open as the teaser.
   const lockedProTabs =
     !isPro && tierResolved && isMarketsPaywallUiEnabled() ? PRO_TABS : [];
-  const lockedTabs = [...lockedProTabs, ...COMING_SOON_TABS];
   const showTabPaywall = lockedProTabs.includes(activeTab);
 
   const marketsQuery = useQuery({
@@ -148,7 +145,7 @@ export function TwelveMarketsPage({ initialTier, pricing, billingContext }: Mark
             <MarketsViewTabs
               activeTab={activeTab}
               onTabChange={setActiveTab}
-              lockedTabs={lockedTabs}
+              lockedTabs={lockedProTabs}
             >
               <div className="relative">
                 <div

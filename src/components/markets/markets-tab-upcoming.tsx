@@ -4,6 +4,7 @@ import { Check, FingerprintPattern, Smartphone } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
+import { JournalIcon } from "@/components/markets/markets-view-tabs";
 import { StoreBadges } from "@/components/site/store-badges";
 
 /** What each feature does in the app (copy from the mobile app's own screens). */
@@ -31,18 +32,6 @@ const COPY = {
     Icon: FingerprintPattern,
   },
 } as const;
-
-/** The app's Journal tab glyph (src/navigation/TabIcons.tsx in the mobile app), on lucide's 24-unit contract. */
-function JournalIcon({ className, strokeWidth = 2 }: { className?: string; strokeWidth?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M14.5 2.5H8a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h9.5a2 2 0 0 0 2-2V7.5z" />
-      <path d="M14.5 2.5v3a2 2 0 0 0 2 2h3" />
-      <path d="M3.5 6.5H7M3.5 10.2H7M3.5 13.9H7M3.5 17.6H7" />
-      <path d="m10 14 2.4 2.4 4.6-5" />
-    </svg>
-  );
-}
 
 /** Same ring for both tabs, with the app's own tab icon inside. */
 function StateIcon({ kind }: { kind: keyof typeof COPY }) {
