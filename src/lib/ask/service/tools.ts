@@ -991,20 +991,20 @@ const L2_WAIT_MS = 120_000; // the mobile app gives up on Ask at 180s
 /** Any ISO country the user named; the live check researches countries the engine has no rows for (e.g. Morocco). */
 const isoCountry = (c?: string) => (c && /^[A-Za-z]{2}$/.test(c.trim()) ? c.trim().toUpperCase() : undefined);
 
-async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment, country?: string) {
+async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment, country?: string, waitMs = L2_WAIT_MS) {
   if (bts.type === "tool" || btsVerificationGate(bts.operatingStatus, bts.researchStatus) || bts.global.verdict === "Not active" || bts.global.verdict === "Under review") return bts;
-  const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: isoCountry(country) ?? bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2);
+  const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: isoCountry(country) ?? bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2, waitMs);
   if (!l2) return { ...bts, scoreSource: "Database assessment" };
   const live = fromLiveCheck(l2);
   // Register-verified licences (e.g. FCA) stay from the research record; the live check scores, it doesn't re-list them.
   return { ...bts, ...live, global: { ...live.global, cloneAlert: bts.global.cloneAlert, licencesVerified: bts.global.licencesVerified } };
 }
 
-async function waitForLiveCheck(subject: L2Subject, getL2: typeof getL2Assessment = getL2Assessment) {
+async function waitForLiveCheck(subject: L2Subject, getL2: typeof getL2Assessment = getL2Assessment, waitMs = L2_WAIT_MS) {
   const run = getL2(subject).catch(() => null);
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const result = await Promise.race([run, new Promise<null>((resolve) => { timer = setTimeout(resolve, L2_WAIT_MS, null); })]);
+    const result = await Promise.race([run, new Promise<null>((resolve) => { timer = setTimeout(resolve, waitMs, null); })]);
     if (!result) {
       try { after(run); } catch { /* Tests and scripts have no request lifetime. */ }
     }
@@ -1044,6 +1044,7 @@ function fromLiveCheck(l2: L2Result) {
       officialWebsite: l2.identity.official_website,
       findings: l2.findings.map(({ source_id: _id, ...f }) => f),
       summary,
+      regulators: l2.regulators,
       concern: l2.concern,
       recommendation: l2.recommendation,
       pillars: l2.pillars.map(({ label, awarded, max, reason }) => ({ label, awarded, max, reason })),
@@ -1058,7 +1059,7 @@ type CheckedBts = Awaited<ReturnType<typeof withLiveCheck>>;
 
 function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "verificationSourceLabel" | "cloneNotice" | "regulation"> {
   const cloneNotice = bts.global.cloneAlert ? { message: bts.global.cloneAlert, ...(bts.research?.cloneNoticeSource ? { sourceUrl: bts.research.cloneNoticeSource } : {}) } : undefined;
-  const regulation = regulationLabel(bts.global.licencesVerified, bts.countryCode) ?? undefined;
+  const regulation = regulationLabel(bts.global.licencesVerified, bts.countryCode, "liveCheck" in bts ? bts.liveCheck.regulators : []) ?? undefined;
   if (!("liveCheck" in bts)) return { cloneNotice, regulation, verificationSourceLabel: "scoreSource" in bts ? bts.scoreSource : "Reviewed record" };
   const live = bts.liveCheck;
   return {
@@ -1133,7 +1134,7 @@ export async function resolveVerificationToolResult(
   // No page on our site, but the engine may still have scored the firm (new brokers, tools).
   const engineByBrand = async () => {
     const bts = await (dependencies.getBtsAskContextByBrandImpl ?? getBtsAskContextByBrand)(normalized.lookupName, country);
-    return bts ? withLiveCheck(bts, dependencies.getL2AssessmentImpl, country) : undefined;
+    return bts ? withLiveCheck(bts, dependencies.getL2AssessmentImpl, country, dependencies.liveCheckWaitMs) : undefined;
   };
 
   // Brokers and prop firms: the BTS engine's verdict and score go on the card verbatim.
@@ -1148,7 +1149,7 @@ export async function resolveVerificationToolResult(
         if (host(supplied) !== host(engine.research.website)) return coverageEvidence(name, true);
       } catch { return coverageEvidence(name, true); }
     }
-    const bts = await withLiveCheck(engine, dependencies.getL2AssessmentImpl, country);
+    const bts = await withLiveCheck(engine, dependencies.getL2AssessmentImpl, country, dependencies.liveCheckWaitMs);
     return {
       ...result,
       card: applyBtsToCard(result.card, bts),
@@ -1164,7 +1165,7 @@ export async function resolveVerificationToolResult(
 
   const checkWithoutBaseline = async (firm: string, kind?: "broker" | "propfirm") => {
     const countryCode = isoCountry(country) ?? await getRequestCountrySafe();
-    const l2 = await waitForLiveCheck({ firm, kind, country: countryCode }, dependencies.getL2AssessmentImpl);
+    const l2 = await waitForLiveCheck({ firm, kind, country: countryCode }, dependencies.getL2AssessmentImpl, dependencies.liveCheckWaitMs);
     if (!l2) return null;
     const bts: CheckedBts = {
       firm,
