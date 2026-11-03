@@ -222,7 +222,7 @@ export function EntityDetail({ entity: e, all, countryRows = [] }: { entity: Pub
 
           {/* 2. What the verdict means */}
           <Block id="verdict" title="What the verdict means" intro={`${e.name} is rated "${e.verdict}" globally. Verdicts come from a fixed, rule-based method applied identically to every firm.`}>
-            <VerdictBands current={e.verdict} />
+            <VerdictBands current={e.verdict} propFirms={!isBroker} />
             <p className="mt-3 text-xs text-slate-400">
               See the <Link href="/methodology" className="text-[var(--vt-blue)] hover:underline">methodology</Link> for how scores are built.
             </p>

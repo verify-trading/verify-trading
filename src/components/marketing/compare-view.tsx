@@ -6,7 +6,8 @@ import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } 
 import { FaqBlock, VerdictBands } from "@/components/marketing/entity-sections";
 import { CountryPicker } from "@/components/marketing/country-verdict";
 import { isListed, isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
-import { countryView, type BtsVerdict } from "@/lib/compare/bts";
+import { FULL_COUNTRY_VERDICTS, countryName, countryView, type BtsVerdict } from "@/lib/compare/bts";
+import { getRegulator } from "@/lib/compare/regulators";
 import { getCountryRows, getRequestCountry } from "@/lib/compare/bts-data";
 import { FilterMenu } from "@/components/marketing/filter-menu";
 import { surface } from "@/components/landing/section-primitives";
@@ -118,10 +119,12 @@ function hrefWith(path: string, v: View, patch: Partial<View> = {}, sortDefault:
   return qs ? `${path}?${qs}` : path;
 }
 
-function sortEntities(list: PublicEntity[], sort: SortKey): PublicEntity[] {
+/** Score sort puts firms licensed in the visitor's country (or EU-passported) first. */
+function sortEntities(list: PublicEntity[], sort: SortKey, licensedLocally: ReadonlySet<string> = new Set()): PublicEntity[] {
   if (sort === "name") return list;
   const out = [...list];
-  if (sort === "score") out.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name));
+  const local = (e: PublicEntity) => Number(licensedLocally.has(e.slug));
+  if (sort === "score") out.sort((a, b) => local(b) - local(a) || (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name));
   else out.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "") || a.name.localeCompare(b.name));
   return out;
 }
@@ -151,8 +154,11 @@ function RegulatorTags({ e }: { e: PublicEntity }) {
       </span>
     );
   }
-  if (!e.regulators.length && !e.fcaWarning) return <span className="text-sm text-slate-500">No licence verified</span>;
-  const shown = e.regulators.slice(0, 3);
+  if (!e.regulatorDetails.length && !e.fcaWarning) return <span className="text-sm text-slate-500">No licence verified</span>;
+  // Tier 1 ("Major onshore") regulators first, each with the green shield.
+  const isMajor = (r: PublicEntity["regulatorDetails"][number]) => Boolean(r.slug && getRegulator(r.slug)?.standing === "major");
+  const refs = [...e.regulatorDetails].sort((a, b) => Number(isMajor(b)) - Number(isMajor(a)));
+  const shown = refs.slice(0, 3);
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       {e.fcaWarning ? (
@@ -162,19 +168,18 @@ function RegulatorTags({ e }: { e: PublicEntity }) {
       ) : null}
       {shown.map((r) => (
         <span
-          key={r}
+          key={`${r.code}-${r.country}`}
+          title={isMajor(r) ? "Tier 1 regulator" : undefined}
           className={cn(
             "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
-            r === "FCA" && e.fcaRegistered
-              ? "border-[var(--vt-green)]/35 bg-[var(--vt-green)]/10 text-[var(--vt-green)]"
-              : "border-white/10 bg-white/[0.04] text-slate-300",
+            isMajor(r) ? "border-[var(--vt-green)]/35 bg-[var(--vt-green)]/10 text-[var(--vt-green)]" : "border-white/10 bg-white/[0.04] text-slate-300",
           )}
         >
-          {r === "FCA" && e.fcaRegistered ? <ShieldCheck className="size-3" aria-hidden /> : null}
-          {r}
+          {isMajor(r) ? <ShieldCheck className="size-3" aria-hidden /> : null}
+          {r.code}
         </span>
       ))}
-      {e.regulators.length > shown.length ? <span className="text-[11px] text-slate-500">+{e.regulators.length - shown.length}</span> : null}
+      {refs.length > shown.length ? <span className="text-[11px] text-slate-500">+{refs.length - shown.length}</span> : null}
     </span>
   );
 }
@@ -194,8 +199,19 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
     return { ...e, verdict: v.verdict, score: v.score };
   });
   // Lists leave out Under review, Not active and Not available; a name search still finds them.
-  const listed = filters.q ? all : all.filter(isListed);
-  const matches = sortEntities(filterEntities(listed, filters), view.sort);
+  // One row per firm: duplicate records of the same engine firm ("Saxo", "Saxo Bank") keep the shortest name.
+  const byFirm = new Map<string, PublicEntity>();
+  for (const e of all) {
+    const key = e.bts?.entityId ?? e.slug;
+    const prev = byFirm.get(key);
+    if (!prev || e.name.length < prev.name.length) byFirm.set(key, e);
+  }
+  const unique = [...byFirm.values()];
+  const listed = filters.q ? unique : unique.filter(isListed);
+  const licensedLocally = new Set(
+    unique.filter((e) => e.bts && ["LOCAL LICENCE VERIFIED", "EEA PASSPORT POSSIBLE"].includes(countryRows[e.bts.entityId]?.fit ?? "")).map((e) => e.slug),
+  );
+  const matches = sortEntities(filterEntities(listed, filters), view.sort, licensedLocally);
   const pages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
   const page = Math.min(filters.page ?? 1, pages);
   const rows = matches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -208,7 +224,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
 
   // Verdict chips carry counts for the other active filters, so a chip never leads to an empty list by surprise.
   const scoped = filterEntities(listed, { ...filters, verdict: undefined });
-  const verdicts: readonly string[] = type === "guru" ? GURU_VERDICTS : VERDICTS.filter((v) => isListed({ verdict: v }) && v !== "Unverified");
+  const verdicts: readonly string[] = type === "guru" ? GURU_VERDICTS : VERDICTS.filter((v) => isListed({ verdict: v }) && v !== "Unverified" && v !== (type === "propfirm" ? "Verified" : "Record reviewed"));
   const start = (page - 1) * PAGE_SIZE;
   const sortLabel = SORTS.find((s) => s.key === view.sort)?.label ?? "";
   const th = (label: string, key: SortKey | null, className?: string) =>
@@ -251,7 +267,17 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
             <span>Independent, not for sale</span>
           </p>
         </header>
-        {type === "broker" ? <div className="mt-2"><CountryPicker country={country} refresh /></div> : null}
+        {type === "broker" ? (
+          <div className="mt-2 space-y-1">
+            <CountryPicker country={country} refresh />
+            {country !== "XX" ? (
+              <p className="text-xs text-slate-500">
+                Brokers licensed in {countryName(country)} are listed first.
+                {FULL_COUNTRY_VERDICTS.has(country) ? "" : " Local licence checks are still in progress, so other brokers show their global rating."}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className={cn(surface, "mt-5 p-3 sm:p-4")}>
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -471,6 +497,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
             <VerdictBands
               counts={Object.fromEntries(VERDICTS.map((v) => [v, all.filter((e) => e.verdict === v).length]))}
               gurus={type === "guru"}
+              propFirms={type === "propfirm"}
             />
           </div>
 

@@ -51,7 +51,7 @@ export type PublicEntityType = "broker" | "propfirm" | "guru";
 
 export type GuruVerdict = GuruTier;
 /** Broker and prop-firm verdicts (BTS engine) plus the guru-only "Unverified". */
-export const VERDICTS = ["Verified", "Caution", "High risk", "Insufficient data", "Under review", "Not active", "Not available", "Unverified"] as const;
+export const VERDICTS = ["Verified", "Record reviewed", "Caution", "High risk", "Insufficient data", "Under review", "Not active", "Not available", "Unverified"] as const;
 export type Verdict = BtsVerdict | GuruVerdict;
 
 export type PublicEntity = {
@@ -191,7 +191,7 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     // Not scored by the engine yet: no verdict claim, no number, no licence claim.
     return { ...base, regulators: [], regulatorDetails: [], fcaRegistered: false, fcaReference: null, verdict: "Under review", score: null, bts: null, closed: false, reviewed: false };
   }
-  const verdict = toVerdict(str(raw.verdict));
+  const verdict = toVerdict(str(raw.verdict), type);
   const details = (raw.details ?? {}) as Record<string, unknown>;
   const pillars = (raw.pillars ?? {}) as Record<string, unknown>;
   const licences = parseLicences(str(details.active_verified_licences));

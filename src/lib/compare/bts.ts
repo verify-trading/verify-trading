@@ -14,7 +14,8 @@ export const ENGINE_VERDICTS = {
   "NOT ACTIVE": "Not active",
   "NOT AVAILABLE IN YOUR COUNTRY": "Not available",
 } as const;
-export type BtsVerdict = (typeof ENGINE_VERDICTS)[keyof typeof ENGINE_VERDICTS];
+/** A prop firm that passes is shown as "Record reviewed": a passing record, not a safety endorsement. */
+export type BtsVerdict = (typeof ENGINE_VERDICTS)[keyof typeof ENGINE_VERDICTS] | "Record reviewed";
 
 /** Badge colour for any verdict, including the guru tiers (Verified / Unverified / Caution). */
 export const verdictTone = (v: string): "green" | "amber" | "coral" | "slate" => {
@@ -24,8 +25,14 @@ export const verdictTone = (v: string): "green" | "amber" | "coral" | "slate" =>
   return "slate";
 };
 
-export const toVerdict = (raw: string | null | undefined): BtsVerdict =>
-  ENGINE_VERDICTS[(raw ?? "").trim().toUpperCase() as keyof typeof ENGINE_VERDICTS] ?? "Under review";
+export function toVerdict(raw: string | null | undefined, kind?: string): BtsVerdict {
+  const label = ENGINE_VERDICTS[(raw ?? "").trim().toUpperCase() as keyof typeof ENGINE_VERDICTS] ?? "Under review";
+  return label === "Verified" && kind === "propfirm" ? "Record reviewed" : label;
+}
+
+/** Ask card status for a verdict. */
+export const cardStatus = (v: BtsVerdict) =>
+  v === "Verified" || v === "Record reviewed" ? "LEGITIMATE" : v === "High risk" || v === "Not active" ? "AVOID" : "WARNING";
 
 /** Verdicts that never show a number (the engine leaves the score empty or it isn't meaningful). */
 export const SCORELESS: ReadonlySet<BtsVerdict> = new Set(["Under review", "Not active", "Not available"]);

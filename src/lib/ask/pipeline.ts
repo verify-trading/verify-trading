@@ -38,6 +38,7 @@ import {
   getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
 import { createAskTools, resolveVerificationToolResult } from "@/lib/ask/service/tools";
+import { cardStatus } from "@/lib/compare/bts";
 import type { BtsAskContext } from "@/lib/compare/bts-data";
 import type {
   AskGenerationCallbacks,
@@ -249,7 +250,7 @@ export function mergeToolOwnedNumbers(
     const bts = findEngineVerdict(toolResults, card.name);
     if (bts) {
       const { verdict, score } = bts.shown;
-      const status = verdict === "Verified" ? "LEGITIMATE" : verdict === "High risk" || verdict === "Not active" ? "AVOID" : "WARNING";
+      const status = cardStatus(verdict);
       return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: bts.conductRecord, color: status === "LEGITIMATE" ? "green" : "red" };
     }
     return { ...card, score: "N/A" };

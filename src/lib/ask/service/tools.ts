@@ -25,6 +25,7 @@ import {
   normalizeForexPair,
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
+import { cardStatus } from "@/lib/compare/bts";
 import { getBtsAskContext, getBtsAskContextByBrand, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
 import {
   findEntityCandidates,
@@ -958,7 +959,7 @@ export type AskToolSet = ReturnType<typeof createAskTools>;
  */
 function applyBtsToCard(card: BrokerCard, bts: BtsAskContext): BrokerCard {
   const { verdict, score, note } = bts.shown;
-  const status = verdict === "Verified" ? "LEGITIMATE" : verdict === "High risk" || verdict === "Not active" ? "AVOID" : "WARNING";
+  const status = cardStatus(verdict);
   const reason = bts.global.reason ? `${bts.global.reason.charAt(0).toUpperCase()}${bts.global.reason.slice(1)}.` : "";
   const sameAsReason = note && bts.global.reason && note.toLowerCase().includes(bts.global.reason.toLowerCase());
   return {
