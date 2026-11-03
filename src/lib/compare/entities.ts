@@ -5,6 +5,7 @@ import { PILLARS, SCORELESS, parseLicences, toVerdict, type BtsRecord, type BtsV
 import { findRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { btsVerificationGate, readBtsResearch } from "@/lib/compare/bts-research";
 import { selectAll } from "@/lib/supabase/select-all";
 
 /**
@@ -33,7 +34,7 @@ export const PUBLIC_ENTITY_COLUMNS = [
   "year_founded",
   "updated_at",
   // BTS engine output (brokers and prop firms):
-  "bts:bts_scores(entity_id, global_score, verdict, verdict_reason, cap_applied, evidence_confidence, pillars, details, research_date)",
+  "bts:bts_scores(entity_id, operating_status, research_status, global_score, verdict, verdict_reason, cap_applied, evidence_confidence, pillars, details, research_date)",
   "research_status",
   // guru inputs (fed through resolveGuruTier; never exposed raw):
   "guru_tier",
@@ -191,9 +192,11 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     // Not scored by the engine yet: no verdict claim, no number, no licence claim.
     return { ...base, regulators: [], regulatorDetails: [], fcaRegistered: false, fcaReference: null, verdict: "Under review", score: null, bts: null, closed: false, reviewed: false };
   }
-  const verdict = toVerdict(str(raw.verdict), type);
+  const gate = btsVerificationGate(str(raw.operating_status), str(raw.research_status));
+  const verdict = gate === "needs_review" ? "Under review" : gate === "inactive" ? "Not active" : gate === "unknown" ? "Insufficient data" : toVerdict(str(raw.verdict), type);
   const details = (raw.details ?? {}) as Record<string, unknown>;
   const pillars = (raw.pillars ?? {}) as Record<string, unknown>;
+  const research = readBtsResearch(details);
   const licences = parseLicences(str(details.active_verified_licences));
   const regulatorDetails: RegulatorRef[] = [];
   for (const l of licences) {
@@ -208,9 +211,10 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     fcaRegistered: Boolean(fca),
     fcaReference: fca?.number ?? null,
     verdict,
-    score: SCORELESS.has(verdict) ? null : num(raw.global_score),
+    score: gate || SCORELESS.has(verdict) ? null : num(raw.global_score),
     bts: {
       entityId: String(raw.entity_id),
+      research,
       confidence: num(raw.evidence_confidence),
       coverage: num(details.pillar_coverage_pct),
       reason: str(raw.verdict_reason),
@@ -256,7 +260,7 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
 }
 
 /** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */
-export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v5"], { revalidate: 3600, tags: ["bts"] });
+export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v6"], { revalidate: 3600, tags: ["bts"] });
 
 export async function getPublicEntity(type: PublicEntityType, slug: string) {
   return (await getPublicEntities(type)).find((e) => e.slug === slug) ?? null;

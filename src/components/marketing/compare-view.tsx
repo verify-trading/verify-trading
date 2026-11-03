@@ -5,6 +5,7 @@ import { Breadcrumbs } from "@/components/marketing/primitives";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { FaqBlock, VerdictBands } from "@/components/marketing/entity-sections";
 import { isListed, isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
+import { btsWebsiteIdentity } from "@/lib/compare/bts-research";
 import { getRegulator } from "@/lib/compare/regulators";
 import { FilterMenu } from "@/components/marketing/filter-menu";
 import { surface } from "@/components/landing/section-primitives";
@@ -189,12 +190,21 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
   // Lists leave out Under review, Not active and Not available; a name search still finds them.
   // One row per firm: duplicate records of the same engine firm ("Saxo", "Saxo Bank") keep the shortest name.
   const byFirm = new Map<string, PublicEntity>();
-  for (const e of all) {
+  // A named alias must remain searchable even when its display row is deduplicated.
+  for (const e of filters.q ? filterEntities(all, { q: filters.q }) : all) {
     const key = e.bts?.entityId ?? e.slug;
     const prev = byFirm.get(key);
     if (!prev || e.name.length < prev.name.length) byFirm.set(key, e);
   }
-  const unique = [...byFirm.values()];
+  const seenWebsites = new Set<string>();
+  const unique = [...byFirm.values()].filter((entity) => {
+    const identity = btsWebsiteIdentity(entity.name, entity.bts?.research);
+    if (!identity) return true;
+    const key = `${entity.type}:${identity}`;
+    if (seenWebsites.has(key)) return false;
+    seenWebsites.add(key);
+    return true;
+  });
   const listed = filters.q ? unique : unique.filter(isListed);
   const matches = sortEntities(filterEntities(listed, filters), view.sort);
   const pages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));

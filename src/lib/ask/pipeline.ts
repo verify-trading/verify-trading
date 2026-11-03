@@ -38,6 +38,7 @@ import {
   getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
 import { createAskTools, resolveVerificationToolResult } from "@/lib/ask/service/tools";
+import { btsVerificationGate } from "@/lib/compare/bts-research";
 import { cardStatus } from "@/lib/compare/bts";
 import type { BtsAskContext } from "@/lib/compare/bts-data";
 import type {
@@ -245,6 +246,8 @@ export function mergeToolOwnedNumbers(
     // match (coverage miss, FCA-only, or a web-researched firm), the number is
     // not ours — force "N/A" so a model-assembled score never reads as a rating.
     const verifiedDbCard = findToolCard("verify_entity", "broker");
+    const gated = findEngineVerdict(toolResults, card.name);
+    if (verifiedDbCard?.type === "broker" && verifiedDbCard.name.trim().toLowerCase() === card.name.trim().toLowerCase() && gated && btsVerificationGate(gated.operatingStatus, gated.researchStatus)) return verifiedDbCard;
     if (verifiedDbCard?.type === "broker" && verifiedDbCard.name.trim().toLowerCase() === card.name.trim().toLowerCase()) {
       return { ...card, score: verifiedDbCard.score, status: verifiedDbCard.status, fca: verifiedDbCard.fca, complaints: verifiedDbCard.complaints, color: verifiedDbCard.color };
     }
