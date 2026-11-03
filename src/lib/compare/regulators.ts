@@ -374,15 +374,21 @@ const ENGINE_ONLY: Record<string, { code: string; country: string | null }> = {
  * Register-verified licences as a short label for the card ("FCA, CySEC", "FSA Seychelles").
  * Outside the UK the FCA goes last so the card doesn't lead with it. Null when none are verified.
  */
-export function regulationLabel(licences: string | null | undefined, country: string): string | null {
-  const ambiguous = new Set(REGULATORS.map((r) => r.code).filter((code, i, all) => all.indexOf(code) !== i));
+export function regulationLabel(licences: string | null | undefined, country: string, live: string[] = []): string | null {
+  // Short codes several countries share read better with their country ("FSA Seychelles").
+  const ambiguous = new Set(["FSA", "FSC", "CMA", "SEC", "FMA", "FSRA", ...REGULATORS.map((r) => r.code).filter((code, i, all) => all.indexOf(code) !== i)]);
   const codes = (licences ?? "").split("|").map((l) => l.split(":")[0].trim()).filter((c) => /^[A-Z_]+$/.test(c));
   if (country !== "GB") codes.sort((a, b) => Number(a === "FCA") - Number(b === "FCA"));
-  const labels = [...new Set(codes.map((c) => {
+  const stored = codes.map((c) => {
     const r = regulatorForEngineCode(c);
     if (r.code === "FCA" && country !== "GB") return "FCA (UK entity)";
     return ambiguous.has(r.code) && r.country ? `${r.code} ${r.country}` : r.code;
-  }))];
+  });
+  const key = (label: string) => label.split(/[\s(]/)[0].toUpperCase();
+  const seen = new Set(stored.map(key));
+  // Live-confirmed regulators first: they are current; stored ones fill in.
+  const fresh = live.filter((l) => !seen.has(key(l)) && !(key(l) === "FCA" && country !== "GB"));
+  const labels = [...new Set([...fresh, ...stored])];
   if (!labels.length) return null;
   return labels.slice(0, 3).join(", ") + (labels.length > 3 ? ` +${labels.length - 3}` : "");
 }

@@ -424,7 +424,8 @@ export async function generateAskResponse(
     knowledgeContextBlock,
   });
 
-  const baseTools = createAskTools({ ...dependencies, brokerPreferences: discovery?.profile ?? request.sessionMemory?.brokerPreferences });
+  // A shortlist checks several firms at once; a shorter live-check wait keeps the reply inside the app timeout.
+  const baseTools = createAskTools({ ...dependencies, brokerPreferences: discovery?.profile ?? request.sessionMemory?.brokerPreferences, ...(discovery ? { liveCheckWaitMs: 60_000 } : {}) });
   const finalize = (
     card: AskCard,
     source: string,
@@ -463,10 +464,17 @@ export async function generateAskResponse(
   if (exactVerifiedEntity) {
     const verification = await resolveVerificationToolResult(exactVerifiedEntity.title, dependencies, dependencies.country);
     if ("card" in verification) {
+      const c = verification.card;
+      // The direct path skips the model, so it brings its own next questions for a scored firm.
+      const followups = c.type === "broker" && /\/100$/.test(c.score)
+        ? c.status === "AVOID"
+          ? [`Why is ${c.name} rated so low?`, "Show me safer alternatives", `What if I already deposited?`]
+          : [`What should I ask ${c.name} first?`, `How does ${c.name} compare to others?`, "Show me alternatives for my country"]
+        : [];
       return finalize(
-        verification.card,
+        c,
         "exact_verified_entity",
-        [{ toolName: "verify_entity", output: verification }],
+        [{ toolName: "verify_entity", output: verification }, ...(followups.length ? [{ toolName: "submit_ask_card", output: { card: c, followups } }] : [])],
       );
     }
   }

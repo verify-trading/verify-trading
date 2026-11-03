@@ -21,6 +21,8 @@ export interface ParsedImageInput {
 
 export interface AskServiceDependencies {
   brokerPreferences?: import("@/lib/ask/broker-discovery").BrokerPreferences;
+  /** Live check wait for this turn; slower checks fall back to the stored assessment and finish in the background. */
+  liveCheckWaitMs?: number;
   generateTextImpl?: typeof generateText;
   getActiveAnalysisRulesImpl?: typeof getActiveAnalysisRules;
   lookupVerifiedEntityImpl?: typeof lookupVerifiedEntity;

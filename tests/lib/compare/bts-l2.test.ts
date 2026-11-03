@@ -22,6 +22,7 @@ const draft = (pillars: Array<[string, number, string[]]>, extra: Partial<Parame
   strengths: [],
   risks: [],
   summary: "s",
+  regulators: [],
   answer: "a",
   concern: "c",
   recommendation: "r",
