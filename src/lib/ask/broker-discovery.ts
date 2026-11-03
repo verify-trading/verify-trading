@@ -14,6 +14,8 @@ const countries = Array.from({ length: 676 }, (_, i) => String.fromCharCode(65 +
   .map(code => ({ code, name: regions.of(code) ?? code })).filter(({ code, name }) => code !== name);
 
 function countryIn(message: string): string | undefined {
+  const code = (/^[A-Za-z]{2}$/.test(message.trim()) ? message.trim() : message.match(/\b(?:in|from|country(?: is)?)\s+([A-Z]{2})\b/)?.[1])?.toUpperCase();
+  if (code && countries.some(country => country.code === code)) return code;
   if (/\b(?:UK|U\.K\.|Britain|British)\b/i.test(message)) return 'GB';
   if (/\b(?:USA|U\.S\.|United States(?: of America)?)\b/i.test(message) || /\bUS\b/.test(message)) return 'US';
   return countries.find(({ name }) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(message))?.code;
@@ -27,6 +29,8 @@ function addRequirements(profile: BrokerPreferences, message: string): BrokerPre
     ['Stocks', /\b(?:stocks?|shares?|equities|etfs?)\b/i],
     ['Crypto', /\b(?:crypto|bitcoin|btc|ethereum|eth)\b/i],
     ['Futures', /\bfutures\b/i],
+    ['Commodities', /\b(?:commodities|oil|silver|brent|wti)\b/i],
+    ['Options', /\boptions\b/i],
   ] as const;
   const found = instruments.filter(([, pattern]) => pattern.test(message)).map(([label]) => label);
   return {
@@ -74,8 +78,8 @@ export function getBrokerDiscovery(request: Pick<AskRequest, 'message' | 'histor
 export function brokerMatchesInstruments(brokerType: string | null, instruments: string[]) {
   if (!brokerType || brokerType === 'unknown' || brokerType === 'multi_asset') return true;
   const markets = instruments.join(' ');
-  return (/forex|gold|indices/i.test(markets) && brokerType === 'forex_cfd')
-    || (/stocks/i.test(markets) && ['securities', 'forex_cfd'].includes(brokerType))
+  return (/forex|gold|indices|commodities/i.test(markets) && brokerType === 'forex_cfd')
+    || (/stocks|options/i.test(markets) && ['securities', 'forex_cfd'].includes(brokerType))
     || (/crypto/i.test(markets) && ['crypto_exchange', 'forex_cfd'].includes(brokerType))
     || (/futures/i.test(markets) && brokerType === 'futures');
 }

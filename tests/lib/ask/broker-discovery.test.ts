@@ -58,3 +58,9 @@ it('keeps all three comparison explanations and source URLs after sanitizing and
   const clarification = getBrokerDiscovery(request('I need a broker'))!.clarification!;
   expect(sanitizeCard(clarification)).toHaveProperty('body', expect.stringContaining('\n\n1. Which country'));
 });
+
+it('accepts ISO country answers and other trading instruments without repeating questions', () => {
+  expect(getBrokerDiscovery(request('Find a broker in ZA for silver and oil'))?.clarification).toBeUndefined();
+  const first = getBrokerDiscovery(request('I need a broker for futures'))!;
+  expect(getBrokerDiscovery({ message: 'ZA', history: [{ role: 'user', content: 'I need a broker for futures' }, { role: 'assistant', content: JSON.stringify(first.clarification) }] })?.clarification).toBeUndefined();
+});
