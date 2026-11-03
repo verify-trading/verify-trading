@@ -980,3 +980,26 @@ describe("createAskTools", () => {
     });
   });
 });
+
+
+it("blocks broker searches without requirements and uses remembered country and instruments", async () => {
+  const listBtsRankedImpl = vi.fn().mockResolvedValue({ country: "South Africa (ZA)", firms: [] });
+  const options = { toolCallId: "discovery", messages: [] };
+  const blocked = await createAskTools({ listBtsRankedImpl }).list_verified_entities.execute?.({ type: "broker" }, options);
+  expect(blocked).toMatchObject({ clarificationRequired: true });
+  expect(listBtsRankedImpl).not.toHaveBeenCalled();
+  await createAskTools({ listBtsRankedImpl, brokerPreferences: { kind: "broker", country: "ZA", instruments: ["Forex", "Gold"], requirements: ["Scalping on MT5"] } }).list_verified_entities.execute?.({ type: "broker" }, options);
+  expect(listBtsRankedImpl).toHaveBeenCalledWith("broker", 12, "ZA", ["Forex", "Gold"]);
+});
+
+
+it("refuses to publish a ranked candidate before its individual firm check", async () => {
+  const tools = createAskTools({ listBtsRankedImpl: vi.fn().mockResolvedValue({ country: "South Africa (ZA)", firms: [{ name: "Example Broker" }] }) });
+  const options = { toolCallId: "discovery", messages: [] };
+  await tools.list_verified_entities.execute?.({ type: "broker", country: "ZA", instruments: ["Forex"] }, options);
+  const output = await tools.submit_ask_card.execute?.({ card_json: JSON.stringify({ type: "insight", headline: "Candidates", body: "Compare Example Broker for MT5.", verdict: "Check eligibility." }) }, options);
+  expect(output).toMatchObject({ verificationRequired: ["example broker"] });
+  expect(output).not.toHaveProperty("card");
+  const { stopAfterFinalToolResult } = await import("@/lib/ask/pipeline");
+  expect(stopAfterFinalToolResult({ steps: [{ toolResults: [{ toolName: "submit_ask_card", output }] }] })).toBe(false);
+});

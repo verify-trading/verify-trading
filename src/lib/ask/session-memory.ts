@@ -1,3 +1,4 @@
+import { getBrokerDiscovery } from "@/lib/ask/broker-discovery";
 import {
   askCardSchema,
   askSessionMemorySchema,
@@ -187,6 +188,9 @@ export function buildSessionMemoryMessage(memory: AskSessionMemory | null) {
     "Use this only to resolve omitted context in follow-up questions. Explicit user input overrides it.",
   ];
 
+  if (memory.brokerPreferences) {
+    lines.push(`Broker discovery preferences (explicit user input): ${JSON.stringify(memory.brokerPreferences)}`);
+  }
   if (memory.activeAsset) {
     lines.push(`Active asset: ${memory.activeAsset}`);
   }
@@ -248,7 +252,9 @@ export function buildUpdatedSessionMemory(input: {
     content: JSON.stringify(input.assistantCard),
   });
 
-  return deriveAskSessionMemory(nextHistory, input.previousMemory ?? null, {
+  const memory = deriveAskSessionMemory(nextHistory, input.previousMemory ?? null, {
     lastUpdatedAt: input.lastUpdatedAt,
   });
+  const discovery = getBrokerDiscovery({ message: input.userMessage, history: input.history ?? [], sessionMemory: input.previousMemory });
+  return discovery ? askSessionMemorySchema.parse({ ...memory, brokerPreferences: discovery.profile }) : memory;
 }

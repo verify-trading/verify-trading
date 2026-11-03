@@ -418,7 +418,7 @@ function InsightCard({ card }: { card: Extract<AskCard, { type: "insight" }> }) 
         <div className="text-lg font-black tracking-[-0.04em] text-white sm:text-xl">
           {card.headline}
         </div>
-        <p className="text-sm leading-relaxed text-slate-200 sm:leading-7">{card.body}</p>
+        <p className="whitespace-pre-line text-sm leading-relaxed text-slate-200 sm:leading-7">{card.body}</p>
         <div className="border-t border-white/[0.06] pt-3">
           <p className="text-sm font-semibold leading-relaxed text-[var(--vt-blue)]">{card.verdict}</p>
         </div>

@@ -585,7 +585,7 @@ describe("AskWorkspace", () => {
     });
   });
 
-  it("shows the daily limit banner above the composer and locks after the 10th reply", async () => {
+  it("shows the daily limit banner while keeping free discovery text available", async () => {
     const profileBuilder = createQueryBuilder({
       data: { tier: "free" },
       error: null,
@@ -642,7 +642,7 @@ describe("AskWorkspace", () => {
     });
 
     expect(screen.getAllByText(/All 5 free messages used today/).length).toBeGreaterThan(0);
-    expect(screen.getAllByPlaceholderText("Upgrade to Pro to continue")[0]).toBeDisabled();
+    expect(screen.getAllByPlaceholderText("Broker setup questions are still free…")[0]).toBeEnabled();
   });
 
   it("loads more sessions automatically when the sidebar reaches the bottom", async () => {

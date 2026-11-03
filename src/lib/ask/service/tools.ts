@@ -103,7 +103,8 @@ const listVerifiedEntitiesInputSchema = z.object({
     .min(1)
     .max(15)
     .optional()
-    .describe("How many to return, highest trust first (default 8)."),
+    .describe("How many research candidates to inspect; show only 2 or 3 relevant options to the trader."),
+  instruments: z.array(z.string().trim().min(1)).optional().describe("Trading instruments stated by the trader, required for broker and prop-firm discovery."),
 });
 
 /** Tool registration requires a plain object JSON Schema; z.discriminatedUnion breaks it. */
@@ -793,12 +794,18 @@ export function createAskTools(dependencies: AskServiceDependencies) {
   const getEconomicCalendarSnapshotImpl =
     dependencies.getEconomicCalendarSnapshotImpl ?? getCachedEconomicCalendarSnapshot;
 
+  const discoveryCandidates = new Set<string>();
+  const checkedCandidates = new Set<string>();
   return {
     verify_entity: tool({
       description:
         "Verify a SINGLE named broker, prop firm, or trading guru. Use this for legitimacy, safety-to-deposit, regulation, complaints, or trust checks on a specific firm. Pass the name EXACTLY as the user wrote it — the resolver already handles misspellings, spacing, and run-together words, so never correct it, normalize it, or substitute a different/similar-looking firm name you guessed. It returns reviewed entity data plus live FCA confirmation as EVIDENCE — it is not your reply. After calling it you must still call submit_ask_card with the final card (echo the exact score and status) and 2-3 followups. Never end your turn on the raw verify_entity result.",
       inputSchema: verifyEntityInputSchema,
-      execute: async ({ name, country }) => resolveVerificationToolResult(name, dependencies, country ?? dependencies.country),
+      execute: async ({ name, country }) => {
+        const result = await resolveVerificationToolResult(name, dependencies, country ?? dependencies.brokerPreferences?.country ?? dependencies.country);
+        checkedCandidates.add(name.toLowerCase());
+        return result;
+      },
     }),
     persist_discovered_prop_firm: tool({
       description:
@@ -808,12 +815,22 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     list_verified_entities: tool({
       description:
-        "List the top reviewed brokers, prop firms, or trading gurus from our database, ranked by trust score. Use this whenever the user asks for the top / best / safest / recommended ones, or 'which … are good', or to list them, and has NOT named a specific firm. For a single named firm use verify_entity instead. Summarize the returned list in your own words: lead with the highest-trust names, give each a quick reason, and flag any marked avoid.",
+        "Retrieve research candidates, not recommendations or endorsements. For brokers/prop firms, establish the trader's country and instruments first, including preferences remembered from this conversation. Use BTS as credibility evidence, then check country eligibility, product, entity, costs and platform using primary sources. Select only 2 or 3 suitable options and explain fit and unresolved risks. Investment-only platforms are not forex/CFD brokers. A named firm goes to verify_entity. For gurus, retain the existing reviewed-list behaviour.",
       inputSchema: listVerifiedEntitiesInputSchema,
-      execute: async ({ type, limit, country }) =>
-        type === "guru"
-          ? { entities: await listVerifiedEntities(type, limit ?? 8) }
-          : { bts: await (dependencies.listBtsRankedImpl ?? listBtsRanked)(type, limit ?? 8, country ?? dependencies.country) },
+      execute: async ({ type, limit, country, instruments }) => {
+        if (type === "guru") return { entities: await listVerifiedEntities(type, limit ?? 8) };
+        const preferences = dependencies.brokerPreferences;
+        const residence = country ?? preferences?.country;
+        const markets = instruments?.length ? instruments : preferences?.instruments;
+        if (!residence || !markets?.length) return { clarificationRequired: true, message: "Ask only for the missing country or trading instruments before searching for firms." };
+        const bts = await (dependencies.listBtsRankedImpl ?? listBtsRanked)(type, limit ?? 12, residence, markets);
+        for (const firm of bts.firms) discoveryCandidates.add(firm.name.toLowerCase());
+        return {
+          requirements: { country: residence, instruments: markets, preferences: preferences?.requirements ?? [] },
+          evidenceNote: "Stored BTS research is historical credibility evidence. Verify product and country eligibility from primary sources before recommending; a global score does not establish suitability.",
+          bts,
+        };
+      },
     }),
     get_market_briefing: tool({
       description:
@@ -948,7 +965,13 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         "Final card submission for the actual answer the user should see. After search_news: use insight, or setup if the user asked for a trade plan and you also used get_market_setup. After get_market_briefing: use briefing only for direct market-status asks, otherwise use insight or setup. After get_market_setup: use setup. After generate_growth_plan: use plan. After calcs: use calc or insight. For mixed multi-topic questions, synthesize one final insight card instead of stopping at a raw tool card. card_json = stringified card.",
       inputSchema: submitAskCardInputSchema,
       execute: async ({ card_json, followups }) => {
-        return { card: parseSubmittedAskCardJson(card_json), followups };
+        const card = parseSubmittedAskCardJson(card_json);
+        if (card.type === "insight") {
+          const text = `${card.headline} ${card.body} ${card.verdict}`.toLowerCase();
+          const unchecked = [...discoveryCandidates].filter(name => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text) && !checkedCandidates.has(name));
+          if (unchecked.length) return { verificationRequired: unchecked, message: "Call verify_entity for these candidates before presenting a shortlist. Use the latest returned assessment, exclude high-risk choices, and state what eligibility or costs remain unconfirmed." };
+        }
+        return { card, followups };
       },
     }),
   };

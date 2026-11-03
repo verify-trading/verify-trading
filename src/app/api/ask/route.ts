@@ -145,6 +145,7 @@ function buildAskStreamResponse({
   requestInput,
   persistence,
   refundReservation,
+  clarification,
 }: PreparedAskRoute) {
   return createUIMessageStreamResponse({
     stream: createUIMessageStream<AskRouteMessage>({
@@ -162,7 +163,7 @@ function buildAskStreamResponse({
           transient: true,
         });
 
-        const response = await completeAskExchange({ parsedRequest, requestInput, persistence, refundReservation }, {
+        const response = await completeAskExchange({ parsedRequest, requestInput, persistence, refundReservation, clarification }, {
           onToolCall: ({ toolName, input }) => {
             writer.write({
               type: "data-tool-status",
