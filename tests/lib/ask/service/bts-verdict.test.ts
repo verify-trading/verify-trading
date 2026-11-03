@@ -33,8 +33,38 @@ describe("Ask and the BTS engine", () => {
     expect("card" in r && r.card).toMatchObject({ score: "No score", status: "WARNING" });
   });
 
+  it.each([['active', 'needs_review'], ['inactive', 'complete'], ['redirected', 'complete'], ['merged', 'complete'], ['unknown', 'complete']])('enforces %s / %s before calling live research', async (operatingStatus, researchStatus) => {
+    const bts = { ...context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false }), operatingStatus, researchStatus };
+    const live = vi.fn();
+    const result = await resolveVerificationToolResult("IG", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl: vi.fn().mockResolvedValue(bts), getL2AssessmentImpl: live }, "GB");
+    expect(live).not.toHaveBeenCalled();
+    expect("card" in result && result.card).toMatchObject({ score: "No score", status: "WARNING", color: "red" });
+    if (researchStatus === "needs_review") expect("card" in result && result.card.type === "broker" && result.card.verdict).toBe("We're still verifying this firm.");
+  });
+
+  it("does not give a lookalike website the legitimate firm's assessment", async () => {
+    const bts = { ...context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false }), research: { website: "https://ig.com" } };
+    const live = vi.fn();
+    const result = await resolveVerificationToolResult("https://ig-clone.com", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl: vi.fn().mockResolvedValue(bts), getL2AssessmentImpl: live }, "GB");
+    expect(live).not.toHaveBeenCalled();
+    expect("card" in result).toBe(false);
+    expect("coverage" in result).toBe(true);
+    expect("bts" in result).toBe(false);
+  });
+
+  it("preserves the needs-review answer when the model tries to praise the firm", async () => {
+    const bts = { ...context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false }), operatingStatus: "active", researchStatus: "needs_review" };
+    const result = await resolveVerificationToolResult("IG", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl: vi.fn().mockResolvedValue(bts), getL2AssessmentImpl: noLiveCheck }, "GB");
+    const { mergeToolOwnedNumbers } = await import("@/lib/ask/pipeline");
+    const modelCard = { type: "broker", name: "IG", score: "99/100", status: "LEGITIMATE", fca: "Yes", complaints: "Low", verdict: "A great safe choice.", color: "green" } as const;
+    expect(mergeToolOwnedNumbers(modelCard, [{ toolName: "verify_entity", output: result }] as never)).toMatchObject({ score: "No score", status: "WARNING", verdict: "We're still verifying this firm." });
+  });
+
   it("shows the live check's final score instead of the engine's, and hides the engine's number from the model", async () => {
-    const getBtsAskContextImpl = vi.fn().mockResolvedValue(context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false }));
+    const bts = context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false });
+    bts.global.cloneAlert = "Scammers impersonate this firm; take extra care.";
+    bts.research = { cloneNoticeSource: "https://fca.org.uk/clone-notice" } as BtsAskContext["research"];
+    const getBtsAskContextImpl = vi.fn().mockResolvedValue(bts);
     const getL2AssessmentImpl = vi.fn().mockResolvedValue({
       kind: "broker", finalScore: 76, verdict: "Generally positive", confidence: 72, rubricVersion: "l2-broker-1.0", countryFit: "CONFIRMED_LOCALLY",
       identity: { confirmed: true, legal_entity: "IG Markets Ltd", official_website: "https://ig.com", note: "" },
@@ -49,6 +79,7 @@ describe("Ask and the BTS engine", () => {
     expect(JSON.stringify(r.bts)).not.toContain("93");
     expect(r.bts).toMatchObject({ scoreSource: "Independent live check", liveCheck: { findings: [{ authority: "FCA", url: "https://fca.org.uk/x" }] } });
     expect("uiMeta" in r && r.uiMeta?.verification).toMatchObject({ confidence: 72, sources: [{ url: "https://fca.org.uk/x" }] });
+    expect("uiMeta" in r && r.uiMeta?.cloneNotice).toEqual({ message: "Scammers impersonate this firm; take extra care.", sourceUrl: "https://fca.org.uk/clone-notice" });
   });
 });
 

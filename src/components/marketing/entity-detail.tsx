@@ -30,6 +30,8 @@ export function entityDescription(e: PublicEntity): string {
 }
 
 function lede(e: PublicEntity): string {
+  if (e.verdict === "Under review") return "We're still verifying this firm.";
+  if (e.bts?.research?.operatingStatus === "unknown") return `We haven't confirmed whether ${e.name} is operating. Its identity and current service need verification.`;
   const rating = e.score !== null ? `${e.verdict}, ${e.score} out of 100` : e.verdict;
   if (e.type === "propfirm") {
     const state = e.closed ? "is recorded as not active" : "is recorded as operating";
@@ -174,6 +176,7 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
             {bts?.cloneAlert ? (
               <Notice title="Scammers have impersonated this brand">
                 Fake sites and apps have used the {e.name} name. This is not a warning about {e.name} itself. Only use its official website, and check the domain against the regulator&apos;s register before you log in or deposit.
+                {bts.research?.cloneNoticeSource ? <> <a href={bts.research.cloneNoticeSource} target="_blank" rel="noopener noreferrer nofollow" className="text-[var(--vt-blue)] underline">Read the regulator&apos;s clone notice</a>.</> : null}
               </Notice>
             ) : null}
             {bts && e.score !== null && bts.confidence !== null && bts.confidence < LIMITED_EVIDENCE ? (
@@ -208,6 +211,24 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
                     </>
                   ) : null}
                 </dl>
+                {bts.research?.actions ? (
+                  <div className="mt-4 space-y-2 text-sm leading-relaxed text-slate-300">
+                    <p className="font-semibold text-white">Recorded regulatory history</p>
+                    <p>{bts.research.actions}</p>
+                    {bts.cap ? <p className="text-xs text-slate-400">The stored score applies the original scoring policy. The legal entity, jurisdiction and final outcome determine what a warning establishes; it does not by itself prove fraud worldwide.</p> : null}
+                  </div>
+                ) : null}
+                {bts.research?.sources.length ? (
+                  <details className="mt-4 rounded-xl border border-white/10 p-4 text-sm">
+                    <summary className="cursor-pointer font-semibold text-white">Historical research sources</summary>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-400">Research dated {formatRecordDate(bts.research.researchDate)}. These are the original source links; listing them does not claim a fresh check.</p>
+                    <ul className="mt-3 space-y-2">
+                      {bts.research.sources.map((source) => (
+                        <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-[var(--vt-blue)] underline underline-offset-2">{source.url}</a></li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
                 <p className="mt-3 text-xs leading-relaxed text-slate-400">
                   Pillars marked &ldquo;Not yet checked&rdquo; are left out of the score rather than counted as zero; they reduce research coverage instead. Coverage measures completed research, not source reliability. Run full check for a current assessment with source-based confidence. Nothing commercial affects a score, verdict or ranking.
                 </p>

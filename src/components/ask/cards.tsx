@@ -230,6 +230,12 @@ function BrokerCard({
             <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
           </div>
         )}
+        {uiMeta?.cloneNotice ? (
+          <div role="note" className="border-l-2 border-[var(--vt-blue)] pl-3 text-xs leading-relaxed text-slate-300">
+            <p>{uiMeta.cloneNotice.message}</p>
+            {uiMeta.cloneNotice.sourceUrl ? <a href={uiMeta.cloneNotice.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--vt-blue)] underline">Regulator&apos;s clone notice</a> : null}
+          </div>
+        ) : null}
         {uiMeta?.verification ? (
           <div className="space-y-2 border-t border-white/10 pt-3 text-xs text-slate-400">
             <p>Evidence confidence {uiMeta.verification.confidence}/100 · Checked {uiMeta.verification.checkedAt.slice(0, 10)}</p>

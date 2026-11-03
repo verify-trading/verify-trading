@@ -63,6 +63,7 @@ export const PILLARS = {
 export type BtsPillar = { label: string; max: number; value: string };
 
 export type BtsRecord = {
+  research?: import("@/lib/compare/bts-research").BtsResearch | null;
   entityId: string;
   confidence: number | null;
   /** Share of researched pillars; separate from source reliability. */

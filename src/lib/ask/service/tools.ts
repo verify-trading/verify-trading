@@ -26,6 +26,7 @@ import {
   normalizeForexPair,
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
+import { btsVerificationGate } from "@/lib/compare/bts-research";
 import { cardStatus, DATABASE_ONLY, countryName, normalizeCountry } from "@/lib/compare/bts";
 import { getBtsAskContext, getBtsAskContextByBrand, getRequestCountrySafe, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
 import { getL2Assessment, type L2Result, type L2Subject } from "@/lib/compare/bts-l2";
@@ -964,9 +965,11 @@ const L2_WAIT_MS = 120_000; // the mobile app gives up on Ask at 180s
  * is unavailable, the Layer 1 rating is shown and labelled as a database assessment.
  */
 async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment) {
-  if (bts.type === "tool" || bts.global.verdict === "Not active") return bts;
+  if (bts.type === "tool" || btsVerificationGate(bts.operatingStatus, bts.researchStatus) || bts.global.verdict === "Not active" || bts.global.verdict === "Under review") return bts;
   const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2);
-  return l2 ? { ...bts, ...fromLiveCheck(l2) } : { ...bts, scoreSource: "Database assessment" };
+  if (!l2) return { ...bts, scoreSource: "Database assessment" };
+  const live = fromLiveCheck(l2);
+  return { ...bts, ...live, global: { ...live.global, cloneAlert: bts.global.cloneAlert } };
 }
 
 async function waitForLiveCheck(subject: L2Subject, getL2: typeof getL2Assessment = getL2Assessment) {
@@ -1020,10 +1023,12 @@ function fromLiveCheck(l2: L2Result) {
 
 type CheckedBts = Awaited<ReturnType<typeof withLiveCheck>>;
 
-function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "verificationSourceLabel"> {
-  if (!("liveCheck" in bts)) return { verificationSourceLabel: "scoreSource" in bts ? bts.scoreSource : "Reviewed record" };
+function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "verificationSourceLabel" | "cloneNotice"> {
+  const cloneNotice = bts.global.cloneAlert ? { message: bts.global.cloneAlert, ...(bts.research?.cloneNoticeSource ? { sourceUrl: bts.research.cloneNoticeSource } : {}) } : undefined;
+  if (!("liveCheck" in bts)) return { cloneNotice, verificationSourceLabel: "scoreSource" in bts ? bts.scoreSource : "Reviewed record" };
   const live = bts.liveCheck;
   return {
+    cloneNotice,
     verificationSourceLabel: bts.scoreSource,
     verification: {
       verdict: bts.shown.verdict,
@@ -1041,6 +1046,10 @@ function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "ve
  * engine's for the user's country. Live FCA data and old record fields never change it.
  */
 function applyBtsToCard(card: BrokerCard, bts: CheckedBts): BrokerCard {
+  const gate = btsVerificationGate(bts.operatingStatus, bts.researchStatus);
+  if (gate || bts.global.verdict === "Under review") {
+    return { ...card, score: "No score", status: "WARNING", color: "red", complaints: "Not checked", verdict: gate === "inactive" ? `${bts.firm} is recorded as inactive, redirected or merged. This record does not confirm an active service.` : gate === "unknown" ? `We haven't confirmed whether ${bts.firm} is operating.` : "We're still verifying this firm." };
+  }
   const { verdict, score, note } = bts.shown;
   const status = cardStatus(verdict);
   const live = "liveCheck" in bts && bts.liveCheck ? bts.liveCheck : null;
@@ -1074,6 +1083,11 @@ export async function resolveVerificationToolResult(
 
   const normalized = normalizeVerificationName(name);
   const lookup = await lookupVerifiedEntityImpl(normalized.lookupName);
+  if (lookup.entity && lookup.entity.type !== "guru" && !normalized.fromUrl) {
+    const key = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const aliases = [lookup.entity.name, lookup.entity.id, ...(lookup.entity.aliases ?? [])];
+    if (!aliases.some((alias) => key(alias) === key(normalized.lookupName))) return coverageEvidence(normalized.lookupName, false);
+  }
 
   // No page on our site, but the engine may still have scored the firm (new brokers, tools).
   const engineByBrand = async () => {
@@ -1086,6 +1100,13 @@ export async function resolveVerificationToolResult(
     if (result.card.type !== "broker") return result;
     const engine = await (dependencies.getBtsAskContextImpl ?? getBtsAskContext)(slug, country);
     if (!engine) return (await checkWithoutBaseline(result.card.name, lookup.entity?.type === "propfirm" ? "propfirm" : "broker")) ?? result;
+    if (normalized.fromUrl && engine.research?.website) {
+      const host = (url: string) => new URL(url.startsWith("http") ? url : `https://${url}`).hostname.toLowerCase().replace(/^www\./, "");
+      try {
+        const supplied = name.match(/https?:\/\/[^\s]+|www\.[^\s]+/i)?.[0] ?? name;
+        if (host(supplied) !== host(engine.research.website)) return coverageEvidence(name, true);
+      } catch { return coverageEvidence(name, true); }
+    }
     const bts = await withLiveCheck(engine, dependencies.getL2AssessmentImpl);
     return {
       ...result,
@@ -1108,6 +1129,9 @@ export async function resolveVerificationToolResult(
       firm,
       entityId: `name:${firm.trim().toLowerCase()}`,
       type: l2.kind,
+      operatingStatus: null,
+      researchStatus: null,
+      research: null,
       countryCode,
       userCountry: countryCode === "XX" ? "unknown" : `${countryName(countryCode)} (${countryCode})`,
       ...fromLiveCheck(l2),

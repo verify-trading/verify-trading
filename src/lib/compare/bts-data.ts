@@ -14,6 +14,7 @@ import {
   type CountryView,
 } from "@/lib/compare/bts";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { btsVerificationGate, readBtsResearch } from "@/lib/compare/bts-research";
 import { selectAll } from "@/lib/supabase/select-all";
 
 const COLUMNS = "entity_id, country, country_fit, country_score, country_verdict, applicable_licences, country_note";
@@ -70,7 +71,7 @@ export async function getRequestCountrySafe(): Promise<string> {
  * What Ask is given for one firm: the engine's global row, the country row and the user's country.
  * Ask explains these; it never changes them or produces a different number.
  */
-const ASK_COLUMNS = "entity_id, kind, brand_name, global_score, verdict, verdict_reason, cap_applied, evidence_confidence, pillars, details, research_date";
+const ASK_COLUMNS = "entity_id, kind, brand_name, operating_status, research_status, global_score, verdict, verdict_reason, cap_applied, evidence_confidence, pillars, details, research_date";
 
 export async function getBtsAskContext(slug: string, requestedCountry?: string | null) {
   const client = getSupabaseAdminClient();
@@ -112,14 +113,16 @@ function conductRecord(kind: keyof typeof CONDUCT_PILLAR, rating: { verdict: str
 async function buildAskContext(raw: Record<string, unknown>, requestedCountry?: string | null) {
   const client = getSupabaseAdminClient()!;
   const kind = (raw.kind === "propfirm" ? "propfirm" : raw.kind === "tool" ? "tool" : "broker") as "broker" | "propfirm" | "tool";
-  const verdict = toVerdict(raw.verdict as string, kind);
-  const globalRating = { verdict, score: SCORELESS.has(verdict) ? null : ((raw.global_score as number | null) ?? null) };
+  const gate = btsVerificationGate(raw.operating_status as string | null, raw.research_status as string | null);
+  const verdict = gate === "needs_review" ? "Under review" : gate === "inactive" ? "Not active" : gate === "unknown" ? "Insufficient data" : toVerdict(raw.verdict as string, kind);
+  const globalRating = { verdict, score: gate || SCORELESS.has(verdict) ? null : ((raw.global_score as number | null) ?? null) };
   const details = (raw.details ?? {}) as Record<string, unknown>;
   const pillars = (raw.pillars ?? {}) as Record<string, unknown>;
+  const research = readBtsResearch(details);
   const country = requestedCountry ? normalizeCountry(requestedCountry) : await getRequestCountrySafe();
 
   let countryRating: CountryView | null = null;
-  if (kind === "broker" && country !== "XX") {
+  if (!gate && kind === "broker" && country !== "XX") {
     const { data: row } = await client.from("bts_country_fit").select(COLUMNS).eq("entity_id", raw.entity_id as string).eq("country", country).maybeSingle();
     countryRating = countryView(globalRating, row ? toRow(row as Record<string, unknown>) : null, country);
   }
@@ -127,6 +130,9 @@ async function buildAskContext(raw: Record<string, unknown>, requestedCountry?: 
   return {
     firm: String(raw.brand_name ?? ""),
     entityId: String(raw.entity_id),
+    operatingStatus: (raw.operating_status as string | null) ?? null,
+    researchStatus: (raw.research_status as string | null) ?? null,
+    research,
     countryCode: country,
     conductRecord: conductRecord(kind, globalRating, pillars),
     type: kind,
@@ -145,7 +151,7 @@ async function buildAskContext(raw: Record<string, unknown>, requestedCountry?: 
             ? Object.fromEntries(Object.entries(pillars).map(([k, v]) => [k.replace(/_/g, " "), /not checked/i.test(String(v)) ? "Not yet checked" : String(v)]))
             : Object.fromEntries(PILLARS[kind].map(([key, label, max]) => [label, pillarDisplay({ label, max, value: String(pillars[key] ?? "not checked") })])),
       licencesVerified: (details.active_verified_licences as string | undefined) ?? "none",
-      cloneAlert: details.clone_alert === "yes" ? "Scammers have impersonated this brand. This is not a warning about the firm itself." : null,
+      cloneAlert: details.clone_alert === "yes" || research?.cloneNoticeSource ? "Scammers have impersonated this brand. This is not a warning about the firm itself." : null,
       lastChecked: (raw.research_date as string | null) ?? null,
     },
     country: countryRating,
@@ -166,7 +172,7 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
   const data = await selectAll((from, to) =>
     client
       .from("verified_entities")
-      .select("name, bts:bts_scores(entity_id, global_score, verdict, verdict_reason)")
+      .select("name, bts:bts_scores(entity_id, operating_status, research_status, global_score, verdict, verdict_reason)")
       .eq("entity_type", type)
       .not("bts_entity_id", "is", null)
       .order("slug")
@@ -181,6 +187,7 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
   }
   const firms = [...byFirm.values()]
     .flatMap(({ name, bts }) => {
+      if (btsVerificationGate(bts.operating_status as string | null, bts.research_status as string | null)) return [];
       const verdict = toVerdict(bts.verdict as string, type);
       const view = countryView({ verdict, score: SCORELESS.has(verdict) ? null : (bts.global_score as number | null) }, rows[String(bts.entity_id)], country);
       const fit = rows[String(bts.entity_id)]?.fit;

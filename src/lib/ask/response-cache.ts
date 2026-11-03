@@ -41,7 +41,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 const CACHE_TABLE = "ask_response_cache";
 
 /** Bump when the card schema or system prompt changes what answers look like. */
-const CACHE_SCHEMA_VERSION = 3; // v3: BTS live check (Layer 2) final scores
+const CACHE_SCHEMA_VERSION = 5; // v4: historical research and hard operating/research status gates
 
 /** How long a cached answer lives. The key already invalidates on any register
  * edit (see buildCacheKey), so these only guard slow off-register drift. */

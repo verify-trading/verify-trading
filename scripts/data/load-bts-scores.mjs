@@ -175,6 +175,15 @@ async function main() {
   }
   if (dryRun) return console.log("Dry run: nothing written.");
 
+  // Preserve the recovered research and its audit on subsequent score-only imports.
+  const existingResearch = new Map((await selectAll(supabase, "bts_scores", "entity_id, details")).map((row) => [row.entity_id, row.details ?? {}]));
+  for (const score of scores) {
+    const existing = existingResearch.get(score.entity_id) ?? {};
+    for (const field of ["research_input", "research_audit", "source_evidence", "duplicate_candidates", "clone_notice"]) {
+      if (field in existing) score.details[field] = existing[field];
+    }
+  }
+
   await inBatches(scores, 500, async (batch) => {
     const { error } = await supabase.from("bts_scores").upsert(batch, { onConflict: "entity_id" });
     if (error) throw new Error(`bts_scores: ${error.message}`);
