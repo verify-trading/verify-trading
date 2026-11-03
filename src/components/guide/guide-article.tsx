@@ -299,8 +299,8 @@ export function GuideArticle() {
                 Checks a broker or prop firm against regulator records: authorisation status, warnings and restrictions,
                 and entity details such as domain and contact information. The result is a score out of 100 and a plain
                 verdict, from Verified to High risk, adjusted for your country. Browse every rated name on the{" "}
-                <Link href="/verify/brokers" className="text-[var(--vt-blue)] hover:underline">broker register</Link> and the{" "}
-                <Link href="/verify/prop-firms" className="text-[var(--vt-blue)] hover:underline">prop firm register</Link>.
+                <Link href="/compare/brokers" className="text-[var(--vt-blue)] hover:underline">broker register</Link> and the{" "}
+                <Link href="/compare/prop-firms" className="text-[var(--vt-blue)] hover:underline">prop firm register</Link>.
               </p>
             </div>
             <div>
@@ -316,7 +316,7 @@ export function GuideArticle() {
               <p className="mt-2 max-w-2xl text-[15px] leading-7 text-slate-400">
                 Checks educators, gurus and signal services: regulatory status, whether they earn broker referral income,
                 their track record, and whether published results look cherry-picked. Start from the{" "}
-                <Link href="/verify/traders" className="text-[var(--vt-blue)] hover:underline">trader and educator checks</Link>.
+                <Link href="/compare/traders" className="text-[var(--vt-blue)] hover:underline">trader and educator checks</Link>.
               </p>
             </div>
           </div>
