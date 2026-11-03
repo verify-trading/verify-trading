@@ -27,7 +27,7 @@ import {
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
 import { btsVerificationGate } from "@/lib/compare/bts-research";
-import { cardStatus, DATABASE_ONLY, countryName, normalizeCountry } from "@/lib/compare/bts";
+import { cardStatus, DATABASE_ONLY, countryName, normalizeCountry, statusColor } from "@/lib/compare/bts";
 import { regulationLabel } from "@/lib/compare/regulators";
 import { getBtsAskContext, getBtsAskContextByBrand, getRequestCountrySafe, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
 import { getL2Assessment, type L2Result, type L2Subject } from "@/lib/compare/bts-l2";
@@ -1105,7 +1105,7 @@ function applyBtsToCard(card: BrokerCard, bts: CheckedBts): BrokerCard {
     // FCA standing from register-verified licences (engine), or the live check's local licence finding.
     fca: (live?.countryFit === "CONFIRMED_LOCALLY" && bts.countryCode === "GB") || /(^|\|)FCA:/.test(bts.global.licencesVerified) ? "Yes" : "No",
     complaints: bts.conductRecord,
-    color: status === "LEGITIMATE" ? "green" : "red",
+    color: statusColor(status),
     // The live check's own summary reads naturally; the database answer says where it came from.
     verdict: live
       ? (note ?? "")

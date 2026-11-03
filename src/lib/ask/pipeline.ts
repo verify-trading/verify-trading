@@ -40,7 +40,7 @@ import {
 } from "@/lib/ask/service/provider";
 import { createAskTools, resolveVerificationToolResult } from "@/lib/ask/service/tools";
 import { btsVerificationGate } from "@/lib/compare/bts-research";
-import { cardStatus } from "@/lib/compare/bts";
+import { cardStatus, statusColor } from "@/lib/compare/bts";
 import type { BtsAskContext } from "@/lib/compare/bts-data";
 import type {
   AskGenerationCallbacks,
@@ -113,6 +113,15 @@ export function stopAfterFinalToolResult({
   return toolResults.some(
     (toolResult) =>
       (toolResult.toolName === "submit_ask_card" && askCardSchema.safeParse((toolResult.output as { card?: unknown } | null)?.card).success) || toolResultHasCompleteCard(toolResult),
+  );
+}
+
+/** Advice questions ("is £200 enough?") need the numbers explained, so a calculator card can't end the turn. */
+const ADVICE_QUESTION = /\b(?:enough|worth|should i|is it (?:ok|okay|good|wise|safe)|can i|good idea|realistic|beginner|new to)\b/i;
+
+function stopAfterSubmittedCard({ steps }: { steps: Array<{ toolResults?: Array<{ toolName?: string; output?: unknown }> }> }) {
+  return (steps[steps.length - 1]?.toolResults ?? []).some(
+    (toolResult) => toolResult.toolName === "submit_ask_card" && askCardSchema.safeParse((toolResult.output as { card?: unknown } | null)?.card).success,
   );
 }
 
@@ -257,7 +266,7 @@ export function mergeToolOwnedNumbers(
     if (bts) {
       const { verdict, score } = bts.shown;
       const status = cardStatus(verdict);
-      return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: bts.conductRecord, color: status === "LEGITIMATE" ? "green" : "red" };
+      return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: bts.conductRecord, color: statusColor(status) };
     }
     return { ...card, score: "N/A" };
   }
@@ -280,10 +289,12 @@ async function runAskGeneration({
   sessionId,
   messageId,
   callbacks,
+  explain = false,
 }: {
   messages: ModelMessage[];
   tools: Record<string, unknown>;
   maxSteps: number;
+  explain?: boolean;
   generateTextImpl: typeof generateText;
   sessionId: string;
   messageId: string;
@@ -297,7 +308,7 @@ async function runAskGeneration({
     model: getAskModel(),
     maxOutputTokens: ASK_MAX_OUTPUT_TOKENS,
     maxRetries: ASK_MODEL_MAX_RETRIES,
-    stopWhen: [stepCountIs(maxSteps), stopAfterFinalToolResult],
+    stopWhen: [stepCountIs(maxSteps), explain ? stopAfterSubmittedCard : stopAfterFinalToolResult],
     messages,
     tools: tools as Parameters<typeof generateText>[0]["tools"],
     experimental_onStepStart({ stepNumber }) {
@@ -483,6 +494,7 @@ export async function generateAskResponse(
     messages,
     tools: baseTools,
     maxSteps: ASK_MAX_STEPS,
+    explain: ADVICE_QUESTION.test(normalizedMessage),
     generateTextImpl,
     sessionId,
     messageId,

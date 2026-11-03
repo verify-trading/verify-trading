@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import { ASK_MODEL_HISTORY_LIMIT } from "@/lib/ask/config";
 
-const brokerStatusSchema = z.enum(["LEGITIMATE", "WARNING", "AVOID"]);
-const cardColorSchema = z.enum(["green", "red"]);
+const brokerStatusSchema = z.enum(["LEGITIMATE", "CAUTION", "WARNING", "AVOID"]);
+const cardColorSchema = z.enum(["green", "amber", "red"]);
 const booleanStringSchema = z.enum(["Yes", "No"]);
 const chartBiasSchema = z.preprocess((value) => {
   if (typeof value !== "string") {
