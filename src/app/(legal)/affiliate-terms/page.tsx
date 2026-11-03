@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   title: "Affiliate Partner Programme Terms",
   description:
     "Review the verify.trading Affiliate Partner Programme Terms before joining as a partner.",
+  // Same inherited-canonical bug as the contact page: without this the page
+  // claims the homepage as its canonical.
+  alternates: { canonical: "/affiliate-terms" },
 };
 
 const terms = [

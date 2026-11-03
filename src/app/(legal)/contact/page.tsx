@@ -9,13 +9,15 @@ import {
   Mail,
   MapPin,
   MessageCircle,
-  Phone,
 } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Contact",
   description:
     "Contact Verify Trading Limited for company, support, partnership, and product enquiries.",
+  // Without this the page inherits the root layout's canonical ("/") and
+  // tells Google the contact page is a duplicate of the homepage.
+  alternates: { canonical: "/contact" },
 };
 
 const socialLinks = [
@@ -58,11 +60,6 @@ const details: ContactDetail[] = [
     label: "Address",
     value: "205 Regent Street, London W1B 4HB",
     icon: MapPin,
-  },
-  {
-    label: "Phone",
-    value: "TBC",
-    icon: Phone,
   },
   {
     label: "Email",
