@@ -110,7 +110,7 @@ describe("card score guard (firms the engine scored but the site has no page for
 
   it("takes the engine's score and status, never the model's", async () => {
     const { mergeToolOwnedNumbers } = await import("@/lib/ask/pipeline");
-    expect(mergeToolOwnedNumbers(card("Binance"), results as never)).toMatchObject({ score: "40/100", status: "WARNING", color: "red" });
+    expect(mergeToolOwnedNumbers(card("Binance"), results as never)).toMatchObject({ score: "40/100", status: "CAUTION", color: "amber" });
   });
 
   it("forces N/A when the card names a different firm", async () => {

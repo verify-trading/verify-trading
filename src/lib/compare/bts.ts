@@ -35,7 +35,9 @@ export const DATABASE_ONLY = "Live check unavailable right now, so this is our s
 
 /** Ask card status for an engine verdict or a live-check verdict (Strong / Generally positive / Score unavailable). */
 export const cardStatus = (v: string) =>
-  v === "Verified" || v === "Record reviewed" || v === "Strong" || v === "Generally positive" ? "LEGITIMATE" : v === "High risk" || v === "Not active" ? "AVOID" : "WARNING";
+  v === "Verified" || v === "Record reviewed" || v === "Strong" || v === "Generally positive" ? "LEGITIMATE" : v === "High risk" || v === "Not active" ? "AVOID" : v === "Caution" ? "CAUTION" : "WARNING";
+/** Card colour for a status: green, amber for a mid-range Caution, red otherwise. */
+export const statusColor = (status: string) => (status === "LEGITIMATE" ? "green" : status === "CAUTION" ? "amber" : "red") as "green" | "amber" | "red";
 
 /** Verdicts that never show a number (the engine leaves the score empty or it isn't meaningful). */
 export const SCORELESS: ReadonlySet<BtsVerdict> = new Set(["Under review", "Not active", "Not available"]);

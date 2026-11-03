@@ -92,7 +92,7 @@ function BrokerCard({
   // than the same coral as Avoid/closed — a mid-trust firm shouldn't look defunct.
   const propBand = uiMeta?.propFirm?.band;
   const propCaution =
-    isPropFirm && (propBand === "Proceed With Caution" || propBand === "High Risk");
+    card.color === "amber" || (isPropFirm && (propBand === "Proceed With Caution" || propBand === "High Risk"));
   const accent =
     card.color === "green" ? "var(--vt-green)" : propCaution ? "var(--vt-amber)" : "var(--vt-coral)";
   const accentClassName =
@@ -140,6 +140,8 @@ function BrokerCard({
           propFirm.trustpilotCount ? ` (${formatReviewCount(propFirm.trustpilotCount)})` : ""
         }`
       : "—";
+  // No Trustpilot snapshot (live-checked prop firms): show the complaints record rather than an empty tile.
+  const showTrustpilot = isPropFirm && propFirm?.trustpilotRating !== undefined;
 
   return (
     <CardFrame
@@ -177,10 +179,10 @@ function BrokerCard({
           </div>
           <div className="min-w-0 rounded-2xl bg-[var(--vt-card-alt)] p-3 text-center">
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--vt-muted)] sm:text-[11px]">
-              {isPropFirm ? "Trustpilot" : "Complaints"}
+              {showTrustpilot ? "Trustpilot" : "Complaints"}
             </div>
             <div className="mt-1 break-words text-sm font-bold text-white">
-              {isPropFirm ? trustpilot : card.complaints}
+              {showTrustpilot ? trustpilot : card.complaints}
             </div>
             {isPropFirm && propFirm?.trustpilotDate ? (
               <div className="mt-1 text-[10px] text-[var(--vt-muted)]">as of {formatAsOfDate(propFirm.trustpilotDate)}</div>
