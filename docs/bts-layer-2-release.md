@@ -30,7 +30,7 @@ Not every imported Layer 1 cap includes its original source URL. Layer 2 supplie
 
 Migration: `supabase/migration_37_bts_l2_assessments.sql` (confirmed applied).
 
-Model: `BTS_L2_MODEL`, default `gpt-6.1-terra`; optional `BTS_L2_REASONING`. Ask chat retains its existing model. Live runs can take around two minutes; Ask waits up to 120 seconds, with a longer run allowed to finish into the cache. Cached assessments expire after 24 hours and are keyed by subject, country, model and rubric version. Concurrent requests within one server process share a run.
+Model: `BTS_L2_MODEL`, default `gpt-6.1-terra`; `BTS_L2_REASONING` defaults to `low` (the tested latency setting). Ask chat retains its existing model. Live runs can take around two minutes; Ask waits up to 120 seconds, with a longer run allowed to finish into the cache. Cached assessments expire after 24 hours and are keyed by subject, country, model and rubric version. Concurrent requests within one server process share a run.
 
 Manual integration check (real research and database write):
 
@@ -38,4 +38,4 @@ Manual integration check (real research and database write):
 RUN_BTS_L2_SMOKE=1 BTS_SMOKE_FIRM='Elites Funding' npx vitest run tests/manual/bts-l2-smoke.test.ts
 ```
 
-Earlier live checks produced Elites Funding 37/100 (confidence 70) and TMGM 56/100, with retrieved evidence and successful cache reuse. Scores are measured outputs, not hardcoded targets. A later gateway request returned “Service temporarily unavailable”; the stored-assessment fallback remains necessary. No claim is made that the upstream gateway is always available.
+Earlier live checks produced Elites Funding 37/100 (confidence 70) and TMGM 56/100, with retrieved evidence and successful cache reuse. Scores are measured outputs, not hardcoded targets. A later gateway request returned “Service temporarily unavailable”; the stored-assessment fallback remains necessary. The final opt-in test passed with the low reasoning setting, including the actual verification-card path and cached source metadata. No claim is made that the upstream gateway is always available.

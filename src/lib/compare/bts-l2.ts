@@ -199,7 +199,7 @@ async function research(modelId: string, firm: string, kind: Kind | undefined, c
     }
   };
   const { system, prompt } = researchPrompt(firm, kind, country);
-  const model = getAskModel(modelId, process.env.BTS_L2_REASONING ? { reasoningEffort: process.env.BTS_L2_REASONING } : {});
+  const model = getAskModel(modelId, { reasoningEffort: process.env.BTS_L2_REASONING ?? "low" });
   try {
     const r = await generateText({
       model,
