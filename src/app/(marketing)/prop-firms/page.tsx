@@ -24,7 +24,7 @@ export default function PropFirmsPage() {
         "Firms being re-checked show as Under review; firms that are no longer active are clearly marked.",
         "The outcome is not for sale. You can ask for a correction.",
       ]}
-      compareHref="/verify/prop-firms"
+      compareHref="/compare/prop-firms"
       compareLabel="Compare Prop Firms"
       entityNoun="prop firm"
       faqs={[...PAGE_FAQS.propFirmsBusiness]}

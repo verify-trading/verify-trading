@@ -15,14 +15,17 @@ const nextConfig: NextConfig = {
       // The blog lives at /blog; people (and the BabyLoveGrowth dashboard) also try /blogs.
       { source: "/blogs", destination: "/blog", permanent: true },
       { source: "/blogs/:slug", destination: "/blog/:slug", permanent: true },
-      // Verify restructure: broker and prop-firm registers moved under /verify. Side-by-side
-      // category pages (futures/forex/forex-vs-futures prop firms) stay under /compare.
-      { source: "/compare/brokers", destination: "/verify/brokers", permanent: true },
-      { source: "/compare/brokers/:slug", destination: "/verify/brokers/:slug", permanent: true },
       // Brand comparison pages live at the root; the page briefly shipped under /compare.
       { source: "/compare/propfirmmatch-vs-verify-trading", destination: "/propfirmmatch-vs-verify-trading", permanent: true },
-      { source: "/compare/prop-firms", destination: "/verify/prop-firms", permanent: true },
-      { source: "/compare/prop-firms/:slug", destination: "/verify/prop-firms/:slug", permanent: true },
+      // The registers live under /compare (their original home). They spent 28 Oct – 3 Nov
+      // under /verify, so those URLs redirect back. The traders register was born under
+      // /verify and moved with them.
+      { source: "/verify/brokers", destination: "/compare/brokers", permanent: true },
+      { source: "/verify/brokers/:slug", destination: "/compare/brokers/:slug", permanent: true },
+      { source: "/verify/prop-firms", destination: "/compare/prop-firms", permanent: true },
+      { source: "/verify/prop-firms/:slug", destination: "/compare/prop-firms/:slug", permanent: true },
+      { source: "/verify/traders", destination: "/compare/traders", permanent: true },
+      { source: "/verify/traders/:slug", destination: "/compare/traders/:slug", permanent: true },
     ];
   },
   async headers() {

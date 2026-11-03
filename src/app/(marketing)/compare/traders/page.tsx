@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { CompareView, type CompareSearchParams } from "@/components/marketing/compare-view";
 import { pageMetadata } from "@/lib/marketing/seo";
 
-const path = "/verify/traders";
+const path = "/compare/traders";
 const description =
   "Check trading educators and gurus against public records and court filings. Explore evidence-based verification statuses on verify.trading.";
 

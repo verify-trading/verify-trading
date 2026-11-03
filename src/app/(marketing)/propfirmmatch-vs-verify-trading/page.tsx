@@ -182,7 +182,7 @@ export default function PropFirmMatchVsVerifyTradingPage() {
           "Use a deals directory to see offers. Use an independent record to check the company before you pay.",
         ]}
         tldrNote={REVIEWED_LABEL}
-        primary={{ label: "Check a prop firm's record", href: "/verify/prop-firms" }}
+        primary={{ label: "Check a prop firm's record", href: "/compare/prop-firms" }}
         secondary={{ label: "Read our methodology", href: "/methodology" }}
         location="propfirmmatch_vs_verify_trading"
       />
@@ -333,7 +333,7 @@ export default function PropFirmMatchVsVerifyTradingPage() {
             {
               title: "Evidence-based verdicts",
               body: "Every broker and prop firm record shows its verdict, the sources behind it and the date it was last reviewed. Records come from regulators and primary sources, not marketing copy, and a record cannot be bought, improved or removed by its subject.",
-              href: "/verify/prop-firms",
+              href: "/compare/prop-firms",
               label: "Browse prop firm records",
             },
             {
@@ -371,7 +371,7 @@ export default function PropFirmMatchVsVerifyTradingPage() {
       <CtaBand
         title="Verify the Firm Before You Buy the Deal"
         body="Discounts change weekly; the company behind them is what decides whether you ever see a payout. Check the independent record, read its sources, then decide — on evidence, from a platform that takes no commission from the firms it rates."
-        primary={{ label: "Check a prop firm now", href: "/verify/prop-firms" }}
+        primary={{ label: "Check a prop firm now", href: "/compare/prop-firms" }}
         secondary={{ label: "How we verify", href: "/methodology" }}
         location="propfirmmatch_vs_verify_trading"
         tight

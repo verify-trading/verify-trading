@@ -140,12 +140,12 @@ describe("guru register", () => {
       ...over,
     })!;
 
-  it("maps verdicts via the guru resolver and routes to /verify/traders", () => {
+  it("maps verdicts via the guru resolver and routes to /compare/traders", () => {
     const g = guru("steady");
     expect(g.type).toBe("guru");
     expect(g.verdict).toBe("Verified");
     expect(g.score).toBeNull();
-    expect(entityPath(g)).toBe("/verify/traders/steady");
+    expect(entityPath(g)).toBe("/compare/traders/steady");
   });
 
   it("drops a Caution to Unverified when the citation URL is missing or invalid", () => {

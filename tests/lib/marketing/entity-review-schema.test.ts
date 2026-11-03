@@ -5,7 +5,7 @@ import { entityReviewSchema } from "@/lib/marketing/seo";
 describe("entityReviewSchema", () => {
   const base = {
     name: "FxPro",
-    path: "/verify/brokers/fxpro",
+    path: "/compare/brokers/fxpro",
     description: "Independent broker check for FxPro: verdict Caution.",
     category: "Online broker",
     verdict: "Caution",
