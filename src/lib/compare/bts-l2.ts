@@ -19,7 +19,7 @@ type Kind = "broker" | "propfirm";
 /** Pilot weights from the Phase 2 handover (1 Nov 2026). Bump the version when they change. */
 export const L2_RUBRIC = {
   broker: {
-    version: "l2-broker-1.4",
+    version: "l2-broker-1.6",
     pillars: [
       ["regulation", "Regulatory position and jurisdiction", 40, "actual licence holder, status, authorised activity, local vs cross-border relevance; distinguish group entities"],
       ["client_protection", "Client protections", 20, "segregation, negative-balance protection, compensation scope, withdrawals; per account entity"],
@@ -29,7 +29,7 @@ export const L2_RUBRIC = {
     ],
   },
   propfirm: {
-    version: "l2-prop-1.4",
+    version: "l2-prop-1.6",
     pillars: [
       ["identity", "Company identity and continuity", 20, "confirmed business identity, operating entity, history and accessibility"],
       ["payout", "Payout credibility", 20, "payout eligibility, independent payment evidence, disputes; self-reported totals count less"],
@@ -77,6 +77,9 @@ const researchSchema = z.object({
   strengths: z.array(z.string()),
   risks: z.array(z.string()),
   summary: z.string(),
+  answer: z.string().describe("Quick take: 2-3 short sentences in the first person answering 'is it safe?', e.g. \"I'd be cautious about depositing with X. ...\". The bottom line and the main reason. No company numbers, source names or jargon."),
+  concern: z.string().describe("Why: 2 short plain sentences on the evidence behind that view (what regulators or terms actually say and its real weight). For a strong firm, what supports the score."),
+  recommendation: z.string().describe("My recommendation: 1-2 short first-person sentences on what this trader should do next, specific to their country."),
 });
 type Research = z.infer<typeof researchSchema>;
 
@@ -139,11 +142,14 @@ export function scoreAssessment(kind: Kind, draft: Research, retrievedUrls: Read
     strengths: draft.strengths.map(clean),
     risks: draft.risks.map(clean),
     summary: clean(draft.summary),
+    answer: clean(draft.answer ?? ""),
+    concern: clean(draft.concern ?? ""),
+    recommendation: clean(draft.recommendation ?? ""),
   };
 }
 
 function researchPrompt(firm: string, kind: Kind | undefined, country: string) {
-  const where = country === "XX" ? "an unknown country (assess globally)" : `${countryName(country)} (${country})`;
+  const where = country === "XX" ? "an unknown country (assess globally)" : `${countryName(country) === country ? (new Intl.DisplayNames(["en"], { type: "region" }).of(country) ?? country) : countryName(country)} (${country})`;
   const kinds: Kind[] = kind ? [kind] : ["broker", "propfirm"];
   const rubric = kinds.map((k) => `${k}:\n${L2_RUBRIC[k].pillars.map(([key, label, max, needs]) => `- ${key} (${label}, max ${max}): ${needs}`).join("\n")}`).join("\n\n");
   return {

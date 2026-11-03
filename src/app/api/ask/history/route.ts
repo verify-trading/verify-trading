@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { isLegacyMobile, withLegacyScores } from "@/lib/ask/legacy-mobile";
 import { getAskPersistence } from "@/lib/ask/persistence";
 import { decodeHistoryCursor } from "@/lib/ask/persistence/shared";
 import { getSessionUser } from "@/lib/auth/session";
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
       limit: query.limit,
     });
 
-    return NextResponse.json(page);
+    return NextResponse.json(isLegacyMobile(request) ? withLegacyScores(page) : page);
   } catch (error) {
     logger.error("Ask history request failed.", {
       sessionId: query.sessionId,

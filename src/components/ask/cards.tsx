@@ -102,13 +102,11 @@ function BrokerCard({
         ? "text-[var(--vt-amber)]"
         : "text-[var(--vt-coral)]";
   const eyebrow = isPropFirm ? "Firm Check" : "Broker Check";
-  const primaryLabel = isPropFirm ? "Type" : "FCA";
-  const primaryValue = isPropFirm ? "Prop Firm" : card.fca;
-  const primaryClassName = isPropFirm
-    ? "text-white"
-    : card.fca === "Yes"
-      ? "text-[var(--vt-green)]"
-      : "text-[var(--vt-coral)]";
+  // Regulators with register-verified licences; older saved cards only carry the FCA Yes/No.
+  const regulation = uiMeta?.regulation ?? (card.fca === "Yes" ? "FCA" : "None verified");
+  const primaryLabel = isPropFirm ? "Type" : "Regulation";
+  const primaryValue = isPropFirm ? "Prop Firm" : regulation;
+  const primaryClassName = isPropFirm || regulation !== "None verified" ? "text-white" : "text-[var(--vt-coral)]";
 
   const propFirm = uiMeta?.propFirm;
   const notRated = propFirm?.notRated ?? false;
@@ -225,6 +223,26 @@ function BrokerCard({
             ) : null}
             {propFirm.reverifyTrigger ? <p className="text-center text-xs leading-relaxed text-[var(--vt-muted)]">{propFirm.reverifyTrigger}</p> : null}
           </div>
+        ) : uiMeta?.verification?.concern || uiMeta?.verification?.recommendation ? (
+          // Live check: the answer first, then why, then what to do. Evidence sits underneath.
+          <div className="space-y-3 border-t border-white/[0.06] pt-3 text-sm leading-relaxed text-slate-200">
+            <section>
+              <h3 className="font-bold text-white">Quick take</h3>
+              <p className="mt-1">{card.verdict}</p>
+            </section>
+            {uiMeta.verification.concern ? (
+              <section>
+                <h3 className="font-bold text-white">{card.status === "LEGITIMATE" ? "Why it scores well" : "Why the concern?"}</h3>
+                <p className="mt-1">{uiMeta.verification.concern}</p>
+              </section>
+            ) : null}
+            {uiMeta.verification.recommendation ? (
+              <section className="rounded-2xl bg-[var(--vt-card-alt)] p-3">
+                <h3 className="font-bold text-white">My recommendation</h3>
+                <p className="mt-1">{uiMeta.verification.recommendation}</p>
+              </section>
+            ) : null}
+          </div>
         ) : (
           <div className="border-t border-white/[0.06] pt-3">
             <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
@@ -240,8 +258,20 @@ function BrokerCard({
           <div className="space-y-2 border-t border-white/10 pt-3 text-xs text-slate-400">
             <p>Evidence confidence {uiMeta.verification.confidence}/100 · Checked {uiMeta.verification.checkedAt.slice(0, 10)}</p>
             <details>
-              <summary className="cursor-pointer font-semibold text-slate-200">Sources and findings</summary>
+              <summary className="cursor-pointer font-semibold text-slate-200">Evidence, scoring and sources</summary>
               <div className="mt-3 space-y-3">
+                {uiMeta.verification.summary ? <p className="leading-relaxed text-slate-300">{uiMeta.verification.summary}</p> : null}
+                {uiMeta.verification.pillars?.length ? (
+                  <div className="space-y-1">
+                    <p className="font-medium text-slate-200">How the score was calculated</p>
+                    {uiMeta.verification.pillars.map((pillar) => (
+                      <p key={pillar.label}><span className="font-semibold text-slate-200">{pillar.label} {pillar.awarded}/{pillar.max}</span>: {pillar.reason}</p>
+                    ))}
+                    {uiMeta.verification.score != null ? (
+                      <p className="font-semibold text-slate-200">Total {uiMeta.verification.score}/100</p>
+                    ) : null}
+                  </div>
+                ) : null}
                 {uiMeta.verification.findings.map((finding, index) => (
                   <div key={`${finding.url}-${index}`} className="space-y-1">
                     <p className="font-medium text-slate-200">{finding.authority}</p>

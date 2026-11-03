@@ -28,6 +28,7 @@ import {
 import { getFcaStatus } from "@/lib/ask/fca";
 import { btsVerificationGate } from "@/lib/compare/bts-research";
 import { cardStatus, DATABASE_ONLY, countryName, normalizeCountry } from "@/lib/compare/bts";
+import { regulationLabel } from "@/lib/compare/regulators";
 import { getBtsAskContext, getBtsAskContextByBrand, getRequestCountrySafe, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
 import { getL2Assessment, type L2Result, type L2Subject } from "@/lib/compare/bts-l2";
 import {
@@ -987,9 +988,12 @@ const L2_WAIT_MS = 120_000; // the mobile app gives up on Ask at 180s
  * removed from what the model sees, so the user never gets two competing scores. When the live check
  * is unavailable, the Layer 1 rating is shown and labelled as a database assessment.
  */
-async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment) {
+/** Any ISO country the user named; the live check researches countries the engine has no rows for (e.g. Morocco). */
+const isoCountry = (c?: string) => (c && /^[A-Za-z]{2}$/.test(c.trim()) ? c.trim().toUpperCase() : undefined);
+
+async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment, country?: string) {
   if (bts.type === "tool" || btsVerificationGate(bts.operatingStatus, bts.researchStatus) || bts.global.verdict === "Not active" || bts.global.verdict === "Under review") return bts;
-  const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2);
+  const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: isoCountry(country) ?? bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2);
   if (!l2) return { ...bts, scoreSource: "Database assessment" };
   const live = fromLiveCheck(l2);
   // Register-verified licences (e.g. FCA) stay from the research record; the live check scores, it doesn't re-list them.
@@ -1014,7 +1018,8 @@ function fromLiveCheck(l2: L2Result) {
   const conduct = l2.pillars.find((p) => p.key === "conduct");
   const summary = l2.summary.trim();
   const risks = l2.risks.filter((risk) => !summary.toLowerCase().includes(risk.toLowerCase())).slice(0, 2);
-  const note = summary.length < 180 && risks.length ? `${summary} ${risks.join(" ")}` : summary;
+  // The card leads with the short plain answer; the full summary and evidence sit underneath it.
+  const note = l2.answer || (summary.length < 180 && risks.length ? `${summary} ${risks.join(" ")}` : summary);
   return {
     scoreSource: "Independent live check",
     conductRecord: l2.findings.some((f) => f.adverse) ? ("On record" as const) : conduct?.sourced ? ("None found" as const) : ("Not checked" as const),
@@ -1038,6 +1043,10 @@ function fromLiveCheck(l2: L2Result) {
       legalEntity: l2.identity.legal_entity,
       officialWebsite: l2.identity.official_website,
       findings: l2.findings.map(({ source_id: _id, ...f }) => f),
+      summary,
+      concern: l2.concern,
+      recommendation: l2.recommendation,
+      pillars: l2.pillars.map(({ label, awarded, max, reason }) => ({ label, awarded, max, reason })),
       strengths: l2.strengths,
       risks: l2.risks,
       sources: l2.sources.map(({ title, url, type }) => ({ title, url, type })),
@@ -1047,17 +1056,24 @@ function fromLiveCheck(l2: L2Result) {
 
 type CheckedBts = Awaited<ReturnType<typeof withLiveCheck>>;
 
-function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "verificationSourceLabel" | "cloneNotice"> {
+function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "verificationSourceLabel" | "cloneNotice" | "regulation"> {
   const cloneNotice = bts.global.cloneAlert ? { message: bts.global.cloneAlert, ...(bts.research?.cloneNoticeSource ? { sourceUrl: bts.research.cloneNoticeSource } : {}) } : undefined;
-  if (!("liveCheck" in bts)) return { cloneNotice, verificationSourceLabel: "scoreSource" in bts ? bts.scoreSource : "Reviewed record" };
+  const regulation = regulationLabel(bts.global.licencesVerified, bts.countryCode) ?? undefined;
+  if (!("liveCheck" in bts)) return { cloneNotice, regulation, verificationSourceLabel: "scoreSource" in bts ? bts.scoreSource : "Reviewed record" };
   const live = bts.liveCheck;
   return {
     cloneNotice,
+    regulation,
     verificationSourceLabel: bts.scoreSource,
     verification: {
       verdict: bts.shown.verdict,
       confidence: live.confidence,
       checkedAt: live.checkedAt,
+      score: bts.shown.score,
+      summary: live.summary,
+      concern: live.concern || undefined,
+      recommendation: live.recommendation || undefined,
+      pillars: live.pillars,
       sources: live.sources.map(({ title, url }) => ({ title, url })),
       findings: live.findings.map((f) => ({ authority: f.authority, legalEntity: f.legal_entity, jurisdiction: f.jurisdiction, date: f.date, finding: f.finding, outcome: f.outcome, url: f.url })),
     },
@@ -1117,7 +1133,7 @@ export async function resolveVerificationToolResult(
   // No page on our site, but the engine may still have scored the firm (new brokers, tools).
   const engineByBrand = async () => {
     const bts = await (dependencies.getBtsAskContextByBrandImpl ?? getBtsAskContextByBrand)(normalized.lookupName, country);
-    return bts ? withLiveCheck(bts, dependencies.getL2AssessmentImpl) : undefined;
+    return bts ? withLiveCheck(bts, dependencies.getL2AssessmentImpl, country) : undefined;
   };
 
   // Brokers and prop firms: the BTS engine's verdict and score go on the card verbatim.
@@ -1132,7 +1148,7 @@ export async function resolveVerificationToolResult(
         if (host(supplied) !== host(engine.research.website)) return coverageEvidence(name, true);
       } catch { return coverageEvidence(name, true); }
     }
-    const bts = await withLiveCheck(engine, dependencies.getL2AssessmentImpl);
+    const bts = await withLiveCheck(engine, dependencies.getL2AssessmentImpl, country);
     return {
       ...result,
       card: applyBtsToCard(result.card, bts),
@@ -1147,7 +1163,7 @@ export async function resolveVerificationToolResult(
   };
 
   const checkWithoutBaseline = async (firm: string, kind?: "broker" | "propfirm") => {
-    const countryCode = country ? normalizeCountry(country) : await getRequestCountrySafe();
+    const countryCode = isoCountry(country) ?? await getRequestCountrySafe();
     const l2 = await waitForLiveCheck({ firm, kind, country: countryCode }, dependencies.getL2AssessmentImpl);
     if (!l2) return null;
     const bts: CheckedBts = {

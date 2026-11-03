@@ -43,3 +43,12 @@ describe("engine field parsing", () => {
   });
 });
 
+
+describe("regulation label", () => {
+  it("lists verified regulators, FCA last and scoped outside the UK", async () => {
+    const { regulationLabel } = await import("@/lib/compare/regulators");
+    expect(regulationLabel("FCA:684312|CYSEC:388/20", "GB")).toBe("FCA, CySEC");
+    expect(regulationLabel("FCA:684312|CYSEC:388/20", "MA")).toBe("CySEC, FCA (UK entity)");
+    expect(regulationLabel("none", "GB")).toBeNull();
+  });
+});

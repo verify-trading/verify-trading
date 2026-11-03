@@ -370,6 +370,23 @@ const ENGINE_ONLY: Record<string, { code: string; country: string | null }> = {
   OTHER_NATIONAL: { code: "National regulator", country: null }, EXCHANGE_MEMBER: { code: "Exchange member", country: null },
 };
 
+/**
+ * Register-verified licences as a short label for the card ("FCA, CySEC", "FSA Seychelles").
+ * Outside the UK the FCA goes last so the card doesn't lead with it. Null when none are verified.
+ */
+export function regulationLabel(licences: string | null | undefined, country: string): string | null {
+  const ambiguous = new Set(REGULATORS.map((r) => r.code).filter((code, i, all) => all.indexOf(code) !== i));
+  const codes = (licences ?? "").split("|").map((l) => l.split(":")[0].trim()).filter((c) => /^[A-Z_]+$/.test(c));
+  if (country !== "GB") codes.sort((a, b) => Number(a === "FCA") - Number(b === "FCA"));
+  const labels = [...new Set(codes.map((c) => {
+    const r = regulatorForEngineCode(c);
+    if (r.code === "FCA" && country !== "GB") return "FCA (UK entity)";
+    return ambiguous.has(r.code) && r.country ? `${r.code} ${r.country}` : r.code;
+  }))];
+  if (!labels.length) return null;
+  return labels.slice(0, 3).join(", ") + (labels.length > 3 ? ` +${labels.length - 3}` : "");
+}
+
 /** Engine licence code -> display code, country and hub slug (null when we have no page for it). */
 export function regulatorForEngineCode(code: string): { code: string; country: string | null; slug: string | null } {
   const r = BY_ENGINE.get(code);
