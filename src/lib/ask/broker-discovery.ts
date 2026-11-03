@@ -4,11 +4,13 @@ export type BrokerPreferences = {
   kind: 'broker' | 'propfirm';
   country?: string;
   instruments: string[];
+  style?: string;
   requirements: string[];
 };
 
 const DISCOVERY = /\b(?:which|what|best|top|safest|recommend\w*|suggest\w*|find\w*|choos\w*|switch\w*|chang\w*|looking\s+for|(?:i\s+)?(?:need|want))\b[^?!.]{0,90}\b(?:brokers?|prop\s*firms?)\b|\b(?:brokers?|prop\s*firms?)\b[^?!.]{0,40}\b(?:recommend|suggest|should\s+i\s+use|are\s+(?:good|best))\b|^help\s+me\s+(?:start\s+)?trad(?:e|ing)[.!?]*$/i;
-const HEADLINES = ['Find a broker that fits', 'Find a prop firm that fits', 'Start with your trading needs'];
+const HEADLINES = ['Find a broker that fits', 'Find a prop firm that fits', 'Start with your trading needs', 'One quick question'];
+const STYLE = /\b(scalp\w*|day[- ]?trad\w*|intraday|swing\w*|position trad\w*|long[- ]term|short[- ]term|news trad\w*|hold\w*|minutes|hours|days|weeks)\b/i;
 const regions = new Intl.DisplayNames(['en'], { type: 'region' });
 const countries = Array.from({ length: 676 }, (_, i) => String.fromCharCode(65 + Math.floor(i / 26), 65 + i % 26))
   .map(code => ({ code, name: regions.of(code) ?? code })).filter(({ code, name }) => code !== name);
@@ -37,6 +39,7 @@ function addRequirements(profile: BrokerPreferences, message: string): BrokerPre
     ...profile,
     country: countryIn(message) ?? profile.country,
     instruments: found.length ? found : profile.instruments,
+    style: message.match(STYLE)?.[0].toLowerCase() ?? profile.style,
     requirements: [...new Set([...profile.requirements, message.slice(0, 500)])].slice(-6),
   };
 }
@@ -64,13 +67,28 @@ export function getBrokerDiscovery(request: Pick<AskRequest, 'message' | 'histor
     ...(!profile.country ? ['Which country are you based in?'] : []),
     ...(!profile.instruments.length ? ['What do you mainly trade: Forex, Gold, Indices, Stocks or Crypto?'] : []),
   ];
-  const clarification: InsightCard | undefined = questions.length ? {
+  const firms = kind === 'propfirm' ? 'prop firms' : 'brokers';
+  // Country and markets known: one question about style, which changes costs and rules more than any score.
+  const styleOnly: InsightCard | undefined = !questions.length && !profile.style ? {
+    type: 'insight',
+    variant: 'broker_discovery',
+    headline: HEADLINES[3],
+    body: [
+      `For trading ${profile.instruments.map((i) => i === 'Gold' ? 'gold (XAUUSD)' : i.toLowerCase()).join(' and ')}, I'd focus on ${kind === 'propfirm' ? 'fair rules, a reliable payout record and fees you can live with' : 'tight spreads, reliable execution and a good withdrawal record'}.`,
+      `Since you're based in ${regions.of(profile.country!) ?? profile.country}, I'll also check which ${firms} can accept you and what protection your account would have.`,
+      `Do you usually scalp${profile.instruments.length === 1 ? ` ${profile.instruments[0].toLowerCase()}` : ''} with quick trades, or hold positions for several hours or days?`,
+    ].join('\n\n'),
+    verdict: kind === 'propfirm'
+      ? 'This helps me match the right rules and drawdown limits, rather than just giving you a list of highly rated firms.'
+      : 'This helps me prioritise the right trading costs and execution conditions, rather than just giving you a list of highly rated brokers.',
+  } : undefined;
+  const clarification: InsightCard | undefined = styleOnly ?? (questions.length ? {
     type: 'insight',
     variant: 'broker_discovery',
     headline: kind === 'propfirm' ? HEADLINES[1] : /^help me/i.test(request.message) ? HEADLINES[2] : HEADLINES[0],
     body: `Of course, I can help you find ${kind === 'propfirm' ? 'a prop firm' : 'a broker'} that suits your trading needs.\n\n${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`,
     verdict: kind === 'propfirm' ? "I'll compare suitable options using their rules, fees and payout risks, alongside trust evidence." : "I'll compare suitable brokers using regulation, costs, platforms and reliability, alongside trust evidence.",
-  } : undefined;
+  } : undefined);
   return { profile, clarification };
 }
 

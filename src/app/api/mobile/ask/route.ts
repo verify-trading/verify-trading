@@ -6,6 +6,7 @@ import {
   completeAskExchange,
   prepareAskRoute,
 } from "@/lib/ask/route-runtime";
+import { isLegacyMobile, withLegacyScores } from "@/lib/ask/legacy-mobile";
 
 // Match web Ask: a live assessment can run beyond the platform default.
 export const maxDuration = 300;
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     if (!prepared.ok) return jsonApiFailure(prepared.failure);
 
     const response = await completeAskExchange(prepared.value);
-    return NextResponse.json(response);
+    return NextResponse.json(isLegacyMobile(request) ? withLegacyScores(response) : response);
   } catch (error) {
     return jsonApiFailure(askRouteFailure(error, "Mobile Ask response generation failed."));
   }

@@ -100,6 +100,7 @@ function extractToolUiMeta(
           ...(propFirm ? { propFirm } : {}),
           ...(nestedUiMeta.verification ? { verification: nestedUiMeta.verification } : {}),
           ...(nestedUiMeta.cloneNotice ? { cloneNotice: nestedUiMeta.cloneNotice } : {}),
+          ...(typeof nestedUiMeta.regulation === "string" ? { regulation: nestedUiMeta.regulation } : {}),
         };
         const parsed = askUiMetaSchema.safeParse(uiMeta);
         return parsed.success ? parsed.data : undefined;

@@ -185,6 +185,7 @@ export const askSessionMemorySchema = z
       kind: z.enum(["broker", "propfirm"]),
       country: z.string().optional(),
       instruments: z.array(z.string()),
+      style: z.string().optional(),
       requirements: z.array(z.string()).max(6),
     }).optional(),
     activeAsset: z.string().trim().min(1).optional(),
@@ -331,10 +332,17 @@ export const askUiMetaSchema = z
     verificationKind: z.enum(["broker", "propfirm"]).optional(),
     verificationSourceLabel: z.string().trim().min(1).optional(),
     cloneNotice: z.object({ message: z.string(), sourceUrl: httpUrlSchema.optional() }).optional(),
+    // Regulators holding register-verified licences, e.g. "FCA, CySEC". Replaces the UK-only FCA tile.
+    regulation: z.string().optional(),
     verification: z.object({
       verdict: z.string(),
       confidence: z.number().min(0).max(100),
       checkedAt: z.string(),
+      score: z.number().nullable().optional(),
+      summary: z.string().optional(),
+      concern: z.string().optional(),
+      recommendation: z.string().optional(),
+      pillars: z.array(z.object({ label: z.string(), awarded: z.number(), max: z.number(), reason: z.string() })).optional(),
       sources: z.array(z.object({ title: z.string(), url: httpUrlSchema })),
       findings: z.array(z.object({
         authority: z.string(), legalEntity: z.string(), jurisdiction: z.string(), date: z.string(),

@@ -288,3 +288,15 @@ describe("broker card sentence limit", () => {
     expect(verdict("Terms name GrowthNext F. Z. E. in Ajman. Payouts are discretionary.")).toBe("Terms name GrowthNext F. Z. E. in Ajman. Payouts are discretionary.");
   });
 });
+
+describe("legacy mobile scores", () => {
+  it("rewrites /100 broker scores only for app builds without a version header", async () => {
+    const { isLegacyMobile, withLegacyScores } = await import("@/lib/ask/legacy-mobile");
+    const req = (headers: Record<string, string>) => new Request("https://x.test", { headers });
+    expect(isLegacyMobile(req({ authorization: "Bearer t" }))).toBe(true);
+    expect(isLegacyMobile(req({ authorization: "Bearer t", "x-vt-app-version": "1.2.0" }))).toBe(false);
+    expect(isLegacyMobile(req({}))).toBe(false);
+    expect(withLegacyScores({ data: { type: "broker", score: "29/100" }, messages: [{ card: { type: "broker", score: "100/100" } }, { card: { type: "insight", score: "5/100" } }] }))
+      .toEqual({ data: { type: "broker", score: "2.9" }, messages: [{ card: { type: "broker", score: "10" } }, { card: { type: "insight", score: "5/100" } }] });
+  });
+});

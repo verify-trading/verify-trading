@@ -41,7 +41,12 @@ describe('broker discovery conversation', () => {
     for (const message of ['Is FxPro suitable for a UK trader scalping gold?', 'Is IG safe?', 'What is gold doing now?', 'Explain broker fees']) expect(getBrokerDiscovery(request(message))).toBeNull();
     const first = getBrokerDiscovery(request('I need a broker'))!;
     expect(getBrokerDiscovery({ message: 'Is FxPro safe?', history: [{ role: 'assistant', content: JSON.stringify(first.clarification) }] })).toBeNull();
-    expect(getBrokerDiscovery(request('Find a broker for South Africa trading gold and forex'))?.clarification).toBeUndefined();
+    // Country and markets known: one question about style, nothing already answered.
+    const style = getBrokerDiscovery(request('Find a broker for South Africa trading gold and forex'))!.clarification!;
+    expect(style.headline).toBe('One quick question');
+    expect(style.body).toContain('South Africa');
+    expect(style.body).not.toContain('Which country');
+    expect(getBrokerDiscovery(request('Find a broker for South Africa trading gold, I swing trade'))?.clarification).toBeUndefined();
   });
 });
 
@@ -60,7 +65,7 @@ it('keeps all three comparison explanations and source URLs after sanitizing and
 });
 
 it('accepts ISO country answers and other trading instruments without repeating questions', () => {
-  expect(getBrokerDiscovery(request('Find a broker in ZA for silver and oil'))?.clarification).toBeUndefined();
+  expect(getBrokerDiscovery(request('Find a broker in ZA for silver and oil, day trading'))?.clarification).toBeUndefined();
   const first = getBrokerDiscovery(request('I need a broker for futures'))!;
-  expect(getBrokerDiscovery({ message: 'ZA', history: [{ role: 'user', content: 'I need a broker for futures' }, { role: 'assistant', content: JSON.stringify(first.clarification) }] })?.clarification).toBeUndefined();
+  expect(getBrokerDiscovery({ message: 'ZA', history: [{ role: 'user', content: 'I need a broker for futures' }, { role: 'assistant', content: JSON.stringify(first.clarification) }] })?.clarification?.headline).toBe('One quick question');
 });

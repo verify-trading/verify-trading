@@ -276,7 +276,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                 name="q"
                 type="search"
                 defaultValue={filters.q}
-                placeholder={`Search ${all.length ? all.length.toLocaleString("en-GB") : ""} ${cfg.plural} by name`.replace("  ", " ")}
+                placeholder={`Search ${cfg.plural} by name`}
                 maxLength={80}
                 autoComplete="off"
                 className="h-10 w-full rounded-lg border border-white/10 bg-black/20 pl-9 pr-20 text-sm text-white placeholder:text-slate-500 focus:border-[var(--vt-blue)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--vt-blue)]/30 [&::-webkit-search-cancel-button]:hidden"
