@@ -51,7 +51,7 @@ export type PublicEntityType = "broker" | "propfirm" | "guru";
 
 export type GuruVerdict = GuruTier;
 /** Broker and prop-firm verdicts (BTS engine) plus the guru-only "Unverified". */
-export const VERDICTS = ["Verified", "Caution", "High risk", "Insufficient data", "Under review", "Not active", "Not available", "Unverified"] as const;
+export const VERDICTS = ["Verified", "Record reviewed", "Caution", "High risk", "Insufficient data", "Under review", "Not active", "Not available", "Unverified"] as const;
 export type Verdict = BtsVerdict | GuruVerdict;
 
 export type PublicEntity = {
@@ -191,7 +191,7 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     // Not scored by the engine yet: no verdict claim, no number, no licence claim.
     return { ...base, regulators: [], regulatorDetails: [], fcaRegistered: false, fcaReference: null, verdict: "Under review", score: null, bts: null, closed: false, reviewed: false };
   }
-  const verdict = toVerdict(str(raw.verdict));
+  const verdict = toVerdict(str(raw.verdict), type);
   const details = (raw.details ?? {}) as Record<string, unknown>;
   const pillars = (raw.pillars ?? {}) as Record<string, unknown>;
   const licences = parseLicences(str(details.active_verified_licences));
@@ -212,6 +212,7 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     bts: {
       entityId: String(raw.entity_id),
       confidence: num(raw.evidence_confidence),
+      coverage: num(details.pillar_coverage_pct),
       reason: str(raw.verdict_reason),
       cap: str(raw.cap_applied),
       pillars: PILLARS[type].map(([key, label, max]) => ({ label, max, value: str(pillars[key]) ?? "not checked" })),
@@ -255,7 +256,7 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
 }
 
 /** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */
-export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v4"], { revalidate: 3600, tags: ["bts"] });
+export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v5"], { revalidate: 3600, tags: ["bts"] });
 
 export async function getPublicEntity(type: PublicEntityType, slug: string) {
   return (await getPublicEntities(type)).find((e) => e.slug === slug) ?? null;

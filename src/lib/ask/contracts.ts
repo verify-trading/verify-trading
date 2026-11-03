@@ -323,6 +323,16 @@ export const askUiMetaSchema = z
     projectionMarkers: z.array(z.number().int().nonnegative()).optional(),
     verificationKind: z.enum(["broker", "propfirm"]).optional(),
     verificationSourceLabel: z.string().trim().min(1).optional(),
+    verification: z.object({
+      verdict: z.string(),
+      confidence: z.number().min(0).max(100),
+      checkedAt: z.string(),
+      sources: z.array(z.object({ title: z.string(), url: httpUrlSchema })),
+      findings: z.array(z.object({
+        authority: z.string(), legalEntity: z.string(), jurisdiction: z.string(), date: z.string(),
+        finding: z.string(), outcome: z.string(), url: httpUrlSchema,
+      })),
+    }).optional(),
     // Prop-firm extras shown alongside the reused broker card: the trust band,
     // the "Not yet rated" state, and the Trustpilot snapshot the score rests on.
     propFirm: z

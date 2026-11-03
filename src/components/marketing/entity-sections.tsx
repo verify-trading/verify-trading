@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 /** What each BTS verdict means, in the approved method's words. No claims beyond the rule. */
 export const BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
   { verdict: "Verified", text: "Score 75+, research complete, and an active tier 1 or 2 licence held by the entity serving retail clients." },
-  { verdict: "Caution", text: "Active, with enough evidence to score, but short of Verified. Read the reason before you deposit." },
+  { verdict: "Record reviewed", text: "Prop firms scoring 75+ with research complete and no adverse findings. A reviewed record, not an endorsement or a guarantee of payouts." },
+  { verdict: "Caution", text: "Active, with enough evidence to score, but short of the top band. Read the reason before you deposit." },
   { verdict: "High risk", text: "Verified adverse evidence only: a regulator warning, or a licence revoked or suspended in the last 2 years." },
   { verdict: "Insufficient data", text: "Not enough verified evidence yet to rate. Not a judgement either way." },
   { verdict: "Under review", text: "Our researchers are re-checking this record. No score is shown until they finish." },
@@ -34,8 +35,9 @@ const barTone: Record<string, string> = {
 };
 
 /** The verdict scale: hairline-separated rows, one line per band. */
-export function VerdictBands({ current, counts, gurus = false }: { current?: Verdict; counts?: Partial<Record<Verdict, number>>; gurus?: boolean }) {
-  const bands = gurus ? GURU_BAND_INFO : BAND_INFO;
+export function VerdictBands({ current, counts, gurus = false, propFirms = false }: { current?: Verdict; counts?: Partial<Record<Verdict, number>>; gurus?: boolean; propFirms?: boolean }) {
+  // Brokers pass as "Verified", prop firms as "Record reviewed".
+  const bands = gurus ? GURU_BAND_INFO : BAND_INFO.filter((b) => b.verdict !== (propFirms ? "Verified" : "Record reviewed"));
   return (
     <ul className="divide-y divide-white/10 border-y border-white/10">
       {bands.map((b) => (
@@ -167,7 +169,7 @@ export function EntityMiniCard({ e, note }: { e: PublicEntity; note?: string }) 
       </div>
       <div className="flex items-center gap-2.5 shrink-0">
         <VerdictBadge verdict={e.verdict} className="px-2 py-0.5 text-[11px]" />
-        <ScoreBar entity={e} className="w-16 hidden sm:block" />
+        <ScoreBar entity={e} className="hidden w-20 shrink-0 sm:block" />
       </div>
     </Link>
   );

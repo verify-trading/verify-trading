@@ -11,9 +11,9 @@ import {
   prepareAskRoute,
   type PreparedAskRoute,
 } from "@/lib/ask/route-runtime";
-// A searching turn can run past a minute on the gateway; the platform default is shorter than
-// a slow one, and a function killed mid-stream reads as "generation started" then nothing.
-export const maxDuration = 120;
+// A searching turn can run past a minute on the gateway, and a firm check waits up to 120s for the
+// live verification (Layer 2), which then finishes in the background and must not be cut off.
+export const maxDuration = 300;
 
 
 type AskRouteMessage = UIMessage<unknown, AskStreamData>;
@@ -48,8 +48,8 @@ type ToolStatusSpec = {
 
 const TOOL_STATUS: Record<string, ToolStatusSpec> = {
   verify_entity: {
-    label: "Checking broker / firm",
-    detail: ({ entity }) => (entity ? `Reviewing ${entity}` : "Reviewing the entity details provided."),
+    label: "Running live verification",
+    detail: ({ entity }) => (entity ? `Checking regulators, terms and disputes for ${entity}.` : "Checking regulators, terms and disputes."),
   },
   get_market_briefing: {
     label: "Fetching live market price",

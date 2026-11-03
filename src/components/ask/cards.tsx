@@ -129,13 +129,13 @@ function BrokerCard({
     : notRated
       ? "notRated"
       : "scored";
-  const trailingLabel = developing
+  const trailingLabel = uiMeta?.verification?.verdict ?? (developing
     // Split only on em/en dash — NOT a plain hyphen, which would truncate hyphenated
     // words like "Pre-revenue" to "Pre".
     ? propFirm?.researchStatus?.split(/[—–]/)[0]?.trim() || "Developing"
     : isPropFirm && propFirm?.band
       ? propFirm.band
-      : card.status;
+      : card.status);
   const trustpilot =
     propFirm?.trustpilotRating !== undefined
       ? `${propFirm.trustpilotRating.toFixed(1)}${
@@ -230,6 +230,30 @@ function BrokerCard({
             <p className="text-sm leading-relaxed text-slate-200">{card.verdict}</p>
           </div>
         )}
+        {uiMeta?.verification ? (
+          <div className="space-y-2 border-t border-white/10 pt-3 text-xs text-slate-400">
+            <p>Evidence confidence {uiMeta.verification.confidence}/100 · Checked {uiMeta.verification.checkedAt.slice(0, 10)}</p>
+            <details>
+              <summary className="cursor-pointer font-semibold text-slate-200">Sources and findings</summary>
+              <div className="mt-3 space-y-3">
+                {uiMeta.verification.findings.map((finding, index) => (
+                  <div key={`${finding.url}-${index}`} className="space-y-1">
+                    <p className="font-medium text-slate-200">{finding.authority}</p>
+                    <p>{[finding.legalEntity, finding.jurisdiction, finding.date].filter(Boolean).join(" · ")}</p>
+                    <p>{finding.finding}</p>
+                    {finding.outcome ? <p>{finding.outcome}</p> : null}
+                    <a href={finding.url} target="_blank" rel="noopener noreferrer" className="text-[var(--vt-blue)] underline underline-offset-2">View source</a>
+                  </div>
+                ))}
+                <ul className="space-y-1">
+                  {uiMeta.verification.sources.map((source) => (
+                    <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="break-words text-[var(--vt-blue)] underline underline-offset-2">{source.title}</a></li>
+                  ))}
+                </ul>
+              </div>
+            </details>
+          </div>
+        ) : null}
       </div>
     </CardFrame>
   );

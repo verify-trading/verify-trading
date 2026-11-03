@@ -111,8 +111,8 @@ function conductRecord(kind: keyof typeof CONDUCT_PILLAR, rating: { verdict: str
 
 async function buildAskContext(raw: Record<string, unknown>, requestedCountry?: string | null) {
   const client = getSupabaseAdminClient()!;
-  const kind = raw.kind === "propfirm" ? "propfirm" : raw.kind === "tool" ? "tool" : "broker";
-  const verdict = toVerdict(raw.verdict as string);
+  const kind = (raw.kind === "propfirm" ? "propfirm" : raw.kind === "tool" ? "tool" : "broker") as "broker" | "propfirm" | "tool";
+  const verdict = toVerdict(raw.verdict as string, kind);
   const globalRating = { verdict, score: SCORELESS.has(verdict) ? null : ((raw.global_score as number | null) ?? null) };
   const details = (raw.details ?? {}) as Record<string, unknown>;
   const pillars = (raw.pillars ?? {}) as Record<string, unknown>;
@@ -126,6 +126,8 @@ async function buildAskContext(raw: Record<string, unknown>, requestedCountry?: 
 
   return {
     firm: String(raw.brand_name ?? ""),
+    entityId: String(raw.entity_id),
+    countryCode: country,
     conductRecord: conductRecord(kind, globalRating, pillars),
     type: kind,
     userCountry: country === "XX" ? "unknown" : `${countryName(country)} (${country})`,
@@ -179,7 +181,7 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
   }
   const firms = [...byFirm.values()]
     .flatMap(({ name, bts }) => {
-      const verdict = toVerdict(bts.verdict as string);
+      const verdict = toVerdict(bts.verdict as string, type);
       const view = countryView({ verdict, score: SCORELESS.has(verdict) ? null : (bts.global_score as number | null) }, rows[String(bts.entity_id)], country);
       const fit = rows[String(bts.entity_id)]?.fit;
       const licensedLocally = fit === "LOCAL LICENCE VERIFIED" || fit === "EEA PASSPORT POSSIBLE";

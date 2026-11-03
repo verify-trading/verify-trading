@@ -68,9 +68,9 @@ export function ScoreBar({ entity, className }: { entity: { score: number | null
       {score === null ? (
         <span className="text-xs text-slate-400">{scoreLabel(entity)}</span>
       ) : (
-        <span className="font-mono text-sm font-semibold text-white">
-          {score}
-          <span className="text-xs font-normal text-slate-500"> / 100</span>
+        <span className="inline-flex items-baseline gap-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-white">
+          <span className="min-w-[3ch] text-right">{score}</span>
+          <span className="text-xs font-normal text-slate-500">/ 100</span>
         </span>
       )}
       <div className="mt-1.5 h-1 w-full max-w-[6.5rem] overflow-hidden rounded-full bg-white/10" aria-hidden>

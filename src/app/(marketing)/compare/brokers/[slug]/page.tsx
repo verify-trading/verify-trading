@@ -3,7 +3,6 @@ import { notFound, permanentRedirect } from "next/navigation";
 
 import { EntityDetail } from "@/components/marketing/entity-detail";
 import { VsView, vsSummary } from "@/components/marketing/vs-view";
-import { getEntityCountryRows } from "@/lib/compare/bts-data";
 import { getPublicEntities, getPublicEntity } from "@/lib/compare/entities";
 import { listableEntities, parseVsPair } from "@/lib/compare/insights";
 import { entityMetadata } from "@/lib/compare/page-meta";
@@ -46,7 +45,5 @@ export default async function Page({ params }: Props) {
   }
   const entity = await getPublicEntity("broker", slug);
   if (!entity) notFound();
-  // All ~67 country rows ship with the cached page; the visitor's country is picked client-side.
-  const countryRows = entity.bts ? await getEntityCountryRows(entity.bts.entityId) : [];
-  return <EntityDetail entity={entity} all={listableEntities(await getPublicEntities("broker"))} countryRows={countryRows} />;
+  return <EntityDetail entity={entity} all={listableEntities(await getPublicEntities("broker"))} />;
 }

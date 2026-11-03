@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { AskResponseCard } from "@/components/ask/cards";
+
+afterEach(cleanup);
 
 describe("AskResponseCard", () => {
   it("renders the inline market mini chart when briefing ui metadata is present", () => {
@@ -54,6 +56,21 @@ describe("AskResponseCard", () => {
 
     expect(screen.getByTestId("projection-curve")).toBeInTheDocument();
     expect(container.querySelectorAll("circle")).toHaveLength(2);
+  });
+
+  it("shows the live verdict, confidence and clickable evidence separately from stored trust bands", () => {
+    render(<AskResponseCard
+      card={{ type: "broker", name: "Example", score: "37/100", status: "AVOID", fca: "No", complaints: "On record", verdict: "Simulated trading with payout discretion.", color: "red" }}
+      uiMeta={{ verificationKind: "propfirm", verificationSourceLabel: "Independent live check", verification: {
+        verdict: "High risk", confidence: 70, checkedAt: "2026-11-03T12:00:00Z",
+        sources: [{ title: "Published terms", url: "https://example.com/terms" }],
+        findings: [{ authority: "ASF", legalEntity: "Example Ltd", jurisdiction: "Romania", date: "2024-10-17", finding: "Authorisation warning for Romania.", outcome: "Not proof of fraud.", url: "https://example.com/warning" }],
+      } }}
+    />);
+    expect(screen.getByText("High risk")).toBeInTheDocument();
+    expect(screen.getByText(/Evidence confidence 70\/100/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Published terms" })).toHaveAttribute("href", "https://example.com/terms");
+    expect(screen.getByText("Not proof of fraud.")).toBeInTheDocument();
   });
 
   it("renders prop firms without a misleading FCA label", () => {

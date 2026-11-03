@@ -38,6 +38,7 @@ import {
   getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
 import { createAskTools, resolveVerificationToolResult } from "@/lib/ask/service/tools";
+import { cardStatus } from "@/lib/compare/bts";
 import type { BtsAskContext } from "@/lib/compare/bts-data";
 import type {
   AskGenerationCallbacks,
@@ -244,12 +245,14 @@ export function mergeToolOwnedNumbers(
     // match (coverage miss, FCA-only, or a web-researched firm), the number is
     // not ours — force "N/A" so a model-assembled score never reads as a rating.
     const verifiedDbCard = findToolCard("verify_entity", "broker");
-    if (verifiedDbCard?.type === "broker") return { ...card, score: verifiedDbCard.score };
+    if (verifiedDbCard?.type === "broker" && verifiedDbCard.name.trim().toLowerCase() === card.name.trim().toLowerCase()) {
+      return { ...card, score: verifiedDbCard.score, status: verifiedDbCard.status, fca: verifiedDbCard.fca, complaints: verifiedDbCard.complaints, color: verifiedDbCard.color };
+    }
     // A firm the engine scored but the site has no page for: the engine's number and verdict, verbatim.
     const bts = findEngineVerdict(toolResults, card.name);
     if (bts) {
       const { verdict, score } = bts.shown;
-      const status = verdict === "Verified" ? "LEGITIMATE" : verdict === "High risk" || verdict === "Not active" ? "AVOID" : "WARNING";
+      const status = cardStatus(verdict);
       return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: bts.conductRecord, color: status === "LEGITIMATE" ? "green" : "red" };
     }
     return { ...card, score: "N/A" };
