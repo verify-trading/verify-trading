@@ -17,6 +17,7 @@ import {
 } from "@/lib/ask/entities";
 import { getAskPrimaryModelId } from "@/lib/ask/service/provider";
 import { logger } from "@/lib/observability/logger";
+import { DATABASE_ONLY } from "@/lib/compare/bts";
 import { getRequestCountrySafe } from "@/lib/compare/bts-data";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -40,7 +41,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 const CACHE_TABLE = "ask_response_cache";
 
 /** Bump when the card schema or system prompt changes what answers look like. */
-const CACHE_SCHEMA_VERSION = 2; // v2: BTS engine verdicts, keyed per country
+const CACHE_SCHEMA_VERSION = 3; // v3: BTS live check (Layer 2) final scores
 
 /** How long a cached answer lives. The key already invalidates on any register
  * edit (see buildCacheKey), so these only guard slow off-register drift. */
@@ -144,6 +145,8 @@ export function isGenericEntityLookup(message: string, entity: VerifiedEntity): 
 export function responseIsCacheable(response: AskResponse, entity: VerifiedEntity): boolean {
   const card = response.data;
   if (card.type !== "broker" && card.type !== "guru") return false;
+  // A database-only answer means the live check didn't finish; the next ask should get it.
+  if (card.type === "broker" && card.verdict.includes(DATABASE_ONLY)) return false;
 
   const cardName = collapseEntityText(card.name ?? "");
   const firmNames = new Set([collapseEntityText(entity.name), ...entity.collapsedAliases]);
@@ -236,6 +239,7 @@ export async function maybeCacheAskResponse(
     if (!client) return;
 
     const developing =
+      response.data.type === "broker" || // live-check scores expire after 24h
       Boolean(response.uiMeta?.propFirm?.developing) ||
       Boolean(entity.researchStatus) ||
       Boolean(entity.provisional);

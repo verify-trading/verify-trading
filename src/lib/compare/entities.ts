@@ -212,6 +212,7 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     bts: {
       entityId: String(raw.entity_id),
       confidence: num(raw.evidence_confidence),
+      coverage: num(details.pillar_coverage_pct),
       reason: str(raw.verdict_reason),
       cap: str(raw.cap_applied),
       pillars: PILLARS[type].map(([key, label, max]) => ({ label, max, value: str(pillars[key]) ?? "not checked" })),
@@ -255,7 +256,7 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
 }
 
 /** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */
-export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v4"], { revalidate: 3600, tags: ["bts"] });
+export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v5"], { revalidate: 3600, tags: ["bts"] });
 
 export async function getPublicEntity(type: PublicEntityType, slug: string) {
   return (await getPublicEntities(type)).find((e) => e.slug === slug) ?? null;

@@ -98,6 +98,7 @@ function extractToolUiMeta(
             ? { verificationSourceLabel }
             : {}),
           ...(propFirm ? { propFirm } : {}),
+          ...(nestedUiMeta.verification ? { verification: nestedUiMeta.verification } : {}),
         };
         const parsed = askUiMetaSchema.safeParse(uiMeta);
         return parsed.success ? parsed.data : undefined;

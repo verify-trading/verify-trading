@@ -1,4 +1,5 @@
 import { tool } from "ai";
+import { after } from "next/server";
 import { z } from "zod";
 
 import { getAskWebSearchTool } from "@/lib/ask/service/provider";
@@ -25,8 +26,9 @@ import {
   normalizeForexPair,
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
-import { cardStatus } from "@/lib/compare/bts";
-import { getBtsAskContext, getBtsAskContextByBrand, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
+import { cardStatus, DATABASE_ONLY, countryName, normalizeCountry } from "@/lib/compare/bts";
+import { getBtsAskContext, getBtsAskContextByBrand, getRequestCountrySafe, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
+import { getL2Assessment, type L2Result, type L2Subject } from "@/lib/compare/bts-l2";
 import {
   findEntityCandidates,
   listVerifiedEntities,
@@ -658,7 +660,7 @@ type VerificationToolResponse = (
       };
     }
   | { coverage: CoverageEvidence }
-) & { bts?: BtsAskContext };
+) & { bts?: CheckedBts };
 
 /**
  * No confident record for the queried name. We hand the model the facts — the
@@ -953,24 +955,111 @@ export function createAskTools(dependencies: AskServiceDependencies) {
 
 export type AskToolSet = ReturnType<typeof createAskTools>;
 
+/** How long Ask waits for a live check before answering from the database. The run keeps going and is cached. */
+const L2_WAIT_MS = 120_000; // the mobile app gives up on Ask at 180s
+
 /**
- * BTS engine card: the engine's verdict and score for the user's country, verbatim. Live FCA data
- * and old record fields never change it ("code decides, Ask explains").
+ * Layer 2 owns the displayed number when it succeeds; Layer 1 stays in the database for audit and is
+ * removed from what the model sees, so the user never gets two competing scores. When the live check
+ * is unavailable, the Layer 1 rating is shown and labelled as a database assessment.
  */
-function applyBtsToCard(card: BrokerCard, bts: BtsAskContext): BrokerCard {
+async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment) {
+  if (bts.type === "tool" || bts.global.verdict === "Not active") return bts;
+  const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2);
+  return l2 ? { ...bts, ...fromLiveCheck(l2) } : { ...bts, scoreSource: "Database assessment" };
+}
+
+async function waitForLiveCheck(subject: L2Subject, getL2: typeof getL2Assessment = getL2Assessment) {
+  const run = getL2(subject).catch(() => null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([run, new Promise<null>((resolve) => { timer = setTimeout(resolve, L2_WAIT_MS, null); })]);
+    if (!result) {
+      try { after(run); } catch { /* Tests and scripts have no request lifetime. */ }
+    }
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function fromLiveCheck(l2: L2Result) {
+  const conduct = l2.pillars.find((p) => p.key === "conduct");
+  const summary = l2.summary.trim();
+  const risks = l2.risks.filter((risk) => !summary.toLowerCase().includes(risk.toLowerCase())).slice(0, 2);
+  const note = summary.length < 180 && risks.length ? `${summary} ${risks.join(" ")}` : summary;
+  return {
+    scoreSource: "Independent live check",
+    conductRecord: l2.findings.some((f) => f.adverse) ? ("On record" as const) : conduct?.sourced ? ("None found" as const) : ("Not checked" as const),
+    shown: { country: "", verdict: l2.verdict, score: l2.finalScore, note, global: false },
+    global: {
+      verdict: l2.verdict,
+      score: l2.finalScore,
+      reason: null,
+      capApplied: null,
+      evidenceConfidence: l2.confidence,
+      pillars: Object.fromEntries(l2.pillars.map((p) => [p.label, `${p.awarded} / ${p.max}${p.sourced ? "" : " (no source found)"}: ${p.reason}`])),
+      licencesVerified: "",
+      cloneAlert: null,
+      lastChecked: l2.checkedAt.slice(0, 10),
+    },
+    country: null,
+    liveCheck: {
+      checkedAt: l2.checkedAt,
+      confidence: l2.confidence,
+      countryFit: l2.countryFit,
+      legalEntity: l2.identity.legal_entity,
+      officialWebsite: l2.identity.official_website,
+      findings: l2.findings.map(({ source_id: _id, ...f }) => f),
+      strengths: l2.strengths,
+      risks: l2.risks,
+      sources: l2.sources.map(({ title, url, type }) => ({ title, url, type })),
+    },
+  };
+}
+
+type CheckedBts = Awaited<ReturnType<typeof withLiveCheck>>;
+
+function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "verificationSourceLabel"> {
+  if (!("liveCheck" in bts)) return { verificationSourceLabel: "scoreSource" in bts ? bts.scoreSource : "Reviewed record" };
+  const live = bts.liveCheck;
+  return {
+    verificationSourceLabel: bts.scoreSource,
+    verification: {
+      verdict: bts.shown.verdict,
+      confidence: live.confidence,
+      checkedAt: live.checkedAt,
+      sources: live.sources.map(({ title, url }) => ({ title, url })),
+      findings: live.findings.map((f) => ({ authority: f.authority, legalEntity: f.legal_entity, jurisdiction: f.jurisdiction, date: f.date, finding: f.finding, outcome: f.outcome, url: f.url })),
+    },
+  };
+}
+
+
+/**
+ * The card shows the final verdict and score verbatim: the live check's when it ran, else the
+ * engine's for the user's country. Live FCA data and old record fields never change it.
+ */
+function applyBtsToCard(card: BrokerCard, bts: CheckedBts): BrokerCard {
   const { verdict, score, note } = bts.shown;
   const status = cardStatus(verdict);
+  const live = "liveCheck" in bts && bts.liveCheck ? bts.liveCheck : null;
   const reason = bts.global.reason ? `${bts.global.reason.charAt(0).toUpperCase()}${bts.global.reason.slice(1)}.` : "";
   const sameAsReason = note && bts.global.reason && note.toLowerCase().includes(bts.global.reason.toLowerCase());
   return {
     ...card,
     score: score === null ? "No score" : `${score}/100`,
     status,
-    // FCA standing from the engine's register-verified licences, not a live name search.
-    fca: /(^|\|)FCA:/.test(bts.global.licencesVerified) ? "Yes" : "No",
+    // FCA standing from register-verified licences (engine), or the live check's local licence finding.
+    fca: live ? (live.countryFit === "CONFIRMED_LOCALLY" && bts.countryCode === "GB" ? "Yes" : card.fca) : /(^|\|)FCA:/.test(bts.global.licencesVerified) ? "Yes" : "No",
     complaints: bts.conductRecord,
     color: status === "LEGITIMATE" ? "green" : "red",
-    verdict: [`${verdict} ${bts.shown.global ? "(global rating)" : `for ${bts.userCountry}`}.`, reason, sameAsReason ? "" : (note ?? "")].filter(Boolean).join(" "),
+    // The live check's own summary reads naturally; the database answer says where it came from.
+    verdict: live
+      ? (note ?? "")
+      : [`${verdict}${bts.shown.global ? "" : ` for ${bts.userCountry}`}.`, reason, sameAsReason ? "" : (note ?? ""), "scoreSource" in bts ? DATABASE_ONLY : ""]
+          .filter(Boolean)
+          .join(" "),
   };
 }
 
@@ -987,13 +1076,44 @@ export async function resolveVerificationToolResult(
   const lookup = await lookupVerifiedEntityImpl(normalized.lookupName);
 
   // No page on our site, but the engine may still have scored the firm (new brokers, tools).
-  const engineByBrand = async () =>
-    (await (dependencies.getBtsAskContextByBrandImpl ?? getBtsAskContextByBrand)(normalized.lookupName, country)) ?? undefined;
+  const engineByBrand = async () => {
+    const bts = await (dependencies.getBtsAskContextByBrandImpl ?? getBtsAskContextByBrand)(normalized.lookupName, country);
+    return bts ? withLiveCheck(bts, dependencies.getL2AssessmentImpl) : undefined;
+  };
 
   // Brokers and prop firms: the BTS engine's verdict and score go on the card verbatim.
   const withEngine = async (result: ReturnType<typeof withCard>, slug: string) => {
-    const bts = await (dependencies.getBtsAskContextImpl ?? getBtsAskContext)(slug, country);
-    return bts && result.card.type === "broker" ? { ...result, card: applyBtsToCard(result.card, bts), bts } : result;
+    if (result.card.type !== "broker") return result;
+    const engine = await (dependencies.getBtsAskContextImpl ?? getBtsAskContext)(slug, country);
+    if (!engine) return (await checkWithoutBaseline(result.card.name, lookup.entity?.type === "propfirm" ? "propfirm" : "broker")) ?? result;
+    const bts = await withLiveCheck(engine, dependencies.getL2AssessmentImpl);
+    return {
+      ...result,
+      card: applyBtsToCard(result.card, bts),
+      bts,
+      uiMeta: {
+        ...result.uiMeta,
+        ...verificationMeta(bts),
+        // Old developing flags and trust bands must not hide or contradict the new final score.
+        ...("liveCheck" in bts ? { propFirm: undefined } : {}),
+      },
+    };
+  };
+
+  const checkWithoutBaseline = async (firm: string, kind?: "broker" | "propfirm") => {
+    const countryCode = country ? normalizeCountry(country) : await getRequestCountrySafe();
+    const l2 = await waitForLiveCheck({ firm, kind, country: countryCode }, dependencies.getL2AssessmentImpl);
+    if (!l2) return null;
+    const bts: CheckedBts = {
+      firm,
+      entityId: `name:${firm.trim().toLowerCase()}`,
+      type: l2.kind,
+      countryCode,
+      userCountry: countryCode === "XX" ? "unknown" : `${countryName(countryCode)} (${countryCode})`,
+      ...fromLiveCheck(l2),
+    };
+    const card = applyBtsToCard({ type: "broker", name: firm, score: "No score", status: "WARNING", fca: "No", complaints: "Not checked", verdict: "Score unavailable", color: "red" }, bts);
+    return { ...withCard(card, { verificationKind: l2.kind, ...verificationMeta(bts) }), bts };
   };
 
   if (lookup.found && lookup.entity) {
@@ -1018,10 +1138,15 @@ export async function resolveVerificationToolResult(
     }
   } else if (!normalized.fromUrl) {
     // A plain name we don't hold — check the live FCA register before giving up.
+    const bts = await engineByBrand();
+    if (!bts) {
+      const live = await checkWithoutBaseline(normalized.lookupName);
+      if (live) return live;
+    }
     const fcaStatus = await getFcaStatusImpl({ name: normalized.lookupName, frn: undefined });
     if (fcaStatus.available && fcaStatus.statusText) {
       return {
-        bts: await engineByBrand(),
+        bts,
         fcaData: {
           queriedName: fcaStatus.queriedName,
           frn: fcaStatus.frn,
@@ -1033,6 +1158,11 @@ export async function resolveVerificationToolResult(
         },
       };
     }
+  }
+
+  if (normalized.fromUrl) {
+    const live = await checkWithoutBaseline(name);
+    if (live) return live;
   }
 
   // No confident record: hand the model the closest labelled candidates and let

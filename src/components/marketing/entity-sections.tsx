@@ -169,7 +169,7 @@ export function EntityMiniCard({ e, note }: { e: PublicEntity; note?: string }) 
       </div>
       <div className="flex items-center gap-2.5 shrink-0">
         <VerdictBadge verdict={e.verdict} className="px-2 py-0.5 text-[11px]" />
-        <ScoreBar entity={e} className="w-16 hidden sm:block" />
+        <ScoreBar entity={e} className="hidden w-20 shrink-0 sm:block" />
       </div>
     </Link>
   );

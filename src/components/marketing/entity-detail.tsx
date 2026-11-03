@@ -5,11 +5,10 @@ import type { ReactNode } from "react";
 import { Breadcrumbs, CtaBand } from "@/components/marketing/primitives";
 import { CtaLink } from "@/components/marketing/cta-link";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, scoreLabel, VerdictBadge } from "@/components/marketing/entity-ui";
-import { CountryVerdict } from "@/components/marketing/country-verdict";
 import { Block, EntityMiniCard, FaqBlock, RegulatorCard, TocNav, VerdictBands, WarningBanner } from "@/components/marketing/entity-sections";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
-import { pillarDisplay, type BtsVerdict, type CountryFitRow } from "@/lib/compare/bts";
+import { pillarDisplay } from "@/lib/compare/bts";
 import type { PublicEntity } from "@/lib/compare/entities";
 import { entityFaqs, entityPath, pickAlternatives, vsPartners, vsPath } from "@/lib/compare/insights";
 import { getRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
@@ -34,15 +33,15 @@ function lede(e: PublicEntity): string {
   const rating = e.score !== null ? `${e.verdict}, ${e.score} out of 100` : e.verdict;
   if (e.type === "propfirm") {
     const state = e.closed ? "is recorded as not active" : "is recorded as operating";
-    return `${e.name} ${state}. Our global rating is ${rating}. Sourced from public operating records and published terms.`;
+    return `${e.name} ${state}. Our stored research rating is ${rating}. Sourced from public operating records and published terms.`;
   }
   const regs = e.regulators.length ? `licensed by ${e.regulators.slice(0, 3).join(", ")} (verified on the register)` : "without a licence verified on a regulator register in our research";
-  return `${e.name} is a broker ${regs}. Our global rating is ${rating}. Below: why it scores this way, what each regulator means for client protection, and how to verify.`;
+  return `${e.name} is a broker ${regs}. Our stored research rating is ${rating}. Below: why it scores this way, what each regulator means for client protection, and how to verify.`;
 }
 
 const LIMITED_EVIDENCE = 50;
 
-export function EntityDetail({ entity: e, all, countryRows = [] }: { entity: PublicEntity; all: PublicEntity[]; countryRows?: CountryFitRow[] }) {
+export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: PublicEntity[] }) {
   if (e.type === "guru") return <GuruDetail entity={e} />;
   const listPath = ENTITY_LIST_PATH[e.type];
   const path = entityPath(e);
@@ -69,13 +68,13 @@ export function EntityDetail({ entity: e, all, countryRows = [] }: { entity: Pub
     ? [
         ["Licences verified", e.regulators.length ? e.regulators.slice(0, 3).join(", ") : "None verified"],
         ["Global score", scoreLabel(e)],
-        ["Evidence", e.score !== null && bts?.confidence != null ? `${bts.confidence} / 100` : "Not scored"],
+        ["Research coverage", e.score !== null && bts?.coverage != null ? `${bts.coverage}%` : "Not recorded"],
         ["Last checked", formatRecordDate(e.updatedAt)],
       ]
     : [
         ["Status", e.closed ? "Not active" : "Operating"],
         ["Global score", scoreLabel(e)],
-        ["Evidence", e.score !== null && bts?.confidence != null ? `${bts.confidence} / 100` : "Not scored"],
+        ["Research coverage", e.score !== null && bts?.coverage != null ? `${bts.coverage}%` : "Not recorded"],
         ["Last checked", formatRecordDate(e.updatedAt)],
       ];
 
@@ -144,18 +143,14 @@ export function EntityDetail({ entity: e, all, countryRows = [] }: { entity: Pub
                 <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-300">{lede(e)}</p>
               </div>
               <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-white/[0.08] bg-black/25 px-5 py-4">
-                {isBroker && bts ? (
-                  <CountryVerdict verdict={e.verdict as BtsVerdict} score={e.score} rows={countryRows} />
-                ) : (
-                  <div className="flex items-center gap-4">
-                    <VerdictBadge verdict={e.verdict} className="px-3 py-1 text-xs" />
-                    <ScoreBar entity={e} className="w-32" />
-                  </div>
-                )}
+                <div className="flex items-center gap-4">
+                  <VerdictBadge verdict={e.verdict} className="px-3 py-1 text-xs" />
+                  <ScoreBar entity={e} className="w-32" />
+                </div>
                 {bts ? (
                   <p className="border-t border-white/[0.06] pt-2.5 text-xs text-slate-400">
-                    Global rating: <span className="font-medium text-slate-200">{e.score !== null ? `${e.score} ${e.verdict}` : e.verdict}</span>
-                    {e.score !== null && bts.confidence !== null ? ` · evidence ${bts.confidence}/100` : ""}
+                    Stored research: <span className="font-medium text-slate-200">{e.score !== null ? `${e.score} ${e.verdict}` : e.verdict}</span>
+                    {e.score !== null && bts.coverage != null ? ` · research coverage ${bts.coverage}%` : ""}
                   </p>
                 ) : null}
               </div>
@@ -183,7 +178,7 @@ export function EntityDetail({ entity: e, all, countryRows = [] }: { entity: Pub
             ) : null}
             {bts && e.score !== null && bts.confidence !== null && bts.confidence < LIMITED_EVIDENCE ? (
               <Notice title="Limited verified evidence">
-                Only part of the picture has been verified so far (evidence {bts.confidence}/100). Check the regulator&apos;s register yourself before you deposit.
+                Only part of the research has been completed so far. Check the regulator&apos;s register yourself before you deposit.
               </Notice>
             ) : null}
             {!bts ? <Notice title="Under review">Our researchers have not finished scoring {e.name}, so no score is shown yet.</Notice> : null}
@@ -199,7 +194,7 @@ export function EntityDetail({ entity: e, all, countryRows = [] }: { entity: Pub
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_14rem] lg:gap-12 lg:py-16">
         <div className="min-w-0 space-y-12">
           {/* 1. Why this score */}
-          <Block id="why" title="Why this score" intro={bts ? `Global rating ${e.score !== null ? `${e.score} out of 100, ` : ""}${e.verdict}. Last checked ${formatRecordDate(bts.researchDate)}.` : `${e.name} has not been scored yet.`}>
+          <Block id="why" title="Why this score" intro={bts ? `Stored research rating ${e.score !== null ? `${e.score} out of 100, ` : ""}${e.verdict}. Last checked ${formatRecordDate(bts.researchDate)}.` : `${e.name} has not been scored yet.`}>
             {bts ? (
               <>
                 <dl className={`${surface} divide-y divide-white/[0.06] overflow-hidden rounded-xl`}>
@@ -209,12 +204,12 @@ export function EntityDetail({ entity: e, all, countryRows = [] }: { entity: Pub
                     <>
                       {bts.cap ? <Row k="Cap applied" v={`Score capped at ${bts.cap}`} /> : null}
                       {bts.pillars.map((p) => <Row key={p.label} k={p.label} v={pillarDisplay(p)} muted={/not checked/i.test(p.value)} />)}
-                      {bts.confidence !== null ? <Row k="Evidence confidence" v={`${bts.confidence} / 100`} /> : null}
+                      {bts.coverage != null ? <Row k="Research coverage" v={`${bts.coverage}%`} /> : null}
                     </>
                   ) : null}
                 </dl>
                 <p className="mt-3 text-xs leading-relaxed text-slate-400">
-                  Pillars marked &ldquo;Not yet checked&rdquo; are left out of the score rather than counted as zero; they lower evidence confidence instead. Nothing commercial affects a score, verdict or ranking.
+                  Pillars marked &ldquo;Not yet checked&rdquo; are left out of the score rather than counted as zero; they reduce research coverage instead. Coverage measures completed research, not source reliability. Run full check for a current assessment with source-based confidence. Nothing commercial affects a score, verdict or ranking.
                 </p>
               </>
             ) : null}

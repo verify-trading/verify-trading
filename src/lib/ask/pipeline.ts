@@ -245,7 +245,9 @@ export function mergeToolOwnedNumbers(
     // match (coverage miss, FCA-only, or a web-researched firm), the number is
     // not ours — force "N/A" so a model-assembled score never reads as a rating.
     const verifiedDbCard = findToolCard("verify_entity", "broker");
-    if (verifiedDbCard?.type === "broker") return { ...card, score: verifiedDbCard.score };
+    if (verifiedDbCard?.type === "broker" && verifiedDbCard.name.trim().toLowerCase() === card.name.trim().toLowerCase()) {
+      return { ...card, score: verifiedDbCard.score, status: verifiedDbCard.status, fca: verifiedDbCard.fca, complaints: verifiedDbCard.complaints, color: verifiedDbCard.color };
+    }
     // A firm the engine scored but the site has no page for: the engine's number and verdict, verbatim.
     const bts = findEngineVerdict(toolResults, card.name);
     if (bts) {

@@ -96,14 +96,13 @@ function askModel(modelId: string, openaiOptions: Record<string, string | boolea
   });
 }
 
-export function getAskModel() {
-  const modelId = getAskPrimaryModelId();
-  return isClaude(modelId) ? anthropicProvider(modelId) : askModel(modelId);
+export function getAskModel(modelId = getAskPrimaryModelId(), openaiOptions: Record<string, string | boolean> = {}) {
+  return isClaude(modelId) ? anthropicProvider(modelId) : askModel(modelId, openaiOptions);
 }
 
 /** Match the server-side web tool to the selected model's API. */
-export function getAskWebSearchTool() {
-  if (isClaude(getAskPrimaryModelId())) {
+export function getAskWebSearchTool(modelId = getAskPrimaryModelId()) {
+  if (isClaude(modelId)) {
     return anthropicProvider.tools.webSearch_20250305({ maxUses: 5, userLocation: { type: "approximate", country: "GB" } });
   }
   return codexProvider.tools.webSearch({ searchContextSize: "medium", userLocation: { type: "approximate", country: "GB" } });

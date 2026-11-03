@@ -43,7 +43,7 @@ vi.mock("@/lib/compare/bts-data", () => ({
   getCountryRows: vi.fn(async () => GB_ROWS),
 }));
 
-const PROP_FIRMS = [entity("ftmo", "Verified", 100, "propfirm"), entity("risky", "High risk", 25, "propfirm"), entity("closed", "Not active", null, "propfirm")];
+const PROP_FIRMS = [entity("ftmo", "Record reviewed", 100, "propfirm"), entity("risky", "High risk", 25, "propfirm"), entity("closed", "Not active", null, "propfirm")];
 
 const guru = (slug: string, verdict: PublicEntity["verdict"]): PublicEntity => ({
   ...entity(slug, verdict, null, "guru"),
@@ -68,15 +68,15 @@ const { CompareView } = await import("@/components/marketing/compare-view");
 const order = (html: string, names: string[]) => names.map((n) => html.indexOf(`>${n}<`));
 
 describe("Compare directory (BTS v2)", () => {
-  it("ranks brokers by the visitor's country score and leaves out Not available, Under review and Not active", async () => {
+  it("ranks brokers by global score without country controls and leaves out Under review and Not active", async () => {
     const html = renderToStaticMarkup(await CompareView({ type: "broker", searchParams: {} }));
-    expect(html).toContain("3 brokers");
-    expect(html).toContain("Showing results for");
-    for (const hidden of ["EXNESS", "REVIEW", "GONE"]) expect(html).not.toContain(`>${hidden}<`);
-    // GB: top 93, mid 60, offshore drops to its country score 40.
+    expect(html).toContain("4 brokers");
+    expect(html).not.toContain("Showing results for");
+    for (const hidden of ["REVIEW", "GONE"]) expect(html).not.toContain(`>${hidden}<`);
+    // Every visitor sees the same stored scores: top 93, offshore 88, mid 60.
     const [top, mid, offshore] = order(html, ["TOP", "MID", "OFFSHORE"]);
-    expect(top).toBeLessThan(mid);
-    expect(mid).toBeLessThan(offshore);
+    expect(top).toBeLessThan(offshore);
+    expect(offshore).toBeLessThan(mid);
   });
 
   it("still finds an unlisted firm by name search", async () => {
@@ -87,6 +87,8 @@ describe("Compare directory (BTS v2)", () => {
   it("lists prop firms by score without the Not active ones", async () => {
     const html = renderToStaticMarkup(await CompareView({ type: "propfirm", searchParams: {} }));
     expect(html).toContain("2 prop firms");
+    expect(html).toContain("Record reviewed");
+    expect(html).not.toMatch(/>Verified</);
     expect(html).not.toContain(">CLOSED<");
   });
 

@@ -4,11 +4,8 @@ import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, SearchX, ShieldCh
 import { Breadcrumbs } from "@/components/marketing/primitives";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { FaqBlock, VerdictBands } from "@/components/marketing/entity-sections";
-import { CountryPicker } from "@/components/marketing/country-verdict";
 import { isListed, isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
-import { FULL_COUNTRY_VERDICTS, countryName, countryView, type BtsVerdict } from "@/lib/compare/bts";
 import { getRegulator } from "@/lib/compare/regulators";
-import { getCountryRows, getRequestCountry } from "@/lib/compare/bts-data";
 import { FilterMenu } from "@/components/marketing/filter-menu";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -119,12 +116,10 @@ function hrefWith(path: string, v: View, patch: Partial<View> = {}, sortDefault:
   return qs ? `${path}?${qs}` : path;
 }
 
-/** Score sort puts firms licensed in the visitor's country (or EU-passported) first. */
-function sortEntities(list: PublicEntity[], sort: SortKey, licensedLocally: ReadonlySet<string> = new Set()): PublicEntity[] {
+function sortEntities(list: PublicEntity[], sort: SortKey): PublicEntity[] {
   if (sort === "name") return list;
   const out = [...list];
-  const local = (e: PublicEntity) => Number(licensedLocally.has(e.slug));
-  if (sort === "score") out.sort((a, b) => local(b) - local(a) || (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name));
+  if (sort === "score") out.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name));
   else out.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "") || a.name.localeCompare(b.name));
   return out;
 }
@@ -184,20 +179,13 @@ function RegulatorTags({ e }: { e: PublicEntity }) {
   );
 }
 
-const COLS = "md:grid-cols-[minmax(0,1.7fr)_9.5rem_7.5rem_minmax(0,1.3fr)_6.5rem_8.5rem]";
+const COLS = "lg:grid-cols-[minmax(0,1.5fr)_9rem_7rem_minmax(0,1fr)_6.5rem_8.5rem]";
 
 export async function CompareView({ type, searchParams }: { type: PublicEntityType; searchParams: CompareSearchParams }) {
   const cfg = CONFIG[type];
   const filters = parseCompareParams(searchParams);
   const view: View = { ...filters, sort: parseSort(searchParams, type) };
-  // Brokers show the visitor's country verdict and score (BTS country layer); prop firms and people have none.
-  const country = type === "broker" ? await getRequestCountry() : "XX";
-  const countryRows = country !== "XX" ? await getCountryRows(country) : {};
-  const all = (await getPublicEntities(type)).map((e) => {
-    if (!e.bts || type !== "broker") return e;
-    const v = countryView({ verdict: e.verdict as BtsVerdict, score: e.score }, countryRows[e.bts.entityId], country);
-    return { ...e, verdict: v.verdict, score: v.score };
-  });
+  const all = await getPublicEntities(type);
   // Lists leave out Under review, Not active and Not available; a name search still finds them.
   // One row per firm: duplicate records of the same engine firm ("Saxo", "Saxo Bank") keep the shortest name.
   const byFirm = new Map<string, PublicEntity>();
@@ -208,10 +196,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
   }
   const unique = [...byFirm.values()];
   const listed = filters.q ? unique : unique.filter(isListed);
-  const licensedLocally = new Set(
-    unique.filter((e) => e.bts && ["LOCAL LICENCE VERIFIED", "EEA PASSPORT POSSIBLE"].includes(countryRows[e.bts.entityId]?.fit ?? "")).map((e) => e.slug),
-  );
-  const matches = sortEntities(filterEntities(listed, filters), view.sort, licensedLocally);
+  const matches = sortEntities(filterEntities(listed, filters), view.sort);
   const pages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
   const page = Math.min(filters.page ?? 1, pages);
   const rows = matches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -233,7 +218,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
         href={href({ sort: key })}
         scroll={false}
         aria-label={`Sort by ${label}`}
-        className={cn("rounded transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60", view.sort === key && "text-white", className)}
+        className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60", view.sort === key && "text-white", className)}
       >
         {label}
         {view.sort === key ? <span aria-hidden> ↓</span> : null}
@@ -267,18 +252,6 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
             <span>Independent, not for sale</span>
           </p>
         </header>
-        {type === "broker" ? (
-          <div className="mt-2 space-y-1">
-            <CountryPicker country={country} refresh />
-            {country !== "XX" ? (
-              <p className="text-xs text-slate-500">
-                Brokers licensed in {countryName(country)} are listed first.
-                {FULL_COUNTRY_VERDICTS.has(country) ? "" : " Local licence checks are still in progress, so other brokers show their global rating."}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
         <div className={cn(surface, "mt-5 p-3 sm:p-4")}>
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <form method="get" action={cfg.path} role="search" className="relative min-w-0 flex-1">
@@ -361,18 +334,18 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
 
         {rows.length > 0 ? (
           <div className="mt-3">
-            <div className={cn("sticky top-[57px] z-20 hidden gap-x-4 rounded-t-xl border border-white/[0.08] bg-[#0c1035] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 md:grid", COLS)} role="presentation">
+            <div className={cn("sticky top-[57px] z-20 hidden gap-x-4 rounded-t-xl border border-white/[0.08] bg-[#0c1035] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 lg:grid", COLS)} role="presentation">
               {th("Name", "name")}
               {th("Verdict", null)}
-              {th(type === "guru" ? "Basis" : "Score", type === "guru" ? null : "score")}
+              {th(type === "guru" ? "Basis" : "Stored score", type === "guru" ? null : "score")}
               {th(type === "broker" ? "Regulators" : type === "propfirm" ? "Status" : "Identity", null)}
               {th(type === "guru" ? "Updated" : "Last checked", "updated")}
               <span className="sr-only">Actions</span>
             </div>
-            <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/[0.08] bg-white/[0.02] md:rounded-t-none md:border-t-0">
+            <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/[0.08] bg-white/[0.02] lg:rounded-t-none lg:border-t-0">
               {rows.map((e) => (
-                <li key={e.slug} className={cn("group grid gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-white/[0.035] sm:px-5 md:items-center md:py-3", COLS)}>
-                  <div className="flex min-w-0 items-center gap-3">
+                <li key={e.slug} className={cn("group grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-white/[0.035] sm:px-5 lg:items-center lg:py-3", COLS)}>
+                  <div className="col-span-2 flex min-w-0 items-center gap-3 lg:col-span-1">
                     <EntityAvatar name={e.name} verdict={e.verdict} />
                     <div className="min-w-0 flex-1">
                       {isSeoWorthy(e) ? (
@@ -382,26 +355,26 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                       ) : (
                         <p className="truncate text-[15px] font-semibold text-white">{e.name}</p>
                       )}
-                      <p className="mt-0.5 text-xs text-[var(--vt-muted)] md:hidden">Updated {formatRecordDate(e.updatedAt)}</p>
+                      <p className="mt-0.5 text-xs text-[var(--vt-muted)] lg:hidden">Updated {formatRecordDate(e.updatedAt)}</p>
                     </div>
-                    <VerdictBadge verdict={e.verdict} className="md:hidden" />
+                    <VerdictBadge verdict={e.verdict} className="shrink-0 lg:hidden" />
                   </div>
-                  <div className="hidden md:block"><VerdictBadge verdict={e.verdict} /></div>
-                  <ScoreBar entity={e} />
+                  <div className="hidden lg:block"><VerdictBadge verdict={e.verdict} /></div>
+                  <ScoreBar entity={e} className="max-w-32 lg:max-w-none" />
                   <RegulatorTags e={e} />
-                  <p className="hidden text-xs text-slate-400 md:block">{formatRecordDate(e.updatedAt)}</p>
-                  <div className="flex items-center gap-2 md:justify-end">
+                  <p className="hidden text-xs text-slate-400 lg:block">{formatRecordDate(e.updatedAt)}</p>
+                  <div className="col-span-2 flex items-center gap-2 lg:col-span-1 lg:justify-end">
                     {isSeoWorthy(e) ? (
-                      <Link href={`${cfg.path}/${e.slug}`} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:flex-none">
+                      <Link href={`${cfg.path}/${e.slug}`} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 lg:flex-none">
                         View record
                       </Link>
                     ) : (
-                      <Link href={askCheckHref(e.name)} prefetch={false} rel="nofollow" aria-label={`Check ${e.name} in Ask AI`} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:flex-none">
+                      <Link href={askCheckHref(e.name)} prefetch={false} rel="nofollow" aria-label={`Check ${e.name} in Ask AI`} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 lg:flex-none">
                         Check in Ask AI
                       </Link>
                     )}
                     {isSeoWorthy(e) ? (
-                      <Link href={askCheckHref(e.name)} prefetch={false} aria-label={`Run full check on ${e.name}`} title="Run full check" className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-[var(--vt-blue)] transition-colors hover:bg-[var(--vt-blue)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 md:hidden">
+                      <Link href={askCheckHref(e.name)} prefetch={false} aria-label={`Run full check on ${e.name}`} title="Run full check" className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-[var(--vt-blue)] transition-colors hover:bg-[var(--vt-blue)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 lg:hidden">
                         Run full check <ArrowRight className="size-3.5" aria-hidden />
                       </Link>
                     ) : null}
@@ -480,7 +453,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
               <div className="mt-4 space-y-4 text-sm leading-relaxed text-slate-400">
                 <p>
                   {type === "broker"
-                    ? "Each broker gets a score out of 100 from a fixed method: regulation, client protection, regulatory conduct, track record and transparency. Then we check whether it is licensed in your country, which can lower the score you see. Pillars we have not checked yet are left out rather than counted against the firm."
+                    ? "Each broker gets a score out of 100 from a fixed method: regulation, client protection, regulatory conduct, track record and transparency. Pillars we have not checked yet are left out rather than counted against the firm."
                     : type === "propfirm"
                       ? "Each prop firm gets a score out of 100 from a fixed method: identity, transparency, dispute record, regulatory conduct and rule disclosure. Pillars we have not checked yet are left out rather than counted against the firm."
                       : "A person is never given a numeric score. Each trader or educator sits in one of three tiers: Verified means we have confirmed a public track record; Unverified is the neutral default; Caution is only ever published when a documented regulator or court action backs it, with the source cited."}{" "}
