@@ -5,6 +5,8 @@ export type BrokerPreferences = {
   country?: string;
   instruments: string[];
   style?: string;
+  /** Set when the trader says they're new: answers stay plain for the whole conversation. */
+  experience?: 'beginner';
   requirements: string[];
 };
 
@@ -40,6 +42,7 @@ function addRequirements(profile: BrokerPreferences, message: string): BrokerPre
     country: countryIn(message) ?? profile.country,
     instruments: found.length ? found : profile.instruments,
     style: message.match(STYLE)?.[0].toLowerCase() ?? profile.style,
+    experience: /\b(?:new to (?:trading|forex|this)|beginner|newbie|just start(?:ed|ing)|first time|never traded|complete novice)\b/i.test(message) ? 'beginner' : profile.experience,
     requirements: [...new Set([...profile.requirements, message.slice(0, 500)])].slice(-6),
   };
 }

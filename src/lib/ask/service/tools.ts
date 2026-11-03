@@ -816,7 +816,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     list_verified_entities: tool({
       description:
-        "Retrieve research candidates, not recommendations or endorsements. For brokers/prop firms, establish the trader's country and instruments first, including preferences remembered from this conversation. Use BTS as credibility evidence, then check country eligibility, product, entity, costs and platform using primary sources. Select only 2 or 3 suitable options and explain fit and unresolved risks. Investment-only platforms are not forex/CFD brokers. A named firm goes to verify_entity. For gurus, retain the existing reviewed-list behaviour.",
+        "Retrieve research candidates, not recommendations or endorsements. For brokers/prop firms, establish the trader's country and instruments first, including preferences remembered from this conversation. Use BTS as credibility evidence, then check country eligibility, product, entity, costs and platform using primary sources. Shortlist 3 to 5 suitable options from the whole list, not just the top two, and explain fit and unresolved risks. Investment-only platforms are not forex/CFD brokers. A named firm goes to verify_entity. For gurus, retain the existing reviewed-list behaviour.",
       inputSchema: listVerifiedEntitiesInputSchema,
       execute: async ({ type, limit, country, instruments }) => {
         if (type === "guru") return { entities: await listVerifiedEntities(type, limit ?? 8) };
@@ -1045,6 +1045,8 @@ function fromLiveCheck(l2: L2Result) {
       findings: l2.findings.map(({ source_id: _id, ...f }) => f),
       summary,
       regulators: l2.regulators,
+      // From the firm's own pages: what a shortlist compares on (spreads, platforms, scalping).
+      tradingConditions: l2.conditions,
       concern: l2.concern,
       recommendation: l2.recommendation,
       pillars: l2.pillars.map(({ label, awarded, max, reason }) => ({ label, awarded, max, reason })),
