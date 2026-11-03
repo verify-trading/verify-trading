@@ -992,7 +992,8 @@ async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment =
   const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2);
   if (!l2) return { ...bts, scoreSource: "Database assessment" };
   const live = fromLiveCheck(l2);
-  return { ...bts, ...live, global: { ...live.global, cloneAlert: bts.global.cloneAlert } };
+  // Register-verified licences (e.g. FCA) stay from the research record; the live check scores, it doesn't re-list them.
+  return { ...bts, ...live, global: { ...live.global, cloneAlert: bts.global.cloneAlert, licencesVerified: bts.global.licencesVerified } };
 }
 
 async function waitForLiveCheck(subject: L2Subject, getL2: typeof getL2Assessment = getL2Assessment) {
@@ -1083,13 +1084,14 @@ function applyBtsToCard(card: BrokerCard, bts: CheckedBts): BrokerCard {
     score: score === null ? "No score" : `${score}/100`,
     status,
     // FCA standing from register-verified licences (engine), or the live check's local licence finding.
-    fca: live ? (live.countryFit === "CONFIRMED_LOCALLY" && bts.countryCode === "GB" ? "Yes" : card.fca) : /(^|\|)FCA:/.test(bts.global.licencesVerified) ? "Yes" : "No",
+    fca: (live?.countryFit === "CONFIRMED_LOCALLY" && bts.countryCode === "GB") || /(^|\|)FCA:/.test(bts.global.licencesVerified) ? "Yes" : "No",
     complaints: bts.conductRecord,
     color: status === "LEGITIMATE" ? "green" : "red",
     // The live check's own summary reads naturally; the database answer says where it came from.
     verdict: live
       ? (note ?? "")
-      : [`${verdict}${bts.shown.global ? "" : ` for ${bts.userCountry}`}.`, reason, sameAsReason ? "" : (note ?? ""), "scoreSource" in bts ? DATABASE_ONLY : ""]
+      // The card keeps 3 sentences, so the fallback drops the note to keep its "stored assessment" label.
+      : [`${verdict}${bts.shown.global ? "" : ` for ${bts.userCountry}`}.`, reason, "scoreSource" in bts ? DATABASE_ONLY : sameAsReason ? "" : (note ?? "")]
           .filter(Boolean)
           .join(" "),
   };

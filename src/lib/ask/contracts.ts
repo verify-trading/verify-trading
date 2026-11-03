@@ -447,20 +447,20 @@ function trimToWordLimit(value: string, maxWords: number) {
   return words.slice(0, maxWords).join(" ").replace(/[,.!?;:]+$/u, "");
 }
 
-function limitSentences(value: string, maxSentences: number) {
-  const decimalPlaceholder = "__ASK_DECIMAL_POINT__";
-  const protectedValue = value.replace(/(?<=\d)\.(?=\d)/g, decimalPlaceholder);
-  const sentences = protectedValue.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
-  if (!sentences || sentences.length <= maxSentences) {
-    return value;
-  }
+const ABBREVIATIONS = new Set(["no", "co", "ltd", "inc", "corp", "st", "mr", "mrs", "ms", "dr", "vs", "approx", "eg", "ie"]);
 
-  return sentences
-    .slice(0, maxSentences)
-    .join(" ")
-    .replaceAll(decimalPlaceholder, ".")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+/**
+ * A sentence ends at . ! or ? followed by a space and a capital or digit. Dots inside domains
+ * (ig.com), decimals, initials and legal suffixes (s. r. o., F. Z. E., Ltd.) never end one.
+ */
+function limitSentences(value: string, maxSentences: number) {
+  let count = 0;
+  for (const match of value.matchAll(/[.!?]+(?=\s+["“'(]?[\p{Lu}\d])/gu)) {
+    const word = (value.slice(0, match.index).match(/\S+$/)?.[0] ?? "").split(".").pop()!.toLowerCase();
+    if (match[0] === "." && (word.length <= 1 || ABBREVIATIONS.has(word))) continue;
+    if (++count === maxSentences) return value.slice(0, match.index + match[0].length).trim();
+  }
+  return value;
 }
 
 // Some OpenAI-compatible gateways leak their internal web-search references into the

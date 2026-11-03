@@ -278,3 +278,13 @@ describe("ask contracts", () => {
     expect(parsed.image).toBe("data:image/png;base64,Zm9v");
   });
 });
+
+describe("broker card sentence limit", () => {
+  const verdict = (text: string) => (sanitizeCard({ type: "broker", name: "X", score: "60/100", status: "WARNING", fca: "No", complaints: "On record", verdict: text, color: "red" }) as { verdict: string }).verdict;
+
+  it("keeps legal suffixes, domains and decimals inside a sentence", () => {
+    expect(verdict("Its imprint names FTMO s. r. o. as the operator. The FCA lists ig.com as genuine. Spreads start at 1.6 pips. Extra sentence."))
+      .toBe("Its imprint names FTMO s. r. o. as the operator. The FCA lists ig.com as genuine. Spreads start at 1.6 pips.");
+    expect(verdict("Terms name GrowthNext F. Z. E. in Ajman. Payouts are discretionary.")).toBe("Terms name GrowthNext F. Z. E. in Ajman. Payouts are discretionary.");
+  });
+});
