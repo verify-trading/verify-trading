@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, SearchX, ShieldCheck, X, Search } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, SearchX, ShieldCheck, X } from "lucide-react";
+
+import { SearchSuggest } from "@/components/marketing/search-suggest";
 
 import { Breadcrumbs } from "@/components/marketing/primitives";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
@@ -270,16 +272,12 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
               {view.status ? <input type="hidden" name="status" value={view.status} /> : null}
               {view.sort !== "name" ? <input type="hidden" name="sort" value={view.sort} /> : null}
               <label htmlFor="compare-q" className="sr-only">Search {cfg.plural} by name</label>
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" aria-hidden />
-              <input
-                id="compare-q"
-                name="q"
-                type="search"
+              <SearchSuggest
+                type={type}
+                path={cfg.path}
+                plural={cfg.plural}
                 defaultValue={filters.q}
                 placeholder={`Search ${cfg.plural} by name`}
-                maxLength={80}
-                autoComplete="off"
-                className="h-10 w-full rounded-lg border border-white/10 bg-black/20 pl-9 pr-20 text-sm text-white placeholder:text-slate-500 focus:border-[var(--vt-blue)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--vt-blue)]/30 [&::-webkit-search-cancel-button]:hidden"
               />
               <span className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
                 {filters.q ? (
