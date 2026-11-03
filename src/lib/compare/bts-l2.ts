@@ -19,7 +19,7 @@ type Kind = "broker" | "propfirm";
 /** Pilot weights from the Phase 2 handover (1 Nov 2026). Bump the version when they change. */
 export const L2_RUBRIC = {
   broker: {
-    version: "l2-broker-1.3",
+    version: "l2-broker-1.4",
     pillars: [
       ["regulation", "Regulatory position and jurisdiction", 40, "actual licence holder, status, authorised activity, local vs cross-border relevance; distinguish group entities"],
       ["client_protection", "Client protections", 20, "segregation, negative-balance protection, compensation scope, withdrawals; per account entity"],
@@ -29,7 +29,7 @@ export const L2_RUBRIC = {
     ],
   },
   propfirm: {
-    version: "l2-prop-1.3",
+    version: "l2-prop-1.4",
     pillars: [
       ["identity", "Company identity and continuity", 20, "confirmed business identity, operating entity, history and accessibility"],
       ["payout", "Payout credibility", 20, "payout eligibility, independent payment evidence, disputes; self-reported totals count less"],
@@ -173,7 +173,7 @@ Scoring rules:
 Rubric (pillar key, max points, what it needs):
 ${rubric}
 
-Write a concise, complete summary covering identity, strongest evidence and material risks. Do not stop at an identity-only sentence. Separate product restrictions (e.g. futures) from the availability of other services.
+Write the summary for a trader, as your own findings. The first two sentences are the bottom line: what the firm is, who operates it, and its single most important risk or strength. Then the remaining evidence and risks. Separate product restrictions (e.g. futures) from the availability of other services. Never mention notes, this response, your research process or field names such as country_fit or UNVERIFIED; say "not confirmed" in plain words.
 
 country_fit is for the user's country: CONFIRMED_LOCALLY (local licence on the register), CROSS_BORDER_SUPPORTED, UNVERIFIED, RESTRICTED or NOT_AVAILABLE.`,
     prompt: `Firm: ${firm}\nUser's country: ${where}\nIdentify the current operator and assess its evidence. Report separately whether it serves this user's country.`,
@@ -216,7 +216,7 @@ async function research(modelId: string, firm: string, kind: Kind | undefined, c
     const r = await generateText({
       model,
       system,
-      prompt: `${prompt}\n\nYour research notes:\n${error.text}\n\nReturn them in the required structure. Use only sources listed in the notes.`,
+      prompt: `${prompt}\n\nYour research so far:\n${error.text}\n\nReturn it in the required structure, citing only sources listed above. Write the summary as your own findings.`,
       output: Output.object({ schema: researchSchema }),
       abortSignal,
     });
@@ -257,7 +257,9 @@ async function runAndStore(s: L2Subject): Promise<L2Result | null> {
     if (draft.kind === "other" || (s.kind && s.kind !== draft.kind)) return null;
     // The gateway must expose search evidence. Never publish a researched verdict from model text alone.
     const retrieved = new Set([...retrievedUrls].map(sourceUrl).filter(Boolean));
-    if (!retrieved.size || draft.sources.some((source) => !sourceUrl(source.url) || !retrieved.has(sourceUrl(source.url)))) {
+    // scoreAssessment drops any cited source the search did not retrieve; refuse only when most were not.
+    const cited = draft.sources.filter((source) => retrieved.has(sourceUrl(source.url)));
+    if (!retrieved.size || cited.length * 2 < draft.sources.length) {
       throw new Error("Research cited sources missing from retrieved web evidence.");
     }
     const assessment = scoreAssessment(draft.kind, draft, retrievedUrls);
