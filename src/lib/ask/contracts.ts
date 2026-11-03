@@ -186,6 +186,7 @@ export const askSessionMemorySchema = z
       country: z.string().optional(),
       instruments: z.array(z.string()),
       style: z.string().optional(),
+      experience: z.literal("beginner").optional(),
       requirements: z.array(z.string()).max(6),
     }).optional(),
     activeAsset: z.string().trim().min(1).optional(),
@@ -452,7 +453,10 @@ function trimToWordLimit(value: string, maxWords: number) {
     return value;
   }
 
-  return words.slice(0, maxWords).join(" ").replace(/[,.!?;:]+$/u, "");
+  // End on the last full sentence inside the limit rather than mid-thought.
+  const cut = words.slice(0, maxWords).join(" ");
+  const end = cut.search(/[.!?](?=[^.!?]*$)/u);
+  return end > cut.length / 2 ? cut.slice(0, end + 1) : cut.replace(/[,.!?;:]+$/u, "");
 }
 
 const ABBREVIATIONS = new Set(["no", "co", "ltd", "inc", "corp", "st", "mr", "mrs", "ms", "dr", "vs", "approx", "eg", "ie"]);

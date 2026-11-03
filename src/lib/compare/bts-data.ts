@@ -17,6 +17,7 @@ import {
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { btsVerificationGate, readBtsResearch } from "@/lib/compare/bts-research";
 import { selectAll } from "@/lib/supabase/select-all";
+import { hasMajorLicence } from "@/lib/compare/regulators";
 
 const COLUMNS = "entity_id, country, country_fit, country_score, country_verdict, applicable_licences, country_note";
 
@@ -186,7 +187,7 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
     const prev = bts && byFirm.get(String(bts.entity_id));
     if (bts && (!prev || name.length < prev.name.length)) byFirm.set(String(bts.entity_id), { name, bts });
   }
-  const firms = [...byFirm.values()]
+  const ranked = [...byFirm.values()]
     .flatMap(({ name, bts }) => {
       if (btsVerificationGate(bts.operating_status as string | null, bts.research_status as string | null)) return [];
       const brokerType = ((bts.details as Record<string, unknown> | null)?.research_input as Record<string, unknown> | undefined)?.broker_type as string | undefined;
@@ -195,13 +196,20 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
       const view = countryView({ verdict, score: SCORELESS.has(verdict) ? null : (bts.global_score as number | null) }, rows[String(bts.entity_id)], country);
       const fit = rows[String(bts.entity_id)]?.fit;
       const licensedLocally = fit === "LOCAL LICENCE VERIFIED" || fit === "EEA PASSPORT POSSIBLE";
+      const majorRegulator = hasMajorLicence((bts.details as Record<string, unknown> | null)?.active_verified_licences as string | undefined);
       return view.score === null || SCORELESS.has(view.verdict)
         ? []
-        : [{ name, verdict: view.verdict, score: view.score, reason: (bts.verdict_reason as string | null) ?? null, licensedLocally, globalRatingShown: view.global, researchDate: bts.research_date, research: readBtsResearch((bts.details ?? {}) as Record<string, unknown>), brokerType: ((bts.details as Record<string, unknown> | null)?.research_input as Record<string, unknown> | undefined)?.broker_type ?? null }];
+        : [{ name, majorRegulator, verdict: view.verdict, score: view.score, reason: (bts.verdict_reason as string | null) ?? null, licensedLocally, globalRatingShown: view.global, researchDate: bts.research_date, research: readBtsResearch((bts.details ?? {}) as Record<string, unknown>), brokerType: ((bts.details as Record<string, unknown> | null)?.research_input as Record<string, unknown> | undefined)?.broker_type ?? null }];
     })
-    // Firms with a verified local (or EU-passported) licence first, then by score.
-    .sort((a, b) => Number(b.licensedLocally) - Number(a.licensedLocally) || b.score - a.score || a.name.localeCompare(b.name))
-    .slice(0, Math.max(1, Math.min(limit, 15)));
+    // Established firms (a major regulator's licence) first: outside the UK local licence data is still
+    // incomplete, so local-only firms would otherwise crowd out the brokers traders actually use.
+    // Then a verified local (or EU-passported) licence, then score.
+    .sort((a, b) => Number(b.majorRegulator) - Number(a.majorRegulator) || Number(b.licensedLocally) - Number(a.licensedLocally) || b.score - a.score || a.name.localeCompare(b.name));
+  // Keep a few places for the best locally licensed firms so local options still get considered.
+  const max = Math.max(1, Math.min(limit, 15));
+  const locals = ranked.filter((f) => !f.majorRegulator && f.licensedLocally).slice(0, 5);
+  const firms = [...ranked.filter((f) => f.majorRegulator).slice(0, max - locals.length), ...locals];
+  if (firms.length < max) firms.push(...ranked.filter((f) => !firms.includes(f)).slice(0, max - firms.length));
   return {
     country: country === "XX" ? "unknown (global ranking)" : `${countryName(country)} (${country})`,
     firms,

@@ -19,7 +19,7 @@ type Kind = "broker" | "propfirm";
 /** Pilot weights from the Phase 2 handover (1 Nov 2026). Bump the version when they change. */
 export const L2_RUBRIC = {
   broker: {
-    version: "l2-broker-1.8",
+    version: "l2-broker-1.9",
     pillars: [
       ["regulation", "Regulatory position and jurisdiction", 40, "actual licence holder, status, authorised activity, local vs cross-border relevance; distinguish group entities"],
       ["client_protection", "Client protections", 20, "segregation, negative-balance protection, compensation scope, withdrawals; per account entity"],
@@ -29,7 +29,7 @@ export const L2_RUBRIC = {
     ],
   },
   propfirm: {
-    version: "l2-prop-1.8",
+    version: "l2-prop-1.9",
     pillars: [
       ["identity", "Company identity and continuity", 20, "confirmed business identity, operating entity, history and accessibility"],
       ["payout", "Payout credibility", 20, "payout eligibility, independent payment evidence, disputes; self-reported totals count less"],
@@ -77,6 +77,13 @@ const researchSchema = z.object({
   strengths: z.array(z.string()),
   risks: z.array(z.string()),
   summary: z.string(),
+  conditions: z.object({
+    platforms: z.string(),
+    gold_spread: z.string().describe("typical XAUUSD spread per account type, e.g. 'from 0.1 pips + $3.50/lot commission (Raw); from 1.2 pips (Standard)'"),
+    commission: z.string(),
+    min_deposit: z.string(),
+    scalping: z.string().describe("whether scalping and expert advisors are allowed"),
+  }).describe("Trading conditions stated on the firm's own pages you retrieved, for the account a trader in the user's country would get. Write 'not found' for anything you couldn't confirm. Prop firms: platforms, fees and trading rules."),
   regulators: z.array(z.string()).describe("Short names of regulators whose public register you retrieved and which list the operating entity as licensed or registered now, e.g. 'FSA Seychelles', 'FSCA', 'ASIC'. Empty if none was confirmed on a register."),
   answer: z.string().describe("Quick take, at most 2 sentences and 35 words, first person with contractions (I'd, isn't, can't). Match the evidence: no recognised licence or active warnings against the operator means \"I'd avoid...\"; mixed evidence \"I'd be careful with...\"; strong evidence \"I'd be comfortable with... as long as...\". No company numbers, source names or jargon."),
   concern: z.string().describe("Why, at most 2 sentences and 40 words: the evidence behind that view and its real weight. For a strong firm, what supports it."),
@@ -144,6 +151,7 @@ export function scoreAssessment(kind: Kind, draft: Research, retrievedUrls: Read
     risks: draft.risks.map(clean),
     summary: clean(draft.summary),
     // Only regulators backed by a register page the search actually retrieved.
+    conditions: Object.fromEntries(Object.entries(draft.conditions ?? {}).map(([k, v]) => [k, clean(String(v)) || "not found"])) as Record<"platforms" | "gold_spread" | "commission" | "min_deposit" | "scalping", string>,
     regulators: [...sources.values()].some((s) => s.type === "official_register") ? (draft.regulators ?? []).map(clean).filter(Boolean).slice(0, 4) : [],
     answer: clean(draft.answer ?? ""),
     concern: clean(draft.concern ?? ""),
@@ -181,6 +189,8 @@ Scoring rules:
 
 Rubric (pillar key, max points, what it needs):
 ${rubric}
+
+Also record the trading conditions from the firm's own pages (platforms, XAUUSD spread, commission, minimum deposit, scalping/EA policy) for the account this user would get. Never estimate them.
 
 Write the summary for a trader, as your own findings. The first two sentences are the bottom line: what the firm is, who operates it, and its single most important risk or strength. Then the remaining evidence and risks. Separate product restrictions (e.g. futures) from the availability of other services. Never mention notes, this response, your research process or field names such as country_fit or UNVERIFIED; say "not confirmed" in plain words.
 

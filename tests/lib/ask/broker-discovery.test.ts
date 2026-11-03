@@ -69,3 +69,10 @@ it('accepts ISO country answers and other trading instruments without repeating 
   const first = getBrokerDiscovery(request('I need a broker for futures'))!;
   expect(getBrokerDiscovery({ message: 'ZA', history: [{ role: 'user', content: 'I need a broker for futures' }, { role: 'assistant', content: JSON.stringify(first.clarification) }] })?.clarification?.headline).toBe('One quick question');
 });
+
+it('remembers a beginner for the rest of the conversation', () => {
+  const first = getBrokerDiscovery(request("Hi I'm new to trading, which broker shall I start with"))!;
+  expect(first.profile.experience).toBe('beginner');
+  const history = [{ role: 'user' as const, content: "Hi I'm new to trading, which broker shall I start with" }, { role: 'assistant' as const, content: JSON.stringify(first.clarification) }];
+  expect(getBrokerDiscovery({ message: 'UK and gold', history })!.profile).toMatchObject({ experience: 'beginner', country: 'GB', instruments: ['Gold'] });
+});

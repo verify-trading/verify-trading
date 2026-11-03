@@ -393,6 +393,10 @@ export function regulationLabel(licences: string | null | undefined, country: st
   return labels.slice(0, 3).join(", ") + (labels.length > 3 ? ` +${labels.length - 3}` : "");
 }
 
+/** True when any register-verified licence is from a major regulator (FCA, ASIC, CySEC…). */
+export const hasMajorLicence = (licences: string | null | undefined) =>
+  (licences ?? "").split("|").some((l) => BY_ENGINE.get(l.split(":")[0].trim())?.standing === "major");
+
 /** Engine licence code -> display code, country and hub slug (null when we have no page for it). */
 export function regulatorForEngineCode(code: string): { code: string; country: string | null; slug: string | null } {
   const r = BY_ENGINE.get(code);
