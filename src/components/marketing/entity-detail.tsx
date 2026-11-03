@@ -176,6 +176,7 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
             {bts?.cloneAlert ? (
               <Notice title="Scammers have impersonated this brand">
                 Fake sites and apps have used the {e.name} name. This is not a warning about {e.name} itself. Only use its official website, and check the domain against the regulator&apos;s register before you log in or deposit.
+                {bts.research?.cloneNoticeSource ? <> <a href={bts.research.cloneNoticeSource} target="_blank" rel="noopener noreferrer nofollow" className="text-[var(--vt-blue)] underline">Read the regulator&apos;s clone notice</a>.</> : null}
               </Notice>
             ) : null}
             {bts && e.score !== null && bts.confidence !== null && bts.confidence < LIMITED_EVIDENCE ? (

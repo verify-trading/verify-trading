@@ -61,7 +61,10 @@ describe("Ask and the BTS engine", () => {
   });
 
   it("shows the live check's final score instead of the engine's, and hides the engine's number from the model", async () => {
-    const getBtsAskContextImpl = vi.fn().mockResolvedValue(context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false }));
+    const bts = context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false });
+    bts.global.cloneAlert = "Scammers impersonate this firm; take extra care.";
+    bts.research = { cloneNoticeSource: "https://fca.org.uk/clone-notice" } as BtsAskContext["research"];
+    const getBtsAskContextImpl = vi.fn().mockResolvedValue(bts);
     const getL2AssessmentImpl = vi.fn().mockResolvedValue({
       kind: "broker", finalScore: 76, verdict: "Generally positive", confidence: 72, rubricVersion: "l2-broker-1.0", countryFit: "CONFIRMED_LOCALLY",
       identity: { confirmed: true, legal_entity: "IG Markets Ltd", official_website: "https://ig.com", note: "" },
@@ -76,6 +79,7 @@ describe("Ask and the BTS engine", () => {
     expect(JSON.stringify(r.bts)).not.toContain("93");
     expect(r.bts).toMatchObject({ scoreSource: "Independent live check", liveCheck: { findings: [{ authority: "FCA", url: "https://fca.org.uk/x" }] } });
     expect("uiMeta" in r && r.uiMeta?.verification).toMatchObject({ confidence: 72, sources: [{ url: "https://fca.org.uk/x" }] });
+    expect("uiMeta" in r && r.uiMeta?.cloneNotice).toEqual({ message: "Scammers impersonate this firm; take extra care.", sourceUrl: "https://fca.org.uk/clone-notice" });
   });
 });
 

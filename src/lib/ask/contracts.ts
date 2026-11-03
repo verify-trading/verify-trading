@@ -323,6 +323,7 @@ export const askUiMetaSchema = z
     projectionMarkers: z.array(z.number().int().nonnegative()).optional(),
     verificationKind: z.enum(["broker", "propfirm"]).optional(),
     verificationSourceLabel: z.string().trim().min(1).optional(),
+    cloneNotice: z.object({ message: z.string(), sourceUrl: httpUrlSchema.optional() }).optional(),
     verification: z.object({
       verdict: z.string(),
       confidence: z.number().min(0).max(100),

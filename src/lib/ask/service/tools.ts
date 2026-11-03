@@ -967,7 +967,9 @@ const L2_WAIT_MS = 120_000; // the mobile app gives up on Ask at 180s
 async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment) {
   if (bts.type === "tool" || btsVerificationGate(bts.operatingStatus, bts.researchStatus) || bts.global.verdict === "Not active" || bts.global.verdict === "Under review") return bts;
   const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2);
-  return l2 ? { ...bts, ...fromLiveCheck(l2) } : { ...bts, scoreSource: "Database assessment" };
+  if (!l2) return { ...bts, scoreSource: "Database assessment" };
+  const live = fromLiveCheck(l2);
+  return { ...bts, ...live, global: { ...live.global, cloneAlert: bts.global.cloneAlert } };
 }
 
 async function waitForLiveCheck(subject: L2Subject, getL2: typeof getL2Assessment = getL2Assessment) {
@@ -1021,10 +1023,12 @@ function fromLiveCheck(l2: L2Result) {
 
 type CheckedBts = Awaited<ReturnType<typeof withLiveCheck>>;
 
-function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "verificationSourceLabel"> {
-  if (!("liveCheck" in bts)) return { verificationSourceLabel: "scoreSource" in bts ? bts.scoreSource : "Reviewed record" };
+function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "verificationSourceLabel" | "cloneNotice"> {
+  const cloneNotice = bts.global.cloneAlert ? { message: bts.global.cloneAlert, ...(bts.research?.cloneNoticeSource ? { sourceUrl: bts.research.cloneNoticeSource } : {}) } : undefined;
+  if (!("liveCheck" in bts)) return { cloneNotice, verificationSourceLabel: "scoreSource" in bts ? bts.scoreSource : "Reviewed record" };
   const live = bts.liveCheck;
   return {
+    cloneNotice,
     verificationSourceLabel: bts.scoreSource,
     verification: {
       verdict: bts.shown.verdict,

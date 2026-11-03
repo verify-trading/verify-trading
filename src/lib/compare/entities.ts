@@ -220,7 +220,7 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
       reason: str(raw.verdict_reason),
       cap: str(raw.cap_applied),
       pillars: PILLARS[type].map(([key, label, max]) => ({ label, max, value: str(pillars[key]) ?? "not checked" })),
-      cloneAlert: str(details.clone_alert) === "yes",
+      cloneAlert: str(details.clone_alert) === "yes" || Boolean(research?.cloneNoticeSource),
       researchDate: str(raw.research_date),
       licences,
     },
@@ -260,7 +260,7 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
 }
 
 /** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */
-export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v6"], { revalidate: 3600, tags: ["bts"] });
+export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v7"], { revalidate: 3600, tags: ["bts"] });
 
 export async function getPublicEntity(type: PublicEntityType, slug: string) {
   return (await getPublicEntities(type)).find((e) => e.slug === slug) ?? null;

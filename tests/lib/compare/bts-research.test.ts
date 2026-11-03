@@ -9,6 +9,7 @@ describe('original BTS research', () => {
     expect(result?.licences[0].licence_holder).toBe('Example Ltd');
     expect(result?.sources).toEqual([{ url: 'https://example.com/terms', roles: ['payout_terms_url'], researchDate: '2026-10-28' }]);
     expect(JSON.stringify(result)).not.toContain('PRIVATE');
+    expect(readBtsResearch({ research_input: { website_url: 'https://acetop.uk' }, clone_notice: { source_url: 'https://fca.org.uk/clone-notice' } })?.cloneNoticeSource).toBe('https://fca.org.uk/clone-notice');
   });
 
   it.each(['inactive', 'redirected', 'merged', 'closed'])('blocks positive outcomes for %s operators', (status) => {

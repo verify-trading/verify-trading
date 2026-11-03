@@ -118,6 +118,7 @@ async function buildAskContext(raw: Record<string, unknown>, requestedCountry?: 
   const globalRating = { verdict, score: gate || SCORELESS.has(verdict) ? null : ((raw.global_score as number | null) ?? null) };
   const details = (raw.details ?? {}) as Record<string, unknown>;
   const pillars = (raw.pillars ?? {}) as Record<string, unknown>;
+  const research = readBtsResearch(details);
   const country = requestedCountry ? normalizeCountry(requestedCountry) : await getRequestCountrySafe();
 
   let countryRating: CountryView | null = null;
@@ -131,7 +132,7 @@ async function buildAskContext(raw: Record<string, unknown>, requestedCountry?: 
     entityId: String(raw.entity_id),
     operatingStatus: (raw.operating_status as string | null) ?? null,
     researchStatus: (raw.research_status as string | null) ?? null,
-    research: readBtsResearch(details),
+    research,
     countryCode: country,
     conductRecord: conductRecord(kind, globalRating, pillars),
     type: kind,
@@ -150,7 +151,7 @@ async function buildAskContext(raw: Record<string, unknown>, requestedCountry?: 
             ? Object.fromEntries(Object.entries(pillars).map(([k, v]) => [k.replace(/_/g, " "), /not checked/i.test(String(v)) ? "Not yet checked" : String(v)]))
             : Object.fromEntries(PILLARS[kind].map(([key, label, max]) => [label, pillarDisplay({ label, max, value: String(pillars[key] ?? "not checked") })])),
       licencesVerified: (details.active_verified_licences as string | undefined) ?? "none",
-      cloneAlert: details.clone_alert === "yes" ? "Scammers have impersonated this brand. This is not a warning about the firm itself." : null,
+      cloneAlert: details.clone_alert === "yes" || research?.cloneNoticeSource ? "Scammers have impersonated this brand. This is not a warning about the firm itself." : null,
       lastChecked: (raw.research_date as string | null) ?? null,
     },
     country: countryRating,

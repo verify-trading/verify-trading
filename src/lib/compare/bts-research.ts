@@ -15,6 +15,7 @@ export type BtsResearch = {
   tradingRules: string | null;
   disputes: string | null;
   auditIssues: string[];
+  cloneNoticeSource: string | null;
 };
 
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -35,6 +36,7 @@ export function readBtsResearch(details: Record<string, unknown>): BtsResearch |
   }) : [];
   const audit = object(details.research_audit);
   return {
+    cloneNoticeSource: text(object(details.clone_notice).source_url),
     website: text(input.website_url), legalEntity: text(input.legal_entity), registeredCountry: text(input.registered_country),
     servicingEntity: text(input.retail_servicing_entity), clientRegions: text(input.retail_client_regions),
     operatingStatus: text(input.operating_status), researchStatus: text(input.research_status), researchDate: text(input.research_date),
