@@ -1,3 +1,4 @@
+import { brokerMatchesInstruments } from "@/lib/ask/broker-discovery";
 import { unstable_cache } from "next/cache";
 import { cookies, headers } from "next/headers";
 
@@ -165,14 +166,14 @@ export type BtsAskContext = NonNullable<Awaited<ReturnType<typeof getBtsAskConte
  * global score (prop firms). Under review, Not active and Not available are left out. Only firms with
  * a page on the site are listed. Nothing commercial affects the order.
  */
-export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requestedCountry?: string | null) {
+export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requestedCountry?: string | null, instruments: string[] = []) {
   const client = getSupabaseAdminClient();
   if (!client) return { country: "unknown", firms: [] };
   const country = requestedCountry ? normalizeCountry(requestedCountry) : await getRequestCountrySafe();
   const data = await selectAll((from, to) =>
     client
       .from("verified_entities")
-      .select("name, bts:bts_scores(entity_id, operating_status, research_status, global_score, verdict, verdict_reason)")
+      .select("name, bts:bts_scores(entity_id, operating_status, research_status, global_score, verdict, verdict_reason, research_date, details)")
       .eq("entity_type", type)
       .not("bts_entity_id", "is", null)
       .order("slug")
@@ -188,13 +189,15 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
   const firms = [...byFirm.values()]
     .flatMap(({ name, bts }) => {
       if (btsVerificationGate(bts.operating_status as string | null, bts.research_status as string | null)) return [];
+      const brokerType = ((bts.details as Record<string, unknown> | null)?.research_input as Record<string, unknown> | undefined)?.broker_type as string | undefined;
+      if (type === "broker" && instruments.length && !brokerMatchesInstruments(brokerType ?? null, instruments)) return [];
       const verdict = toVerdict(bts.verdict as string, type);
       const view = countryView({ verdict, score: SCORELESS.has(verdict) ? null : (bts.global_score as number | null) }, rows[String(bts.entity_id)], country);
       const fit = rows[String(bts.entity_id)]?.fit;
       const licensedLocally = fit === "LOCAL LICENCE VERIFIED" || fit === "EEA PASSPORT POSSIBLE";
       return view.score === null || SCORELESS.has(view.verdict)
         ? []
-        : [{ name, verdict: view.verdict, score: view.score, reason: (bts.verdict_reason as string | null) ?? null, licensedLocally, globalRatingShown: view.global }];
+        : [{ name, verdict: view.verdict, score: view.score, reason: (bts.verdict_reason as string | null) ?? null, licensedLocally, globalRatingShown: view.global, researchDate: bts.research_date, research: readBtsResearch((bts.details ?? {}) as Record<string, unknown>), brokerType: ((bts.details as Record<string, unknown> | null)?.research_input as Record<string, unknown> | undefined)?.broker_type ?? null }];
     })
     // Firms with a verified local (or EU-passported) licence first, then by score.
     .sort((a, b) => Number(b.licensedLocally) - Number(a.licensedLocally) || b.score - a.score || a.name.localeCompare(b.name))

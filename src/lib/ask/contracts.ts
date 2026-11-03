@@ -94,6 +94,7 @@ const guruCardSchema = z.object({
 
 const insightCardSchema = z.object({
   type: z.literal("insight"),
+  variant: z.literal("broker_discovery").optional(),
   headline: textFieldSchema,
   body: textFieldSchema,
   verdict: textFieldSchema,
@@ -180,6 +181,12 @@ export const askCardSchema = z.discriminatedUnion("type", [
 
 export const askSessionMemorySchema = z
   .object({
+    brokerPreferences: z.object({
+      kind: z.enum(["broker", "propfirm"]),
+      country: z.string().optional(),
+      instruments: z.array(z.string()),
+      requirements: z.array(z.string()).max(6),
+    }).optional(),
     activeAsset: z.string().trim().min(1).optional(),
     activeSide: z.enum(["buy", "sell"]).optional(),
     lastCardType: askCardTypeSchema.optional(),
@@ -566,7 +573,9 @@ function sanitizeCardNaturalLanguage(card: AskCard): AskCard {
       return {
         ...card,
         headline: sanitizeNaturalLanguageField(card.headline),
-        body: sanitizeNaturalLanguageField(card.body, { maxSentences: 3 }),
+        body: card.variant === "broker_discovery"
+          ? trimToWordLimit(card.body.split(/\n+/).map(line => sanitizeNaturalLanguageField(line)).join("\n\n"), 160)
+          : sanitizeNaturalLanguageField(card.body, { maxSentences: 3 }),
         verdict: sanitizeNaturalLanguageField(card.verdict, { maxSentences: 2 }),
       };
     case "plan":
@@ -598,7 +607,9 @@ export function sanitizeCard(card: AskCard): AskCard {
   const clonedCard = JSON.parse(JSON.stringify(card)) as AskCard;
   for (const [key, value] of Object.entries(clonedCard)) {
     if (key !== "citationUrl" && typeof value === "string") {
-      const cleaned = stripAskInternalCitationMarkers(value);
+      const cleaned = clonedCard.type === "insight" && clonedCard.variant === "broker_discovery" && key === "body"
+        ? value.split(/\n+/).map(stripAskInternalCitationMarkers).join("\n\n")
+        : stripAskInternalCitationMarkers(value);
       (clonedCard as Record<string, unknown>)[key] = cleaned || "Unavailable";
     }
   }

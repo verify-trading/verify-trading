@@ -20,6 +20,7 @@ export interface ParsedImageInput {
 }
 
 export interface AskServiceDependencies {
+  brokerPreferences?: import("@/lib/ask/broker-discovery").BrokerPreferences;
   generateTextImpl?: typeof generateText;
   getActiveAnalysisRulesImpl?: typeof getActiveAnalysisRules;
   lookupVerifiedEntityImpl?: typeof lookupVerifiedEntity;

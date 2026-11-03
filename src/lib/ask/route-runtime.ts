@@ -1,3 +1,4 @@
+import { getBrokerDiscovery } from "@/lib/ask/broker-discovery";
 import { after } from "next/server";
 import { ZodError } from "zod";
 
@@ -27,6 +28,7 @@ export type PreparedAskRoute = {
   parsedRequest: ParsedAskRequest;
   requestInput: AskRequestInput;
   persistence: AskPersistence;
+  clarification?: AskResponse["data"];
   /** Returns the reserved daily query if generation fails. Best-effort, never throws. */
   refundReservation: () => Promise<void>;
 };
@@ -71,20 +73,6 @@ export async function prepareAskRoute(
   }
 
   const parsedRequest = askRequestSchema.parse(body);
-  const reserve = await reserveAskQuery(session.supabase);
-  if (!reserve.ok) {
-    return {
-      ok: false,
-      failure: {
-        error: "rate_limited",
-        status: 429,
-        code: reserve.reason,
-        message: getRateLimitMessage(reserve.reason),
-        remaining: reserve.remaining ?? 0,
-      },
-    };
-  }
-
   const sessionId = parsedRequest.sessionId ?? parsedRequest.chatSessionId ?? crypto.randomUUID();
   const persistence = getAskPersistence({ userId: session.user.id });
   const [historyResult, memoryResult] = await Promise.allSettled([
@@ -113,12 +101,33 @@ export async function prepareAskRoute(
     ? memoryResult.value
     : parsedRequest.sessionMemory ?? null;
 
+  const clarification = getBrokerDiscovery({ ...parsedRequest, history, sessionMemory })?.clarification;
+  let reserved = false;
+  if (!clarification) {
+    const reserve = await reserveAskQuery(session.supabase);
+    if (!reserve.ok) {
+      return {
+        ok: false,
+        failure: {
+          error: "rate_limited",
+          status: 429,
+          code: reserve.reason,
+          message: getRateLimitMessage(reserve.reason),
+          remaining: reserve.remaining ?? 0,
+        },
+      };
+    }
+
+    reserved = true;
+  }
+
   return {
     ok: true,
     value: {
       parsedRequest,
       persistence,
-      refundReservation: () => refundAskQuery(session.supabase),
+      clarification,
+      refundReservation: () => reserved ? refundAskQuery(session.supabase) : Promise.resolve(),
       requestInput: {
         ...parsedRequest,
         message: parsedRequest.message || (parsedRequest.image ? defaultAskImagePrompt : ""),
@@ -141,6 +150,16 @@ export async function completeAskExchange(
   // a hit is indistinguishable from a generated answer everywhere else. The
   // sync pre-gate keeps non-cacheable requests (images, follow-ups) off the
   // async cache path entirely.
+  if (prepared.clarification) {
+    const response: AskResponse = {
+      data: prepared.clarification,
+      sessionId: prepared.requestInput.sessionId ?? crypto.randomUUID(),
+      messageId: crypto.randomUUID(),
+    };
+    // Save the question before returning so an immediate reply can be classified without using quota.
+    await saveAskExchangeBestEffort(prepared, response);
+    return response;
+  }
   const cacheCandidate = isAskCacheCandidate(prepared.requestInput);
   if (cacheCandidate) {
     const cached = await readCachedAskResponse(prepared.requestInput);

@@ -61,6 +61,17 @@ describe("POST /api/ask", () => {
     saveExchange.mockResolvedValue(undefined);
   });
 
+  it("keeps clarification free even after the daily allowance is exhausted", async () => {
+    vi.mocked(reserveAskQuery).mockResolvedValue({ ok: false, reason: "daily_limit", remaining: 0 });
+    const response = await POST(new Request("http://localhost/api/ask", { method: "POST", body: JSON.stringify({ message: "I need a broker" }), headers: { "Content-Type": "application/json" } }));
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain("Which country are you based in?");
+    expect(reserveAskQuery).not.toHaveBeenCalled();
+    expect(generateAskResponse).not.toHaveBeenCalled();
+    expect(saveExchange).toHaveBeenCalledTimes(1);
+  });
+
   it("returns a generated card response", async () => {
     vi.mocked(generateAskResponse).mockResolvedValue({
       data: fallbackInsightCard,

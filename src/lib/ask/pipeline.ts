@@ -1,3 +1,4 @@
+import { getBrokerDiscovery } from "@/lib/ask/broker-discovery";
 import { generateText, stepCountIs, type ModelMessage } from "ai";
 
 import {
@@ -111,7 +112,7 @@ export function stopAfterFinalToolResult({
   const toolResults = lastStep?.toolResults ?? [];
   return toolResults.some(
     (toolResult) =>
-      toolResult.toolName === "submit_ask_card" || toolResultHasCompleteCard(toolResult),
+      (toolResult.toolName === "submit_ask_card" && askCardSchema.safeParse((toolResult.output as { card?: unknown } | null)?.card).success) || toolResultHasCompleteCard(toolResult),
   );
 }
 
@@ -132,9 +133,9 @@ function buildAskMessages({
   analysisRulesMessage: string | null;
   knowledgeContextBlock: string | null;
 }): ModelMessage[] {
-  const sessionMemoryMessage = buildSessionMemoryMessage(
-    deriveAskSessionMemory(request.history, request.sessionMemory ?? null),
-  );
+  const discovery = getBrokerDiscovery(request);
+  const memory = deriveAskSessionMemory(request.history, request.sessionMemory ?? null);
+  const sessionMemoryMessage = buildSessionMemoryMessage(discovery ? { ...memory, brokerPreferences: discovery.profile } : memory);
 
   const userMessage: ModelMessage = image
     ? {
@@ -382,6 +383,8 @@ export async function generateAskResponse(
   const messageId = crypto.randomUUID();
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
+  const discovery = getBrokerDiscovery(request);
+  if (discovery?.clarification) return askResponseSchema.parse({ data: discovery.clarification, sessionId, messageId });
   const generationStartedAt = Date.now();
 
   logger.info("Ask generation started.", {
@@ -421,13 +424,15 @@ export async function generateAskResponse(
     knowledgeContextBlock,
   });
 
-  const baseTools = createAskTools(dependencies);
+  const baseTools = createAskTools({ ...dependencies, brokerPreferences: discovery?.profile ?? request.sessionMemory?.brokerPreferences });
   const finalize = (
     card: AskCard,
     source: string,
     toolResults: ToolResultRecord[],
   ) => {
-    const merged = mergeToolOwnedNumbers(card, toolResults);
+    const resolved = mergeToolOwnedNumbers(card, toolResults);
+    const comparison = resolved.type === "insight" && (discovery || toolResults.some(result => result.toolName === "list_verified_entities" && result.output && typeof result.output === "object" && "bts" in result.output));
+    const merged: AskCard = comparison ? { ...resolved, variant: "broker_discovery" } : resolved;
 
     logger.info("Ask generation completed.", {
       sessionId,

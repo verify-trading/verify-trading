@@ -401,7 +401,8 @@ function AskWorkspaceContent() {
     });
 
   const isSubmitting = status === "submitted" || status === "streaming";
-  const isComposerLocked = isDailyLimitReached && !isSubmitting;
+  // Text stays available for free discovery questions; the server enforces quota on substantive answers.
+  const isComposerLocked = isDailyLimitReached && !isSubmitting && Boolean(attachment);
   const isOpeningSession = Boolean(sessionId) && messages.length === 0 && !error;
   /** `router.replace` can lag `useSearchParams`; store already matches `pendingUrlSessionRef`. */
   const urlCatchingUpToStore =
@@ -984,7 +985,7 @@ function AskWorkspaceContent() {
                 disabled={isComposerLocked}
                 isSubmitting={isSubmitting}
                 isDragActive={isDragActive}
-                placeholder={isComposerLocked ? "Upgrade to Pro to continue" : "Ask anything about trading…"}
+                placeholder={isDailyLimitReached ? "Broker setup questions are still free…" : "Ask anything about trading…"}
                 inputProps={getInputProps()}
                 focusSignal={prefillFocusSignal}
                 onDraftChange={setDraft}
