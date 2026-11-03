@@ -92,12 +92,12 @@ describe("Compare directory (BTS v2)", () => {
     expect(html).not.toContain(">CLOSED<");
   });
 
-  it("lists every trader (guru register) and links each row to /verify/traders/[slug]", async () => {
+  it("lists every trader (guru register) and links each row to /compare/traders/[slug]", async () => {
     const html = renderToStaticMarkup(await CompareView({ type: "guru", searchParams: {} }));
     expect(html).toContain(`${GURUS.length} traders`);
     for (const g of GURUS) {
       expect(html).toContain(g.name);
-      expect(html).toContain(`href="/verify/traders/${g.slug}"`);
+      expect(html).toContain(`href="/compare/traders/${g.slug}"`);
     }
   });
 });

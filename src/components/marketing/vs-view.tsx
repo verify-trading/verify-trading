@@ -39,7 +39,7 @@ export function vsSummary(a: PublicEntity, b: PublicEntity): string {
 export function VsView({ a, b }: { a: PublicEntity; b: PublicEntity }) {
   const isBroker = a.type === "broker";
   const path = vsPath(a.type, a.slug, b.slug);
-  const crumb = isBroker ? { name: "Compare Brokers", path: "/verify/brokers" } : { name: "Compare Prop Firms", path: "/verify/prop-firms" };
+  const crumb = isBroker ? { name: "Compare Brokers", path: "/compare/brokers" } : { name: "Compare Prop Firms", path: "/compare/prop-firms" };
   const eyebrow = isBroker ? "Broker comparison" : "Prop firm comparison";
 
   const shared = a.regulators.filter((r) => b.regulators.includes(r));

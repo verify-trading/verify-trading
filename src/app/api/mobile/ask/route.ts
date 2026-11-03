@@ -7,6 +7,9 @@ import {
   prepareAskRoute,
 } from "@/lib/ask/route-runtime";
 
+// Match web Ask: a live assessment can run beyond the platform default.
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   try {
     const prepared = await prepareAskRoute(request, "mobile Ask", true);
