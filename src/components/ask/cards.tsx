@@ -62,10 +62,10 @@ function TrustScoreBar({ score, accent }: { score: string; accent: string }) {
 
   return (
     <>
-      <div className="mt-3 flex items-center justify-between text-sm text-[var(--vt-muted)]">
+      <div className="mt-3 flex items-baseline justify-between text-sm text-[var(--vt-muted)]">
         <span>Trust Score</span>
-        <span className="font-black" style={{ color: accent }}>
-          {parsed ? `${parsed.value} / ${parsed.max}` : score}
+        <span style={{ color: accent }}>
+          {parsed ? <><span className="text-2xl font-black">{parsed.value}</span><span className="font-bold">/{parsed.max}</span></> : <span className="font-black">{score}</span>}
         </span>
       </div>
       {parsed ? (
@@ -254,44 +254,75 @@ function BrokerCard({
             {uiMeta.cloneNotice.sourceUrl ? <a href={uiMeta.cloneNotice.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--vt-blue)] underline">Regulator&apos;s clone notice</a> : null}
           </div>
         ) : null}
-        {uiMeta?.verification ? (
-          <div className="space-y-2 border-t border-white/10 pt-3 text-xs text-slate-400">
-            <p>Evidence confidence {uiMeta.verification.confidence}/100 · Checked {uiMeta.verification.checkedAt.slice(0, 10)}</p>
-            <details>
-              <summary className="cursor-pointer font-semibold text-slate-200">Evidence, scoring and sources</summary>
-              <div className="mt-3 space-y-3">
-                {uiMeta.verification.summary ? <p className="leading-relaxed text-slate-300">{uiMeta.verification.summary}</p> : null}
-                {uiMeta.verification.pillars?.length ? (
-                  <div className="space-y-1">
-                    <p className="font-medium text-slate-200">How the score was calculated</p>
-                    {uiMeta.verification.pillars.map((pillar) => (
-                      <p key={pillar.label}><span className="font-semibold text-slate-200">{pillar.label} {pillar.awarded}/{pillar.max}</span>: {pillar.reason}</p>
-                    ))}
-                    {uiMeta.verification.score != null ? (
-                      <p className="font-semibold text-slate-200">Total {uiMeta.verification.score}/100</p>
-                    ) : null}
-                  </div>
-                ) : null}
-                {uiMeta.verification.findings.map((finding, index) => (
-                  <div key={`${finding.url}-${index}`} className="space-y-1">
-                    <p className="font-medium text-slate-200">{finding.authority}</p>
-                    <p>{[finding.legalEntity, finding.jurisdiction, finding.date].filter(Boolean).join(" · ")}</p>
-                    <p>{finding.finding}</p>
-                    {finding.outcome ? <p>{finding.outcome}</p> : null}
-                    <a href={finding.url} target="_blank" rel="noopener noreferrer" className="text-[var(--vt-blue)] underline underline-offset-2">View source</a>
-                  </div>
-                ))}
-                <ul className="space-y-1">
-                  {uiMeta.verification.sources.map((source) => (
-                    <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="break-words text-[var(--vt-blue)] underline underline-offset-2">{source.title}</a></li>
-                  ))}
-                </ul>
-              </div>
-            </details>
-          </div>
-        ) : null}
+        {uiMeta?.verification ? <LiveCheckEvidence verification={uiMeta.verification} accent={accent} /> : null}
       </div>
     </CardFrame>
+  );
+}
+
+type LiveCheck = NonNullable<AskUiMeta["verification"]>;
+
+/** "2026-11-03T16:43:39Z" -> "3 Nov 2026". */
+const checkedOn = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value.slice(0, 10) : date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+};
+
+/** Evidence under the answer: date line, then score breakdown and findings, each folded until asked for. */
+function LiveCheckEvidence({ verification, accent }: { verification: LiveCheck; accent: string }) {
+  const linked = new Set(verification.findings.map((f) => f.url));
+  const moreSources = verification.sources.filter((s) => !linked.has(s.url));
+  const fold = "group border-t border-white/[0.06] py-2.5 [&_summary::-webkit-details-marker]:hidden";
+  const head = "flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-200";
+  const chevron = <span aria-hidden className="text-[var(--vt-muted)] transition-transform group-open:rotate-180">⌄</span>;
+  return (
+    <div className="text-xs text-slate-400">
+      <p className="pb-2 text-[var(--vt-muted)]">Checked {checkedOn(verification.checkedAt)} · Source reliability {verification.confidence}/100</p>
+      {verification.pillars?.length ? (
+        <details className={fold}>
+          <summary className={head}>How we scored it {chevron}</summary>
+          <ul className="mt-3 space-y-2.5">
+            {verification.pillars.map((pillar) => (
+              <li key={pillar.label}>
+                <details className="group/p [&_summary::-webkit-details-marker]:hidden">
+                  <summary className="cursor-pointer list-none">
+                    <div className="flex justify-between text-slate-300"><span>{pillar.label}</span><span className="font-semibold text-slate-200">{pillar.awarded}/{pillar.max}</span></div>
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/8">
+                      <div className="h-full rounded-full" style={{ width: `${pillar.max ? (pillar.awarded / pillar.max) * 100 : 0}%`, backgroundColor: accent }} />
+                    </div>
+                  </summary>
+                  <p className="mt-1.5 leading-relaxed">{pillar.reason}</p>
+                </details>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[var(--vt-muted)]">Tap a line for the reason.</p>
+        </details>
+      ) : null}
+      {verification.findings.length ? (
+        <details className={fold}>
+          <summary className={head}>What regulators and records say ({verification.findings.length}) {chevron}</summary>
+          <ul className="mt-3 space-y-3">
+            {verification.findings.map((finding, index) => (
+              <li key={`${finding.url}-${index}`} className="leading-relaxed">
+                <p className="font-semibold text-slate-200">{finding.authority}{finding.date ? <span className="font-normal text-[var(--vt-muted)]"> · {finding.date.slice(0, 4)}</span> : null}</p>
+                <p>{finding.finding}{finding.outcome ? <span className="text-[var(--vt-muted)]"> {finding.outcome}</span> : null}{" "}<a href={finding.url} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap text-[var(--vt-blue)] underline underline-offset-2">Source</a></p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {moreSources.length ? (
+        <details className={fold}>
+          <summary className={head}>Other sources ({moreSources.length}) {chevron}</summary>
+          <ul className="mt-3 space-y-1.5">
+            {moreSources.map((source) => (
+              <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="break-words text-[var(--vt-blue)] underline underline-offset-2">{source.title}</a></li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
   );
 }
 

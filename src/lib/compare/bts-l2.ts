@@ -19,7 +19,7 @@ type Kind = "broker" | "propfirm";
 /** Pilot weights from the Phase 2 handover (1 Nov 2026). Bump the version when they change. */
 export const L2_RUBRIC = {
   broker: {
-    version: "l2-broker-1.6",
+    version: "l2-broker-1.7",
     pillars: [
       ["regulation", "Regulatory position and jurisdiction", 40, "actual licence holder, status, authorised activity, local vs cross-border relevance; distinguish group entities"],
       ["client_protection", "Client protections", 20, "segregation, negative-balance protection, compensation scope, withdrawals; per account entity"],
@@ -29,7 +29,7 @@ export const L2_RUBRIC = {
     ],
   },
   propfirm: {
-    version: "l2-prop-1.6",
+    version: "l2-prop-1.7",
     pillars: [
       ["identity", "Company identity and continuity", 20, "confirmed business identity, operating entity, history and accessibility"],
       ["payout", "Payout credibility", 20, "payout eligibility, independent payment evidence, disputes; self-reported totals count less"],
@@ -77,9 +77,9 @@ const researchSchema = z.object({
   strengths: z.array(z.string()),
   risks: z.array(z.string()),
   summary: z.string(),
-  answer: z.string().describe("Quick take: 2-3 short sentences in the first person answering 'is it safe?', e.g. \"I'd be cautious about depositing with X. ...\". The bottom line and the main reason. No company numbers, source names or jargon."),
-  concern: z.string().describe("Why: 2 short plain sentences on the evidence behind that view (what regulators or terms actually say and its real weight). For a strong firm, what supports the score."),
-  recommendation: z.string().describe("My recommendation: 1-2 short first-person sentences on what this trader should do next, specific to their country."),
+  answer: z.string().describe("Quick take, at most 2 sentences and 35 words, first person with contractions (I'd, isn't, can't). Match the evidence: no recognised licence or active warnings against the operator means \"I'd avoid...\"; mixed evidence \"I'd be careful with...\"; strong evidence \"I'd be comfortable with... as long as...\". No company numbers, source names or jargon."),
+  concern: z.string().describe("Why, at most 2 sentences and 40 words: the evidence behind that view and its real weight. For a strong firm, what supports it."),
+  recommendation: z.string().describe("What to do next, at most 2 sentences and 30 words, first person with contractions, specific to the trader's country."),
 });
 type Research = z.infer<typeof researchSchema>;
 
