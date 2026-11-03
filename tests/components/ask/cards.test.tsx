@@ -68,9 +68,10 @@ describe("AskResponseCard", () => {
       } }}
     />);
     expect(screen.getByText("High risk")).toBeInTheDocument();
-    expect(screen.getByText(/Evidence confidence 70\/100/)).toBeInTheDocument();
+    expect(screen.getByText(/Checked 3 Nov 2026 · Source reliability 70\/100/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Source" })).toHaveAttribute("href", "https://example.com/warning");
     expect(screen.getByRole("link", { name: "Published terms" })).toHaveAttribute("href", "https://example.com/terms");
-    expect(screen.getByText("Not proof of fraud.")).toBeInTheDocument();
+    expect(screen.getByText(/Not proof of fraud\./)).toBeInTheDocument();
   });
 
   it("renders prop firms without a misleading FCA label", () => {
