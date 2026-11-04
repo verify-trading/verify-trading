@@ -13,7 +13,7 @@ function ensureSupabaseEnv() {
   hasLoadedNodeEnv = true;
 }
 
-export function hasSupabaseAdminConfig() {
+function hasSupabaseAdminConfig() {
   ensureSupabaseEnv();
 
   return Boolean(

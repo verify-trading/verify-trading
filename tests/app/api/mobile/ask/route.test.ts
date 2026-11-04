@@ -1,5 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/ask/routing", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ask/routing")>();
+  return {
+    ...actual,
+    routeAskMessage: vi.fn((input) => actual.routeAskMessage(input, {
+      classify: async () => ({ intent: input.message === "I need a broker" ? "pick_firm" : "other" }),
+      lookupExact: async () => null,
+    })),
+  };
+});
+
 vi.mock("@/lib/ask/pipeline", () => ({
   generateAskResponse: vi.fn(),
 }));
@@ -20,6 +31,8 @@ vi.mock("@/lib/ai/consent", () => ({
 vi.mock("@/lib/rate-limit/reserve-ask-query", () => ({
   reserveAskQuery: vi.fn(),
 }));
+
+import { routeAskMessage } from "@/lib/ask/routing";
 
 import { POST } from "@/app/api/mobile/ask/route";
 import { fallbackInsightCard } from "@/lib/ask/contracts";
@@ -67,6 +80,7 @@ describe("POST /api/mobile/ask", () => {
     const body = await response.text();
     expect(body).toContain("Which country are you based in?");
     expect(reserveAskQuery).not.toHaveBeenCalled();
+    expect(routeAskMessage).toHaveBeenCalledTimes(1);
     expect(generateAskResponse).not.toHaveBeenCalled();
     expect(saveExchange).toHaveBeenCalledTimes(1);
   });

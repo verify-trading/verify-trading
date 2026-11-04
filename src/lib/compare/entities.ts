@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 
 import { resolveGuruTier, type GuruTier } from "@/lib/ask/gurus";
-import { PILLARS, SCORELESS, parseLicences, toVerdict, type BtsRecord, type BtsVerdict } from "@/lib/compare/bts";
+import { PILLARS, SCORELESS, gatedVerdict, parseLicences, type BtsRecord, type BtsVerdict } from "@/lib/compare/bts";
 import { findRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
 import { getOfficialScores, type OfficialScore } from "@/lib/compare/bts-l2";
 import { logger } from "@/lib/observability/logger";
@@ -28,10 +28,7 @@ export const PUBLIC_ENTITY_COLUMNS = [
   "slug",
   "name",
   "entity_type",
-  "fca_registered",
-  "fca_reference",
   "fca_warning",
-  "regulators_listed",
   "year_founded",
   "updated_at",
   // BTS engine output (brokers and prop firms):
@@ -110,10 +107,15 @@ const num = (v: unknown): number | null => {
 
 /** Placeholder tokens that mean "no value" in the source data (e.g. a literal "NULL" string). */
 const isSentinel = (s: string) => /^(none|null|n\/?a|tbd|unknown|-|–|—)$/i.test(s.trim());
+/** The free-text regulator column carries at least one regulator (not empty, a placeholder or "NONE …"). */
+const hasRegulators = (listed: string | null): listed is string => {
+  if (!listed) return false;
+  return !isSentinel(listed) && !/^none\b/i.test(listed.trim());
+};
 
 /** "FCA (United Kingdom), CySEC (Cyprus)" -> ["FCA", "CySEC"]. "NONE ..."/"NULL" -> []. */
 export function parseRegulators(listed: string | null): string[] {
-  if (!listed || isSentinel(listed) || /^none\b/i.test(listed.trim())) return [];
+  if (!hasRegulators(listed)) return [];
   const out = new Set<string>();
   // Split on commas that are not inside parentheses.
   for (const part of listed.split(/,(?![^(]*\))/)) {
@@ -126,7 +128,7 @@ export function parseRegulators(listed: string | null): string[] {
 /** "FCA (United Kingdom), FSC (Mauritius)" -> code, country and hub slug per regulator. */
 export function parseRegulatorRefs(listed: string | null, fcaRegistered = false): RegulatorRef[] {
   const out: RegulatorRef[] = [];
-  if (listed && !isSentinel(listed) && !/^none\b/i.test(listed.trim())) {
+  if (hasRegulators(listed)) {
     for (const part of listed.split(/,(?![^(]*\))/)) {
       const code = part.replace(/\(.*?\)/g, "").trim();
       const country = part.match(/\((.*?)\)/)?.[1]?.trim() || null;
@@ -137,9 +139,6 @@ export function parseRegulatorRefs(listed: string | null, fcaRegistered = false)
   if (fcaRegistered && !out.some((r) => r.code === "FCA")) out.unshift({ code: "FCA", country: "United Kingdom", slug: "fca" });
   return out;
 }
-
-/** A register-confirmed FCA firm lists FCA even when the free-text regulator column is empty. */
-const withFca = (list: string[], registered: boolean) => (registered && !list.includes("FCA") ? ["FCA", ...list] : list);
 
 /** Maps a raw row to the public shape. Copies only allowlisted fields; anything else is dropped. */
 export function toPublicEntity(row: Record<string, unknown>): PublicEntity | null {
@@ -152,11 +151,7 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     slug,
     name,
     type,
-    fcaRegistered: Boolean(row.fca_registered),
-    fcaReference: str(row.fca_reference),
     fcaWarning: Boolean(row.fca_warning),
-    regulators: withFca(parseRegulators(str(row.regulators_listed)), Boolean(row.fca_registered)),
-    regulatorDetails: parseRegulatorRefs(str(row.regulators_listed), Boolean(row.fca_registered)),
     yearFounded: num(row.year_founded),
     updatedAt: str(row.updated_at),
   } as const;
@@ -199,7 +194,7 @@ export function toPublicEntity(row: Record<string, unknown>): PublicEntity | nul
     return { ...base, regulators: [], regulatorDetails: [], fcaRegistered: false, fcaReference: null, verdict: "Under review", score: null, bts: null, closed: false, reviewed: false };
   }
   const gate = btsVerificationGate(str(raw.operating_status), str(raw.research_status));
-  const verdict = gate === "needs_review" ? "Under review" : gate === "inactive" ? "Not active" : gate === "unknown" ? "Insufficient data" : toVerdict(str(raw.verdict), type);
+  const verdict = gatedVerdict(gate, str(raw.verdict), type);
   const details = (raw.details ?? {}) as Record<string, unknown>;
   const pillars = (raw.pillars ?? {}) as Record<string, unknown>;
   const research = readBtsResearch(details);

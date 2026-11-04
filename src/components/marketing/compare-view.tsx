@@ -86,7 +86,7 @@ type View = EntityFilters & { sort: SortKey };
 
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)?.trim() || undefined;
 
-export function parseCompareParams(sp: CompareSearchParams): EntityFilters {
+function parseCompareParams(sp: CompareSearchParams): EntityFilters {
   const page = Number.parseInt(first(sp.page) ?? "1", 10);
   return {
     q: first(sp.q)?.slice(0, 80),
@@ -395,7 +395,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
         ) : (
           <div className={cn(surface, "mt-3 flex flex-col items-center px-6 py-14 text-center")}>
             <span className="flex size-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400"><SearchX className="size-5" aria-hidden /></span>
-            <h2 className="mt-4 text-base font-semibold text-white">No {cfg.plural} match{filters.q ? ` \"${filters.q}\"` : ""}</h2>
+            <h2 className="mt-4 text-base font-semibold text-white">No {cfg.plural} match{filters.q ? ` "${filters.q}"` : ""}</h2>
             <p className="mt-1.5 max-w-sm text-sm text-slate-400">
               Try a shorter name or fewer filters. If we may not hold a record yet, run a check in Ask.
             </p>

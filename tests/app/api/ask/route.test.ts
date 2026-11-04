@@ -1,5 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/ask/routing", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ask/routing")>();
+  return {
+    ...actual,
+    routeAskMessage: vi.fn((input) => actual.routeAskMessage(input, {
+      classify: async () => ({ intent: input.message === "I need a broker" ? "pick_firm" : "other" }),
+      lookupExact: async () => null,
+    })),
+  };
+});
+
 vi.mock("@/lib/ask/pipeline", () => ({
   generateAskResponse: vi.fn(),
 }));
@@ -15,6 +26,8 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/rate-limit/reserve-ask-query", () => ({
   reserveAskQuery: vi.fn(),
 }));
+
+import { routeAskMessage } from "@/lib/ask/routing";
 
 import { POST } from "@/app/api/ask/route";
 import { fallbackInsightCard } from "@/lib/ask/contracts";
@@ -68,6 +81,7 @@ describe("POST /api/ask", () => {
     const body = await response.text();
     expect(body).toContain("Which country are you based in?");
     expect(reserveAskQuery).not.toHaveBeenCalled();
+    expect(routeAskMessage).toHaveBeenCalledTimes(1);
     expect(generateAskResponse).not.toHaveBeenCalled();
     expect(saveExchange).toHaveBeenCalledTimes(1);
   });
@@ -175,7 +189,7 @@ describe("POST /api/ask", () => {
           { role: "assistant", content: JSON.stringify(fallbackInsightCard) },
         ],
       }),
-      {},
+      { route: { kind: "model" } },
       expect.objectContaining({ onToolCall: expect.any(Function) }),
     );
   });
@@ -212,7 +226,7 @@ describe("POST /api/ask", () => {
           activeSide: "buy",
         }),
       }),
-      {},
+      { route: { kind: "model" } },
       expect.objectContaining({ onToolCall: expect.any(Function) }),
     );
     expect(saveExchange).toHaveBeenCalledWith(
@@ -251,7 +265,7 @@ describe("POST /api/ask", () => {
       expect.objectContaining({
         history: [{ role: "user", content: "Local fallback history" }],
       }),
-      {},
+      { route: { kind: "model" } },
       expect.objectContaining({ onToolCall: expect.any(Function) }),
     );
   });
@@ -310,7 +324,7 @@ describe("POST /api/ask", () => {
       expect.objectContaining({
         message: defaultAskImagePrompt,
       }),
-      {},
+      { route: { kind: "model" } },
       expect.objectContaining({ onToolCall: expect.any(Function) }),
     );
     expect(saveExchange).toHaveBeenCalledWith(

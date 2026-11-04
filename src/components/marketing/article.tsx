@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import type { Block } from "@/lib/blog/posts";
 
-export const slugify = (text: string) =>
+const slugify = (text: string) =>
   text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 /** Renders inline `[label](/href)` as internal Links; everything else stays plain text. */

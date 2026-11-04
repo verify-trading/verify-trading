@@ -61,7 +61,7 @@ const TIMING = {
 } as const;
 
 /** Merge real gold values over the scripted briefing card when available. */
-export function resolveExchanges(liveBriefing: HeroLiveBriefing | null): DemoExchange[] {
+function resolveExchanges(liveBriefing: HeroLiveBriefing | null): DemoExchange[] {
   if (!liveBriefing) return DEMO_EXCHANGES;
   return DEMO_EXCHANGES.map((exchange) =>
     exchange.card.type === "briefing"

@@ -177,7 +177,7 @@ export function howToSchema(input: {
   };
 }
 
-export const GLOSSARY_PATH = "/glossary";
+const GLOSSARY_PATH = "/glossary";
 
 export function definedTermSetSchema(input: { terms: Array<{ term: string; slug: string }> }): SchemaOrgObject {
   return {

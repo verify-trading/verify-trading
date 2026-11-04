@@ -450,7 +450,7 @@ export async function storeBillingCheckoutSession({
   return Boolean(data);
 }
 
-export async function markBillingCheckoutSessionCompleted({
+async function markBillingCheckoutSessionCompleted({
   userId,
   checkoutSessionId,
 }: {

@@ -68,7 +68,7 @@ export function scopeToChallenge<T extends { entry_date: string; trading_account
 }
 
 // Stored as a jsonb blob. Every field is optional — a session can be saved with none of them.
-export const tradeDetailsSchema = z
+const tradeDetailsSchema = z
   .object({
     asset: z.string().trim().max(40).optional(),
     direction: z.enum(["long", "short", "scalp"]).optional(),

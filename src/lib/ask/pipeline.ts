@@ -1,4 +1,4 @@
-import { getBrokerDiscovery } from "@/lib/ask/broker-discovery";
+import { routeAskMessage, type AskRoute } from "@/lib/ask/routing";
 import { generateText, stepCountIs, type ModelMessage } from "ai";
 
 import {
@@ -63,13 +63,12 @@ const ASK_MAX_STEPS = 10;
 /** Recent turns kept verbatim; older context is carried by session memory. */
 const MAX_HISTORY_TURNS = 12;
 
-const DIRECT_VERIFICATION_INTENT =
-  /\b(?:safe|legit(?:imate)?|regulated|regulation|authori[sz]ed|scam|trustworthy|complaints?|deposit)\b/i;
-
 type ToolResultRecord = { toolName?: string; output?: unknown };
+type AskStep = { toolResults?: ToolResultRecord[] };
 
 type AskGenerationDependencies = AskServiceDependencies & {
   retrieveAskKnowledgeImpl?: typeof retrieveAskKnowledge;
+  route?: AskRoute;
 };
 
 /**
@@ -89,39 +88,38 @@ const DETERMINISTIC_CARD_TOOLS = new Set([
   "generate_growth_plan",
 ]);
 
-function toolResultHasCompleteCard(toolResult: {
-  toolName?: string;
-  output?: unknown;
-}): boolean {
-  if (!toolResult.toolName || !DETERMINISTIC_CARD_TOOLS.has(toolResult.toolName)) {
-    return false;
-  }
+function parseToolCard(toolResult: ToolResultRecord): AskCard | null {
   const output =
     toolResult.output && typeof toolResult.output === "object"
       ? (toolResult.output as { card?: unknown })
       : null;
-  return askCardSchema.safeParse(output?.card).success;
+  const parsed = askCardSchema.safeParse(output?.card);
+  return parsed.success ? parsed.data : null;
 }
 
-export function stopAfterFinalToolResult({
-  steps,
-}: {
-  steps: Array<{ toolResults?: Array<{ toolName?: string; output?: unknown }> }>;
-}) {
-  const lastStep = steps[steps.length - 1];
-  const toolResults = lastStep?.toolResults ?? [];
-  return toolResults.some(
-    (toolResult) =>
-      (toolResult.toolName === "submit_ask_card" && askCardSchema.safeParse((toolResult.output as { card?: unknown } | null)?.card).success) || toolResultHasCompleteCard(toolResult),
-  );
+function lastStepToolResults(steps: AskStep[]): ToolResultRecord[] {
+  return steps[steps.length - 1]?.toolResults ?? [];
+}
+
+function finalCardIn(toolResults: ToolResultRecord[]): boolean {
+  return toolResults.some((toolResult) => {
+    const endsTurn =
+      toolResult.toolName === "submit_ask_card" ||
+      Boolean(toolResult.toolName && DETERMINISTIC_CARD_TOOLS.has(toolResult.toolName));
+    return endsTurn && Boolean(parseToolCard(toolResult));
+  });
+}
+
+export function stopAfterFinalToolResult({ steps }: { steps: AskStep[] }): boolean {
+  return finalCardIn(lastStepToolResults(steps));
 }
 
 /** Advice questions ("is £200 enough?") need the numbers explained, so a calculator card can't end the turn. */
 const ADVICE_QUESTION = /\b(?:enough|worth|should i|is it (?:ok|okay|good|wise|safe)|can i|good idea|realistic|beginner|new to)\b/i;
 
-function stopAfterSubmittedCard({ steps }: { steps: Array<{ toolResults?: Array<{ toolName?: string; output?: unknown }> }> }) {
-  return (steps[steps.length - 1]?.toolResults ?? []).some(
-    (toolResult) => toolResult.toolName === "submit_ask_card" && askCardSchema.safeParse((toolResult.output as { card?: unknown } | null)?.card).success,
+function stopAfterSubmittedCard({ steps }: { steps: AskStep[] }) {
+  return lastStepToolResults(steps).some(
+    (toolResult) => toolResult.toolName === "submit_ask_card" && Boolean(parseToolCard(toolResult)),
   );
 }
 
@@ -130,6 +128,7 @@ function plainSystemMessage(content: string): ModelMessage {
 }
 
 function buildAskMessages({
+  route,
   request,
   normalizedMessage,
   image,
@@ -137,14 +136,15 @@ function buildAskMessages({
   knowledgeContextBlock,
 }: {
   request: AskRequest;
+  route: AskRoute;
   normalizedMessage: string;
   image: ReturnType<typeof parseImageDataUrl>;
   analysisRulesMessage: string | null;
   knowledgeContextBlock: string | null;
 }): ModelMessage[] {
-  const discovery = getBrokerDiscovery(request);
+  const profile = route.kind !== "safety" ? route.profile : undefined;
   const memory = deriveAskSessionMemory(request.history, request.sessionMemory ?? null);
-  const sessionMemoryMessage = buildSessionMemoryMessage(discovery ? { ...memory, brokerPreferences: discovery.profile } : memory);
+  const sessionMemoryMessage = buildSessionMemoryMessage(profile ? { ...memory, brokerPreferences: profile } : memory);
 
   const userMessage: ModelMessage = image
     ? {
@@ -209,13 +209,9 @@ export function mergeToolOwnedNumbers(
       if (toolResult.toolName !== toolName) {
         continue;
       }
-      const output =
-        toolResult.output && typeof toolResult.output === "object"
-          ? (toolResult.output as { card?: unknown })
-          : null;
-      const parsed = askCardSchema.safeParse(output?.card);
-      if (parsed.success && parsed.data.type === type) {
-        return parsed.data;
+      const card = parseToolCard(toolResult);
+      if (card?.type === type) {
+        return card;
       }
     }
     return null;
@@ -257,16 +253,18 @@ export function mergeToolOwnedNumbers(
     // not ours — force "N/A" so a model-assembled score never reads as a rating.
     const verifiedDbCard = findToolCard("verify_entity", "broker");
     const gated = findEngineVerdict(toolResults, card.name);
-    if (verifiedDbCard?.type === "broker" && verifiedDbCard.name.trim().toLowerCase() === card.name.trim().toLowerCase() && gated && btsVerificationGate(gated.operatingStatus, gated.researchStatus)) return verifiedDbCard;
-    if (verifiedDbCard?.type === "broker" && verifiedDbCard.name.trim().toLowerCase() === card.name.trim().toLowerCase()) {
+    const sameFirm = (candidate: AskCard | null): candidate is Extract<AskCard, { type: "broker" }> =>
+      candidate?.type === "broker" && candidate.name.trim().toLowerCase() === card.name.trim().toLowerCase();
+
+    if (sameFirm(verifiedDbCard) && gated && btsVerificationGate(gated.operatingStatus, gated.researchStatus)) return verifiedDbCard;
+    if (sameFirm(verifiedDbCard)) {
       return { ...card, score: verifiedDbCard.score, status: verifiedDbCard.status, fca: verifiedDbCard.fca, complaints: verifiedDbCard.complaints, color: verifiedDbCard.color };
     }
     // A firm the engine scored but the site has no page for: the engine's number and verdict, verbatim.
-    const bts = findEngineVerdict(toolResults, card.name);
-    if (bts) {
-      const { verdict, score } = bts.shown;
+    if (gated) {
+      const { verdict, score } = gated.shown;
       const status = cardStatus(verdict);
-      return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: bts.conductRecord, color: statusColor(status) };
+      return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: gated.conductRecord, color: statusColor(status) };
     }
     return { ...card, score: "N/A" };
   }
@@ -394,8 +392,9 @@ export async function generateAskResponse(
   const messageId = crypto.randomUUID();
   const image = parseImageDataUrl(request.image);
   const normalizedMessage = request.message || (image ? defaultAskImagePrompt : "");
-  const discovery = getBrokerDiscovery(request);
-  if (discovery?.clarification) return askResponseSchema.parse({ data: discovery.clarification, sessionId, messageId });
+  const route = dependencies.route ?? await routeAskMessage(request);
+  if (route.kind === "questionnaire") return askResponseSchema.parse({ data: route.clarification, sessionId, messageId });
+  const profile = route.kind === "model" ? route.profile : undefined;
   const generationStartedAt = Date.now();
 
   logger.info("Ask generation started.", {
@@ -428,6 +427,7 @@ export async function generateAskResponse(
 
   const knowledgeContextBlock = buildKnowledgeContextBlock(knowledge);
   const messages = buildAskMessages({
+    route,
     request,
     normalizedMessage,
     image,
@@ -436,14 +436,14 @@ export async function generateAskResponse(
   });
 
   // A shortlist checks several firms at once; a shorter live-check wait keeps the reply inside the app timeout.
-  const baseTools = createAskTools({ ...dependencies, brokerPreferences: discovery?.profile ?? request.sessionMemory?.brokerPreferences, ...(discovery ? { liveCheckWaitMs: 60_000 } : {}) });
+  const baseTools = createAskTools({ ...dependencies, brokerPreferences: profile ?? request.sessionMemory?.brokerPreferences, ...(route.kind === "model" && route.pick ? { liveCheckWaitMs: 60_000 } : {}) });
   const finalize = (
     card: AskCard,
     source: string,
     toolResults: ToolResultRecord[],
   ) => {
     const resolved = mergeToolOwnedNumbers(card, toolResults);
-    const comparison = resolved.type === "insight" && (discovery || toolResults.some(result => result.toolName === "list_verified_entities" && result.output && typeof result.output === "object" && "bts" in result.output));
+    const comparison = resolved.type === "insight" && (toolResults.some(result => result.toolName === "list_verified_entities" && result.output && typeof result.output === "object" && "bts" in result.output));
     const merged: AskCard = comparison ? { ...resolved, variant: "broker_discovery" } : resolved;
 
     logger.info("Ask generation completed.", {
@@ -469,11 +469,8 @@ export async function generateAskResponse(
   // avoids two slow gateway model turns (select verify_entity, then submit_ask_card) while
   // keeping fuzzy/unknown names on the model path where clarification and research matter.
   // A question about a place ("is IG safe in South Africa") goes to the model, which picks the country.
-  const exactVerifiedEntity = !image && DIRECT_VERIFICATION_INTENT.test(normalizedMessage) && !/\b(?:in|from)\s+\w/i.test(normalizedMessage)
-    ? knowledge.entityCandidates.find((candidate) => candidate.matchType === "exact")
-    : undefined;
-  if (exactVerifiedEntity) {
-    const verification = await resolveVerificationToolResult(exactVerifiedEntity.title, dependencies, dependencies.country);
+  if (route.kind === "safety") {
+    const verification = await resolveVerificationToolResult(route.firm, dependencies, dependencies.country);
     if ("card" in verification) {
       const c = verification.card;
       // The direct path skips the model, so it brings its own next questions for a scored firm.

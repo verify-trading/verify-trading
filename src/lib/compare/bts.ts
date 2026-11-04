@@ -32,6 +32,11 @@ export function toVerdict(raw: string | null | undefined, kind?: string): BtsVer
   return label === "Verified" && kind === "propfirm" ? "Record reviewed" : label;
 }
 
+/** Research gates override the engine verdict; the gate types come from btsVerificationGate. */
+export function gatedVerdict(gate: string | null, rawVerdict: string | null | undefined, kind?: string): BtsVerdict {
+  return gate === "needs_review" ? "Under review" : gate === "inactive" ? "Not active" : gate === "unknown" ? "Insufficient data" : toVerdict(rawVerdict, kind);
+}
+
 /** Ends the card when there is no official score or live check and the Layer 1 baseline is shown instead. */
 export const DATABASE_ONLY = "Independent verification is still pending, so this is our baseline assessment.";
 
@@ -41,10 +46,8 @@ export const cardStatus = (v: string) =>
 /** Card colour for a status: green, amber for a mid-range Caution, red otherwise. */
 export const statusColor = (status: string) => (status === "LEGITIMATE" ? "green" : status === "CAUTION" ? "amber" : "red") as "green" | "amber" | "red";
 
-/** Verdicts that never show a number (the engine leaves the score empty or it isn't meaningful). */
+/** Verdicts that never show a number (the engine leaves the score empty or it isn't meaningful); also left out of every list and ranking. */
 export const SCORELESS: ReadonlySet<BtsVerdict> = new Set(["Under review", "Not active", "Not available"]);
-/** Left out of every list and ranking (still reachable by name search and on their own page). */
-export const UNLISTED: ReadonlySet<BtsVerdict> = new Set(["Under review", "Not active", "Not available"]);
 
 /** Pillar order and maximum points, per the approved method. */
 export const PILLARS = {
@@ -100,7 +103,7 @@ export const pillarDisplay = (p: BtsPillar) => (/not checked/i.test(p.value) ? "
  * falls back to the global rating, because licence data outside these markets is not complete yet
  * (it would show IG as 40 Caution in Germany). Add a market only after its licence-completion pass.
  */
-export const FULL_COUNTRY_VERDICTS: ReadonlySet<string> = new Set(["GB"]);
+const FULL_COUNTRY_VERDICTS: ReadonlySet<string> = new Set(["GB"]);
 
 /**
  * Countries the engine has rows for (66; XX = unknown). Names are fixed rather than Intl.DisplayNames,

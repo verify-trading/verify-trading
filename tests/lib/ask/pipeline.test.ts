@@ -9,13 +9,27 @@ vi.mock("@/lib/observability/logger", () => ({
 }));
 
 import {
-  generateAskResponse,
+  generateAskResponse as generateResponse,
   mergeToolOwnedNumbers,
   stopAfterFinalToolResult,
 } from "@/lib/ask/pipeline";
 import { fallbackInsightCard, imageFallbackInsightCard } from "@/lib/ask/contracts";
 import { DEFAULT_ASK_MODEL } from "@/lib/ask/service/provider";
 import { logger } from "@/lib/observability/logger";
+
+import { routeAskMessage } from "@/lib/ask/routing";
+
+async function generateAskResponse(input: Parameters<typeof generateResponse>[0], deps: Parameters<typeof generateResponse>[1] = {}, callbacks?: Parameters<typeof generateResponse>[2]) {
+  const route = deps.route ?? await routeAskMessage(input, {
+    classify: async () => ({ intent: "other" }),
+    lookupExact: async name => {
+      const knowledge = await deps.retrieveAskKnowledgeImpl?.(name);
+      const exact = knowledge?.entityCandidates.filter(candidate => candidate.matchType === "exact") ?? [];
+      return exact.length === 1 ? exact[0].title : null;
+    },
+  });
+  return generateResponse(input, { ...deps, route }, callbacks);
+}
 
 const insightCard = {
   type: "insight" as const,
@@ -318,7 +332,7 @@ describe("generateAskResponse", () => {
     });
 
     const response = await generateAskResponse(
-      baseRequest("Is Pepperstone safe for UK retail CFD?"),
+      baseRequest("Is Pepperstone safe?"),
       { generateTextImpl, retrieveAskKnowledgeImpl, lookupVerifiedEntityImpl, getFcaStatusImpl },
     );
 

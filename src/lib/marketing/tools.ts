@@ -15,7 +15,7 @@ import {
 
 export const TOOL_PAIRS = ["EUR/USD", "GBP/USD", "AUD/USD", "NZD/USD", "USD/JPY", "USD/CAD", "USD/CHF", "EUR/GBP", "EUR/JPY", "GBP/JPY"] as const;
 export const ACCOUNT_CURRENCIES = ["USD", "GBP", "EUR"] as const;
-export const CONTRACT_SIZE = 100_000;
+const CONTRACT_SIZE = 100_000;
 
 /** True when neither side of the pair is the account currency, so the user must supply a rate. */
 export function needsQuoteRate(pair: string, account: string): boolean {

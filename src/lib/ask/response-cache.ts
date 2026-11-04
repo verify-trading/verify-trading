@@ -30,8 +30,8 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
  *
  * Safety comes from being strict about what is cached: a hit shows one user's
  * answer to another, so we only cache image-free, first-message lookups whose
- * words are just the firm name plus generic vocabulary, and only single
- * broker/guru cards. Anything else runs the normal pipeline. A miss (or any
+ * words are just the firm name plus generic vocabulary, and only single guru
+ * cards. Anything else runs the normal pipeline. A miss (or any
  * cache error) behaves exactly like today, so the worst a bug can do is "no
  * hit" — never a wrong answer.
  */
@@ -41,7 +41,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 const CACHE_TABLE = "ask_response_cache";
 
 /** Bump when the card schema or system prompt changes what answers look like. */
-const CACHE_SCHEMA_VERSION = 5; // v4: historical research and hard operating/research status gates
+const CACHE_SCHEMA_VERSION = 5; // v5: sourced clone notices
 
 /** How long a cached answer lives. The key already invalidates on any register
  * edit (see buildCacheKey), so these only guard slow off-register drift. */
@@ -144,10 +144,9 @@ export function isGenericEntityLookup(message: string, entity: VerifiedEntity): 
  */
 export function responseIsCacheable(response: AskResponse, entity: VerifiedEntity): boolean {
   const card = response.data;
-  if (card.type !== "broker" && card.type !== "guru") return false;
   // Broker answers are never replayed: a person can publish or reject a score in Supabase at any time, and
   // Ask must show the standing as it is now. Official scores are stored, so these answers are fast anyway.
-  if (card.type === "broker" || card.verdict.includes(DATABASE_ONLY)) return false;
+  if (card.type !== "guru" || card.verdict.includes(DATABASE_ONLY)) return false;
 
   const cardName = collapseEntityText(card.name ?? "");
   const firmNames = new Set([collapseEntityText(entity.name), ...entity.collapsedAliases]);
@@ -199,8 +198,9 @@ export function buildAskResponseCacheKey(entity: VerifiedEntity, modelId: string
 export async function readCachedAskResponse(input: AskCacheRequest): Promise<CachedPayload | null> {
   try {
     const entity = await resolveCacheableEntity(input);
-    const client = entity && getSupabaseAdminClient();
-    if (!entity || !client) return null;
+    if (!entity) return null;
+    const client = getSupabaseAdminClient();
+    if (!client) return null;
 
     const cacheKey = buildAskResponseCacheKey(entity, getAskPrimaryModelId(), await getRequestCountrySafe());
     const { data, error } = await client
@@ -249,7 +249,6 @@ export async function maybeCacheAskResponse(
     if (!client) return;
 
     const developing =
-      response.data.type === "broker" || // official scores can change on approval: replay for a day at most
       Boolean(response.uiMeta?.propFirm?.developing) ||
       Boolean(entity.researchStatus) ||
       Boolean(entity.provisional);

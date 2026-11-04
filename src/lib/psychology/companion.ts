@@ -44,7 +44,7 @@ export type LastCall = {
 };
 
 // Null on an unparseable value, so the prompt drops the phrase instead of "NaN days ago".
-export function daysAgoPhrase(iso: string | undefined | null): string | null {
+function daysAgoPhrase(iso: string | undefined | null): string | null {
   const at = new Date(iso ?? "").getTime();
   if (Number.isNaN(at)) return null;
   const days = Math.floor(Date.now() / 86_400_000) - Math.floor(at / 86_400_000);

@@ -42,21 +42,21 @@ function formatReviewCount(count: number): string {
   return count >= 1000 ? `${Math.round(count / 1000)}k` : String(count);
 }
 
+const asOfDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
 /** "2026-07-08" → "Jul 8"; anything unparseable renders as-is. */
 function formatAsOfDate(value: string): string {
   const date = new Date(value.includes("T") ? value : `${value}T00:00:00Z`);
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return Number.isNaN(date.getTime()) ? value : asOfDate.format(date);
 }
 
-/** A non-numeric score (e.g. "Provisional") shows the label only — a bar would render a NaN width. */
 /** "93/100" (BTS engine) -> 93 of 100; a bare legacy "7.7" -> 7.7 of 10; anything else is shown as text. */
 function parseScore(score: string) {
   const m = score.match(/^\s*(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+))?\s*$/);
   return m ? { value: Number(m[1]), max: Number(m[2] ?? 10) } : null;
 }
 
+/** A non-numeric score (e.g. "Provisional") shows the label only — a bar would render a NaN width. */
 function TrustScoreBar({ score, accent }: { score: string; accent: string }) {
   const parsed = parseScore(score);
 
@@ -264,10 +264,12 @@ function BrokerCard({
 
 type LiveCheck = NonNullable<AskUiMeta["verification"]>;
 
+const checkedOnDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
 /** "2026-11-03T16:43:39Z" -> "3 Nov 2026". */
 const checkedOn = (value: string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value.slice(0, 10) : date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return Number.isNaN(date.getTime()) ? value.slice(0, 10) : checkedOnDate.format(date);
 };
 
 /** Evidence under the answer: date line, then score breakdown and findings, each folded until asked for. */

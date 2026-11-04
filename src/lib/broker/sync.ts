@@ -104,7 +104,7 @@ export const LOGIN_REJECTED_DETAIL =
 const LOGIN_REJECTED_PREFIX = "Your broker turned the login away";
 
 /** True for ANY wording a login rejection has ever been stamped with, current or legacy. */
-export function isLoginRejectedDetail(detail: string | null): boolean {
+function isLoginRejectedDetail(detail: string | null): boolean {
   return detail?.startsWith(LOGIN_REJECTED_PREFIX) ?? false;
 }
 

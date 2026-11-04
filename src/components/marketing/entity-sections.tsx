@@ -5,13 +5,14 @@ import type { ReactNode } from "react";
 import { Faq } from "@/components/marketing/primitives";
 import { EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { JsonLd } from "@/components/seo/json-ld";
+import { verdictTone } from "@/lib/compare/bts";
 import { entityPath } from "@/lib/compare/insights";
 import type { PublicEntity, RegulatorRef, Verdict } from "@/lib/compare/entities";
 import { STANDING_LABEL, getRegulator, type Standing } from "@/lib/compare/regulators";
 import { cn } from "@/lib/utils";
 
 /** What each BTS verdict means, in the approved method's words. No claims beyond the rule. */
-export const BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
+const BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
   { verdict: "Strong", text: "Independently verified, 85+: strong licences and client protections, backed by sourced evidence." },
   { verdict: "Generally positive", text: "Independently verified, 70–84: properly licensed and broadly sound, with points worth checking." },
   { verdict: "Verified", text: "Score 75+, research complete, and an active tier 1 or 2 licence held by the entity serving retail clients." },
@@ -24,19 +25,21 @@ export const BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
 ];
 
 /** Separate scale for people: no numeric score, three tiers, each one defensible. */
-export const GURU_BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
+const GURU_BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
   { verdict: "Verified", text: "A public track record we have independently confirmed. Not an endorsement of any strategy." },
   { verdict: "Unverified", text: "The neutral default. Record is published but no verified track record is on file. Not an accusation." },
   { verdict: "Caution", text: "A documented regulator or court action is on file, with the source cited on the record." },
 ];
 
-const barTone: Record<string, string> = {
-  Strong: "bg-[var(--vt-green)]",
-  "Generally positive": "bg-[var(--vt-green)]",
-  Verified: "bg-[var(--vt-green)]",
-  Caution: "bg-[var(--vt-amber)]",
-  "High risk": "bg-[var(--vt-coral)]",
+const barTone: Record<ReturnType<typeof verdictTone>, string> = {
+  green: "bg-[var(--vt-green)]",
+  amber: "bg-[var(--vt-amber)]",
+  coral: "bg-[var(--vt-coral)]",
+  slate: "bg-slate-500",
 };
+
+/** Background colour for the verdict dot and split bars. */
+export const verdictBarClass = (verdict: string) => barTone[verdictTone(verdict)];
 
 /** The verdict scale: hairline-separated rows, one line per band. */
 export function VerdictBands({ current, counts, gurus = false, propFirms = false }: { current?: Verdict; counts?: Partial<Record<Verdict, number>>; gurus?: boolean; propFirms?: boolean }) {
@@ -54,7 +57,7 @@ export function VerdictBands({ current, counts, gurus = false, propFirms = false
           aria-current={current === b.verdict ? "true" : undefined}
         >
           <div className="flex items-center gap-2.5">
-            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", barTone[b.verdict] ?? "bg-slate-500")} />
+            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", verdictBarClass(b.verdict))} />
             <VerdictBadge verdict={b.verdict} />
             {current === b.verdict ? <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--vt-coral)]">This record</span> : null}
           </div>
@@ -96,6 +99,20 @@ export function TocNav({ items }: { items: Array<{ id: string; label: string }> 
         ))}
       </ol>
     </nav>
+  );
+}
+
+/** Numbered "how to verify" checklist shared by entity and regulator pages. */
+export function VerifySteps({ steps }: { steps: string[] }) {
+  return (
+    <ol className="divide-y divide-white/10 border-y border-white/10">
+      {steps.map((s, i) => (
+        <li key={s} className="flex gap-4 py-4 sm:gap-6 sm:py-5">
+          <span className="shrink-0 font-mono text-xs font-semibold text-[var(--vt-coral)] tabular-nums">{String(i + 1).padStart(2, "0")}</span>
+          <p className="text-[15px] leading-7 text-slate-300">{s}</p>
+        </li>
+      ))}
+    </ol>
   );
 }
 

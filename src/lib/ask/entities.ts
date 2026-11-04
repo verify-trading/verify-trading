@@ -15,7 +15,7 @@ export type VerifiedEntityStatus = "legitimate" | "warning" | "avoid";
 export type { CardConfirmedFact, EntityCardFacts };
 
 /** Marks a record retained on discovery but never scored. Single source of truth. */
-export const DEVELOPING_RESEARCH_STATUS = "DEVELOPING — MONITOR";
+const DEVELOPING_RESEARCH_STATUS = "DEVELOPING — MONITOR";
 
 export interface TrustpilotSnapshot {
   rating: number;

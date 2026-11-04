@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, ExternalLink } from "lucide-react";
 
 import { Breadcrumbs, CtaBand } from "@/components/marketing/primitives";
-import { Block, FaqBlock, StandingBadge, TocNav, VerdictBands } from "@/components/marketing/entity-sections";
+import { Block, FaqBlock, StandingBadge, TocNav, VerdictBands, VerifySteps, verdictBarClass } from "@/components/marketing/entity-sections";
 import { EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -35,18 +35,12 @@ const GENERAL_FAQS = [
 ];
 
 /** Segmented bar of verdict counts. Decorative: the counts are also written out beside it. */
+const SPLIT_ORDER: Array<keyof HubStats["verdicts"]> = ["Strong", "Generally positive", "Verified", "Caution", "High risk", "Insufficient data"];
+
 function VerdictSplit({ verdicts, total }: { verdicts: HubStats["verdicts"]; total: number }) {
-  const tones: Array<[keyof HubStats["verdicts"], string]> = [
-    ["Strong", "bg-[var(--vt-green)]"],
-    ["Generally positive", "bg-[var(--vt-green)]"],
-    ["Verified", "bg-[var(--vt-green)]"],
-    ["Caution", "bg-[var(--vt-amber)]"],
-    ["High risk", "bg-[var(--vt-coral)]"],
-    ["Insufficient data", "bg-slate-500"],
-  ];
   return (
     <div aria-hidden className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-      {tones.map(([v, cls]) => (verdicts[v] ? <span key={v} className={cls} style={{ width: `${((verdicts[v] ?? 0) / total) * 100}%` }} /> : null))}
+      {SPLIT_ORDER.map((v) => (verdicts[v] ? <span key={v} className={verdictBarClass(v)} style={{ width: `${((verdicts[v] ?? 0) / total) * 100}%` }} /> : null))}
     </div>
   );
 }
@@ -134,7 +128,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
   const { regulator: r, entities, verdicts } = hub;
   const path = `/regulators/${r.slug}`;
   const n = entities.length;
-  const top = entities.filter((e) => e.score !== null);
+  const hasScored = entities.some((e) => e.score !== null);
   const faqs = [
     { q: `What protection does a ${r.code} licence give clients?`, a: `${r.protections.join(" ")} These are general facts about the regime; what applies to you depends on the licensed entity and your client category.` },
     { q: `How many brokers hold a ${r.code} licence in your register?`, a: `${n.toLocaleString("en-GB")} of the brokers in our register have an active ${r.name} (${r.code}) licence verified on the register in our latest research. Licences change, so check the register yourself before you deposit.` },
@@ -206,14 +200,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
           </Block>
 
           <Block id="verify" title={`How to check the ${r.code} register`}>
-            <ol className="divide-y divide-white/10 border-y border-white/10">
-              {steps.map((s, i) => (
-                <li key={s} className="flex gap-4 py-4 sm:gap-6 sm:py-5">
-                  <span className="shrink-0 font-mono text-xs font-semibold text-[var(--vt-coral)] tabular-nums">{String(i + 1).padStart(2, "0")}</span>
-                  <p className="text-[15px] leading-7 text-slate-300">{s}</p>
-                </li>
-              ))}
-            </ol>
+            <VerifySteps steps={steps} />
             {r.registerUrl ? (
               <a href={r.registerUrl} target="_blank" rel="noopener noreferrer nofollow" className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 transition-colors hover:text-white">
                 {r.registerLabel} <ExternalLink className="size-3.5" aria-hidden />
@@ -230,7 +217,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
                 Browse all {n.toLocaleString("en-GB")} in Compare Brokers <ArrowRight className="size-3.5" aria-hidden />
               </Link>
             ) : null}
-            {top.length === 0 ? <p className="mt-3 text-sm text-slate-500">None of these records has a score yet.</p> : null}
+            {hasScored ? null : <p className="mt-3 text-sm text-slate-500">None of these records has a score yet.</p>}
           </Block>
 
           <Block id="verdicts" title={`Verdicts for ${r.code} brokers`} intro="How the brokers licensed by this regulator are spread across our verdicts.">
