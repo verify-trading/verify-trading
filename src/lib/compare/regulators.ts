@@ -377,20 +377,31 @@ const ENGINE_ONLY: Record<string, { code: string; country: string | null }> = {
 export function regulationLabel(licences: string | null | undefined, country: string, live: string[] = []): string | null {
   // Short codes several countries share read better with their country ("FSA Seychelles").
   const ambiguous = new Set(["FSA", "FSC", "CMA", "SEC", "FMA", "FSRA", ...REGULATORS.map((r) => r.code).filter((code, i, all) => all.indexOf(code) !== i)]);
+  const fca = country === "GB" ? "FCA" : "FCA (UK entity)";
   const codes = (licences ?? "").split("|").map((l) => l.split(":")[0].trim()).filter((c) => /^[A-Z_]+$/.test(c));
-  if (country !== "GB") codes.sort((a, b) => Number(a === "FCA") - Number(b === "FCA"));
   const stored = codes.map((c) => {
     const r = regulatorForEngineCode(c);
-    if (r.code === "FCA" && country !== "GB") return "FCA (UK entity)";
+    if (r.code === "FCA") return fca;
     return ambiguous.has(r.code) && r.country ? `${r.code} ${r.country}` : r.code;
   });
   const key = (label: string) => label.split(/[\s(]/)[0].toUpperCase();
   const seen = new Set(stored.map(key));
-  // Live-confirmed regulators first: they are current; stored ones fill in.
-  const fresh = live.filter((l) => !seen.has(key(l)) && !(key(l) === "FCA" && country !== "GB"));
-  const labels = [...new Set([...fresh, ...stored])];
+  // Live-confirmed regulators come first within a tier: they are current; stored ones fill in.
+  const fresh = live.filter((l) => !seen.has(key(l))).map((l) => (key(l) === "FCA" ? fca : l));
+  // Bigger regulators lead (FCA, ASIC, CySEC before offshore ones like SCB Bahamas).
+  const labels = [...new Set([...fresh, ...stored])].sort((a, b) => standingRank(a) - standingRank(b));
   if (!labels.length) return null;
   return labels.slice(0, 3).join(", ") + (labels.length > 3 ? ` +${labels.length - 3}` : "");
+}
+
+const STANDING_RANK: Record<Standing, number> = { major: 0, regional: 1, registration: 2, offshore: 3 };
+
+/** Tier of a display label such as "FCA (UK entity)", "FSA Seychelles" or "SCB"; unknown codes sit mid-table. */
+function standingRank(label: string): number {
+  const [code, ...place] = label.replace(/\(.*\)/, "").trim().split(/\s+/);
+  const where = place.join(" ").toLowerCase();
+  const hits = REGULATORS.filter((r) => r.code.toUpperCase() === code.toUpperCase() && (!where || r.country?.toLowerCase().includes(where)));
+  return hits.length ? Math.min(...hits.map((r) => STANDING_RANK[r.standing])) : 2;
 }
 
 /** True when any register-verified licence is from a major regulator (FCA, ASIC, CySEC…). */

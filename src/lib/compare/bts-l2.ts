@@ -19,7 +19,7 @@ type Kind = "broker" | "propfirm";
 /** Pilot weights from the Phase 2 handover (1 Nov 2026). Bump the version when they change. */
 export const L2_RUBRIC = {
   broker: {
-    version: "l2-broker-1.10",
+    version: "l2-broker-1.11",
     pillars: [
       ["regulation", "Regulatory position and jurisdiction", 40, "actual licence holder, status, authorised activity, local vs cross-border relevance; distinguish group entities"],
       ["client_protection", "Client protections", 20, "segregation, negative-balance protection, compensation scope, withdrawals; per account entity"],
@@ -29,7 +29,7 @@ export const L2_RUBRIC = {
     ],
   },
   propfirm: {
-    version: "l2-prop-1.10",
+    version: "l2-prop-1.11",
     pillars: [
       ["identity", "Company identity and continuity", 20, "confirmed business identity, operating entity, history and accessibility"],
       ["payout", "Payout credibility", 20, "payout eligibility, independent payment evidence, disputes; self-reported totals count less"],
@@ -86,7 +86,7 @@ const researchSchema = z.object({
   }).describe("Trading conditions stated on the firm's own pages you retrieved, for the account a trader in the user's country would get. Write 'not found' for anything you couldn't confirm. Prop firms: platforms, fees and trading rules."),
   regulators: z.array(z.string()).describe("Short names of regulators whose public register you retrieved and which list the operating entity as licensed or registered now, e.g. 'FSA Seychelles', 'FSCA', 'ASIC'. Empty if none was confirmed on a register."),
   answer: z.string().describe("Quick take, at most 2 sentences and 35 words, first person with contractions (I'd, isn't, can't). Match the evidence: no recognised licence or active warnings against the operator means \"I'd avoid...\"; mixed evidence \"I'd be careful with...\"; strong evidence \"I'd be comfortable with... as long as...\". No company numbers, source names or jargon."),
-  concern: z.string().describe("Why, at most 2 sentences and 45 words: the evidence behind that view. For a regulator warning say who issued it, what it found, the country it applies to and that it is not proof of fraud. For a strong firm, what supports it."),
+  concern: z.string().describe("Why, at most 2 sentences and 45 words: the evidence behind that view. For a regulator warning say who issued it, what it found, the country it applies to and that it is not proof of fraud. For a strong firm, what supports it (its major licences and protections) and then, briefly, the main thing to watch."),
   recommendation: z.string().describe("What to do next, at most 2 sentences and 30 words, first person with contractions, specific to the trader's country."),
 });
 type Research = z.infer<typeof researchSchema>;
@@ -183,6 +183,7 @@ Evidence rules:
 
 Scoring rules:
 - Award points per pillar for evidence you found and cite in source_ids. Missing evidence earns partial points at most, and the reason says what was missing.
+- Weigh regulators by standing. A current licence from a major or well-recognised regulator (e.g. FCA, ASIC, CySEC, BaFin, CFTC/NFA, MAS, FINMA) is the strongest evidence and anchors the score. For an operator that holds such licences, another country's notice that it is not authorised there (e.g. Brazil CVM, Japan FSA, India) is a small conduct deduction, not a reason for Caution, unless it applies to the user's country, comes from one of those major regulators or alleges fraud. Offshore licences (e.g. SCB Bahamas, FSA Seychelles) add little and never outweigh a major one. Lead the answer and summary with the major regulators.
 - A historical, settled sanction should be weighed by severity, remediation, recency and the exact entity. It does not cancel an active primary licence or current client protections.
 - Full points are rare and need positive, sourced evidence. "No complaints found" is not evidence of good conduct.
 - Do not produce a total; it is calculated from your pillar points.

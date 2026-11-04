@@ -48,16 +48,17 @@ describe("regulation label", () => {
   it("lists verified regulators, FCA last and scoped outside the UK", async () => {
     const { regulationLabel } = await import("@/lib/compare/regulators");
     expect(regulationLabel("FCA:684312|CYSEC:388/20", "GB")).toBe("FCA, CySEC");
-    expect(regulationLabel("FCA:684312|CYSEC:388/20", "MA")).toBe("CySEC, FCA (UK entity)");
+    expect(regulationLabel("FCA:684312|CYSEC:388/20", "MA")).toBe("FCA (UK entity), CySEC");
     expect(regulationLabel("none", "GB")).toBeNull();
   });
 });
 
 describe("regulation label with live-confirmed regulators", () => {
-  it("adds live register finds first and spells out shared codes", async () => {
+  it("leads with bigger regulators and spells out shared codes", async () => {
     const { regulationLabel } = await import("@/lib/compare/regulators");
-    expect(regulationLabel(undefined, "ZA", ["FSA Seychelles", "FSCA"])).toBe("FSA Seychelles, FSCA");
-    expect(regulationLabel("FSA_SC:SD028|CYSEC:120/10", "NG")).toBe("FSA Seychelles, CySEC");
-    expect(regulationLabel("FCA:1", "MA", ["FCA", "FSA Seychelles"])).toBe("FSA Seychelles, FCA (UK entity)");
+    expect(regulationLabel(undefined, "ZA", ["FSA Seychelles", "FSCA"])).toBe("FSCA, FSA Seychelles");
+    expect(regulationLabel("FSA_SC:SD028|CYSEC:120/10", "NG")).toBe("CySEC, FSA Seychelles");
+    expect(regulationLabel("FCA:1", "MA", ["FCA", "FSA Seychelles"])).toBe("FCA (UK entity), FSA Seychelles");
+    expect(regulationLabel("FCA:1|CYSEC:2", "XX", ["SCB Bahamas"])).toBe("FCA (UK entity), CySEC, SCB Bahamas");
   });
 });
