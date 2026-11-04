@@ -92,7 +92,9 @@ export function CountryVerdict({
     ? local.score === null
       ? `Under review for ${countryName(country!)}: new evidence is being checked`
       : `Official score for ${countryName(country!)} · checked ${formatRecordDate(local.checkedAt)}`
-    : basis === "official"
+    : score === null && verdict === "Under review"
+      ? "Under review: new evidence is being checked"
+      : basis === "official"
       ? `Independently verified · checked ${formatRecordDate(checkedAt)}`
       : basis === "baseline"
         ? "Baseline score · independent verification pending"

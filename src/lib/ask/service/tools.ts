@@ -1095,6 +1095,16 @@ function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "ve
 }
 
 
+/** First sentence of a baseline (Layer 1) answer, in the same plain voice as the live check. */
+function baselineOpener(verdict: string, firm: string, country: string | null): string {
+  const where = country ? ` in ${country}` : "";
+  if (verdict === "Verified" || verdict === "Record reviewed") return `Our preliminary record suggests ${firm}${where} is sound, as long as you confirm which company holds your account.`;
+  if (verdict === "Caution") return `Our preliminary record suggests being careful with ${firm}${where}.`;
+  if (verdict === "High risk") return `Our preliminary record suggests avoiding ${firm}${where}.`;
+  if (verdict === "Insufficient data") return `There isn't enough verified evidence to rate ${firm}${where} yet.`;
+  return `${verdict}${where}.`;
+}
+
 /**
  * The card shows the final verdict and score verbatim: the live check's when it ran, else the
  * engine's for the user's country. Live FCA data and old record fields never change it.
@@ -1125,7 +1135,7 @@ function applyBtsToCard(card: BrokerCard, bts: CheckedBts): BrokerCard {
     verdict: live
       ? (note ?? "")
       // The card keeps 3 sentences, so the fallback drops the note to keep its "stored assessment" label.
-      : [`${verdict}${bts.shown.global ? "" : ` for ${bts.userCountry}`}.`, reason, "scoreSource" in bts ? DATABASE_ONLY : sameAsReason ? "" : (note ?? "")]
+      : [baselineOpener(verdict, bts.firm, bts.shown.global ? null : countryName(bts.countryCode)), reason && `Main reason: ${reason}`, "scoreSource" in bts ? DATABASE_ONLY : sameAsReason ? "" : (note ?? "")]
           .filter(Boolean)
           .join(" "),
   };
@@ -1183,7 +1193,11 @@ export async function resolveVerificationToolResult(
   const checkWithoutBaseline = async (firm: string, kind?: "broker" | "propfirm") => {
     const countryCode = isoCountry(country) ?? await getRequestCountrySafe();
     const l2 = await waitForLiveCheck({ firm, kind, country: countryCode }, dependencies.getL2AssessmentImpl, dependencies.liveCheckWaitMs);
-    if (!l2) return null;
+    // Same standing rules as engine firms: thin evidence shows nothing new, a disputed check shows no score.
+    if (!l2 || (l2.status !== "published" && !isDisputed(l2))) return null;
+    if (isDisputed(l2)) {
+      return withCard({ type: "broker", name: firm, score: "No score", status: "CAUTION", fca: "No", complaints: "Not checked", color: "amber", verdict: `Our latest check found new evidence about ${firm} that changes its rating, so we're reviewing it before publishing a score. Until then, check the regulator's register yourself before depositing.` }, { verificationKind: l2.kind, verificationSourceLabel: "Under review" });
+    }
     const bts: CheckedBts = {
       firm,
       entityId: `name:${firm.trim().toLowerCase()}`,

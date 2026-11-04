@@ -150,7 +150,7 @@ export function EntityDetail({ entity: e, all, official = null, countryScores = 
                 <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-300">{lede(e)}</p>
               </div>
               <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-white/[0.08] bg-black/25 px-5 py-4">
-                {bts && e.score !== null ? (
+                {bts && e.scoreBasis !== undefined ? (
                   <CountryVerdict verdict={e.verdict} score={e.score} basis={e.scoreBasis ?? null} checkedAt={e.updatedAt} countryScores={countryScores} />
                 ) : (
                   <div className="flex items-center gap-4">
@@ -205,7 +205,7 @@ export function EntityDetail({ entity: e, all, official = null, countryScores = 
             title="Why this score"
             intro={
               official
-                ? `Independently verified rating ${e.score} out of 100, ${e.verdict}. Checked ${formatRecordDate(official.checkedAt)}. The same assessment Ask explains.`
+                ? `Global rating, independently verified: ${e.score} out of 100, ${e.verdict}. Checked ${formatRecordDate(official.checkedAt)}. The same assessment Ask explains; a country score above comes with its own assessment in Ask.`
                 : bts
                   ? `Baseline rating ${e.score !== null ? `${e.score} out of 100, ` : ""}${e.verdict}. Independent verification is pending. Last researched ${formatRecordDate(bts.researchDate)}.`
                   : `${e.name} has not been scored yet.`
