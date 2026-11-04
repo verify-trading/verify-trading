@@ -1,5 +1,5 @@
 import { getRegulator, REGULATORS, type Regulator } from "@/lib/compare/regulators";
-import { UNLISTED, type BtsVerdict } from "@/lib/compare/bts";
+import { SCORELESS, type BtsVerdict } from "@/lib/compare/bts";
 import type { PublicEntity, PublicEntityType, Verdict } from "@/lib/compare/entities";
 
 /** Best first. Used to say which record rates higher. */
@@ -19,7 +19,7 @@ export const VERDICT_RANK: Record<Verdict, number> = {
 };
 
 /** Shown in lists and rankings: not Under review, Not active or Not available. */
-export const isListed = (e: { verdict: Verdict }) => !UNLISTED.has(e.verdict as BtsVerdict);
+export const isListed = (e: { verdict: Verdict }) => !SCORELESS.has(e.verdict as BtsVerdict);
 
 /**
  * Thin-page rule. A record is indexable only when it has something beyond a name and a verdict:
@@ -105,7 +105,7 @@ export const pairKey = (a: string, b: string) => (a < b ? [a, b] : [b, a]) as [s
 const canonicalPair = (a: PublicEntity, b: PublicEntity): [PublicEntity, PublicEntity] => (a.slug < b.slug ? [a, b] : [b, a]);
 
 /** The one place the "X vs Y" URL shape lives: /compare/<type>/<a>-vs-<b>, slugs sorted. */
-export const vsBasePath = (type: PublicEntityType) => (type === "propfirm" ? "/compare/prop-firms" : "/compare/brokers");
+const vsBasePath = (type: PublicEntityType) => (type === "propfirm" ? "/compare/prop-firms" : "/compare/brokers");
 export const vsPath = (type: PublicEntityType, aSlug: string, bSlug: string) => {
   const [x, y] = pairKey(aSlug, bSlug);
   return `${vsBasePath(type)}/${x}-vs-${y}`;
@@ -121,12 +121,12 @@ export function parseVsPair(segment: string): [string, string] | null {
   return [a, b];
 }
 
-export const VS_PER_REGULATOR = 6;
+const VS_PER_REGULATOR = 6;
 /** Overall cap on indexed broker vs pages. The rest of a real pairing still renders, but noindex. */
-export const VS_CAP = 80;
+const VS_CAP = 80;
 /** Prop firms have no regulators, so the indexed set is the top-scoring firms paired with each other. */
-export const PROP_VS_TOP = 12;
-export const PROP_VS_CAP = 60;
+const PROP_VS_TOP = 12;
+const PROP_VS_CAP = 60;
 
 /**
  * Bounded set of broker "X vs Y" pages worth indexing: for each regulator with a reference entry, the

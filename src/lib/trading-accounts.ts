@@ -64,7 +64,7 @@ export async function archiveTradingAccount(admin: SupabaseClient, id: string): 
 
 
 /** What a trader's hand-logged days land in until they name something better. */
-export const DEFAULT_MANUAL_ACCOUNT_NAME = "My journal";
+const DEFAULT_MANUAL_ACCOUNT_NAME = "My journal";
 
 /**
  * The account a manual save belongs to when the client did not name one.

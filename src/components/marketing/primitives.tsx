@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import { SectionEyebrow } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { CtaLink, type CtaEvent } from "@/components/marketing/cta-link";
-import { PRODUCT_LINKS } from "@/lib/marketing/copy";
 import { breadcrumbSchema, type Crumb } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 import { cn } from "@/lib/utils";
@@ -270,35 +269,6 @@ export function Steps({ items }: { items: Array<{ title: string; body: string }>
         </li>
       ))}
     </ol>
-  );
-}
-
-/** Related products: card links in columns. */
-export function RelatedLinks({ keys, title = "Related products" }: { keys: string[]; title?: string }) {
-  const items = keys.map((k) => PRODUCT_LINKS[k]).filter(Boolean).slice(0, 3);
-  return (
-    <Section title={title} band>
-      <ul className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
-        {items.map((p) => (
-          <li key={p.href}>
-            <Link href={p.href} className="group flex h-full flex-col rounded-2xl border border-white/[0.08] bg-[linear-gradient(160deg,rgba(76,110,245,0.09),rgba(255,255,255,0.015)_55%)] p-5 transition hover:border-[var(--vt-blue)]/40 sm:p-6">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-base font-semibold text-white transition-colors group-hover:text-[var(--vt-coral)]">
-                  {p.name}
-                </span>
-                <span className="font-mono text-[11px] uppercase tracking-wider text-slate-400">
-                  {p.tier}
-                </span>
-              </div>
-              <p className="mt-2 text-[15px] leading-7 text-slate-400">{p.blurb}</p>
-              <span className="mt-auto inline-flex items-center gap-1 pt-3 text-sm font-medium text-slate-300 transition-colors group-hover:text-white">
-                Learn more <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" aria-hidden />
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Section>
   );
 }
 

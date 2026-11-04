@@ -20,7 +20,7 @@ function resolveBaseURL(value = process.env.OPENAI_BASE_URL) {
 }
 
 // Kept for explicit GPT overrides. Its gateway upstream is currently unavailable.
-export const codexProvider = createOpenAI({ baseURL: resolveBaseURL() });
+const codexProvider = createOpenAI({ baseURL: resolveBaseURL() });
 
 // Native Claude messages support our client tools and live web research. Pikachu omits
 // native search traces; verify against fresh page facts, not just providerExecuted events.
@@ -35,7 +35,7 @@ export const DEFAULT_ASK_MODEL = "claude-sonnet-5-5";
 const isClaude = (modelId: string) => modelId.startsWith("claude-");
 
 /** Model for the non-conversational writers (journal insight, challenge status). */
-export const DEFAULT_ASK_SIMPLE_MODEL = "claude-sonnet-5-5";
+const DEFAULT_ASK_SIMPLE_MODEL = "claude-sonnet-5-5";
 
 // Separate KEY GROUP, not just a separate model: with OPENAI_API_KEY every claude model
 // answers "Upstream service temporarily unavailable".
@@ -47,17 +47,17 @@ const coachProvider = createOpenAI({
 // The Mind coach only. Not ASK_SIMPLE_MODEL: that one also feeds the journal/challenge
 // writers, which are not voice and should not follow the coach's tradeoffs. Same model as
 // Ask; GPT overrides pin reasoning low because on a voice call the thinking is dead air.
-export const DEFAULT_COACH_MODEL = "claude-sonnet-5-5";
+const DEFAULT_COACH_MODEL = "claude-sonnet-5-5";
 
 export function getAskPrimaryModelId() {
   return process.env.ASK_MODEL ?? DEFAULT_ASK_MODEL;
 }
 
-export function getAskSimpleModelId() {
+function getAskSimpleModelId() {
   return process.env.ASK_SIMPLE_MODEL ?? DEFAULT_ASK_SIMPLE_MODEL;
 }
 
-export function getPsychologyCoachModelId() {
+function getPsychologyCoachModelId() {
   return process.env.ASK_COACH_MODEL ?? DEFAULT_COACH_MODEL;
 }
 

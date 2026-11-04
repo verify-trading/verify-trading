@@ -20,7 +20,7 @@ type MetaPixelPayload = {
   status?: string;
 };
 
-export function trackMetaPixelEvent(eventName: MetaPixelEventName, payload?: MetaPixelPayload) {
+function trackMetaPixelEvent(eventName: MetaPixelEventName, payload?: MetaPixelPayload) {
   if (typeof window === "undefined" || typeof window.fbq !== "function") {
     return;
   }

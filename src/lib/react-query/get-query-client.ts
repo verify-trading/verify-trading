@@ -2,7 +2,7 @@ import { QueryClient, isServer } from "@tanstack/react-query";
 import { cache } from "react";
 
 /** Keep in sync with {@link Providers} expectations (shell queries rely on ~60s stale time). */
-export const QUERY_CLIENT_DEFAULTS = {
+const QUERY_CLIENT_DEFAULTS = {
   queries: {
     staleTime: 60_000,
     gcTime: 5 * 60_000,

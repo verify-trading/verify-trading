@@ -1,4 +1,4 @@
-import { FREE_DAILY_ASK_LIMIT, PRO_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
+import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
 
 /**
  * Every marketing-page FAQ lives here so tests can enforce one rule:
@@ -158,4 +158,3 @@ export function allMarketingFaqs(): Faq[] {
   return out;
 }
 
-export const ASK_LIMITS = { free: FREE_DAILY_ASK_LIMIT, pro: PRO_DAILY_ASK_LIMIT };

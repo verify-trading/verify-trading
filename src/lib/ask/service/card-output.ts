@@ -3,7 +3,7 @@ import { z } from "zod";
 import { askCardSchema, type AskCard } from "@/lib/ask/contracts";
 import { extractJson } from "@/lib/ask/service/context";
 
-export const askCardOutputEnvelopeSchema = z.object({
+const askCardOutputEnvelopeSchema = z.object({
   card_json: z
     .string()
     .describe("A single JSON object string for the final response card. It must match the ask card schema exactly."),
@@ -172,7 +172,7 @@ export function buildInsightCardFromLooseCard(value: unknown): AskCard | null {
  * generic fallback. Returns null for JSON-shaped text — that is handled by the
  * card parsers above.
  */
-export function buildInsightCardFromModelText(text: string): AskCard | null {
+function buildInsightCardFromModelText(text: string): AskCard | null {
   const normalized = normalizeWhitespace(text);
   if (!normalized) {
     return null;

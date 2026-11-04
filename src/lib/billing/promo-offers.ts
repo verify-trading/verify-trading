@@ -2,8 +2,8 @@ import type { BillingPlanKey } from "@/lib/billing/config";
 
 export const PROMO_OFFER_COOKIE_NAME = "vt_promo_offer";
 export const TUBMAN_OFFER_KEY = "tubman-14-day";
-export const MONTHLY_TRIAL_OFFER_KEY = "monthly-14-day";
-export const TUBMAN_REFERRAL_TOKEN = "Tubman";
+const MONTHLY_TRIAL_OFFER_KEY = "monthly-14-day";
+const TUBMAN_REFERRAL_TOKEN = "Tubman";
 
 export const BILLING_PROMO_OFFER_KEYS = [TUBMAN_OFFER_KEY, MONTHLY_TRIAL_OFFER_KEY] as const;
 export type BillingPromoOfferKey = (typeof BILLING_PROMO_OFFER_KEYS)[number];

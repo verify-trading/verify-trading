@@ -54,7 +54,7 @@ function clampScore(value: number): number {
   return Math.round(Math.min(10, Math.max(0, value)) * 10) / 10;
 }
 
-export function isClosedFirm(firmStatus: string | null): boolean {
+function isClosedFirm(firmStatus: string | null): boolean {
   return /closed|defunct|shut down|wound down/i.test(firmStatus ?? "");
 }
 

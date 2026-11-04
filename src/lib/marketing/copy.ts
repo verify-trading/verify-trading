@@ -36,15 +36,3 @@ export const PRICING_FAQS: FaqItem[] = [
     a: "No. verify.trading publishes regulator-sourced records, risk maths and market context. We never tell you what to trade or where to deposit. The decision is always yours.",
   },
 ];
-
-export type ProductLink = { href: string; name: string; blurb: string; tier: "Free" | "Pro" };
-
-export const PRODUCT_LINKS: Record<string, ProductLink> = {
-  ask: { href: "/ask", name: "Ask", blurb: "Ask about a broker, a trade or the markets and get a cited answer.", tier: "Free" },
-  verify: { href: "/verify", name: "Verify", blurb: "Check brokers, prop firms and educators against regulator records.", tier: "Free" },
-  markets: { href: "/markets", name: "Markets", blurb: "Live prices and session context across gold, FX, indices and crypto.", tier: "Free" },
-  intelligence: { href: "/intelligence", name: "Intelligence", blurb: "A daily pre-session brief with bias and key levels.", tier: "Pro" },
-  calendar: { href: "/economic-calendar", name: "Economic Calendar", blurb: "Seven days of events with impact levels, filtered by country.", tier: "Pro" },
-  journal: { href: "/journal", name: "Journal", blurb: "Log sessions, tag mood and breaches, and get a weekly insight.", tier: "Pro" },
-  mind: { href: "/mind", name: "Mind", blurb: "A trading-psychology assessment and voice calls with a Companion.", tier: "Pro" },
-};

@@ -17,7 +17,7 @@ import { FREE_DAILY_ASK_LIMIT } from "@/lib/rate-limit/usage";
  */
 
 export const GUIDE_PATH = "/guide";
-export const GUIDE_PDF_PATH = "/guide-pdf";
+const GUIDE_PDF_PATH = "/guide-pdf";
 export const GUIDE_REVIEWED = "2026-10-29";
 export const GUIDE_TITLE = "AI Trading Prompts and Platform Guide";
 export const GUIDE_DESCRIPTION =
@@ -213,7 +213,7 @@ function PromptList({ group }: { group: PromptGroup }) {
   );
 }
 
-export const GUIDE_FAQS = [
+const GUIDE_FAQS = [
   {
     q: "Do the prompts need special syntax?",
     a: "No. Replace the text in [brackets] with your own details and send it in plain English. Ask works out which engine should answer.",
