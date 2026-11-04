@@ -150,7 +150,7 @@ function ForgotPasswordPageContent() {
         </div>
         <CaptchaWidget {...captcha.widgetProps} />
         <Button type="submit" variant="default" size="pill" className="w-full" disabled={loading || captcha.blocked}>
-          {loading ? "Sending…" : "Send reset link"}
+          {loading ? "Sending…" : captcha.pending ? "Verifying you’re human…" : "Send reset link"}
         </Button>
       </form>
 

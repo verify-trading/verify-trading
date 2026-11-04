@@ -259,7 +259,7 @@ function SignupPageContent() {
               className="w-full"
               disabled={googleBusy || isSubmitting || captcha.blocked}
             >
-              {isSubmitting ? "Creating…" : "Create account with email"}
+              {isSubmitting ? "Creating…" : captcha.pending ? "Verifying you’re human…" : "Create account with email"}
             </Button>
             <p className="text-center text-xs text-(--vt-muted)">
               We&apos;ll send a few emails to help you get started. You can unsubscribe any time.{" "}

@@ -203,7 +203,7 @@ function LoginPageContent() {
           className="w-full"
           disabled={googleBusy || isSubmitting || captcha.blocked}
         >
-          {isSubmitting ? "Signing in…" : "Sign in with email"}
+          {isSubmitting ? "Signing in…" : captcha.pending ? "Verifying you’re human…" : "Sign in with email"}
         </Button>
       </form>
 
