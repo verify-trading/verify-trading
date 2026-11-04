@@ -209,8 +209,10 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
     })
     // Established firms (a major regulator's licence) first: outside the UK local licence data is still
     // incomplete, so local-only firms would otherwise crowd out the brokers traders actually use.
+    // Then firms with an official (independently verified) score: the engine's baseline alone over-rates
+    // many small firms (100 for unknown prop firms), so verified firms are what a shortlist should check first.
     // Then a verified local (or EU-passported) licence, then score.
-    .sort((a, b) => Number(b.majorRegulator) - Number(a.majorRegulator) || Number(b.licensedLocally) - Number(a.licensedLocally) || b.score - a.score || a.name.localeCompare(b.name));
+    .sort((a, b) => Number(b.majorRegulator) - Number(a.majorRegulator) || Number(b.scoreBasis === "official") - Number(a.scoreBasis === "official") || Number(b.licensedLocally) - Number(a.licensedLocally) || b.score - a.score || a.name.localeCompare(b.name));
   // Keep a few places for the best locally licensed firms so local options still get considered.
   const max = Math.max(1, Math.min(limit, 15));
   const locals = ranked.filter((f) => !f.majorRegulator && f.licensedLocally).slice(0, 5);

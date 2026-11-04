@@ -152,3 +152,7 @@ export function getPsychologyCoachModel() {
 export function createSystemMessage(content: string) {
   return { role: "system" as const, content };
 }
+
+export function getAskRouterModelId() {
+  return process.env.ASK_ROUTER_MODEL ?? "claude-sonnet-5";
+}

@@ -1,4 +1,4 @@
-import { getBrokerDiscovery } from "@/lib/ask/broker-discovery";
+import { routeAskMessage, type AskRoute } from "@/lib/ask/routing";
 import { after } from "next/server";
 import { ZodError } from "zod";
 
@@ -29,6 +29,7 @@ export type PreparedAskRoute = {
   requestInput: AskRequestInput;
   persistence: AskPersistence;
   clarification?: AskResponse["data"];
+  route: AskRoute;
   /** Returns the reserved daily query if generation fails. Best-effort, never throws. */
   refundReservation: () => Promise<void>;
 };
@@ -101,7 +102,8 @@ export async function prepareAskRoute(
     ? memoryResult.value
     : parsedRequest.sessionMemory ?? null;
 
-  const clarification = getBrokerDiscovery({ ...parsedRequest, history, sessionMemory })?.clarification;
+  const route = await routeAskMessage({ ...parsedRequest, history, sessionMemory });
+  const clarification = route.kind === "questionnaire" ? route.clarification : undefined;
   let reserved = false;
   if (!clarification) {
     const reserve = await reserveAskQuery(session.supabase);
@@ -127,6 +129,7 @@ export async function prepareAskRoute(
       parsedRequest,
       persistence,
       clarification,
+      route,
       refundReservation: () => reserved ? refundAskQuery(session.supabase) : Promise.resolve(),
       requestInput: {
         ...parsedRequest,
@@ -160,7 +163,7 @@ export async function completeAskExchange(
     await saveAskExchangeBestEffort(prepared, response);
     return response;
   }
-  const cacheCandidate = isAskCacheCandidate(prepared.requestInput);
+  const cacheCandidate = prepared.route.kind === "safety" && isAskCacheCandidate(prepared.requestInput);
   if (cacheCandidate) {
     const cached = await readCachedAskResponse(prepared.requestInput);
     if (cached) {
@@ -182,7 +185,7 @@ export async function completeAskExchange(
 
   let response: AskResponse;
   try {
-    response = await generateAskResponse(prepared.requestInput, {}, callbacks);
+    response = await generateAskResponse(prepared.requestInput, { route: prepared.route }, callbacks);
   } catch (error) {
     // Generation failed — refund the reserved daily query so the user isn't charged.
     await prepared.refundReservation();
@@ -222,6 +225,7 @@ async function saveAskExchangeBestEffort(prepared: PreparedAskRoute, response: A
 
   try {
     sessionMemory = buildUpdatedSessionMemory({
+      route: prepared.route,
       history: prepared.requestInput.history,
       userMessage: prepared.parsedRequest.message,
       assistantCard: response.data,

@@ -1,4 +1,4 @@
-import { getBrokerDiscovery } from "@/lib/ask/broker-discovery";
+import type { AskRoute } from "@/lib/ask/routing";
 import {
   askCardSchema,
   askSessionMemorySchema,
@@ -231,6 +231,7 @@ export function buildSessionMemoryMessage(memory: AskSessionMemory | null) {
 }
 
 export function buildUpdatedSessionMemory(input: {
+  route?: AskRoute;
   history: AskRequest["history"] | undefined;
   userMessage: string;
   assistantCard: AskCard;
@@ -255,6 +256,6 @@ export function buildUpdatedSessionMemory(input: {
   const memory = deriveAskSessionMemory(nextHistory, input.previousMemory ?? null, {
     lastUpdatedAt: input.lastUpdatedAt,
   });
-  const discovery = getBrokerDiscovery({ message: input.userMessage, history: input.history ?? [], sessionMemory: input.previousMemory });
-  return discovery ? askSessionMemorySchema.parse({ ...memory, brokerPreferences: discovery.profile }) : memory;
+  const profile = input.route?.kind !== "safety" ? input.route?.profile : undefined;
+  return profile ? askSessionMemorySchema.parse({ ...memory, brokerPreferences: profile }) : memory;
 }

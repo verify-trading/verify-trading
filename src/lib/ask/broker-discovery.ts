@@ -1,4 +1,4 @@
-import type { AskRequest, InsightCard } from './contracts';
+import type { InsightCard } from './contracts';
 
 export type BrokerPreferences = {
   kind: 'broker' | 'propfirm';
@@ -10,14 +10,13 @@ export type BrokerPreferences = {
   requirements: string[];
 };
 
-const DISCOVERY = /\b(?:which|what|best|top|safest|recommend\w*|suggest\w*|find\w*|choos\w*|switch\w*|chang\w*|looking\s+for|(?:i\s+)?(?:need|want))\b[^?!.]{0,90}\b(?:brokers?|prop\s*firms?)\b|\b(?:brokers?|prop\s*firms?)\b[^?!.]{0,40}\b(?:recommend|suggest|should\s+i\s+use|are\s+(?:good|best))\b|^help\s+me\s+(?:start\s+)?trad(?:e|ing)[.!?]*$/i;
-const HEADLINES = ['Find a broker that fits', 'Find a prop firm that fits', 'Start with your trading needs', 'One quick question'];
+export const HEADLINES = ['Find a broker that fits', 'Find a prop firm that fits', 'Start with your trading needs', 'One quick question'];
 const STYLE = /\b(scalp\w*|day[- ]?trad\w*|intraday|swing\w*|position trad\w*|long[- ]term|short[- ]term|news trad\w*|hold\w*|minutes|hours|days|weeks)\b/i;
 const regions = new Intl.DisplayNames(['en'], { type: 'region' });
 const countries = Array.from({ length: 676 }, (_, i) => String.fromCharCode(65 + Math.floor(i / 26), 65 + i % 26))
   .map(code => ({ code, name: regions.of(code) ?? code })).filter(({ code, name }) => code !== name);
 
-function countryIn(message: string): string | undefined {
+export function countryIn(message: string): string | undefined {
   const code = (/^[A-Za-z]{2}$/.test(message.trim()) ? message.trim() : message.match(/\b(?:in|from|country(?: is)?)\s+([A-Z]{2})\b/)?.[1])?.toUpperCase();
   if (code && countries.some(country => country.code === code)) return code;
   if (/\b(?:UK|U\.K\.|Britain|British)\b/i.test(message)) return 'GB';
@@ -25,7 +24,7 @@ function countryIn(message: string): string | undefined {
   return countries.find(({ name }) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(message))?.code;
 }
 
-function addRequirements(profile: BrokerPreferences, message: string): BrokerPreferences {
+export function addRequirements(profile: BrokerPreferences, message: string): BrokerPreferences {
   const instruments = [
     ['Forex', /\b(?:forex|fx|currenc(?:y|ies)|eur\/?usd|gbp\/?usd)\b/i],
     ['Gold', /\b(?:gold|xau(?:\/?usd)?)\b/i],
@@ -47,52 +46,26 @@ function addRequirements(profile: BrokerPreferences, message: string): BrokerPre
   };
 }
 
-function isClarification(content: string) {
-  try { return HEADLINES.includes(JSON.parse(content).headline); } catch { return false; }
+export function isClarification(content: string) {
+  try {
+    const card = JSON.parse(content);
+    return card.type === 'insight' && card.variant === 'broker_discovery' && HEADLINES.includes(card.headline);
+  } catch { return false; }
 }
 
-/** Shared by quota reservation and generation: clarification never calls a model or consumes a query. */
-export function getBrokerDiscovery(request: Pick<AskRequest, 'message' | 'history' | 'sessionMemory' | 'image'>) {
-  if (request.image || /https?:\/\//i.test(request.message) || /^(?:is|are|verify|check|review|compare)\s+.+\b(?:safe|legit|suitable|regulated|scam|trustworthy)\b/i.test(request.message)) return null;
-  let profile = request.sessionMemory?.brokerPreferences;
-  let awaiting = false;
-  for (const turn of request.history ?? []) {
-    if (turn.role === 'assistant') { awaiting = isClarification(turn.content); continue; }
-    if (DISCOVERY.test(turn.content) || awaiting) {
-      profile = addRequirements(profile ?? { kind: /prop\s*firm/i.test(turn.content) ? 'propfirm' : 'broker', instruments: [], requirements: [] }, turn.content);
-      awaiting = false;
-    }
-  }
-  if (!DISCOVERY.test(request.message) && !awaiting) return null;
-  const kind = /prop\s*firm/i.test(request.message) ? 'propfirm' : /\bbroker/i.test(request.message) ? 'broker' : profile?.kind ?? 'broker';
-  profile = addRequirements({ ...(profile ?? { instruments: [], requirements: [] }), kind }, request.message);
+export function buildClarification(profile: BrokerPreferences): InsightCard {
   const questions = [
     ...(!profile.country ? ['Which country are you based in?'] : []),
     ...(!profile.instruments.length ? ['What do you mainly trade: Forex, Gold, Indices, Stocks or Crypto?'] : []),
   ];
-  const firms = kind === 'propfirm' ? 'prop firms' : 'brokers';
-  // Country and markets known: one question about style, which changes costs and rules more than any score.
-  const styleOnly: InsightCard | undefined = !questions.length && !profile.style ? {
+  const kind = profile.kind;
+  return {
     type: 'insight',
     variant: 'broker_discovery',
-    headline: HEADLINES[3],
-    body: [
-      `For trading ${profile.instruments.map((i) => i === 'Gold' ? 'gold (XAUUSD)' : i.toLowerCase()).join(' and ')}, I'd focus on ${kind === 'propfirm' ? 'fair rules, a reliable payout record and fees you can live with' : 'tight spreads, reliable execution and a good withdrawal record'}.`,
-      `Since you're based in ${regions.of(profile.country!) ?? profile.country}, I'll also check which ${firms} can accept you and what protection your account would have.`,
-      `Do you usually scalp${profile.instruments.length === 1 ? ` ${profile.instruments[0].toLowerCase()}` : ''} with quick trades, or hold positions for several hours or days?`,
-    ].join('\n\n'),
-    verdict: kind === 'propfirm'
-      ? 'This helps me match the right rules and drawdown limits, rather than just giving you a list of highly rated firms.'
-      : 'This helps me prioritise the right trading costs and execution conditions, rather than just giving you a list of highly rated brokers.',
-  } : undefined;
-  const clarification: InsightCard | undefined = styleOnly ?? (questions.length ? {
-    type: 'insight',
-    variant: 'broker_discovery',
-    headline: kind === 'propfirm' ? HEADLINES[1] : /^help me/i.test(request.message) ? HEADLINES[2] : HEADLINES[0],
+    headline: kind === 'propfirm' ? HEADLINES[1] : /^help me/i.test(profile.requirements.at(-1) ?? '') ? HEADLINES[2] : HEADLINES[0],
     body: `Of course, I can help you find ${kind === 'propfirm' ? 'a prop firm' : 'a broker'} that suits your trading needs.\n\n${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`,
     verdict: kind === 'propfirm' ? "I'll compare suitable options using their rules, fees and payout risks, alongside trust evidence." : "I'll compare suitable brokers using regulation, costs, platforms and reliability, alongside trust evidence.",
-  } : undefined);
-  return { profile, clarification };
+  };
 }
 
 /** Product category is a first filter, never proof of instrument availability or residence eligibility. */
