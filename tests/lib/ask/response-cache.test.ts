@@ -104,18 +104,9 @@ describe("responseIsCacheable", () => {
     color: "green",
   };
 
-  it("accepts a broker card about the resolved entity", () => {
-    expect(responseIsCacheable(makeResponse(brokerCard), entity)).toBe(true);
-  });
-
-  it("never caches a broker answer that isn't the official score", () => {
-    expect(responseIsCacheable(makeResponse(brokerCard, "Preliminary check · pending review"), entity)).toBe(false);
-  });
-
-  it("accepts spacing variants of the entity name on the card", () => {
-    expect(
-      responseIsCacheable(makeResponse({ ...brokerCard, name: "AlphaFutures" }), entity),
-    ).toBe(true);
+  it("never replays a broker answer: its standing can change in Supabase at any time", () => {
+    expect(responseIsCacheable(makeResponse(brokerCard), entity)).toBe(false);
+    expect(responseIsCacheable(makeResponse(brokerCard, "Under review"), entity)).toBe(false);
   });
 
   it("rejects a card about a different firm", () => {

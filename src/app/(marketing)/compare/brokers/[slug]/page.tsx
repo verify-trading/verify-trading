@@ -47,6 +47,7 @@ export default async function Page({ params }: Props) {
   const entity = await getPublicEntity("broker", slug);
   if (!entity) notFound();
   const official = entity.scoreBasis === "official" && entity.bts ? await getOfficialAssessment(entity.bts.entityId) : null;
-  const countryScores = entity.bts && entity.score !== null ? await getOfficialCountryScores(entity.bts.entityId) : {};
+  // Engine-gated firms (not active, being re-researched) never set scoreBasis: no country scores for them.
+  const countryScores = entity.bts && entity.scoreBasis !== undefined ? await getOfficialCountryScores(entity.bts.entityId) : {};
   return <EntityDetail entity={entity} all={listableEntities(await getPublicEntities("broker"))} official={official} countryScores={countryScores} />;
 }

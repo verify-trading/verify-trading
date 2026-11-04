@@ -60,6 +60,17 @@ describe("Ask and the BTS engine", () => {
     expect(mergeToolOwnedNumbers(modelCard, [{ toolName: "verify_entity", output: result }] as never)).toMatchObject({ score: "No score", status: "WARNING", verdict: "We're still verifying this firm." });
   });
 
+  it("firms without an engine record follow the same standing rules: never 'Official score' unless published", async () => {
+    const l2 = (status: string, reviewReason: string | null) => vi.fn().mockResolvedValue({ status, country: "XX", reviewReason, kind: "broker", finalScore: 43, verdict: "High risk", confidence: 80, pillars: [], findings: [], sources: [], strengths: [], risks: [], summary: "s", answer: "I'd avoid it.", concern: "", recommendation: "", countryFit: "UNVERIFIED", identity: { confirmed: true, legal_entity: "", official_website: "", note: "" }, conditions: {}, regulators: [], checkedAt: "2026-11-04T12:00:00Z" });
+    const noEngine = vi.fn().mockResolvedValue(null);
+    const disputed = await resolveVerificationToolResult("IG", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl: noEngine, getL2AssessmentImpl: l2("review", "Score change: verdict moves from Caution to High risk (43)") }, "GB");
+    expect("card" in disputed && disputed.card).toMatchObject({ score: "No score", status: "CAUTION" });
+    expect("uiMeta" in disputed && disputed.uiMeta?.verificationSourceLabel).toBe("Under review");
+    const thin = await resolveVerificationToolResult("IG", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl: noEngine, getL2AssessmentImpl: l2("review", "Evidence: 1 primary source, needs 2") }, "GB");
+    expect("uiMeta" in thin && thin.uiMeta?.verificationSourceLabel).not.toMatch(/Official/);
+    expect(JSON.stringify("card" in thin && thin.card)).not.toContain("43/100");
+  });
+
   it("matches the website while a check is held: disputed shows no score, thin evidence keeps the baseline", async () => {
     const held = (reviewReason: string) => vi.fn().mockResolvedValue({ status: "review", country: "XX", reviewReason, kind: "broker", finalScore: 43, verdict: "High risk", pillars: [], findings: [], sources: [], strengths: [], risks: [], summary: "", identity: { confirmed: true, legal_entity: "", official_website: "", note: "" }, checkedAt: "2026-11-04T12:00:00Z" });
     const bts = () => vi.fn().mockResolvedValue(context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false }));

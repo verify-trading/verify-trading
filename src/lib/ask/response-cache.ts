@@ -145,8 +145,9 @@ export function isGenericEntityLookup(message: string, entity: VerifiedEntity): 
 export function responseIsCacheable(response: AskResponse, entity: VerifiedEntity): boolean {
   const card = response.data;
   if (card.type !== "broker" && card.type !== "guru") return false;
-  // Only the official score is replayed: a baseline or a check awaiting review may change on the next ask.
-  if (card.type === "broker" && (card.verdict.includes(DATABASE_ONLY) || !response.uiMeta?.verificationSourceLabel?.startsWith("Official score"))) return false;
+  // Broker answers are never replayed: a person can publish or reject a score in Supabase at any time, and
+  // Ask must show the standing as it is now. Official scores are stored, so these answers are fast anyway.
+  if (card.type === "broker" || card.verdict.includes(DATABASE_ONLY)) return false;
 
   const cardName = collapseEntityText(card.name ?? "");
   const firmNames = new Set([collapseEntityText(entity.name), ...entity.collapsedAliases]);

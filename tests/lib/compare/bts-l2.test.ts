@@ -25,6 +25,7 @@ const draft = (pillars: Array<[string, number, string[]]>, extra: Partial<Parame
   regulators: [],
   conditions: { platforms: "MT5", gold_spread: "not found", commission: "none", min_deposit: "$100", scalping: "allowed" },
   answer: "a",
+  stance: "careful" as const,
   concern: "c",
   recommendation: "r",
   ...extra,
