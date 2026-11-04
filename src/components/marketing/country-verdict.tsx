@@ -89,7 +89,9 @@ export function CountryVerdict({
   const local = country ? countryScores[country] : undefined;
   const view = local ? { verdict: local.verdict, score: local.score } : { verdict, score };
   const line = local
-    ? `Official score for ${countryName(country!)} · checked ${formatRecordDate(local.checkedAt)}`
+    ? local.score === null
+      ? `Under review for ${countryName(country!)}: new evidence is being checked`
+      : `Official score for ${countryName(country!)} · checked ${formatRecordDate(local.checkedAt)}`
     : basis === "official"
       ? `Independently verified · checked ${formatRecordDate(checkedAt)}`
       : basis === "baseline"

@@ -30,7 +30,7 @@ import { btsVerificationGate } from "@/lib/compare/bts-research";
 import { cardStatus, DATABASE_ONLY, countryName, normalizeCountry, statusColor } from "@/lib/compare/bts";
 import { regulationLabel } from "@/lib/compare/regulators";
 import { getBtsAskContext, getBtsAskContextByBrand, getRequestCountrySafe, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
-import { getL2Assessment, type L2Result, type L2Subject } from "@/lib/compare/bts-l2";
+import { getL2Assessment, isDisputed, type L2Result, type L2Subject } from "@/lib/compare/bts-l2";
 import {
   findEntityCandidates,
   listVerifiedEntities,
@@ -994,7 +994,18 @@ const isoCountry = (c?: string) => (c && /^[A-Za-z]{2}$/.test(c.trim()) ? c.trim
 async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment, country?: string, waitMs = L2_WAIT_MS) {
   if (bts.type === "tool" || btsVerificationGate(bts.operatingStatus, bts.researchStatus) || bts.global.verdict === "Not active" || bts.global.verdict === "Under review") return bts;
   const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: isoCountry(country) ?? bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2, waitMs);
-  if (!l2) return { ...bts, scoreSource: "Baseline · verification pending" };
+  // Same standing as the website: thin evidence keeps the baseline (pending); a disputed check shows no score.
+  if (!l2 || (l2.status !== "published" && !isDisputed(l2))) return { ...bts, scoreSource: "Baseline · verification pending" };
+  if (isDisputed(l2)) {
+    const reason = "Our independent check found evidence that changes this rating, so it's being reviewed. No score is shown until that's done; check the regulator's register yourself before depositing.";
+    return {
+      ...bts,
+      scoreSource: "Under review",
+      shown: { ...bts.shown, verdict: "Under review" as const, score: null, note: null, global: true },
+      global: { ...bts.global, verdict: "Under review" as const, score: null, reason, capApplied: null, evidenceConfidence: null, pillars: {} },
+      country: null,
+    };
+  }
   const live = fromLiveCheck(l2);
   // Register-verified licences (e.g. FCA) stay from the research record; the live check scores, it doesn't re-list them.
   return { ...bts, ...live, global: { ...live.global, cloneAlert: bts.global.cloneAlert, licencesVerified: bts.global.licencesVerified } };
@@ -1021,8 +1032,7 @@ function fromLiveCheck(l2: L2Result) {
   // The card leads with the short plain answer; the full summary and evidence sit underneath it.
   const note = l2.answer || (summary.length < 180 && risks.length ? `${summary} ${risks.join(" ")}` : summary);
   return {
-    // Published = the official score the website shows; otherwise a fresh check awaiting review.
-    scoreSource: l2.status === "published" ? "Official score" : "Preliminary check · pending review",
+    scoreSource: l2.country === "XX" ? "Official score" : `Official score · ${countryName(l2.country)}`,
     conductRecord: l2.findings.some((f) => f.adverse) ? ("On record" as const) : conduct?.sourced ? ("None found" as const) : ("Not checked" as const),
     shown: { country: "", verdict: l2.verdict, score: l2.finalScore, note, global: false },
     global: {

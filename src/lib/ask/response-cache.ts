@@ -146,7 +146,7 @@ export function responseIsCacheable(response: AskResponse, entity: VerifiedEntit
   const card = response.data;
   if (card.type !== "broker" && card.type !== "guru") return false;
   // Only the official score is replayed: a baseline or a check awaiting review may change on the next ask.
-  if (card.type === "broker" && (card.verdict.includes(DATABASE_ONLY) || response.uiMeta?.verificationSourceLabel !== "Official score")) return false;
+  if (card.type === "broker" && (card.verdict.includes(DATABASE_ONLY) || !response.uiMeta?.verificationSourceLabel?.startsWith("Official score"))) return false;
 
   const cardName = collapseEntityText(card.name ?? "");
   const firmNames = new Set([collapseEntityText(entity.name), ...entity.collapsedAliases]);
@@ -248,7 +248,7 @@ export async function maybeCacheAskResponse(
     if (!client) return;
 
     const developing =
-      response.data.type === "broker" || // live-check scores expire after 24h
+      response.data.type === "broker" || // official scores can change on approval: replay for a day at most
       Boolean(response.uiMeta?.propFirm?.developing) ||
       Boolean(entity.researchStatus) ||
       Boolean(entity.provisional);

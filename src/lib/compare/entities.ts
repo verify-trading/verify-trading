@@ -278,6 +278,8 @@ export function withOfficialScores(entities: PublicEntity[], official: Record<st
     if (!e.bts || e.score === null) return e;
     const o = official[`${e.bts.entityId}|XX`];
     if (!o) return { ...e, scoreBasis: "baseline" };
+    // A disputed check is waiting for a person: no score anywhere until it is decided.
+    if (o.score === null) return { ...e, score: null, verdict: "Under review", scoreBasis: null, updatedAt: o.checkedAt };
     return { ...e, score: o.score, verdict: o.verdict, scoreBasis: "official", updatedAt: o.checkedAt };
   });
 }
