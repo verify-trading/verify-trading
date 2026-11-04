@@ -9,7 +9,8 @@ import { Block, EntityMiniCard, FaqBlock, RegulatorCard, TocNav, VerdictBands, W
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { pillarDisplay } from "@/lib/compare/bts";
-import type { L2Result } from "@/lib/compare/bts-l2";
+import type { L2Result, OfficialScore } from "@/lib/compare/bts-l2";
+import { CountryVerdict } from "@/components/marketing/country-verdict";
 import type { PublicEntity } from "@/lib/compare/entities";
 import { entityFaqs, entityPath, pickAlternatives, vsPartners, vsPath } from "@/lib/compare/insights";
 import { getRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
@@ -47,7 +48,7 @@ function lede(e: PublicEntity): string {
 
 const LIMITED_EVIDENCE = 50;
 
-export function EntityDetail({ entity: e, all, official = null }: { entity: PublicEntity; all: PublicEntity[]; official?: L2Result | null }) {
+export function EntityDetail({ entity: e, all, official = null, countryScores = {} }: { entity: PublicEntity; all: PublicEntity[]; official?: L2Result | null; countryScores?: Record<string, OfficialScore> }) {
   if (e.type === "guru") return <GuruDetail entity={e} />;
   const listPath = ENTITY_LIST_PATH[e.type];
   const path = entityPath(e);
@@ -149,19 +150,14 @@ export function EntityDetail({ entity: e, all, official = null }: { entity: Publ
                 <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-300">{lede(e)}</p>
               </div>
               <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-white/[0.08] bg-black/25 px-5 py-4">
-                <div className="flex items-center gap-4">
-                  <VerdictBadge verdict={e.verdict} className="px-3 py-1 text-xs" />
-                  <ScoreBar entity={e} className="w-32" />
-                </div>
                 {bts && e.score !== null ? (
-                  <p className="border-t border-white/[0.06] pt-2.5 text-xs text-slate-400">
-                    {e.scoreBasis === "official" ? (
-                      <>Independently verified · checked {formatRecordDate(e.updatedAt)}</>
-                    ) : (
-                      <>Baseline score · independent verification pending</>
-                    )}
-                  </p>
-                ) : null}
+                  <CountryVerdict verdict={e.verdict} score={e.score} basis={e.scoreBasis ?? null} checkedAt={e.updatedAt} countryScores={countryScores} />
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <VerdictBadge verdict={e.verdict} className="px-3 py-1 text-xs" />
+                    <ScoreBar entity={e} className="w-32" />
+                  </div>
+                )}
               </div>
             </div>
             <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">

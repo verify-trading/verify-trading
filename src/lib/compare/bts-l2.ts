@@ -338,6 +338,17 @@ async function published(s: L2Subject): Promise<L2Result | null> {
   return row ? toResult(row) : null;
 }
 
+/** A firm's official country scores (not the global one), keyed by country code, for its record page. */
+export async function getOfficialCountryScores(entityId: string): Promise<Record<string, OfficialScore>> {
+  const all = await getOfficialScores().catch(() => ({}) as Record<string, OfficialScore>);
+  return Object.fromEntries(
+    Object.entries(all).flatMap(([key, score]) => {
+      const [id, country] = key.split("|");
+      return id === entityId && country !== "XX" ? [[country, score]] : [];
+    }),
+  );
+}
+
 /** The published global check behind a firm's official score: its pillars and evidence for the record page. */
 export const getOfficialAssessment = unstable_cache(
   async (entityId: string): Promise<L2Result | null> => published({ firm: "", entityId, country: "XX" }).catch(() => null),
