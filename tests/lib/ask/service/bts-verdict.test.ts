@@ -23,7 +23,7 @@ describe("Ask and the BTS engine", () => {
     expect(getBtsAskContextImpl).toHaveBeenCalledWith("ig", "GB");
     expect("card" in r && r.card).toMatchObject({ score: "93/100", status: "LEGITIMATE", color: "green" });
     // The live check was unavailable, so the card says the score is the database's.
-    expect("card" in r && r.card.type === "broker" && r.card.verdict).toMatch(/stored assessment\.$/);
+    expect("card" in r && r.card.type === "broker" && r.card.verdict).toMatch(/baseline assessment\.$/);
     expect("bts" in r && r.bts?.shown.score).toBe(93);
   });
 
@@ -77,7 +77,7 @@ describe("Ask and the BTS engine", () => {
     expect(getL2AssessmentImpl).toHaveBeenCalledWith(expect.objectContaining({ firm: "IG", kind: "broker", country: "GB", entityId: "BTS-B-1", baseline: { score: 93, verdict: "Verified" } }));
     expect("card" in r && r.card).toMatchObject({ score: "76/100", status: "LEGITIMATE", complaints: "On record" });
     expect(JSON.stringify(r.bts)).not.toContain("93");
-    expect(r.bts).toMatchObject({ scoreSource: "Independent live check", liveCheck: { findings: [{ authority: "FCA", url: "https://fca.org.uk/x" }] } });
+    expect(r.bts).toMatchObject({ scoreSource: "Preliminary check · pending review", liveCheck: { findings: [{ authority: "FCA", url: "https://fca.org.uk/x" }] } });
     expect("uiMeta" in r && r.uiMeta?.verification).toMatchObject({ confidence: 72, sources: [{ url: "https://fca.org.uk/x" }] });
     expect("uiMeta" in r && r.uiMeta?.cloneNotice).toEqual({ message: "Scammers impersonate this firm; take extra care.", sourceUrl: "https://fca.org.uk/clone-notice" });
   });

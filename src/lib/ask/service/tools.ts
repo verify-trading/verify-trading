@@ -994,7 +994,7 @@ const isoCountry = (c?: string) => (c && /^[A-Za-z]{2}$/.test(c.trim()) ? c.trim
 async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment, country?: string, waitMs = L2_WAIT_MS) {
   if (bts.type === "tool" || btsVerificationGate(bts.operatingStatus, bts.researchStatus) || bts.global.verdict === "Not active" || bts.global.verdict === "Under review") return bts;
   const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: isoCountry(country) ?? bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2, waitMs);
-  if (!l2) return { ...bts, scoreSource: "Database assessment" };
+  if (!l2) return { ...bts, scoreSource: "Baseline · verification pending" };
   const live = fromLiveCheck(l2);
   // Register-verified licences (e.g. FCA) stay from the research record; the live check scores, it doesn't re-list them.
   return { ...bts, ...live, global: { ...live.global, cloneAlert: bts.global.cloneAlert, licencesVerified: bts.global.licencesVerified } };
@@ -1021,7 +1021,8 @@ function fromLiveCheck(l2: L2Result) {
   // The card leads with the short plain answer; the full summary and evidence sit underneath it.
   const note = l2.answer || (summary.length < 180 && risks.length ? `${summary} ${risks.join(" ")}` : summary);
   return {
-    scoreSource: "Independent live check",
+    // Published = the official score the website shows; otherwise a fresh check awaiting review.
+    scoreSource: l2.status === "published" ? "Official score" : "Preliminary check · pending review",
     conductRecord: l2.findings.some((f) => f.adverse) ? ("On record" as const) : conduct?.sourced ? ("None found" as const) : ("Not checked" as const),
     shown: { country: "", verdict: l2.verdict, score: l2.finalScore, note, global: false },
     global: {

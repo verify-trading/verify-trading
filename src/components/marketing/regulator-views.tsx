@@ -37,6 +37,8 @@ const GENERAL_FAQS = [
 /** Segmented bar of verdict counts. Decorative: the counts are also written out beside it. */
 function VerdictSplit({ verdicts, total }: { verdicts: HubStats["verdicts"]; total: number }) {
   const tones: Array<[keyof HubStats["verdicts"], string]> = [
+    ["Strong", "bg-[var(--vt-green)]"],
+    ["Generally positive", "bg-[var(--vt-green)]"],
     ["Verified", "bg-[var(--vt-green)]"],
     ["Caution", "bg-[var(--vt-amber)]"],
     ["High risk", "bg-[var(--vt-coral)]"],
@@ -174,7 +176,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
           <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
             {([
               ["Licensed brokers", n.toLocaleString("en-GB")],
-              ["Verified", String(verdicts.Verified ?? 0)],
+              ["Verified or positive", String((verdicts.Strong ?? 0) + (verdicts["Generally positive"] ?? 0) + (verdicts.Verified ?? 0))],
               ["Caution or high risk", String((verdicts.Caution ?? 0) + (verdicts["High risk"] ?? 0))],
               ["Regulator country", r.country.replace(/ \(.*\)/, "")],
             ] as Array<[string, string]>).map(([k, v]) => (

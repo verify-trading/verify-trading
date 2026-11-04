@@ -3,6 +3,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 
 import { EntityDetail } from "@/components/marketing/entity-detail";
 import { VsView, vsSummary } from "@/components/marketing/vs-view";
+import { getOfficialAssessment } from "@/lib/compare/bts-l2";
 import { getPublicEntities, getPublicEntity } from "@/lib/compare/entities";
 import { listableEntities, parseVsPair } from "@/lib/compare/insights";
 import { entityMetadata } from "@/lib/compare/page-meta";
@@ -45,5 +46,6 @@ export default async function Page({ params }: Props) {
   }
   const entity = await getPublicEntity("broker", slug);
   if (!entity) notFound();
-  return <EntityDetail entity={entity} all={listableEntities(await getPublicEntities("broker"))} />;
+  const official = entity.scoreBasis === "official" && entity.bts ? await getOfficialAssessment(entity.bts.entityId) : null;
+  return <EntityDetail entity={entity} all={listableEntities(await getPublicEntities("broker"))} official={official} />;
 }

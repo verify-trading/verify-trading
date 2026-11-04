@@ -15,7 +15,9 @@ export const ENGINE_VERDICTS = {
   "NOT AVAILABLE IN YOUR COUNTRY": "Not available",
 } as const;
 /** A prop firm that passes is shown as "Record reviewed": a passing record, not a safety endorsement. */
-export type BtsVerdict = (typeof ENGINE_VERDICTS)[keyof typeof ENGINE_VERDICTS] | "Record reviewed";
+export type BtsVerdict = (typeof ENGINE_VERDICTS)[keyof typeof ENGINE_VERDICTS] | "Record reviewed" | OfficialVerdict;
+/** Verdicts of a published (official) score; Caution and High risk are shared with the engine scale. */
+export type OfficialVerdict = "Strong" | "Generally positive" | "Caution" | "High risk";
 
 /** Badge colour for any verdict, including the guru tiers (Verified / Unverified / Caution). */
 export const verdictTone = (v: string): "green" | "amber" | "coral" | "slate" => {
@@ -30,8 +32,8 @@ export function toVerdict(raw: string | null | undefined, kind?: string): BtsVer
   return label === "Verified" && kind === "propfirm" ? "Record reviewed" : label;
 }
 
-/** Ends the card when the live check (Layer 2) couldn't finish and the engine's score is shown instead. */
-export const DATABASE_ONLY = "Live check unavailable right now, so this is our stored assessment.";
+/** Ends the card when there is no official score or live check and the Layer 1 baseline is shown instead. */
+export const DATABASE_ONLY = "Independent verification is still pending, so this is our baseline assessment.";
 
 /** Ask card status for an engine verdict or a live-check verdict (Strong / Generally positive / Score unavailable). */
 export const cardStatus = (v: string) =>

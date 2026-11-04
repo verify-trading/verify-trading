@@ -9,6 +9,7 @@ import { Block, EntityMiniCard, FaqBlock, RegulatorCard, TocNav, VerdictBands, W
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { pillarDisplay } from "@/lib/compare/bts";
+import type { L2Result } from "@/lib/compare/bts-l2";
 import type { PublicEntity } from "@/lib/compare/entities";
 import { entityFaqs, entityPath, pickAlternatives, vsPartners, vsPath } from "@/lib/compare/insights";
 import { getRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
@@ -29,21 +30,24 @@ export function entityDescription(e: PublicEntity): string {
   return text.length <= 160 ? text : `${text.slice(0, 157).trimEnd()}...`;
 }
 
+/** How the rating is described: the official independent check, or the baseline while that is pending. */
+const ratingSource = (e: PublicEntity) => (e.scoreBasis === "official" ? "Our independently verified rating" : e.scoreBasis === "baseline" ? "Our baseline rating (independent verification pending)" : "Our stored research rating");
+
 function lede(e: PublicEntity): string {
   if (e.verdict === "Under review") return "We're still verifying this firm.";
   if (e.bts?.research?.operatingStatus === "unknown") return `We haven't confirmed whether ${e.name} is operating. Its identity and current service need verification.`;
   const rating = e.score !== null ? `${e.verdict}, ${e.score} out of 100` : e.verdict;
   if (e.type === "propfirm") {
     const state = e.closed ? "is recorded as not active" : "is recorded as operating";
-    return `${e.name} ${state}. Our stored research rating is ${rating}. Sourced from public operating records and published terms.`;
+    return `${e.name} ${state}. ${ratingSource(e)} is ${rating}. Sourced from public operating records and published terms.`;
   }
   const regs = e.regulators.length ? `licensed by ${e.regulators.slice(0, 3).join(", ")} (verified on the register)` : "without a licence verified on a regulator register in our research";
-  return `${e.name} is a broker ${regs}. Our stored research rating is ${rating}. Below: why it scores this way, what each regulator means for client protection, and how to verify.`;
+  return `${e.name} is a broker ${regs}. ${ratingSource(e)} is ${rating}. Below: why it scores this way, what each regulator means for client protection, and how to verify.`;
 }
 
 const LIMITED_EVIDENCE = 50;
 
-export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: PublicEntity[] }) {
+export function EntityDetail({ entity: e, all, official = null }: { entity: PublicEntity; all: PublicEntity[]; official?: L2Result | null }) {
   if (e.type === "guru") return <GuruDetail entity={e} />;
   const listPath = ENTITY_LIST_PATH[e.type];
   const path = entityPath(e);
@@ -70,13 +74,13 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
     ? [
         ["Licences verified", e.regulators.length ? e.regulators.slice(0, 3).join(", ") : "None verified"],
         ["Global score", scoreLabel(e)],
-        ["Research coverage", e.score !== null && bts?.coverage != null ? `${bts.coverage}%` : "Not recorded"],
+        official ? ["Source reliability", `${official.confidence}/100`] : ["Research coverage", e.score !== null && bts?.coverage != null ? `${bts.coverage}%` : "Not recorded"],
         ["Last checked", formatRecordDate(e.updatedAt)],
       ]
     : [
         ["Status", e.closed ? "Not active" : "Operating"],
         ["Global score", scoreLabel(e)],
-        ["Research coverage", e.score !== null && bts?.coverage != null ? `${bts.coverage}%` : "Not recorded"],
+        official ? ["Source reliability", `${official.confidence}/100`] : ["Research coverage", e.score !== null && bts?.coverage != null ? `${bts.coverage}%` : "Not recorded"],
         ["Last checked", formatRecordDate(e.updatedAt)],
       ];
 
@@ -149,10 +153,13 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
                   <VerdictBadge verdict={e.verdict} className="px-3 py-1 text-xs" />
                   <ScoreBar entity={e} className="w-32" />
                 </div>
-                {bts ? (
+                {bts && e.score !== null ? (
                   <p className="border-t border-white/[0.06] pt-2.5 text-xs text-slate-400">
-                    Stored research: <span className="font-medium text-slate-200">{e.score !== null ? `${e.score} ${e.verdict}` : e.verdict}</span>
-                    {e.score !== null && bts.coverage != null ? ` · research coverage ${bts.coverage}%` : ""}
+                    {e.scoreBasis === "official" ? (
+                      <>Independently verified · checked {formatRecordDate(e.updatedAt)}</>
+                    ) : (
+                      <>Baseline score · independent verification pending</>
+                    )}
                   </p>
                 ) : null}
               </div>
@@ -179,7 +186,7 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
                 {bts.research?.cloneNoticeSource ? <> <a href={bts.research.cloneNoticeSource} target="_blank" rel="noopener noreferrer nofollow" className="text-[var(--vt-blue)] underline">Read the regulator&apos;s clone notice</a>.</> : null}
               </Notice>
             ) : null}
-            {bts && e.score !== null && bts.confidence !== null && bts.confidence < LIMITED_EVIDENCE ? (
+            {bts && !official && e.score !== null && bts.confidence !== null && bts.confidence < LIMITED_EVIDENCE ? (
               <Notice title="Limited verified evidence">
                 Only part of the research has been completed so far. Check the regulator&apos;s register yourself before you deposit.
               </Notice>
@@ -197,8 +204,18 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_14rem] lg:gap-12 lg:py-16">
         <div className="min-w-0 space-y-12">
           {/* 1. Why this score */}
-          <Block id="why" title="Why this score" intro={bts ? `Stored research rating ${e.score !== null ? `${e.score} out of 100, ` : ""}${e.verdict}. Last checked ${formatRecordDate(bts.researchDate)}.` : `${e.name} has not been scored yet.`}>
-            {bts ? (
+          <Block
+            id="why"
+            title="Why this score"
+            intro={
+              official
+                ? `Independently verified rating ${e.score} out of 100, ${e.verdict}. Checked ${formatRecordDate(official.checkedAt)}. The same assessment Ask explains.`
+                : bts
+                  ? `Baseline rating ${e.score !== null ? `${e.score} out of 100, ` : ""}${e.verdict}. Independent verification is pending. Last researched ${formatRecordDate(bts.researchDate)}.`
+                  : `${e.name} has not been scored yet.`
+            }
+          >
+            {official ? <OfficialWhy official={official} /> : bts ? (
               <>
                 <dl className={`${surface} divide-y divide-white/[0.06] overflow-hidden rounded-xl`}>
                   {bts.reason ? <Row k="Reason" v={bts.reason.charAt(0).toUpperCase() + bts.reason.slice(1)} /> : null}
@@ -347,6 +364,48 @@ export function EntityDetail({ entity: e, all }: { entity: PublicEntity; all: Pu
         secondary={{ label: "How we verify", href: "/methodology" }}
         location={`entity_${e.type}`}
       />
+    </>
+  );
+}
+
+/** The official score's evidence: points per pillar with the reason, the regulator findings, the sources. */
+function OfficialWhy({ official }: { official: L2Result }) {
+  return (
+    <>
+      {official.summary ? <p className="mb-4 text-sm leading-relaxed text-slate-300">{official.summary}</p> : null}
+      <dl className={`${surface} divide-y divide-white/[0.06] overflow-hidden rounded-xl`}>
+        {official.pillars.map((p) => (
+          <Row key={p.key} k={p.label} v={`${p.awarded} / ${p.max}${p.sourced ? "" : " (no source found)"}. ${p.reason}`} />
+        ))}
+      </dl>
+      {official.findings.length ? (
+        <div className="mt-4 text-sm">
+          <p className="font-semibold text-white">What regulators and records say</p>
+          <ul className="mt-2 space-y-2 text-slate-300">
+            {official.findings.map((f) => (
+              <li key={`${f.authority}-${f.url}`}>
+                <span className="font-medium text-slate-100">{f.authority}</span>
+                {f.date ? ` (${formatRecordDate(f.date)})` : ""}: {f.finding}
+                {f.outcome ? <span className="text-slate-400"> Outcome: {f.outcome}.</span> : null}{" "}
+                <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" className="text-[var(--vt-blue)] underline underline-offset-2">Source</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {official.sources.length ? (
+        <details className="mt-4 rounded-xl border border-white/10 p-4 text-sm">
+          <summary className="cursor-pointer font-semibold text-white">Sources ({official.sources.length})</summary>
+          <ul className="mt-3 space-y-2">
+            {official.sources.map((s) => (
+              <li key={s.url}><a href={s.url} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-[var(--vt-blue)] underline underline-offset-2">{s.title || s.url}</a></li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      <p className="mt-3 text-xs leading-relaxed text-slate-400">
+        Scored on rubric {official.rubricVersion} from sources retrieved on the check date. Our code checks every cited source and totals the points; nothing commercial affects a score, verdict or ranking.
+      </p>
     </>
   );
 }

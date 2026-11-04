@@ -145,8 +145,8 @@ export function isGenericEntityLookup(message: string, entity: VerifiedEntity): 
 export function responseIsCacheable(response: AskResponse, entity: VerifiedEntity): boolean {
   const card = response.data;
   if (card.type !== "broker" && card.type !== "guru") return false;
-  // A database-only answer means the live check didn't finish; the next ask should get it.
-  if (card.type === "broker" && card.verdict.includes(DATABASE_ONLY)) return false;
+  // Only the official score is replayed: a baseline or a check awaiting review may change on the next ask.
+  if (card.type === "broker" && (card.verdict.includes(DATABASE_ONLY) || response.uiMeta?.verificationSourceLabel !== "Official score")) return false;
 
   const cardName = collapseEntityText(card.name ?? "");
   const firmNames = new Set([collapseEntityText(entity.name), ...entity.collapsedAliases]);
@@ -161,6 +161,15 @@ async function resolveCacheableEntity(input: AskCacheRequest): Promise<VerifiedE
   if (!lookup.found || !lookup.entity) return null;
   if (!isGenericEntityLookup(input.message, lookup.entity)) return null;
   return lookup.entity;
+}
+
+/** Drops cached answers about a firm once its official score changes, so Ask never replays the old one. */
+export async function forgetCachedAnswers(btsEntityId: string): Promise<void> {
+  const client = getSupabaseAdminClient();
+  if (!client) return;
+  const { data } = await client.from("verified_entities").select("slug").eq("bts_entity_id", btsEntityId);
+  const slugs = (data ?? []).map((r) => String(r.slug));
+  if (slugs.length) await client.from(CACHE_TABLE).delete().in("entity_slug", slugs);
 }
 
 // ── Cache key ─────────────────────────────────────────────────────────────────
