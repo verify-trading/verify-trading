@@ -234,7 +234,7 @@ function BrokerCard({
             </section>
             {uiMeta.verification.concern ? (
               <section>
-                <h3 className="font-bold text-white">{card.status === "LEGITIMATE" ? "Why it scores well" : "Why the concern?"}</h3>
+                <h3 className="font-bold text-white">{card.status === "LEGITIMATE" ? "Worth knowing" : "Why the concern?"}</h3>
                 <p className="mt-1">{uiMeta.verification.concern}</p>
               </section>
             ) : null}
