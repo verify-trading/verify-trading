@@ -93,6 +93,13 @@ export default function RootLayout({
             gtag('config', 'G-QKRRYV1XKF');
           `}
         </Script>
+        {/* DataFast analytics */}
+        <Script
+          src="https://datafa.st/js/script.js"
+          data-website-id="dfid_EfISfZ0KYO1G4A9wXa2ZY"
+          data-domain="verify.trading"
+          strategy="afterInteractive"
+        />
         {/* Rewardful tracking */}
 <Script id="rewardful-queue" strategy="afterInteractive">
   {`(function(w,r){w._rwq=r;w[r]=w[r]||function(){(w[r].q=w[r].q||[]).push(arguments)}})(window,'rewardful');`}
