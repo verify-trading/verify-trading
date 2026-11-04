@@ -35,7 +35,7 @@ describe('routing classifier', () => {
     vi.useFakeTimers();
     vi.mocked(generateText).mockImplementation(() => new Promise(() => {}));
     const result = classifyIntent('broker', false, '{}');
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(await result).toEqual({ intent: 'other' });
     expect(vi.mocked(generateText).mock.calls[0][0].abortSignal?.aborted).toBe(true);
   });

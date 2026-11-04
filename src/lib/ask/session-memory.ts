@@ -256,6 +256,6 @@ export function buildUpdatedSessionMemory(input: {
   const memory = deriveAskSessionMemory(nextHistory, input.previousMemory ?? null, {
     lastUpdatedAt: input.lastUpdatedAt,
   });
-  const profile = input.route?.kind !== "safety" ? input.route?.profile : undefined;
+  const profile = input.route?.kind === "safety" ? undefined : input.route?.profile;
   return profile ? askSessionMemorySchema.parse({ ...memory, brokerPreferences: profile }) : memory;
 }

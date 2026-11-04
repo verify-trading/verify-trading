@@ -64,6 +64,7 @@ const ASK_MAX_STEPS = 10;
 const MAX_HISTORY_TURNS = 12;
 
 type ToolResultRecord = { toolName?: string; output?: unknown };
+type AskStep = { toolResults?: ToolResultRecord[] };
 
 type AskGenerationDependencies = AskServiceDependencies & {
   retrieveAskKnowledgeImpl?: typeof retrieveAskKnowledge;
@@ -87,39 +88,38 @@ const DETERMINISTIC_CARD_TOOLS = new Set([
   "generate_growth_plan",
 ]);
 
-function toolResultHasCompleteCard(toolResult: {
-  toolName?: string;
-  output?: unknown;
-}): boolean {
-  if (!toolResult.toolName || !DETERMINISTIC_CARD_TOOLS.has(toolResult.toolName)) {
-    return false;
-  }
+function parseToolCard(toolResult: ToolResultRecord): AskCard | null {
   const output =
     toolResult.output && typeof toolResult.output === "object"
       ? (toolResult.output as { card?: unknown })
       : null;
-  return askCardSchema.safeParse(output?.card).success;
+  const parsed = askCardSchema.safeParse(output?.card);
+  return parsed.success ? parsed.data : null;
 }
 
-export function stopAfterFinalToolResult({
-  steps,
-}: {
-  steps: Array<{ toolResults?: Array<{ toolName?: string; output?: unknown }> }>;
-}) {
-  const lastStep = steps[steps.length - 1];
-  const toolResults = lastStep?.toolResults ?? [];
-  return toolResults.some(
-    (toolResult) =>
-      (toolResult.toolName === "submit_ask_card" && askCardSchema.safeParse((toolResult.output as { card?: unknown } | null)?.card).success) || toolResultHasCompleteCard(toolResult),
-  );
+function lastStepToolResults(steps: AskStep[]): ToolResultRecord[] {
+  return steps[steps.length - 1]?.toolResults ?? [];
+}
+
+function finalCardIn(toolResults: ToolResultRecord[]): boolean {
+  return toolResults.some((toolResult) => {
+    const endsTurn =
+      toolResult.toolName === "submit_ask_card" ||
+      Boolean(toolResult.toolName && DETERMINISTIC_CARD_TOOLS.has(toolResult.toolName));
+    return endsTurn && Boolean(parseToolCard(toolResult));
+  });
+}
+
+export function stopAfterFinalToolResult({ steps }: { steps: AskStep[] }): boolean {
+  return finalCardIn(lastStepToolResults(steps));
 }
 
 /** Advice questions ("is £200 enough?") need the numbers explained, so a calculator card can't end the turn. */
 const ADVICE_QUESTION = /\b(?:enough|worth|should i|is it (?:ok|okay|good|wise|safe)|can i|good idea|realistic|beginner|new to)\b/i;
 
-function stopAfterSubmittedCard({ steps }: { steps: Array<{ toolResults?: Array<{ toolName?: string; output?: unknown }> }> }) {
-  return (steps[steps.length - 1]?.toolResults ?? []).some(
-    (toolResult) => toolResult.toolName === "submit_ask_card" && askCardSchema.safeParse((toolResult.output as { card?: unknown } | null)?.card).success,
+function stopAfterSubmittedCard({ steps }: { steps: AskStep[] }) {
+  return lastStepToolResults(steps).some(
+    (toolResult) => toolResult.toolName === "submit_ask_card" && Boolean(parseToolCard(toolResult)),
   );
 }
 
@@ -209,13 +209,9 @@ export function mergeToolOwnedNumbers(
       if (toolResult.toolName !== toolName) {
         continue;
       }
-      const output =
-        toolResult.output && typeof toolResult.output === "object"
-          ? (toolResult.output as { card?: unknown })
-          : null;
-      const parsed = askCardSchema.safeParse(output?.card);
-      if (parsed.success && parsed.data.type === type) {
-        return parsed.data;
+      const card = parseToolCard(toolResult);
+      if (card?.type === type) {
+        return card;
       }
     }
     return null;
@@ -257,16 +253,18 @@ export function mergeToolOwnedNumbers(
     // not ours — force "N/A" so a model-assembled score never reads as a rating.
     const verifiedDbCard = findToolCard("verify_entity", "broker");
     const gated = findEngineVerdict(toolResults, card.name);
-    if (verifiedDbCard?.type === "broker" && verifiedDbCard.name.trim().toLowerCase() === card.name.trim().toLowerCase() && gated && btsVerificationGate(gated.operatingStatus, gated.researchStatus)) return verifiedDbCard;
-    if (verifiedDbCard?.type === "broker" && verifiedDbCard.name.trim().toLowerCase() === card.name.trim().toLowerCase()) {
+    const sameFirm = (candidate: AskCard | null): candidate is Extract<AskCard, { type: "broker" }> =>
+      candidate?.type === "broker" && candidate.name.trim().toLowerCase() === card.name.trim().toLowerCase();
+
+    if (sameFirm(verifiedDbCard) && gated && btsVerificationGate(gated.operatingStatus, gated.researchStatus)) return verifiedDbCard;
+    if (sameFirm(verifiedDbCard)) {
       return { ...card, score: verifiedDbCard.score, status: verifiedDbCard.status, fca: verifiedDbCard.fca, complaints: verifiedDbCard.complaints, color: verifiedDbCard.color };
     }
     // A firm the engine scored but the site has no page for: the engine's number and verdict, verbatim.
-    const bts = findEngineVerdict(toolResults, card.name);
-    if (bts) {
-      const { verdict, score } = bts.shown;
+    if (gated) {
+      const { verdict, score } = gated.shown;
       const status = cardStatus(verdict);
-      return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: bts.conductRecord, color: statusColor(status) };
+      return { ...card, score: score === null ? "No score" : `${score}/100`, status, complaints: gated.conductRecord, color: statusColor(status) };
     }
     return { ...card, score: "N/A" };
   }

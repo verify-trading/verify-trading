@@ -1,6 +1,7 @@
 import { generateText } from 'ai';
 import { addRequirements, buildClarification, isClarification, type BrokerPreferences } from './broker-discovery';
 import type { AskRequest, InsightCard } from './contracts';
+import { collapseEntityText } from './entities';
 import { retrieveAskKnowledge } from './knowledge/retrieve';
 import { getAskModel, getAskRouterModelId } from './service/provider';
 
@@ -45,7 +46,7 @@ export async function classifyIntent(message: string, pending: boolean, profileS
         maxRetries: 0,
       }),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); reject(new Error("Router timeout")); }, 4000);
+        timer = setTimeout(() => { controller.abort(); reject(new Error("Router timeout")); }, 5000);
       }),
     ]);
     const line = result.text.trim().split(/\r?\n/)[0].replace(/[<>]/g, '');
@@ -66,9 +67,9 @@ export async function lookupExactEntity(name: string): Promise<string | null> {
   const exact = knowledge.entityCandidates.filter(candidate => candidate.matchType === 'exact');
   // Retrieval also calls a title embedded in a longer phrase "exact".
   // The instant path requires the entire captured name to match.
-  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
   // Several records can match ("IG", "IG Group"): use the one whose whole title is the name, if unique.
-  const same = exact.filter(candidate => normalize(candidate.title) === normalize(name));
+  const normalizedName = collapseEntityText(name);
+  const same = exact.filter(candidate => collapseEntityText(candidate.title) === normalizedName);
   return same.length === 1 ? same[0].title : null;
 }
 
@@ -82,8 +83,9 @@ export async function routeAskMessage(
   if (!profile) {
     for (let i = 1; i < history.length; i++) {
       if (history[i].role === 'assistant' && isClarification(history[i].content) && history[i - 1].role === 'user') {
-        const message = history[i - 1].content;
-        profile = addRequirements(profile ?? { kind: /prop\s*firm/i.test(message) ? 'propfirm' : 'broker', instruments: [], requirements: [] }, message);
+        const previousMessage = history[i - 1].content;
+        // Accumulates across rounds: a country given in round one survives round two.
+        profile = addRequirements(profile ?? { kind: /prop\s*firm/i.test(previousMessage) ? 'propfirm' : 'broker', instruments: [], requirements: [] }, previousMessage);
       }
     }
   }
@@ -93,8 +95,9 @@ export async function routeAskMessage(
   const lookup = async (name: string) => {
     try { return await (deps.lookupExact ?? lookupExactEntity)(name); } catch { return null; }
   };
-  const safety = message.replace(/[?!]$/, '').match(/^(?:is|are)\s+(.+?)\s+(?:safe|legit|legitimate|regulated|trustworthy|a scam|reliable)$/i)
-    ?? message.replace(/[?!]$/, '').match(/^can i trust\s+(.+?)$/i);
+  const question = message.replace(/[?!]$/, '');
+  const safety = question.match(/^(?:is|are)\s+(.+?)\s+(?:safe|legit|legitimate|regulated|trustworthy|a scam|reliable)$/i)
+    ?? question.match(/^can i trust\s+(.+?)$/i);
   if (safety) {
     const firm = await lookup(safety[1]);
     if (firm) return { kind: 'safety', firm };

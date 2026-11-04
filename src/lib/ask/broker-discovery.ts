@@ -10,18 +10,23 @@ export type BrokerPreferences = {
   requirements: string[];
 };
 
-export const HEADLINES = ['Find a broker that fits', 'Find a prop firm that fits', 'Start with your trading needs', 'One quick question'];
+const HEADLINES = ['Find a broker that fits', 'Find a prop firm that fits', 'Start with your trading needs', 'One quick question'];
 const STYLE = /\b(scalp\w*|day[- ]?trad\w*|intraday|swing\w*|position trad\w*|long[- ]term|short[- ]term|news trad\w*|hold\w*|minutes|hours|days|weeks)\b/i;
 const regions = new Intl.DisplayNames(['en'], { type: 'region' });
 const countries = Array.from({ length: 676 }, (_, i) => String.fromCharCode(65 + Math.floor(i / 26), 65 + i % 26))
   .map(code => ({ code, name: regions.of(code) ?? code })).filter(({ code, name }) => code !== name);
+const countryCodes = new Set(countries.map(({ code }) => code));
+const countryMatchers = countries.map(({ code, name }) => ({
+  code,
+  pattern: new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'),
+}));
 
-export function countryIn(message: string): string | undefined {
+function countryIn(message: string): string | undefined {
   const code = (/^[A-Za-z]{2}$/.test(message.trim()) ? message.trim() : message.match(/\b(?:in|from|country(?: is)?)\s+([A-Z]{2})\b/)?.[1])?.toUpperCase();
-  if (code && countries.some(country => country.code === code)) return code;
+  if (code && countryCodes.has(code)) return code;
   if (/\b(?:UK|U\.K\.|Britain|British)\b/i.test(message)) return 'GB';
   if (/\b(?:USA|U\.S\.|United States(?: of America)?)\b/i.test(message) || /\bUS\b/.test(message)) return 'US';
-  return countries.find(({ name }) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(message))?.code;
+  return countryMatchers.find(({ pattern }) => pattern.test(message))?.code;
 }
 
 export function addRequirements(profile: BrokerPreferences, message: string): BrokerPreferences {
@@ -58,7 +63,7 @@ export function buildClarification(profile: BrokerPreferences): InsightCard {
     ...(!profile.country ? ['Which country are you based in?'] : []),
     ...(!profile.instruments.length ? ['What do you mainly trade: Forex, Gold, Indices, Stocks or Crypto?'] : []),
   ];
-  const kind = profile.kind;
+  const { kind } = profile;
   return {
     type: 'insight',
     variant: 'broker_discovery',

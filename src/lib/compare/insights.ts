@@ -94,10 +94,6 @@ export function regulatorHubs(brokers: PublicEntity[]): HubStats[] {
   });
 }
 
-/** A hub is worth indexing only with enough listed firms to be a useful page. */
-export const MIN_HUB_ENTITIES = 3;
-export const hubIndexable = (h: HubStats) => h.entities.length >= MIN_HUB_ENTITIES;
-
 export const hubFor = (brokers: PublicEntity[], slug: string): HubStats | null => {
   const regulator = getRegulator(slug);
   return regulator ? (regulatorHubs(brokers).find((h) => h.regulator.slug === slug) ?? null) : null;
@@ -105,6 +101,8 @@ export const hubFor = (brokers: PublicEntity[], slug: string): HubStats | null =
 
 /** Canonical order of a pair: alphabetical by slug. */
 export const pairKey = (a: string, b: string) => (a < b ? [a, b] : [b, a]) as [string, string];
+
+const canonicalPair = (a: PublicEntity, b: PublicEntity): [PublicEntity, PublicEntity] => (a.slug < b.slug ? [a, b] : [b, a]);
 
 /** The one place the "X vs Y" URL shape lives: /compare/<type>/<a>-vs-<b>, slugs sorted. */
 export const vsBasePath = (type: PublicEntityType) => (type === "propfirm" ? "/compare/prop-firms" : "/compare/brokers");
@@ -142,11 +140,11 @@ export function vsPairs(brokers: PublicEntity[]): Array<[PublicEntity, PublicEnt
     for (let i = 0; i < top.length; i++) {
       for (let j = i + 1; j < top.length; j++) {
         if (out.length >= VS_CAP) return out;
-        const [a, b] = pairKey(top[i].slug, top[j].slug);
-        const key = `${a}|${b}`;
+        const pair = canonicalPair(top[i], top[j]);
+        const key = `${pair[0].slug}|${pair[1].slug}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push(top[i].slug === a ? [top[i], top[j]] : [top[j], top[i]]);
+        out.push(pair);
       }
     }
   }
@@ -163,8 +161,7 @@ export function propVsPairs(propFirms: PublicEntity[]): Array<[PublicEntity, Pub
   for (let i = 0; i < top.length; i++) {
     for (let j = i + 1; j < top.length; j++) {
       if (out.length >= PROP_VS_CAP) return out;
-      const [a] = pairKey(top[i].slug, top[j].slug);
-      out.push(top[i].slug === a ? [top[i], top[j]] : [top[j], top[i]]);
+      out.push(canonicalPair(top[i], top[j]));
     }
   }
   return out;

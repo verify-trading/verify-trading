@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { Breadcrumbs, CtaBand } from "@/components/marketing/primitives";
 import { CtaLink } from "@/components/marketing/cta-link";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, scoreLabel, VerdictBadge } from "@/components/marketing/entity-ui";
-import { Block, EntityMiniCard, FaqBlock, RegulatorCard, TocNav, VerdictBands, WarningBanner } from "@/components/marketing/entity-sections";
+import { Block, EntityMiniCard, FaqBlock, RegulatorCard, TocNav, VerdictBands, VerifySteps, WarningBanner } from "@/components/marketing/entity-sections";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
 import { pillarDisplay } from "@/lib/compare/bts";
@@ -17,18 +17,18 @@ import { getRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { entityReviewSchema, webPageSchema } from "@/lib/marketing/seo";
 
-export const ENTITY_LIST_PATH = { broker: "/compare/brokers", propfirm: "/compare/prop-firms", guru: "/compare/traders" } as const;
+const ENTITY_LIST_PATH = { broker: "/compare/brokers", propfirm: "/compare/prop-firms", guru: "/compare/traders" } as const;
 const LIST_CRUMB = { broker: "Compare Brokers", propfirm: "Compare Prop Firms", guru: "Verify Traders" } as const;
+
+const truncateDescription = (text: string) => (text.length <= 160 ? text : `${text.slice(0, 157).trimEnd()}...`);
 
 export function entityDescription(e: PublicEntity): string {
   if (e.type === "guru") {
-    const text = `Independent trader and educator check for ${e.name}: verdict ${e.verdict}. See the record, its basis and last update. Sourced from public records, not paid placement.`;
-    return text.length <= 160 ? text : `${text.slice(0, 157).trimEnd()}...`;
+    return truncateDescription(`Independent trader and educator check for ${e.name}: verdict ${e.verdict}. See the record, its basis and last update. Sourced from public records, not paid placement.`);
   }
   const noun = e.type === "broker" ? "broker" : "prop firm";
   const reg = e.regulators.length ? ` Listed regulators: ${e.regulators.slice(0, 3).join(", ")}.` : "";
-  const text = `Independent ${noun} check for ${e.name}: verdict ${e.verdict}.${reg} See the record, its basis and last update. Sourced from public records, not paid placement.`;
-  return text.length <= 160 ? text : `${text.slice(0, 157).trimEnd()}...`;
+  return truncateDescription(`Independent ${noun} check for ${e.name}: verdict ${e.verdict}.${reg} See the record, its basis and last update. Sourced from public records, not paid placement.`);
 }
 
 /** How the rating is described: the official independent check, or the baseline while that is pending. */
@@ -48,8 +48,22 @@ function lede(e: PublicEntity): string {
 
 const LIMITED_EVIDENCE = 50;
 
+function SummaryStats({ items }: { items: Array<[string, string]> }) {
+  return (
+    <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
+      {items.map(([k, v]) => (
+        <div key={k} className="bg-[#0b0f36] px-3.5 py-3">
+          <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{k}</dt>
+          <dd className="mt-0.5 truncate text-sm font-semibold text-slate-100" title={v}>{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function EntityDetail({ entity: e, all, official = null, countryScores = {} }: { entity: PublicEntity; all: PublicEntity[]; official?: L2Result | null; countryScores?: Record<string, OfficialScore> }) {
   if (e.type === "guru") return <GuruDetail entity={e} />;
+  const description = entityDescription(e);
   const listPath = ENTITY_LIST_PATH[e.type];
   const path = entityPath(e);
   const isBroker = e.type === "broker";
@@ -118,12 +132,12 @@ export function EntityDetail({ entity: e, all, official = null, countryScores = 
 
   return (
     <>
-      <JsonLd data={webPageSchema({ name: `${e.name} verification record`, description: entityDescription(e), path })} />
+      <JsonLd data={webPageSchema({ name: `${e.name} verification record`, description, path })} />
       <JsonLd
         data={entityReviewSchema({
           name: e.name,
           path,
-          description: entityDescription(e),
+          description,
           category: isBroker ? "Online broker" : "Proprietary trading firm",
           verdict: e.verdict,
           score: e.score,
@@ -160,14 +174,7 @@ export function EntityDetail({ entity: e, all, official = null, countryScores = 
                 )}
               </div>
             </div>
-            <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
-              {highlights.map(([k, v]) => (
-                <div key={k} className="bg-[#0b0f36] px-3.5 py-3">
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{k}</dt>
-                  <dd className="mt-0.5 truncate text-sm font-semibold text-slate-100" title={v}>{v}</dd>
-                </div>
-              ))}
-            </dl>
+            <SummaryStats items={highlights} />
             {e.fcaWarning ? (
               <div className="mt-5">
                 <WarningBanner title="FCA warning on record">
@@ -276,14 +283,7 @@ export function EntityDetail({ entity: e, all, official = null, countryScores = 
 
           {/* 3. How to verify */}
           <Block id="verify" title="How to verify this yourself" intro="Take a few minutes to check official registers directly:">
-            <ol className="divide-y divide-white/10 border-y border-white/10">
-              {steps.map((s, i) => (
-                <li key={s} className="flex gap-4 py-4 sm:gap-6 sm:py-5">
-                  <span className="shrink-0 font-mono text-xs font-semibold text-[var(--vt-coral)] tabular-nums">{String(i + 1).padStart(2, "0")}</span>
-                  <p className="text-[15px] leading-7 text-slate-300">{s}</p>
-                </li>
-              ))}
-            </ol>
+            <VerifySteps steps={steps} />
             {isBroker && primary?.registerUrl ? (
               <a href={primary.registerUrl} target="_blank" rel="noopener noreferrer nofollow" className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 transition-colors hover:text-white">
                 Open the {primary.registerLabel} <ExternalLink className="size-3.5" aria-hidden />
@@ -316,12 +316,7 @@ export function EntityDetail({ entity: e, all, official = null, countryScores = 
           {/* 5. The record table */}
           <Block id="record" title="The record" intro="Public verification fields held for this entity:">
             <dl className={`${surface} divide-y divide-white/[0.06] rounded-xl overflow-hidden`}>
-              {facts.map(([k, v]) => (
-                <div key={k} className="grid gap-1 px-4 py-3 sm:grid-cols-[11rem_1fr] sm:gap-4">
-                  <dt className="text-xs uppercase tracking-wider text-slate-400">{k}</dt>
-                  <dd className="text-sm font-medium text-slate-100">{v}</dd>
-                </div>
-              ))}
+              {facts.map(([k, v]) => <Row key={k} k={k} v={v} />)}
             </dl>
             <div className="mt-4 space-y-2 text-xs leading-relaxed text-slate-400">
               <p>Check the regulator&apos;s register before depositing. {INDEPENDENCE_STATEMENT}</p>
@@ -435,6 +430,7 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
  * (belt and braces — the resolver already downgrades to Unverified when the URL is missing).
  */
 function GuruDetail({ entity: e }: { entity: PublicEntity }) {
+  const description = entityDescription(e);
   const path = entityPath(e);
   const listPath = ENTITY_LIST_PATH.guru;
   // Belt-and-braces: never render Caution without a citation.
@@ -467,12 +463,12 @@ function GuruDetail({ entity: e }: { entity: PublicEntity }) {
 
   return (
     <>
-      <JsonLd data={webPageSchema({ name: `${e.name} verification record`, description: entityDescription(e), path })} />
+      <JsonLd data={webPageSchema({ name: `${e.name} verification record`, description, path })} />
       <JsonLd
         data={entityReviewSchema({
           name: e.name,
           path,
-          description: entityDescription(e),
+          description,
           category: "Trading educator",
           verdict: safeVerdict,
           score: null,
@@ -504,14 +500,7 @@ function GuruDetail({ entity: e }: { entity: PublicEntity }) {
                 <VerdictBadge verdict={safeVerdict} className="px-3 py-1 text-xs" />
               </div>
             </div>
-            <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
-              {highlights.map(([k, v]) => (
-                <div key={k} className="bg-[#0b0f36] px-3.5 py-3">
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{k}</dt>
-                  <dd className="mt-0.5 truncate text-sm font-semibold text-slate-100" title={v}>{v}</dd>
-                </div>
-              ))}
-            </dl>
+            <SummaryStats items={highlights} />
             <div className="mt-6 flex flex-wrap gap-3">
               <CtaLink href={askCheckHref(e.name)} event="ask" location="entity_guru_summary" className="h-10">
                 Run full check <ArrowRight aria-hidden />
@@ -537,19 +526,14 @@ function GuruDetail({ entity: e }: { entity: PublicEntity }) {
           ) : null}
 
           <Block id="verify" title="How to verify this yourself" intro="Take a few minutes to check public sources directly:">
-            <ol className="divide-y divide-white/10 border-y border-white/10">
-              {[
+            <VerifySteps
+              steps={[
                 `Search the person's name on their own regulator's public register, if any (for example the FCA Financial Services Register for UK-authorised individuals).`,
                 "Check court-record databases and official press releases for named enforcement actions, rather than relying on social-media summaries.",
                 "Look for independent evidence of a track record on neutral platforms, not the person's own site or affiliate network.",
                 "Confirm the person's identity matches the social profiles that promote them.",
-              ].map((s, i) => (
-                <li key={s} className="flex gap-4 py-4 sm:gap-6 sm:py-5">
-                  <span className="shrink-0 font-mono text-xs font-semibold text-[var(--vt-coral)] tabular-nums">{String(i + 1).padStart(2, "0")}</span>
-                  <p className="text-[15px] leading-7 text-slate-300">{s}</p>
-                </li>
-              ))}
-            </ol>
+              ]}
+            />
           </Block>
 
           {safeVerdict === "Caution" && e.citationUrl ? (
@@ -562,12 +546,7 @@ function GuruDetail({ entity: e }: { entity: PublicEntity }) {
 
           <Block id="record" title="The record" intro="Public verification fields held for this person:">
             <dl className={`${surface} divide-y divide-white/[0.06] rounded-xl overflow-hidden`}>
-              {facts.map(([k, v]) => (
-                <div key={k} className="grid gap-1 px-4 py-3 sm:grid-cols-[11rem_1fr] sm:gap-4">
-                  <dt className="text-xs uppercase tracking-wider text-slate-400">{k}</dt>
-                  <dd className="text-sm font-medium text-slate-100">{v}</dd>
-                </div>
-              ))}
+              {facts.map(([k, v]) => <Row key={k} k={k} v={v} />)}
             </dl>
             <div className="mt-4 space-y-2 text-xs leading-relaxed text-slate-400">
               <p>{INDEPENDENCE_STATEMENT}</p>

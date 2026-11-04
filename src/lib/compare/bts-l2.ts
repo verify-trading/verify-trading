@@ -47,8 +47,7 @@ export const L2_RUBRIC = {
   },
 } as const satisfies Record<Kind, { version: string; pillars: ReadonlyArray<readonly [string, string, number, string]> }>;
 
-export const L2_VERDICTS = ["Strong", "Generally positive", "Caution", "High risk", "Score unavailable"] as const;
-export type L2Verdict = (typeof L2_VERDICTS)[number];
+export type L2Verdict = OfficialVerdict | "Score unavailable";
 const verdictFor = (score: number): L2Verdict => (score >= 85 ? "Strong" : score >= 70 ? "Generally positive" : score >= 50 ? "Caution" : "High risk");
 
 /** How much one source of each type proves. Confidence = reliability of evidence, not field completeness. */
@@ -120,15 +119,17 @@ const sourceUrl = (url: string) => {
     return null;
   }
 };
+const normalizeUrls = (urls: Iterable<string>) => new Set([...urls].map(sourceUrl).filter((url): url is string => url !== null));
+/** Search models inline "([site](url))" citations; sources are listed separately. */
+const CITATION = /\s*\(\[[^\]]*\]\([^)]*\)\)/g;
 
 /**
  * Turn the researcher's draft into the published assessment. Pure: everything numeric is decided here.
  * A source must match provider-returned web evidence; anything else loses its source.
  */
 export function scoreAssessment(kind: Kind, draft: Research, retrievedUrls: ReadonlySet<string>) {
-  const retrieved = new Set([...retrievedUrls].map(sourceUrl).filter(Boolean));
-  // Search models inline "([site](url))" citations; sources are listed separately.
-  const clean = (t: string) => t.replace(/\s*\(\[[^\]]*\]\([^)]*\)\)/g, "").trim();
+  const retrieved = normalizeUrls(retrievedUrls);
+  const clean = (t: string) => t.replace(CITATION, "").trim();
   const sources = new Map(
     draft.sources.flatMap((s) => {
       const url = sourceUrl(s.url);
@@ -166,8 +167,8 @@ export function scoreAssessment(kind: Kind, draft: Research, retrievedUrls: Read
     strengths: draft.strengths.map(clean),
     risks: draft.risks.map(clean),
     summary: clean(draft.summary),
-    // Only regulators backed by a register page the search actually retrieved.
     conditions: Object.fromEntries(Object.entries(draft.conditions ?? {}).map(([k, v]) => [k, clean(String(v)) || "not found"])) as Record<"platforms" | "gold_spread" | "commission" | "min_deposit" | "scalping", string>,
+    // Only regulators backed by a register page the search actually retrieved.
     regulators: [...sources.values()].some((s) => s.type === "official_register") ? (draft.regulators ?? []).map(clean).filter(Boolean).slice(0, 4) : [],
     // Public takeaways are written after scoring (writeTakeaways), knowing the final verdict.
     answer: "",
@@ -177,7 +178,8 @@ export function scoreAssessment(kind: Kind, draft: Research, retrievedUrls: Read
 }
 
 function researchPrompt(firm: string, kind: Kind | undefined, country: string) {
-  const where = country === "XX" ? "an unknown country (assess globally)" : `${countryName(country) === country ? (new Intl.DisplayNames(["en"], { type: "region" }).of(country) ?? country) : countryName(country)} (${country})`;
+  const named = countryName(country);
+  const where = country === "XX" ? "an unknown country (assess globally)" : `${named === country ? (new Intl.DisplayNames(["en"], { type: "region" }).of(country) ?? country) : named} (${country})`;
   const kinds: Kind[] = kind ? [kind] : ["broker", "propfirm"];
   const rubric = kinds.map((k) => `${k}:\n${L2_RUBRIC[k].pillars.map(([key, label, max, needs]) => `- ${key} (${label}, max ${max}): ${needs}`).join("\n")}`).join("\n\n");
   return {
@@ -327,8 +329,9 @@ const SAYS = {
 /** Does the quick take express the view the score supports? */
 export function takeMatches(answer: string, view: keyof typeof SAYS): boolean {
   if (!answer.trim()) return false;
-  if (view === "avoid") return SAYS.avoid.test(answer);
-  if (SAYS.avoid.test(answer)) return false;
+  const avoids = SAYS.avoid.test(answer);
+  if (view === "avoid") return avoids;
+  if (avoids) return false;
   return view === "careful" ? SAYS.careful.test(answer) : SAYS.comfortable.test(answer) && !/^\s*I['’]d be (careful|cautious)/i.test(answer);
 }
 
@@ -508,9 +511,12 @@ async function runAndStore(s: L2Subject, previous: Previous): Promise<L2Result |
     const { draft, retrievedUrls, usage } = await research(model, s.firm, s.kind, s.country, AbortSignal.timeout(240_000));
     if (draft.kind === "other" || (s.kind && s.kind !== draft.kind)) return null;
     // The gateway must expose search evidence. Never publish a researched verdict from model text alone.
-    const retrieved = new Set([...retrievedUrls].map(sourceUrl).filter(Boolean));
+    const retrieved = normalizeUrls(retrievedUrls);
     // scoreAssessment drops any cited source the search did not retrieve; refuse only when most were not.
-    const cited = draft.sources.filter((source) => retrieved.has(sourceUrl(source.url)));
+    const cited = draft.sources.filter((source) => {
+      const url = sourceUrl(source.url);
+      return url !== null && retrieved.has(url);
+    });
     if (!retrieved.size || cited.length * 2 < draft.sources.length) {
       throw new Error("Research cited sources missing from retrieved web evidence.");
     }
@@ -556,8 +562,9 @@ async function runAndStore(s: L2Subject, previous: Previous): Promise<L2Result |
     const changesStanding = publication.status === "published" || isDisputed({ status: publication.status, reviewReason: publication.reason });
     if (changesStanding) refreshWebsite();
     // Lazy import: response-cache -> bts-data -> this module would otherwise be a cycle.
-    if (changesStanding && s.entityId) {
-      await import("@/lib/ask/response-cache").then((m) => m.forgetCachedAnswers(s.entityId!)).catch(() => {});
+    const entityId = s.entityId;
+    if (changesStanding && entityId) {
+      await import("@/lib/ask/response-cache").then((m) => m.forgetCachedAnswers(entityId)).catch(() => {});
     }
     if (publication.status === "review") logger.info("bts_l2_needs_review", { firm: s.firm, country: s.country, reason: publication.reason });
     return { ...assessment, model, checkedAt, status: publication.status === "confirmed" ? "candidate" : publication.status, country: s.country, reviewReason: publication.reason };

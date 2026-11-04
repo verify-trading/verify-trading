@@ -27,7 +27,7 @@ import {
 } from "@/lib/ask/calculators";
 import { getFcaStatus } from "@/lib/ask/fca";
 import { btsVerificationGate } from "@/lib/compare/bts-research";
-import { cardStatus, DATABASE_ONLY, countryName, normalizeCountry, statusColor } from "@/lib/compare/bts";
+import { cardStatus, DATABASE_ONLY, countryName, statusColor } from "@/lib/compare/bts";
 import { regulationLabel } from "@/lib/compare/regulators";
 import { getBtsAskContext, getBtsAskContextByBrand, getRequestCountrySafe, listBtsRanked, type BtsAskContext } from "@/lib/compare/bts-data";
 import { getL2Assessment, isDisputed, type L2Result, type L2Subject } from "@/lib/compare/bts-l2";
@@ -35,6 +35,7 @@ import {
   findEntityCandidates,
   listVerifiedEntities,
   lookupVerifiedEntity,
+  normalizeEntityText,
   upsertDevelopingPropFirm,
   type EntityCandidate,
   type LookupVerifiedEntityResult,
@@ -55,6 +56,7 @@ import { buildMarketSetupCard, getMarketSetupInputSchema } from "@/lib/ask/setup
 import type { EconomicCalendarSnapshot, EconomicEventItem } from "@/lib/markets/economic-calendar";
 import { ECONOMIC_CALENDAR_CACHE_KEY } from "@/lib/markets/rapidapi-economic-calendar";
 import { readCacheRow } from "@/lib/markets/twelve-data-adapter";
+import { formatChange } from "@/lib/markets/twelve-markets-data";
 
 const verifyEntityInputSchema = z.object({
   name: z.string().min(1).describe("Broker, prop firm, guru, or brand name to verify."),
@@ -215,31 +217,28 @@ function addUtcDays(date: Date, days: number) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
 }
 
-function normalizeCalendarSearch(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
+const CALENDAR_QUERY_ALIASES: Record<string, string[]> = {
+  cpi: ["cpi", "consumer price index", "inflation"],
+  nfp: ["nfp", "nonfarm payroll", "non farm payroll", "payroll"],
+  fed: ["fed", "fomc", "federal reserve", "rate decision"],
+  boe: ["boe", "bank of england", "rate decision"],
+  ecb: ["ecb", "european central bank", "rate decision"],
+  pmi: ["pmi", "purchasing managers"],
+  gdp: ["gdp", "gross domestic product"],
+};
 
 function eventMatchesQuery(item: EconomicEventItem, query: string | undefined) {
   if (!query) {
     return true;
   }
 
-  const normalizedQuery = normalizeCalendarSearch(query);
+  const normalizedQuery = normalizeEntityText(query);
   if (!normalizedQuery) {
     return true;
   }
 
-  const aliases: Record<string, string[]> = {
-    cpi: ["cpi", "consumer price index", "inflation"],
-    nfp: ["nfp", "nonfarm payroll", "non farm payroll", "payroll"],
-    fed: ["fed", "fomc", "federal reserve", "rate decision"],
-    boe: ["boe", "bank of england", "rate decision"],
-    ecb: ["ecb", "european central bank", "rate decision"],
-    pmi: ["pmi", "purchasing managers"],
-    gdp: ["gdp", "gross domestic product"],
-  };
-  const expandedTerms = aliases[normalizedQuery] ?? [normalizedQuery];
-  const haystack = normalizeCalendarSearch(
+  const expandedTerms = CALENDAR_QUERY_ALIASES[normalizedQuery] ?? [normalizedQuery];
+  const haystack = normalizeEntityText(
     [item.event, item.currency, item.country, item.period ?? "", item.source ?? ""].join(" "),
   );
 
@@ -598,10 +597,6 @@ function normalizeVerificationName(name: string) {
   }
 }
 
-function formatChange(value: number) {
-  return `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(2)}%`;
-}
-
 function buildBriefingCard(
   quote: Awaited<ReturnType<typeof getMarketQuote>>,
   series: Awaited<ReturnType<typeof getMarketSeries>>,
@@ -713,10 +708,6 @@ async function coverageEvidence(
   };
 }
 
-// Ask reads through the shared TTL cache (Twelve Data primary, FMP fallback) rather than
-// hammering the provider live on every turn — a market briefing at most 60s old is fine, and
-// this is what stopped the FMP 429s from repeated/rapid asks re-fetching the same symbol.
-
 async function enrichPositionSizeInput(
   toolInput: z.input<typeof calculatePositionSizeInputSchema>,
   getMarketQuoteImpl: (asset: string, options?: MarketDataOptions) => ReturnType<typeof getMarketQuote>,
@@ -786,10 +777,11 @@ function buildProfitLossCard(result: ReturnType<typeof calculateProfitLoss>): As
 }
 
 export function createAskTools(dependencies: AskServiceDependencies) {
-  const getMarketQuoteImpl =
-    dependencies.getMarketQuoteImpl ?? ((asset: string) => getMarketQuote(asset));
-  const getMarketSeriesImpl =
-    dependencies.getMarketSeriesImpl ?? ((asset: string, timeframe) => getMarketSeries(asset, timeframe));
+  // Ask reads through the shared TTL cache (Twelve Data primary, FMP fallback) rather than
+  // hammering the provider live on every turn — a market briefing at most 60s old is fine, and
+  // this is what stopped the FMP 429s from repeated/rapid asks re-fetching the same symbol.
+  const getMarketQuoteImpl = dependencies.getMarketQuoteImpl ?? getMarketQuote;
+  const getMarketSeriesImpl = dependencies.getMarketSeriesImpl ?? getMarketSeries;
   const fetchNewsEverythingImpl =
     dependencies.fetchNewsEverythingImpl ?? fetchNewsEverything;
   const getEconomicCalendarSnapshotImpl =
@@ -978,19 +970,17 @@ export function createAskTools(dependencies: AskServiceDependencies) {
   };
 }
 
-export type AskToolSet = ReturnType<typeof createAskTools>;
-
 /** How long Ask waits for a live check before answering from the database. The run keeps going and is cached. */
 const L2_WAIT_MS = 120_000; // the mobile app gives up on Ask at 180s
+
+/** Any ISO country the user named; the live check researches countries the engine has no rows for (e.g. Morocco). */
+const isoCountry = (c?: string) => (c && /^[A-Za-z]{2}$/.test(c.trim()) ? c.trim().toUpperCase() : undefined);
 
 /**
  * Layer 2 owns the displayed number when it succeeds; Layer 1 stays in the database for audit and is
  * removed from what the model sees, so the user never gets two competing scores. When the live check
  * is unavailable, the Layer 1 rating is shown and labelled as a database assessment.
  */
-/** Any ISO country the user named; the live check researches countries the engine has no rows for (e.g. Morocco). */
-const isoCountry = (c?: string) => (c && /^[A-Za-z]{2}$/.test(c.trim()) ? c.trim().toUpperCase() : undefined);
-
 async function withLiveCheck(bts: BtsAskContext, getL2: typeof getL2Assessment = getL2Assessment, country?: string, waitMs = L2_WAIT_MS) {
   if (bts.type === "tool" || btsVerificationGate(bts.operatingStatus, bts.researchStatus) || bts.global.verdict === "Not active" || bts.global.verdict === "Under review") return bts;
   const l2 = await waitForLiveCheck({ firm: bts.firm, kind: bts.type, country: isoCountry(country) ?? bts.countryCode, entityId: bts.entityId, baseline: { score: bts.global.score, verdict: bts.global.verdict } }, getL2, waitMs);
@@ -1105,15 +1095,25 @@ function baselineOpener(verdict: string, firm: string, country: string | null): 
   return `${verdict}${where}.`;
 }
 
+/** A disputed live check shows no score until a person decides (amber: not a negative finding). */
+function disputedBrokerFields(firm: string): Pick<BrokerCard, "score" | "status" | "color" | "complaints" | "verdict"> {
+  return {
+    score: "No score",
+    status: "CAUTION",
+    color: "amber",
+    complaints: "Not checked",
+    verdict: `Our latest check found new evidence about ${firm} that changes its rating, so we're reviewing it before publishing a score. Until then, check the regulator's register yourself before depositing.`,
+  };
+}
+
 /**
  * The card shows the final verdict and score verbatim: the live check's when it ran, else the
  * engine's for the user's country. Live FCA data and old record fields never change it.
  */
 function applyBtsToCard(card: BrokerCard, bts: CheckedBts): BrokerCard {
   const gate = btsVerificationGate(bts.operatingStatus, bts.researchStatus);
-  // A disputed live check: no score until a person decides, said plainly (amber: not a negative finding).
   if (!gate && "scoreSource" in bts && bts.scoreSource === "Under review") {
-    return { ...card, score: "No score", status: "CAUTION", color: "amber", complaints: "Not checked", verdict: `Our latest check found new evidence about ${bts.firm} that changes its rating, so we're reviewing it before publishing a score. Until then, check the regulator's register yourself before depositing.` };
+    return { ...card, ...disputedBrokerFields(bts.firm) };
   }
   if (gate || bts.global.verdict === "Under review") {
     return { ...card, score: "No score", status: "WARNING", color: "red", complaints: "Not checked", verdict: gate === "inactive" ? `${bts.firm} is recorded as inactive, redirected or merged. This record does not confirm an active service.` : gate === "unknown" ? `We haven't confirmed whether ${bts.firm} is operating.` : "We're still verifying this firm." };
@@ -1196,7 +1196,7 @@ export async function resolveVerificationToolResult(
     // Same standing rules as engine firms: thin evidence shows nothing new, a disputed check shows no score.
     if (!l2 || (l2.status !== "published" && !isDisputed(l2))) return null;
     if (isDisputed(l2)) {
-      return withCard({ type: "broker", name: firm, score: "No score", status: "CAUTION", fca: "No", complaints: "Not checked", color: "amber", verdict: `Our latest check found new evidence about ${firm} that changes its rating, so we're reviewing it before publishing a score. Until then, check the regulator's register yourself before depositing.` }, { verificationKind: l2.kind, verificationSourceLabel: "Under review" });
+      return withCard({ type: "broker", name: firm, fca: "No", ...disputedBrokerFields(firm) }, { verificationKind: l2.kind, verificationSourceLabel: "Under review" });
     }
     const bts: CheckedBts = {
       firm,
@@ -1255,6 +1255,10 @@ export async function resolveVerificationToolResult(
         },
       };
     }
+    return {
+      ...(await coverageEvidence(normalized.lookupName, false)),
+      bts,
+    };
   }
 
   if (normalized.fromUrl) {

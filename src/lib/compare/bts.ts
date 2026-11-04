@@ -32,6 +32,11 @@ export function toVerdict(raw: string | null | undefined, kind?: string): BtsVer
   return label === "Verified" && kind === "propfirm" ? "Record reviewed" : label;
 }
 
+/** Research gates override the engine verdict; the gate types come from btsVerificationGate. */
+export function gatedVerdict(gate: string | null, rawVerdict: string | null | undefined, kind?: string): BtsVerdict {
+  return gate === "needs_review" ? "Under review" : gate === "inactive" ? "Not active" : gate === "unknown" ? "Insufficient data" : toVerdict(rawVerdict, kind);
+}
+
 /** Ends the card when there is no official score or live check and the Layer 1 baseline is shown instead. */
 export const DATABASE_ONLY = "Independent verification is still pending, so this is our baseline assessment.";
 
@@ -44,7 +49,7 @@ export const statusColor = (status: string) => (status === "LEGITIMATE" ? "green
 /** Verdicts that never show a number (the engine leaves the score empty or it isn't meaningful). */
 export const SCORELESS: ReadonlySet<BtsVerdict> = new Set(["Under review", "Not active", "Not available"]);
 /** Left out of every list and ranking (still reachable by name search and on their own page). */
-export const UNLISTED: ReadonlySet<BtsVerdict> = new Set(["Under review", "Not active", "Not available"]);
+export const UNLISTED = SCORELESS;
 
 /** Pillar order and maximum points, per the approved method. */
 export const PILLARS = {

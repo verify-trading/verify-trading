@@ -18,16 +18,15 @@ import {
 const readCookie = (name: string) => document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))?.[1] ?? null;
 const CHANGED = "vt-country-change";
 
+const subscribeCountryChange = (onChange: () => void) => {
+  window.addEventListener(CHANGED, onChange);
+  return () => window.removeEventListener(CHANGED, onChange);
+};
+const getVisitorCountry = () => normalizeCountry(readCookie(COUNTRY_COOKIE) ?? readCookie(GEO_COOKIE));
+
 /** The visitor's country: saved choice, else the IP guess middleware stored, else XX. Null during SSR. */
 function useVisitorCountry(): string | null {
-  return useSyncExternalStore(
-    (onChange) => {
-      window.addEventListener(CHANGED, onChange);
-      return () => window.removeEventListener(CHANGED, onChange);
-    },
-    () => normalizeCountry(readCookie(COUNTRY_COOKIE) ?? readCookie(GEO_COOKIE)),
-    () => null,
-  );
+  return useSyncExternalStore(subscribeCountryChange, getVisitorCountry, () => null);
 }
 
 const OPTIONS = [...BTS_COUNTRIES].sort((a, b) => countryName(a).localeCompare(countryName(b)));
@@ -36,7 +35,7 @@ const OPTIONS = [...BTS_COUNTRIES].sort((a, b) => countryName(a).localeCompare(c
  * "Showing results for 🇬🇧 United Kingdom · Change". The choice is saved in a cookie and wins over the IP guess.
  * Server-rendered lists pass `refresh` so the server re-ranks for the new country.
  */
-export function CountryPicker({ country, refresh = false }: { country: string; refresh?: boolean }) {
+function CountryPicker({ country, refresh = false }: { country: string; refresh?: boolean }) {
   const router = useRouter();
   return (
     <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
@@ -87,11 +86,12 @@ export function CountryVerdict({
 }) {
   const country = useVisitorCountry();
   const local = country ? countryScores[country] : undefined;
+  const countryLabel = countryName(country ?? "XX");
   const view = local ? { verdict: local.verdict, score: local.score } : { verdict, score };
   const line = local
     ? local.score === null
-      ? `Under review for ${countryName(country!)}: new evidence is being checked`
-      : `Official score for ${countryName(country!)} · checked ${formatRecordDate(local.checkedAt)}`
+      ? `Under review for ${countryLabel}: new evidence is being checked`
+      : `Official score for ${countryLabel} · checked ${formatRecordDate(local.checkedAt)}`
     : score === null && verdict === "Under review"
       ? "Under review: new evidence is being checked"
       : basis === "official"

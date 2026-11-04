@@ -146,13 +146,6 @@ export async function completeAskExchange(
   prepared: PreparedAskRoute,
   callbacks?: AskGenerationCallbacks,
 ): Promise<AskResponse> {
-  // Bare single-entity lookups ("is alpha futures legit") are served from the
-  // shared response cache when a fresh answer for the same register row
-  // exists — zero model cost, sub-second response. The exchange still counts
-  // against the daily quota and still lands in the user's session history, so
-  // a hit is indistinguishable from a generated answer everywhere else. The
-  // sync pre-gate keeps non-cacheable requests (images, follow-ups) off the
-  // async cache path entirely.
   if (prepared.clarification) {
     const response: AskResponse = {
       data: prepared.clarification,
@@ -163,6 +156,13 @@ export async function completeAskExchange(
     await saveAskExchangeBestEffort(prepared, response);
     return response;
   }
+  // Bare single-entity lookups ("is alpha futures legit") are served from the
+  // shared response cache when a fresh answer for the same register row
+  // exists — zero model cost, sub-second response. The exchange still counts
+  // against the daily quota and still lands in the user's session history, so
+  // a hit is indistinguishable from a generated answer everywhere else. The
+  // sync pre-gate keeps non-cacheable requests (images, follow-ups) off the
+  // async cache path entirely.
   const cacheCandidate = prepared.route.kind === "safety" && isAskCacheCandidate(prepared.requestInput);
   if (cacheCandidate) {
     const cached = await readCachedAskResponse(prepared.requestInput);
