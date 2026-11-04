@@ -59,10 +59,11 @@ const TTL_MS = 24 * 60 * 60 * 1000;
 const REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
 /** Publication rules. A move bigger than these, or thinner evidence, waits for a person to approve it. */
 const MAX_AUTO_MOVE = 10;
-/** First publication vs the Layer 1 baseline: a gap over 20 that changes the band, or any gap over 35. */
+/** First publication vs the Layer 1 baseline: a gap over 20 that changes the verdict, or any gap over 35. */
 const MAX_BASELINE_GAP = 20;
-const MAX_BASELINE_GAP_SAME_BAND = 35;
-const band = (score: number) => (score >= 70 ? 2 : score >= 50 ? 1 : 0);
+const MAX_BASELINE_GAP_SAME_VERDICT = 35;
+/** Verdicts on both scales reduced to what they tell a trader: positive, caution or high risk. */
+const stance = (verdict: string) => (/^(verified|record reviewed|strong|generally positive)$/i.test(verdict) ? "positive" : /^high risk$/i.test(verdict) ? "risk" : "caution");
 const MIN_PUBLISH_CONFIDENCE = { broker: 70, propfirm: 60 } as const;
 const MIN_PRIMARY_SOURCES = 2;
 
@@ -209,7 +210,7 @@ ${rubric}
 
 Also record the trading conditions from the firm's own pages (platforms, XAUUSD spread, commission, minimum deposit, scalping/EA policy) for the account this user would get. Never estimate them.
 
-Write the summary for a trader, as your own findings. The first two sentences are the bottom line: what the firm is, who operates it, and its single most important risk or strength. Then the remaining evidence and risks. Separate product restrictions (e.g. futures) from the availability of other services. Never mention notes, this response, your research process or field names such as country_fit or UNVERIFIED; say "not confirmed" in plain words.
+Write the summary for a trader, as your own findings. The first two sentences are the bottom line: what the firm is, who operates it, and its single most important risk or strength. Then the remaining evidence and risks. Separate product restrictions (e.g. futures) from the availability of other services. Never mention notes, this response, your research process or field names such as country_fit or UNVERIFIED; say "not confirmed" in plain words. In every text field, never describe pages that didn't load, render or couldn't be read; say what couldn't be confirmed instead (e.g. "its current register entry couldn't be confirmed").
 
 country_fit is for the user's country: CONFIRMED_LOCALLY (local licence on the register), CROSS_BORDER_SUPPORTED, UNVERIFIED, RESTRICTED or NOT_AVAILABLE.`,
     prompt: `Firm: ${firm}\nUser's country: ${where}\nIdentify the current operator and assess its evidence. Report separately whether it serves this user's country.`,
@@ -266,17 +267,19 @@ export type L2Status = "published" | "review";
  * May this check become the official score by itself? Two kinds of hold, written as the reason prefix:
  * - "Evidence:" thin or unconfirmed evidence. Not shown anywhere; the baseline stays, marked pending.
  * - "Score change:" solid evidence that contradicts the current score (a move over 10 from the published
- *   score, or on first publication a band change with a 20+ gap, or any 35+ gap from the Layer 1 baseline).
+ *   score, or on first publication a different verdict with a 20+ gap, or any 35+ gap from the Layer 1 baseline).
  *   The firm shows "Under review" with no score, on the website and in Ask, until a person decides.
  */
 export function publicationCheck(
-  a: Pick<L2Assessment, "kind" | "finalScore" | "confidence" | "identity" | "sources">,
+  a: Pick<L2Assessment, "kind" | "finalScore" | "verdict" | "confidence" | "identity" | "sources">,
   previous: number | null,
-  baseline: number | null,
+  baseline: { score: number | null; verdict: string } | null | undefined,
 ): { status: L2Status; reason: string | null } {
   const primary = a.sources.filter((s) => s.type === "official_register" || s.type === "regulator_notice" || (a.kind === "propfirm" && s.type === "company_terms")).length;
   const score = a.finalScore;
-  const gap = score !== null && baseline !== null ? Math.abs(score - baseline) : 0;
+  const base = baseline?.score ?? null;
+  const gap = score !== null && base !== null ? Math.abs(score - base) : 0;
+  const verdictChanged = Boolean(baseline) && stance(a.verdict) !== stance(baseline!.verdict);
   const reason =
     score === null || !a.identity.confirmed
       ? "Evidence: firm or evidence not confirmed"
@@ -286,8 +289,8 @@ export function publicationCheck(
           ? `Evidence: ${primary} primary source${primary === 1 ? "" : "s"}, needs ${MIN_PRIMARY_SOURCES}`
           : previous !== null && Math.abs(score - previous) > MAX_AUTO_MOVE
             ? `Score change: moves ${score - previous > 0 ? "+" : ""}${score - previous} from the published ${previous}`
-            : previous === null && baseline !== null && (gap > MAX_BASELINE_GAP_SAME_BAND || (gap > MAX_BASELINE_GAP && band(score) !== band(baseline)))
-              ? `Score change: first score ${score} is ${gap} points from the baseline ${baseline}`
+            : previous === null && base !== null && (gap > MAX_BASELINE_GAP_SAME_VERDICT || (gap > MAX_BASELINE_GAP && verdictChanged))
+              ? `Score change: first score ${score} (${a.verdict}) is ${gap} points from the baseline ${base} (${baseline!.verdict})`
               : null;
   return { status: reason ? "review" : "published", reason };
 }
@@ -421,7 +424,7 @@ async function runAndStore(s: L2Subject, previous: number | null): Promise<L2Res
       throw new Error("Research cited sources missing from retrieved web evidence.");
     }
     const assessment = scoreAssessment(draft.kind, draft, retrievedUrls);
-    const publication = publicationCheck(assessment, previous, s.baseline?.score ?? null);
+    const publication = publicationCheck(assessment, previous, s.baseline);
     const checkedAt = new Date().toISOString();
     const client = getSupabaseAdminClient()!;
     // Snapshot the cap and uncapped score after research, keeping the researcher independent.
