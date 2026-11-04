@@ -35,7 +35,7 @@ export function entityDescription(e: PublicEntity): string {
 const ratingSource = (e: PublicEntity) => (e.scoreBasis === "official" ? "Our independently verified rating" : e.scoreBasis === "baseline" ? "Our baseline rating (independent verification pending)" : "Our stored research rating");
 
 function lede(e: PublicEntity): string {
-  if (e.verdict === "Under review") return "We're still verifying this firm.";
+  if (e.verdict === "Under review") return e.bts ? `We're reviewing new evidence about ${e.name} before publishing a score. Until then, check the regulator's register yourself before depositing.` : "We're still verifying this firm.";
   if (e.bts?.research?.operatingStatus === "unknown") return `We haven't confirmed whether ${e.name} is operating. Its identity and current service need verification.`;
   const rating = e.score !== null ? `${e.verdict}, ${e.score} out of 100` : e.verdict;
   if (e.type === "propfirm") {

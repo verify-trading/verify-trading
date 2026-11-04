@@ -1101,6 +1101,10 @@ function verificationMeta(bts: CheckedBts): Pick<AskUiMeta, "verification" | "ve
  */
 function applyBtsToCard(card: BrokerCard, bts: CheckedBts): BrokerCard {
   const gate = btsVerificationGate(bts.operatingStatus, bts.researchStatus);
+  // A disputed live check: no score until a person decides, said plainly (amber: not a negative finding).
+  if (!gate && "scoreSource" in bts && bts.scoreSource === "Under review") {
+    return { ...card, score: "No score", status: "CAUTION", color: "amber", complaints: "Not checked", verdict: `Our latest check found new evidence about ${bts.firm} that changes its rating, so we're reviewing it before publishing a score. Until then, check the regulator's register yourself before depositing.` };
+  }
   if (gate || bts.global.verdict === "Under review") {
     return { ...card, score: "No score", status: "WARNING", color: "red", complaints: "Not checked", verdict: gate === "inactive" ? `${bts.firm} is recorded as inactive, redirected or merged. This record does not confirm an active service.` : gate === "unknown" ? `We haven't confirmed whether ${bts.firm} is operating.` : "We're still verifying this firm." };
   }
