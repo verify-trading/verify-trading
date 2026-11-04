@@ -101,9 +101,9 @@ const researchSchema = z.object({
     scalping: z.string().describe("whether scalping and expert advisors are allowed"),
   }).describe("Trading conditions stated on the firm's own pages you retrieved, for the account a trader in the user's country would get. Write 'not found' for anything you couldn't confirm. Prop firms: platforms, fees and trading rules."),
   regulators: z.array(z.string()).describe("Short names of regulators whose public register you retrieved and which list the operating entity as licensed or registered now, e.g. 'FSA Seychelles', 'FSCA', 'ASIC'. Empty if none was confirmed on a register."),
-  answer: z.string().describe("Quick take, at most 2 sentences and 35 words, first person with contractions (I'd, isn't, can't). Match the evidence: no recognised licence or active warnings against the operator means \"I'd avoid...\"; mixed evidence \"I'd be careful with...\"; strong evidence \"I'd be comfortable with... as long as...\". No company numbers, source names or jargon."),
+  answer: z.string().describe("Quick take, at most 2 sentences and 35 words, first person with contractions (I'd, isn't, can't). Its tone MUST match the total of your pillar points: 70 or more \"I'd be comfortable with... as long as...\"; 50 to 69 \"I'd be careful with...\"; under 50 \"I'd avoid...\". No company numbers, source names or jargon."),
   concern: z.string().describe("Why, at most 2 sentences and 45 words: the evidence behind that view. For a regulator warning say who issued it, what it found, the country it applies to and that it is not proof of fraud. For a strong firm, what supports it (its major licences and protections) and then, briefly, the main thing to watch."),
-  recommendation: z.string().describe("What to do next, at most 2 sentences and 30 words, first person with contractions, specific to the trader's country."),
+  recommendation: z.string().describe("What to do next, at most 2 sentences and 30 words, first person with contractions. Specific to the trader's country when it is known; when it is unknown, advice that works anywhere (e.g. confirm which company holds your account and the protections it gives where you live). Never ask the reader to tell you their country."),
 });
 type Research = z.infer<typeof researchSchema>;
 
@@ -490,4 +490,13 @@ export async function getL2Assessment(s: L2Subject): Promise<L2Result | null> {
     inFlight.set(key, run);
   }
   return prefer(await run);
+}
+
+/**
+ * Re-checks a firm now, for scripts and batch refreshes. Same publication rules as Ask, measured
+ * against the firm's current official score in that country.
+ */
+export async function refreshL2Assessment(s: L2Subject): Promise<L2Result | null> {
+  const current = await published(s).catch(() => null);
+  return runAndStore(s, current?.country === s.country ? current.finalScore : null);
 }
