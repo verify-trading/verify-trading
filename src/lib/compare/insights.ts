@@ -4,6 +4,8 @@ import type { PublicEntity, PublicEntityType, Verdict } from "@/lib/compare/enti
 
 /** Best first. Used to say which record rates higher. */
 export const VERDICT_RANK: Record<Verdict, number> = {
+  Strong: 0,
+  "Generally positive": 0,
   Verified: 0,
   "Record reviewed": 0,
   Caution: 1,

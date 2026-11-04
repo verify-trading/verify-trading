@@ -84,10 +84,10 @@ describe("buildAskResponseCacheKey", () => {
 describe("responseIsCacheable", () => {
   const entity = makeEntity();
 
-  function makeResponse(data: AskResponse["data"]): AskResponse {
+  function makeResponse(data: AskResponse["data"], label = "Official score"): AskResponse {
     return {
       data,
-      uiMeta: undefined,
+      uiMeta: { verificationSourceLabel: label } as AskResponse["uiMeta"],
       sessionId: "11111111-1111-4111-8111-111111111111",
       messageId: "22222222-2222-4222-8222-222222222222",
     };
@@ -106,6 +106,10 @@ describe("responseIsCacheable", () => {
 
   it("accepts a broker card about the resolved entity", () => {
     expect(responseIsCacheable(makeResponse(brokerCard), entity)).toBe(true);
+  });
+
+  it("never caches a broker answer that isn't the official score", () => {
+    expect(responseIsCacheable(makeResponse(brokerCard, "Preliminary check · pending review"), entity)).toBe(false);
   });
 
   it("accepts spacing variants of the entity name on the card", () => {

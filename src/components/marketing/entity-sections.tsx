@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 
 /** What each BTS verdict means, in the approved method's words. No claims beyond the rule. */
 export const BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
+  { verdict: "Strong", text: "Independently verified, 85+: strong licences and client protections, backed by sourced evidence." },
+  { verdict: "Generally positive", text: "Independently verified, 70–84: properly licensed and broadly sound, with points worth checking." },
   { verdict: "Verified", text: "Score 75+, research complete, and an active tier 1 or 2 licence held by the entity serving retail clients." },
   { verdict: "Record reviewed", text: "Prop firms scoring 75+ with research complete and no adverse findings. A reviewed record, not an endorsement or a guarantee of payouts." },
   { verdict: "Caution", text: "Active, with enough evidence to score, but short of the top band. Read the reason before you deposit." },
@@ -29,6 +31,8 @@ export const GURU_BAND_INFO: Array<{ verdict: Verdict; text: string }> = [
 ];
 
 const barTone: Record<string, string> = {
+  Strong: "bg-[var(--vt-green)]",
+  "Generally positive": "bg-[var(--vt-green)]",
   Verified: "bg-[var(--vt-green)]",
   Caution: "bg-[var(--vt-amber)]",
   "High risk": "bg-[var(--vt-coral)]",

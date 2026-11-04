@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { resolveGuruTier, type GuruTier } from "@/lib/ask/gurus";
 import { PILLARS, SCORELESS, parseLicences, toVerdict, type BtsRecord, type BtsVerdict } from "@/lib/compare/bts";
 import { findRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
+import { getOfficialScores, type OfficialScore } from "@/lib/compare/bts-l2";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { btsVerificationGate, readBtsResearch } from "@/lib/compare/bts-research";
@@ -52,7 +53,7 @@ export type PublicEntityType = "broker" | "propfirm" | "guru";
 
 export type GuruVerdict = GuruTier;
 /** Broker and prop-firm verdicts (BTS engine) plus the guru-only "Unverified". */
-export const VERDICTS = ["Verified", "Record reviewed", "Caution", "High risk", "Insufficient data", "Under review", "Not active", "Not available", "Unverified"] as const;
+export const VERDICTS = ["Strong", "Generally positive", "Verified", "Record reviewed", "Caution", "High risk", "Insufficient data", "Under review", "Not active", "Not available", "Unverified"] as const;
 export type Verdict = BtsVerdict | GuruVerdict;
 
 export type PublicEntity = {
@@ -77,8 +78,13 @@ export type PublicEntity = {
   closed: boolean;
   /** Guru only: identity confirmed. */
   reviewed: boolean;
-  /** When the record was last checked: the BTS research date, else the row's last update. */
+  /** When the record was last checked: the official check's date, the BTS research date, else the row's last update. */
   updatedAt: string | null;
+  /**
+   * Where the score comes from: "official" = a published independent check (shown the same in Ask),
+   * "baseline" = the Layer 1 engine score while verification is pending. Null when no score is shown.
+   */
+  scoreBasis?: "official" | "baseline" | null;
   /**
    * Guru only: cleared for public display (identity + research gate). Used by `loadEntities`
    * to filter the register before caching. NEVER render this field — it is a loader guard,
@@ -260,7 +266,29 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
 }
 
 /** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */
-export const getPublicEntities = unstable_cache(loadEntities, ["public-entities-v7"], { revalidate: 3600, tags: ["bts"] });
+const getEngineEntities = unstable_cache(loadEntities, ["public-entities-v7"], { revalidate: 3600, tags: ["bts"] });
+
+/**
+ * The register as the website shows it: each firm's official (published, global) score replaces its
+ * Layer 1 baseline, so lists, records and Ask agree. Firms without one keep the baseline, marked as such.
+ * Gates the engine set (Under review, Not active) still win: those firms show no score at all.
+ */
+export function withOfficialScores(entities: PublicEntity[], official: Record<string, OfficialScore>): PublicEntity[] {
+  return entities.map((e) => {
+    if (!e.bts || e.score === null) return e;
+    const o = official[`${e.bts.entityId}|XX`];
+    if (!o) return { ...e, scoreBasis: "baseline" };
+    // A disputed check is waiting for a person: no score anywhere until it is decided.
+    if (o.score === null) return { ...e, score: null, verdict: "Under review", scoreBasis: null, updatedAt: o.checkedAt };
+    return { ...e, score: o.score, verdict: o.verdict, scoreBasis: "official", updatedAt: o.checkedAt };
+  });
+}
+
+export async function getPublicEntities(type: PublicEntityType): Promise<PublicEntity[]> {
+  const entities = await getEngineEntities(type);
+  if (type === "guru") return entities;
+  return withOfficialScores(entities, await getOfficialScores().catch(() => ({})));
+}
 
 export async function getPublicEntity(type: PublicEntityType, slug: string) {
   return (await getPublicEntities(type)).find((e) => e.slug === slug) ?? null;

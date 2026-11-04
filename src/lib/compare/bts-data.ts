@@ -18,6 +18,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { btsVerificationGate, readBtsResearch } from "@/lib/compare/bts-research";
 import { selectAll } from "@/lib/supabase/select-all";
 import { hasMajorLicence } from "@/lib/compare/regulators";
+import { getOfficialScores } from "@/lib/compare/bts-l2";
 
 const COLUMNS = "entity_id, country, country_fit, country_score, country_verdict, applicable_licences, country_note";
 
@@ -181,6 +182,8 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
       .range(from, to),
   );
   const rows = type === "broker" && country !== "XX" ? Object.fromEntries((await query("country", country)).map(({ entityId, ...r }) => [entityId, r])) : {};
+  // The official score (this country's, else the global one) wins over the engine baseline, as on the website.
+  const official = await getOfficialScores().catch(() => ({} as Awaited<ReturnType<typeof getOfficialScores>>));
   // One entry per engine firm; duplicate site rows ("IG", "IG Group") keep the shortest name.
   const byFirm = new Map<string, { name: string; bts: Record<string, unknown> }>();
   for (const { name, bts } of data as unknown as Array<{ name: string; bts: Record<string, unknown> | null }>) {
@@ -193,13 +196,16 @@ export async function listBtsRanked(type: "broker" | "propfirm", limit = 8, requ
       const brokerType = ((bts.details as Record<string, unknown> | null)?.research_input as Record<string, unknown> | undefined)?.broker_type as string | undefined;
       if (type === "broker" && instruments.length && !brokerMatchesInstruments(brokerType ?? null, instruments)) return [];
       const verdict = toVerdict(bts.verdict as string, type);
-      const view = countryView({ verdict, score: SCORELESS.has(verdict) ? null : (bts.global_score as number | null) }, rows[String(bts.entity_id)], country);
+      const o = official[`${bts.entity_id}|${country}`] ?? official[`${bts.entity_id}|XX`];
+      const view = o
+        ? { country, verdict: o.verdict, score: o.score, note: null, global: !official[`${bts.entity_id}|${country}`] }
+        : countryView({ verdict, score: SCORELESS.has(verdict) ? null : (bts.global_score as number | null) }, rows[String(bts.entity_id)], country);
       const fit = rows[String(bts.entity_id)]?.fit;
       const licensedLocally = fit === "LOCAL LICENCE VERIFIED" || fit === "EEA PASSPORT POSSIBLE";
       const majorRegulator = hasMajorLicence((bts.details as Record<string, unknown> | null)?.active_verified_licences as string | undefined);
       return view.score === null || SCORELESS.has(view.verdict)
         ? []
-        : [{ name, majorRegulator, verdict: view.verdict, score: view.score, reason: (bts.verdict_reason as string | null) ?? null, licensedLocally, globalRatingShown: view.global, researchDate: bts.research_date, research: readBtsResearch((bts.details ?? {}) as Record<string, unknown>), brokerType: ((bts.details as Record<string, unknown> | null)?.research_input as Record<string, unknown> | undefined)?.broker_type ?? null }];
+        : [{ name, majorRegulator, verdict: view.verdict, score: view.score, scoreBasis: o ? "official" : "baseline · verification pending", reason: (bts.verdict_reason as string | null) ?? null, licensedLocally, globalRatingShown: view.global, researchDate: bts.research_date, research: readBtsResearch((bts.details ?? {}) as Record<string, unknown>), brokerType: ((bts.details as Record<string, unknown> | null)?.research_input as Record<string, unknown> | undefined)?.broker_type ?? null }];
     })
     // Established firms (a major regulator's licence) first: outside the UK local licence data is still
     // incomplete, so local-only firms would otherwise crowd out the brokers traders actually use.

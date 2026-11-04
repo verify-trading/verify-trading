@@ -23,7 +23,7 @@ describe("Ask and the BTS engine", () => {
     expect(getBtsAskContextImpl).toHaveBeenCalledWith("ig", "GB");
     expect("card" in r && r.card).toMatchObject({ score: "93/100", status: "LEGITIMATE", color: "green" });
     // The live check was unavailable, so the card says the score is the database's.
-    expect("card" in r && r.card.type === "broker" && r.card.verdict).toMatch(/stored assessment\.$/);
+    expect("card" in r && r.card.type === "broker" && r.card.verdict).toMatch(/baseline assessment\.$/);
     expect("bts" in r && r.bts?.shown.score).toBe(93);
   });
 
@@ -60,12 +60,24 @@ describe("Ask and the BTS engine", () => {
     expect(mergeToolOwnedNumbers(modelCard, [{ toolName: "verify_entity", output: result }] as never)).toMatchObject({ score: "No score", status: "WARNING", verdict: "We're still verifying this firm." });
   });
 
+  it("matches the website while a check is held: disputed shows no score, thin evidence keeps the baseline", async () => {
+    const held = (reviewReason: string) => vi.fn().mockResolvedValue({ status: "review", country: "XX", reviewReason, kind: "broker", finalScore: 43, verdict: "High risk", pillars: [], findings: [], sources: [], strengths: [], risks: [], summary: "", identity: { confirmed: true, legal_entity: "", official_website: "", note: "" }, checkedAt: "2026-11-04T12:00:00Z" });
+    const bts = () => vi.fn().mockResolvedValue(context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false }));
+    const disputed = await resolveVerificationToolResult("IG", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl: bts(), getL2AssessmentImpl: held("Score change: first score 43 is 50 points from the baseline 93") }, "GB");
+    expect("card" in disputed && disputed.card).toMatchObject({ score: "No score" });
+    expect(disputed.bts).toMatchObject({ scoreSource: "Under review" });
+    const thin = await resolveVerificationToolResult("IG", { lookupVerifiedEntityImpl, getFcaStatusImpl, getBtsAskContextImpl: bts(), getL2AssessmentImpl: held("Evidence: 1 primary source, needs 2") }, "GB");
+    expect("card" in thin && thin.card).toMatchObject({ score: "93/100" });
+    expect(thin.bts).toMatchObject({ scoreSource: "Baseline · verification pending" });
+  });
+
   it("shows the live check's final score instead of the engine's, and hides the engine's number from the model", async () => {
     const bts = context({ country: "GB", verdict: "Verified", score: 93, note: null, global: false });
     bts.global.cloneAlert = "Scammers impersonate this firm; take extra care.";
     bts.research = { cloneNoticeSource: "https://fca.org.uk/clone-notice" } as BtsAskContext["research"];
     const getBtsAskContextImpl = vi.fn().mockResolvedValue(bts);
     const getL2AssessmentImpl = vi.fn().mockResolvedValue({
+      status: "published", country: "GB", reviewReason: null,
       kind: "broker", finalScore: 76, verdict: "Generally positive", confidence: 72, rubricVersion: "l2-broker-1.0", countryFit: "CONFIRMED_LOCALLY",
       identity: { confirmed: true, legal_entity: "IG Markets Ltd", official_website: "https://ig.com", note: "" },
       pillars: [{ key: "conduct", label: "Verified conduct", max: 25, awarded: 18, reason: "fine in 2019, settled", sourced: true, sources: ["s1"] }],
@@ -77,7 +89,7 @@ describe("Ask and the BTS engine", () => {
     expect(getL2AssessmentImpl).toHaveBeenCalledWith(expect.objectContaining({ firm: "IG", kind: "broker", country: "GB", entityId: "BTS-B-1", baseline: { score: 93, verdict: "Verified" } }));
     expect("card" in r && r.card).toMatchObject({ score: "76/100", status: "LEGITIMATE", complaints: "On record" });
     expect(JSON.stringify(r.bts)).not.toContain("93");
-    expect(r.bts).toMatchObject({ scoreSource: "Independent live check", liveCheck: { findings: [{ authority: "FCA", url: "https://fca.org.uk/x" }] } });
+    expect(r.bts).toMatchObject({ scoreSource: "Official score · United Kingdom", liveCheck: { findings: [{ authority: "FCA", url: "https://fca.org.uk/x" }] } });
     expect("uiMeta" in r && r.uiMeta?.verification).toMatchObject({ confidence: 72, sources: [{ url: "https://fca.org.uk/x" }] });
     expect("uiMeta" in r && r.uiMeta?.cloneNotice).toEqual({ message: "Scammers impersonate this firm; take extra care.", sourceUrl: "https://fca.org.uk/clone-notice" });
   });
@@ -85,6 +97,7 @@ describe("Ask and the BTS engine", () => {
 
 it("runs Layer 2 for a firm outside the database and publishes its score with sources", async () => {
   const getL2AssessmentImpl = vi.fn().mockResolvedValue({
+      status: "published", country: "GB", reviewReason: null,
     kind: "broker", finalScore: 75, verdict: "Generally positive", confidence: 70,
     countryFit: "UNVERIFIED", checkedAt: "2026-11-03T12:00:00Z",
     identity: { legal_entity: "Example Ltd", official_website: "https://example.com" },

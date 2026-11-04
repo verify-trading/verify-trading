@@ -255,6 +255,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">{cfg.h1}</h1>
             <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-400">{cfg.intro}</p>
+            {type !== "guru" ? <p className="mt-1 text-xs text-slate-500">Scores are global. Open a firm to see its score for your country.</p> : null}
           </div>
           <p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
             <span className="font-semibold text-white">{listed.length.toLocaleString("en-GB")} {cfg.plural}</span>

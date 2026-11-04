@@ -5,14 +5,20 @@
  * validates every source, caps unsourced pillars, totals the score, derives the verdict and the
  * confidence, and stores the result next to the Layer 1 baseline (never over it). The researcher
  * never sees the Layer 1 score, so it cannot anchor on it.
+ *
+ * A stored check becomes the OFFICIAL score (status 'published') when its evidence passes
+ * `publicationCheck`; otherwise it waits as 'review' until a person publishes or rejects it in
+ * Supabase. The website and Ask both show the newest published row for a firm and jurisdiction.
  */
 import { generateText, NoObjectGeneratedError, Output, type ToolSet, type StepResult } from "ai";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 
 import { getAskModel, getAskWebSearchTool } from "@/lib/ask/service/provider";
-import { countryName } from "@/lib/compare/bts";
+import { countryName, type OfficialVerdict } from "@/lib/compare/bts";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { selectAll } from "@/lib/supabase/select-all";
 
 type Kind = "broker" | "propfirm";
 
@@ -49,6 +55,16 @@ const RELIABILITY = { official_register: 1, regulator_notice: 1, company_terms: 
 /** Below this the evidence is too thin to publish a number. */
 const MIN_CONFIDENCE = 25;
 const TTL_MS = 24 * 60 * 60 * 1000;
+/** An official score is re-checked when Ask next needs it after this long. */
+const REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
+/** Publication rules. A move bigger than these, or thinner evidence, waits for a person to approve it. */
+const MAX_AUTO_MOVE = 10;
+/** First publication vs the Layer 1 baseline: a gap over 20 that changes the band, or any gap over 35. */
+const MAX_BASELINE_GAP = 20;
+const MAX_BASELINE_GAP_SAME_BAND = 35;
+const band = (score: number) => (score >= 70 ? 2 : score >= 50 ? 1 : 0);
+const MIN_PUBLISH_CONFIDENCE = { broker: 70, propfirm: 60 } as const;
+const MIN_PRIMARY_SOURCES = 2;
 
 const sourceType = z.enum(Object.keys(RELIABILITY) as [keyof typeof RELIABILITY, ...Array<keyof typeof RELIABILITY>]);
 const researchSchema = z.object({
@@ -230,7 +246,7 @@ async function research(modelId: string, firm: string, kind: Kind | undefined, c
       output: Output.object({ schema: researchSchema }),
       abortSignal,
     });
-    return { draft: r.output, retrievedUrls };
+    return { draft: r.output, retrievedUrls, usage: r.totalUsage };
   } catch (error) {
     if (!NoObjectGeneratedError.isInstance(error) || !error.text) throw error;
     const r = await generateText({
@@ -240,40 +256,162 @@ async function research(modelId: string, firm: string, kind: Kind | undefined, c
       output: Output.object({ schema: researchSchema }),
       abortSignal,
     });
-    return { draft: r.output, retrievedUrls };
+    return { draft: r.output, retrievedUrls, usage: r.totalUsage };
+  }
+}
+
+export type L2Status = "published" | "review";
+
+/**
+ * May this check become the official score by itself? Two kinds of hold, written as the reason prefix:
+ * - "Evidence:" thin or unconfirmed evidence. Not shown anywhere; the baseline stays, marked pending.
+ * - "Score change:" solid evidence that contradicts the current score (a move over 10 from the published
+ *   score, or on first publication a band change with a 20+ gap, or any 35+ gap from the Layer 1 baseline).
+ *   The firm shows "Under review" with no score, on the website and in Ask, until a person decides.
+ */
+export function publicationCheck(
+  a: Pick<L2Assessment, "kind" | "finalScore" | "confidence" | "identity" | "sources">,
+  previous: number | null,
+  baseline: number | null,
+): { status: L2Status; reason: string | null } {
+  const primary = a.sources.filter((s) => s.type === "official_register" || s.type === "regulator_notice" || (a.kind === "propfirm" && s.type === "company_terms")).length;
+  const score = a.finalScore;
+  const gap = score !== null && baseline !== null ? Math.abs(score - baseline) : 0;
+  const reason =
+    score === null || !a.identity.confirmed
+      ? "Evidence: firm or evidence not confirmed"
+      : a.confidence < MIN_PUBLISH_CONFIDENCE[a.kind]
+        ? `Evidence: source reliability ${a.confidence}/100, needs ${MIN_PUBLISH_CONFIDENCE[a.kind]}`
+        : primary < MIN_PRIMARY_SOURCES
+          ? `Evidence: ${primary} primary source${primary === 1 ? "" : "s"}, needs ${MIN_PRIMARY_SOURCES}`
+          : previous !== null && Math.abs(score - previous) > MAX_AUTO_MOVE
+            ? `Score change: moves ${score - previous > 0 ? "+" : ""}${score - previous} from the published ${previous}`
+            : previous === null && baseline !== null && (gap > MAX_BASELINE_GAP_SAME_BAND || (gap > MAX_BASELINE_GAP && band(score) !== band(baseline)))
+              ? `Score change: first score ${score} is ${gap} points from the baseline ${baseline}`
+              : null;
+  return { status: reason ? "review" : "published", reason };
+}
+
+/** A held check that contradicts the current score: the firm shows "Under review" everywhere. */
+export const isDisputed = (r: { status: string; reviewReason?: string | null } | null | undefined) =>
+  r?.status === "review" && Boolean(r.reviewReason?.startsWith("Score change"));
+
+/** Clears the website's official-score caches right away (best effort; outside a request it is a no-op). */
+function refreshWebsite() {
+  try {
+    revalidateTag("bts-official", { expire: 0 });
+  } catch {
+    /* Scripts and tests have no Next cache. The 5-minute revalidate catches up. */
   }
 }
 
 const L2_MODEL = () => process.env.BTS_L2_MODEL ?? "gpt-6.1-terra";
 
 export type L2Subject = { firm: string; kind?: Kind; country: string; entityId?: string | null; baseline?: { score: number | null; verdict: string } };
-export type L2Result = L2Assessment & { checkedAt: string; model: string };
+/** status 'published' = the official score the website shows too; 'review'/'candidate' = awaiting a person. */
+export type L2Result = L2Assessment & { checkedAt: string; model: string; status: L2Status | "candidate"; country: string; reviewReason: string | null };
+/** The website's view of a firm's official standing: a published score, or "Under review" (no score) while disputed. */
+export type OfficialScore = { score: number; verdict: OfficialVerdict; checkedAt: string } | { score: null; verdict: "Under review"; checkedAt: string };
 
 const subjectKey = (s: L2Subject) => s.entityId ?? `name:${s.firm.trim().toLowerCase()}`;
 const inFlight = new Map<string, Promise<L2Result | null>>();
 
+type Row = { assessment: unknown; model: string; checked_at: string; status: L2Result["status"]; user_country: string; review_reason: string | null };
+const ROW = "assessment, model, checked_at, status, user_country, review_reason";
+const toResult = (r: Row): L2Result => ({ ...(r.assessment as L2Assessment), model: r.model, checkedAt: r.checked_at, status: r.status, country: r.user_country, reviewReason: r.review_reason });
+/** Rows that decide a firm's standing: published scores and disputed holds. The newest one wins. */
+const decides = (r: { status: string; review_reason: string | null }) => r.status === "published" || isDisputed({ status: r.status, reviewReason: r.review_reason });
+
+/** Newest unexpired, unrejected check for this firm and country from the current model and rubric. */
 async function cached(s: L2Subject): Promise<L2Result | null> {
   const client = getSupabaseAdminClient();
   if (!client) return null;
   const { data } = await client
     .from("bts_l2_assessments")
-    .select("assessment, model, checked_at")
+    .select(ROW)
     .eq("subject", subjectKey(s))
     .eq("user_country", s.country)
     .eq("model", L2_MODEL())
     .in("rubric_version", (s.kind ? [s.kind] : ["broker", "propfirm"] as Kind[]).map((kind) => L2_RUBRIC[kind].version))
+    .in("status", ["published", "review"])
     .gt("expires_at", new Date().toISOString())
     .order("checked_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data ? { ...(data.assessment as L2Assessment), model: data.model, checkedAt: data.checked_at } : null;
+  return data ? toResult(data as Row) : null;
 }
 
-async function runAndStore(s: L2Subject): Promise<L2Result | null> {
+/**
+ * The firm's official standing for this country, else the global (XX) one: the newest published
+ * check, or a newer disputed hold (shown as "Under review"). Null when neither exists.
+ */
+async function published(s: L2Subject): Promise<L2Result | null> {
+  const client = getSupabaseAdminClient();
+  if (!client) return null;
+  const { data } = await client
+    .from("bts_l2_assessments")
+    .select(ROW)
+    .eq("subject", subjectKey(s))
+    .in("user_country", [...new Set([s.country, "XX"])])
+    .in("status", ["published", "review"])
+    .order("checked_at", { ascending: false })
+    .limit(20);
+  const rows = ((data ?? []) as Row[]).filter((r) => decides(r) && (r.status !== "published" || toResult(r).finalScore !== null));
+  const row = rows.find((r) => r.user_country === s.country) ?? rows.find((r) => r.user_country === "XX");
+  return row ? toResult(row) : null;
+}
+
+/** A firm's official country scores (not the global one), keyed by country code, for its record page. */
+export async function getOfficialCountryScores(entityId: string): Promise<Record<string, OfficialScore>> {
+  const all = await getOfficialScores().catch(() => ({}) as Record<string, OfficialScore>);
+  return Object.fromEntries(
+    Object.entries(all).flatMap(([key, score]) => {
+      const [id, country] = key.split("|");
+      return id === entityId && country !== "XX" ? [[country, score]] : [];
+    }),
+  );
+}
+
+/** The published global check behind a firm's official score: its pillars and evidence for the record page. */
+export const getOfficialAssessment = unstable_cache(
+  async (entityId: string): Promise<L2Result | null> => published({ firm: "", entityId, country: "XX" }).catch(() => null),
+  ["bts-official-assessment-v2"],
+  { revalidate: 300, tags: ["bts", "bts-official"] },
+);
+
+/** Every official score, newest per firm and jurisdiction, keyed "entityId|country" ("XX" = global). */
+export const getOfficialScores = unstable_cache(
+  async (): Promise<Record<string, OfficialScore>> => {
+    const client = getSupabaseAdminClient();
+    if (!client) return {};
+    const data = await selectAll((from, to) =>
+      client
+        .from("bts_l2_assessments")
+        .select("entity_id, user_country, final_score, final_verdict, checked_at, status, review_reason")
+        .in("status", ["published", "review"])
+        .not("entity_id", "is", null)
+        .order("checked_at", { ascending: false })
+        .range(from, to),
+    );
+    const out: Record<string, OfficialScore> = {};
+    for (const r of data as Array<{ entity_id: string; user_country: string; final_score: number | null; final_verdict: L2Verdict; checked_at: string; status: string; review_reason: string | null }>) {
+      const key = `${r.entity_id}|${r.user_country}`;
+      if (out[key] || !decides(r)) continue;
+      if (r.status === "review") out[key] = { score: null, verdict: "Under review", checkedAt: r.checked_at };
+      // A row someone published without a score (Score unavailable) is not a rating.
+      else if (r.final_score !== null && r.final_verdict !== "Score unavailable") out[key] = { score: r.final_score, verdict: r.final_verdict, checkedAt: r.checked_at };
+    }
+    return out;
+  },
+  ["bts-official-scores-v2"],
+  { revalidate: 300, tags: ["bts", "bts-official"] },
+);
+
+async function runAndStore(s: L2Subject, previous: number | null): Promise<L2Result | null> {
   const model = L2_MODEL();
   const started = Date.now();
   try {
-    const { draft, retrievedUrls } = await research(model, s.firm, s.kind, s.country, AbortSignal.timeout(240_000));
+    const { draft, retrievedUrls, usage } = await research(model, s.firm, s.kind, s.country, AbortSignal.timeout(240_000));
     if (draft.kind === "other" || (s.kind && s.kind !== draft.kind)) return null;
     // The gateway must expose search evidence. Never publish a researched verdict from model text alone.
     const retrieved = new Set([...retrievedUrls].map(sourceUrl).filter(Boolean));
@@ -283,6 +421,7 @@ async function runAndStore(s: L2Subject): Promise<L2Result | null> {
       throw new Error("Research cited sources missing from retrieved web evidence.");
     }
     const assessment = scoreAssessment(draft.kind, draft, retrievedUrls);
+    const publication = publicationCheck(assessment, previous, s.baseline?.score ?? null);
     const checkedAt = new Date().toISOString();
     const client = getSupabaseAdminClient()!;
     // Snapshot the cap and uncapped score after research, keeping the researcher independent.
@@ -306,11 +445,21 @@ async function runAndStore(s: L2Subject): Promise<L2Result | null> {
       latency_ms: Date.now() - started,
       checked_at: checkedAt,
       expires_at: new Date(Date.now() + TTL_MS).toISOString(),
+      status: publication.status,
+      review_reason: publication.reason,
       assessment,
-      raw: { research: draft, retrievedUrls: [...retrievedUrls], baselineAudit },
+      raw: { research: draft, retrievedUrls: [...retrievedUrls], baselineAudit, usage },
     });
     if (error) logger.warn("bts_l2_store_failed", { firm: s.firm, error: error.message });
-    return { ...assessment, model, checkedAt };
+    // A new official score or a disputed hold changes what the firm shows: refresh the website, drop replayed answers.
+    const changesStanding = !error && (publication.status === "published" || isDisputed({ status: publication.status, reviewReason: publication.reason }));
+    if (changesStanding) refreshWebsite();
+    // Lazy import: response-cache -> bts-data -> this module would otherwise be a cycle.
+    if (changesStanding && s.entityId) {
+      await import("@/lib/ask/response-cache").then((m) => m.forgetCachedAnswers(s.entityId!)).catch(() => {});
+    }
+    if (publication.status === "review") logger.info("bts_l2_needs_review", { firm: s.firm, country: s.country, reason: publication.reason });
+    return { ...assessment, model, checkedAt, status: publication.status, country: s.country, reviewReason: publication.reason };
   } catch (error) {
     logger.warn("bts_l2_failed", { firm: s.firm, model, ms: Date.now() - started, error: error instanceof Error ? error.message : String(error) });
     return null;
@@ -318,20 +467,27 @@ async function runAndStore(s: L2Subject): Promise<L2Result | null> {
 }
 
 /**
- * The live assessment for a firm in a country: cached (24h) or freshly researched. Concurrent calls
- * for the same firm share one run. Resolves null when the live check fails — the caller then shows
- * the Layer 1 database assessment, labelled as such.
+ * What Ask shows for a firm in a country: the same standing as the website. The official score when
+ * one is published (re-checked after REFRESH_MS), "Under review" while a disputed hold waits for a
+ * person, else a recent check or a fresh run (which publishes itself when it passes
+ * `publicationCheck`). A thin-evidence hold never replaces anything: the caller shows the baseline.
+ * Concurrent calls for the same firm share one run. Null when the live check fails.
  */
 export async function getL2Assessment(s: L2Subject): Promise<L2Result | null> {
   // No database, no cache and no audit trail: don't spend a research run that can't be kept.
   if (!getSupabaseAdminClient()) return null;
-  const hit = await cached(s).catch(() => null);
-  if (hit) return hit;
-  const key = `${subjectKey(s)}|${s.country}|${s.kind ?? "auto"}|${L2_MODEL()}`;
+  const current = await published(s).catch(() => null);
+  if (current && (current.status !== "published" || Date.now() - Date.parse(current.checkedAt) < REFRESH_MS)) return current;
+  // A stale global score is refreshed as the global score, not replaced by this user's country.
+  const target = current ? { ...s, country: current.country } : s;
+  const prefer = (r: L2Result | null) => (r && (r.status === "published" || isDisputed(r) || !current) ? r : current);
+  const hit = await cached(target).catch(() => null);
+  if (hit) return prefer(hit);
+  const key = `${subjectKey(target)}|${target.country}|${target.kind ?? "auto"}|${L2_MODEL()}`;
   let run = inFlight.get(key);
   if (!run) {
-    run = runAndStore(s).finally(() => inFlight.delete(key));
+    run = runAndStore(target, current?.finalScore ?? null).finally(() => inFlight.delete(key));
     inFlight.set(key, run);
   }
-  return run;
+  return prefer(await run);
 }
