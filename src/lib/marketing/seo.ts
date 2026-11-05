@@ -230,7 +230,6 @@ export function entityReviewSchema(input: {
   name: string;
   path: string;
   description: string;
-  category: string;
   verdict: string;
   score: number | null;
   updatedAt: string | null;
@@ -245,7 +244,7 @@ export function entityReviewSchema(input: {
     "@id": `${abs(input.path)}#item`,
     name: input.name,
     description: input.description,
-    category: input.category,
+    // No `category`: schema.org does not define it for Organization/Person and GSC warns on it.
     brand: { "@type": "Brand", name: input.name },
     ...(input.foundingDate ? { foundingDate: input.foundingDate } : {}),
     ...(input.regulators.length ? { award: `Listed with ${input.regulators.join(", ")}` } : {}),
