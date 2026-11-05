@@ -105,8 +105,8 @@ export function RegulatorsIndex({ hubs, total }: { hubs: HubStats[]; total: numb
           />
         </div>
 
-        <div className="mt-12 max-w-3xl">
-          <h2 className="text-xl font-bold text-white sm:text-2xl">Regulator questions</h2>
+        <div className="mx-auto mt-12 max-w-3xl">
+          <h2 className="text-center text-xl font-bold text-white sm:text-2xl">Regulator questions</h2>
           <div className="mt-5"><FaqBlock items={GENERAL_FAQS} /></div>
           <p className="mt-6 text-xs leading-relaxed text-[var(--vt-muted)]">{NOT_ADVICE_STATEMENT}</p>
         </div>

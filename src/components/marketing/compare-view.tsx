@@ -514,8 +514,8 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
             }
           />
 
-          <div className="max-w-3xl">
-            <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">Common questions</h2>
+          <div className="mx-auto max-w-3xl">
+            <h2 className="text-center text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">Common questions</h2>
             <div className="mt-5"><FaqBlock items={faqs} /></div>
             <p className="mt-6 text-xs leading-relaxed text-[var(--vt-muted)]">{NOT_ADVICE_STATEMENT}</p>
           </div>
