@@ -20,8 +20,8 @@ const FOOTER_COLUMNS: Array<{ title: string; links: Array<[label: string, href: 
   {
     title: "Products",
     links: [
-      ["Ask Feature", "/ask"],
-      ["Markets Feature", "/markets"],
+      ["Ask Feature", "/how-it-works#ask"],
+      ["Markets Feature", "/how-it-works#markets"],
       ["Intelligence Feature", "/intelligence"],
       ["Calendar Feature", "/economic-calendar"],
       ["Journal Feature", "/journal"],
