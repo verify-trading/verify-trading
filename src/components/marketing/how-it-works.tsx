@@ -251,6 +251,8 @@ const mindScreen = (
 
 type Step = {
   n: string;
+  /** Anchor id so site-wide links (footer "Ask Feature" etc.) can deep-link the step. */
+  id: string;
   icon: AppIconKey;
   title: string;
   body: string;
@@ -261,12 +263,12 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  { n: "01", icon: "ask", title: "Ask", body: "Ask about any broker, prop firm, setup or market and get a sourced answer in seconds.", href: "/ask", cta: "Go to Ask", tier: "Free", visual: askScreen },
-  { n: "02", icon: "markets", title: "Markets", body: "Live prices across gold, forex, indices and crypto, with the context behind each move.", href: "/markets", cta: "Go to Markets", tier: "Free", visual: marketsScreen },
-  { n: "03", icon: "intelligence", title: "Intelligence", body: "A daily pre-session brief: the bias, the key level and what to watch for each major asset.", href: "/intelligence", cta: "Go to Intelligence", tier: "Pro", visual: intelligenceScreen },
-  { n: "04", icon: "calendar", title: "Economic Calendar", body: "See CPI, NFP and FOMC coming, with impact levels and a heads-up before high-impact releases.", href: "/economic-calendar", cta: "Go to Economic Calendar", tier: "Pro", visual: calendarScreen },
-  { n: "05", icon: "journal", title: "Journal", body: "Log every trade, spot the patterns that cost you, and run Challenge Mode for prop firm evaluations.", href: "/journal", cta: "Go to Journal", tier: "Pro", visual: journalScreen },
-  { n: "06", icon: "mind", title: "Mind", body: "Build discipline, catch tilt early and trade with a clear head.", href: "/mind", cta: "Go to Mind", tier: "Pro", visual: mindScreen },
+  { n: "01", id: "ask", icon: "ask", title: "Ask", body: "Ask about any broker, prop firm, setup or market and get a sourced answer in seconds.", href: "/ask", cta: "Go to Ask", tier: "Free", visual: askScreen },
+  { n: "02", id: "markets", icon: "markets", title: "Markets", body: "Live prices across gold, forex, indices and crypto, with the context behind each move.", href: "/markets", cta: "Go to Markets", tier: "Free", visual: marketsScreen },
+  { n: "03", id: "intelligence", icon: "intelligence", title: "Intelligence", body: "A daily pre-session brief: the bias, the key level and what to watch for each major asset.", href: "/intelligence", cta: "Go to Intelligence", tier: "Pro", visual: intelligenceScreen },
+  { n: "04", id: "economic-calendar", icon: "calendar", title: "Economic Calendar", body: "See CPI, NFP and FOMC coming, with impact levels and a heads-up before high-impact releases.", href: "/economic-calendar", cta: "Go to Economic Calendar", tier: "Pro", visual: calendarScreen },
+  { n: "05", id: "journal", icon: "journal", title: "Journal", body: "Log every trade, spot the patterns that cost you, and run Challenge Mode for prop firm evaluations.", href: "/journal", cta: "Go to Journal", tier: "Pro", visual: journalScreen },
+  { n: "06", id: "mind", icon: "mind", title: "Mind", body: "Build discipline, catch tilt early and trade with a clear head.", href: "/mind", cta: "Go to Mind", tier: "Pro", visual: mindScreen },
 ];
 
 export function HowItWorksSteps() {
@@ -275,7 +277,7 @@ export function HowItWorksSteps() {
       {STEPS.map((s) => {
         const Icon = APP_ICONS[s.icon];
         return (
-          <li key={s.n} className={cn(surface, "flex flex-col gap-5 overflow-hidden bg-[linear-gradient(160deg,rgba(76,110,245,0.08),transparent_60%)] px-5 pt-5 transition hover:border-[var(--vt-blue)]/40 sm:min-h-[260px] sm:flex-row sm:gap-4 sm:pr-0 sm:pl-6 sm:pt-6")}>
+          <li key={s.n} id={s.id} className={cn(surface, "scroll-mt-20 flex flex-col gap-5 overflow-hidden bg-[linear-gradient(160deg,rgba(76,110,245,0.08),transparent_60%)] px-5 pt-5 transition hover:border-[var(--vt-blue)]/40 sm:min-h-[260px] sm:flex-row sm:gap-4 sm:pr-0 sm:pl-6 sm:pt-6")}>
             <div className="flex min-w-0 flex-1 flex-col sm:pb-6">
               <div className="flex items-center gap-2.5">
                 <span className="text-3xl font-bold tabular-nums text-[var(--vt-coral)]">{s.n}</span>

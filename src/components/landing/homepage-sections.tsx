@@ -263,9 +263,9 @@ function CalendarVisual() {
         <span className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-white">
           <Calendar className="size-3.5 text-[var(--vt-coral)]" aria-hidden /> Economic Calendar
         </span>
-        <ExampleTag>Preview</ExampleTag>
+        <ExampleTag>Sample week</ExampleTag>
       </div>
-      <p className="mt-2 text-[11px] text-[var(--vt-muted)]">Times shown in UTC · timezone is adjustable in-app</p>
+      <p className="mt-2 text-[11px] text-[var(--vt-muted)]">Illustrative example events, not this week’s calendar · times in UTC, adjustable in-app</p>
       <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.08]">
         <div className="grid grid-cols-[auto_auto_1fr_auto] gap-x-3 border-b border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--vt-muted)]">
           <span>Time</span>
@@ -326,7 +326,7 @@ function CalculatorVisual() {
       <p className="mt-3 text-[12px] leading-6 text-slate-300">
         Keep the risk at $100 and widen the stop to 40 pips, and the position halves to <span className="font-semibold text-white">0.25 lot</span> — same risk, smaller size.
       </p>
-      <p className="mt-2 text-[11px] text-[var(--vt-muted)]">Forex example. A planning estimate — allow for execution costs and your broker’s contract specifications.</p>
+      <p className="mt-2 text-[11px] text-[var(--vt-muted)]">Forex example with hypothetical figures. A planning estimate — allow for execution costs and your broker’s contract specifications.</p>
     </Panel>
   );
 }
@@ -442,7 +442,7 @@ export function HomepageSections() {
           eyebrow="Ask"
           title="Ask AI About Your Trading Charts"
           wide
-          primary={{ label: "Ask about your chart", href: "/ask", event: "ask" }}
+          primary={{ label: "Ask about your chart", href: "/signup?next=%2Fask", event: "ask" }}
           secondary={[{ label: "See how verify.trading works", href: "/how-it-works" }]}
           visual={<AskVisual />}
         >
@@ -462,7 +462,7 @@ export function HomepageSections() {
           title="Explore Market Analysis and Insights"
           wide
           flip
-          primary={{ label: "Explore Markets", href: "/markets" }}
+          primary={{ label: "Explore Markets", href: "/signup?next=%2Fmarkets" }}
           secondary={[{ label: "Preview the daily market brief", href: "/intelligence" }]}
           visual={<MarketsVisual />}
         >
