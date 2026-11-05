@@ -317,7 +317,8 @@ export function videoObjectSchema(input: {
     thumbnailUrl: resolve(input.thumbnailUrl),
     ...(input.contentUrl ? { contentUrl: resolve(input.contentUrl) } : {}),
     ...(input.embedUrl ? { embedUrl: resolve(input.embedUrl) } : {}),
-    uploadDate: input.uploadDate,
+    // Google's video rich-result check wants a full datetime with a timezone, not a bare date.
+    uploadDate: /^\d{4}-\d{2}-\d{2}$/.test(input.uploadDate) ? `${input.uploadDate}T00:00:00+00:00` : input.uploadDate,
     ...(input.duration ? { duration: input.duration } : {}),
     inLanguage: input.inLanguage ?? "en",
     isFamilyFriendly: true,
