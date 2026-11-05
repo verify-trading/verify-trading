@@ -24,7 +24,7 @@ import {
   type PublicEntityType,
 } from "@/lib/compare/entities";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
-import { articleSchema, itemListSchema, SITE_REVIEWED } from "@/lib/marketing/seo";
+import { collectionPageSchema, itemListSchema } from "@/lib/marketing/seo";
 import { cn } from "@/lib/utils";
 
 const CONFIG = {
@@ -249,7 +249,8 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
           items: rows.filter(isSeoWorthy).map((e) => ({ name: e.name, path: `${cfg.path}/${e.slug}` })),
         })}
       />
-      <JsonLd data={articleSchema({ headline: cfg.h1, description: cfg.intro, path: cfg.path, datePublished: SITE_REVIEWED, articleType: "TechArticle" })} />
+      {/* A register is a directory, not an article: CollectionPage, never TechArticle. */}
+      <JsonLd data={collectionPageSchema({ name: cfg.h1, description: cfg.intro, path: cfg.path })} />
 
       <section className="mx-auto w-full max-w-6xl px-4 pb-10 pt-4 sm:px-6">
         <header className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
