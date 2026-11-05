@@ -52,7 +52,7 @@ export const CATEGORY_VIDEOS = {
  */
 export function CategoryVideo({ video, heading, lede }: { video: CategoryVideoData; heading: string; lede?: string }) {
   return (
-    <div>
+    <div className="mx-auto max-w-3xl text-center">
       <JsonLd
         data={videoObjectSchema({
           name: video.title,
@@ -63,8 +63,8 @@ export function CategoryVideo({ video, heading, lede }: { video: CategoryVideoDa
         })}
       />
       <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">{heading}</h2>
-      {lede ? <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">{lede}</p> : null}
-      <figure className="mt-5 max-w-3xl">
+      {lede ? <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">{lede}</p> : null}
+      <figure className="mt-5">
         <div className="overflow-hidden rounded-2xl border border-white/[0.09] bg-black/40">
           <iframe
             className="aspect-video w-full"
