@@ -299,7 +299,8 @@ export function collectionPageSchema(input: { name: string; description: string;
 export function videoObjectSchema(input: {
   name: string;
   description: string;
-  contentUrl: string;
+  /** Direct media URL for a self-hosted video. A YouTube embed passes embedUrl instead. */
+  contentUrl?: string;
   thumbnailUrl: string;
   uploadDate: string;
   duration?: string;
@@ -314,7 +315,7 @@ export function videoObjectSchema(input: {
     name: input.name,
     description: input.description,
     thumbnailUrl: resolve(input.thumbnailUrl),
-    contentUrl: resolve(input.contentUrl),
+    ...(input.contentUrl ? { contentUrl: resolve(input.contentUrl) } : {}),
     ...(input.embedUrl ? { embedUrl: resolve(input.embedUrl) } : {}),
     uploadDate: input.uploadDate,
     ...(input.duration ? { duration: input.duration } : {}),

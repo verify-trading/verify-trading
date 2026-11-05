@@ -41,6 +41,18 @@ describe("videoObjectSchema", () => {
     expect(String(schema.thumbnailUrl)).toMatch(/\.(jpg|png|webp)$/);
   });
 
+  it("omits contentUrl for an embed-only video instead of emitting an empty field", () => {
+    const schema = videoObjectSchema({
+      name: base.name,
+      description: base.description,
+      uploadDate: base.uploadDate,
+      embedUrl: "https://www.youtube-nocookie.com/embed/O4t_fhlWIDw",
+      thumbnailUrl: "https://i.ytimg.com/vi/O4t_fhlWIDw/hqdefault.jpg",
+    });
+    expect(schema).not.toHaveProperty("contentUrl");
+    expect(schema.embedUrl).toBe("https://www.youtube-nocookie.com/embed/O4t_fhlWIDw");
+  });
+
   it("keeps absolute YouTube URLs as-is for embedded videos", () => {
     const schema = videoObjectSchema({
       ...base,

@@ -5,6 +5,7 @@ import { Breadcrumbs, CtaBand } from "@/components/marketing/primitives";
 import { Block, FaqBlock, StandingBadge, TocNav, VerdictBands, VerifySteps, verdictBarClass } from "@/components/marketing/entity-sections";
 import { EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { surface } from "@/components/landing/section-primitives";
+import { CATEGORY_VIDEOS, CategoryVideo } from "@/components/marketing/category-video";
 import { JsonLd } from "@/components/seo/json-ld";
 import type { PublicEntity } from "@/lib/compare/entities";
 import { entityPath, type HubStats } from "@/lib/compare/insights";
@@ -96,6 +97,14 @@ export function RegulatorsIndex({ hubs, total }: { hubs: HubStats[]; total: numb
             </div>
           );
         })}
+
+        <div className="mt-12">
+          <CategoryVideo
+            video={CATEGORY_VIDEOS.regulators}
+            heading="Watch: what a licence actually protects"
+            lede="What the FCA, ASIC, CySEC and the rest actually do, and how to check a broker's licence on the official register — in one short explainer."
+          />
+        </div>
 
         <div className="mt-12 max-w-3xl">
           <h2 className="text-xl font-bold text-white sm:text-2xl">Regulator questions</h2>

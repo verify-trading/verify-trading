@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, SearchX, ShieldCheck, X } from "lucide-react";
 
+import { CATEGORY_VIDEOS, CategoryVideo } from "@/components/marketing/category-video";
 import { SearchSuggest } from "@/components/marketing/search-suggest";
 
 import { Breadcrumbs } from "@/components/marketing/primitives";
@@ -499,6 +500,18 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
               </div>
             </div>
           ) : null}
+
+          <CategoryVideo
+            video={CATEGORY_VIDEOS[type]}
+            heading={type === "broker" ? "Watch: how brokers actually work" : type === "propfirm" ? "Watch: how prop firms actually work" : "Watch: how to judge trading educators"}
+            lede={
+              type === "broker"
+                ? "Market makers versus agency execution, spreads, commissions and what regulation protects — in one short explainer."
+                : type === "propfirm"
+                  ? "Challenges, drawdown rules, payouts and the business model behind funded accounts — in one short explainer."
+                  : "Why screenshots are not proof, what a verified track record looks like, and the red flags to check before you pay."
+            }
+          />
 
           <div className="max-w-3xl">
             <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">Common questions</h2>
