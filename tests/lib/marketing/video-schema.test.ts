@@ -23,7 +23,8 @@ describe("videoObjectSchema", () => {
     expect(schema.thumbnailUrl).toBe(`${site}/videos/lot-size.jpg`);
     expect(schema.contentUrl).toBe(`${site}/videos/lot-size.mp4`);
     expect(schema.embedUrl).toBe(`${site}/tools/position-size-calculator`);
-    expect(schema.uploadDate).toBe("2026-10-21");
+    // A bare date is expanded to a full datetime with timezone (Google flags date-only values).
+    expect(schema.uploadDate).toBe("2026-10-21T00:00:00+00:00");
     expect(schema.duration).toBe("PT26S");
     expect(schema.inLanguage).toBe("en");
     expect(schema.isFamilyFriendly).toBe(true);
