@@ -15,7 +15,7 @@ import {
 import { JsonLd } from "@/components/seo/json-ld";
 import { NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import type { Faq } from "@/lib/marketing/faqs";
-import { articleSchema, freeSoftwareSchema, SITE_REVIEWED, webPageSchema } from "@/lib/marketing/seo";
+import { freeSoftwareSchema, webPageSchema } from "@/lib/marketing/seo";
 import { PRO_PLAN_FEATURES } from "@/lib/marketing/pro-plan-features";
 
 export type ProductPageProps = {
@@ -66,8 +66,9 @@ export function ProductPage(p: ProductPageProps) {
 
   return (
     <>
-      <JsonLd data={p.tier === "Free" ? freeSoftwareSchema(schema) : webPageSchema(schema)} />
-      <JsonLd data={articleSchema({ headline: p.name, description: p.description, path: p.path, datePublished: SITE_REVIEWED, articleType: "TechArticle" })} />
+      {/* A product/tool page is a WebPage (plus SoftwareApplication when free), not a TechArticle. */}
+      <JsonLd data={webPageSchema(schema)} />
+      {p.tier === "Free" ? <JsonLd data={freeSoftwareSchema(schema)} /> : null}
       <Breadcrumbs crumbs={[{ name: p.name, path: p.path }]} />
       <PageHero
         eyebrow={p.eyebrow}

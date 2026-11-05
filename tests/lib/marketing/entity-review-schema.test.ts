@@ -7,7 +7,6 @@ describe("entityReviewSchema", () => {
     name: "FxPro",
     path: "/compare/brokers/fxpro",
     description: "Independent broker check for FxPro: verdict Caution.",
-    category: "Online broker",
     verdict: "Caution",
     score: 74,
     updatedAt: "2026-09-29",
@@ -24,7 +23,8 @@ describe("entityReviewSchema", () => {
     expect(item["@type"]).not.toContain("Product");
     expect(item.name).toBe("FxPro");
     expect(item.brand).toEqual({ "@type": "Brand", name: "FxPro" });
-    expect(item.category).toBe("Online broker");
+    // `category` is not a schema.org Organization property; GSC warned on it, so it is omitted.
+    expect(item).not.toHaveProperty("category");
     expect(item.foundingDate).toBe("2006");
   });
 
