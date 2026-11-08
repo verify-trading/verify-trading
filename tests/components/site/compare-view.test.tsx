@@ -68,11 +68,13 @@ const { CompareView } = await import("@/components/marketing/compare-view");
 const order = (html: string, names: string[]) => names.map((n) => html.indexOf(`>${n}<`));
 
 describe("Compare directory (BTS v2)", () => {
-  it("ranks brokers by global score without country controls and leaves out Under review and Not active", async () => {
+  it("ranks brokers by global score without country controls and keeps Under review and Not active out of the table (A–Z directory only)", async () => {
     const html = renderToStaticMarkup(await CompareView({ type: "broker", searchParams: {} }));
     expect(html).toContain("4 brokers");
     expect(html).not.toContain("Showing results for");
-    for (const hidden of ["REVIEW", "GONE"]) expect(html).not.toContain(`>${hidden}<`);
+    // Unlisted records appear exactly once: as a plain link in the A–Z directory, never as a ranked row.
+    expect(html).toContain("A to Z");
+    for (const hidden of ["REVIEW", "GONE"]) expect((html.match(new RegExp(`>${hidden}<`, "g")) ?? []).length).toBe(1);
     // Every visitor sees the same stored scores: top 93, offshore 88, mid 60.
     const [top, mid, offshore] = order(html, ["TOP", "MID", "OFFSHORE"]);
     expect(top).toBeLessThan(offshore);
@@ -89,7 +91,8 @@ describe("Compare directory (BTS v2)", () => {
     expect(html).toContain("2 prop firms");
     expect(html).toContain("Record reviewed");
     expect(html).not.toMatch(/>Verified</);
-    expect(html).not.toContain(">CLOSED<");
+    // Not active firms stay out of the ranked table but keep their one A–Z directory link.
+    expect((html.match(/>CLOSED</g) ?? []).length).toBe(1);
   });
 
   it("lists every trader (guru register) and links each row to /compare/traders/[slug]", async () => {
