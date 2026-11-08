@@ -7,7 +7,7 @@ import { SearchSuggest } from "@/components/marketing/search-suggest";
 import { Breadcrumbs } from "@/components/marketing/primitives";
 import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, VerdictBadge } from "@/components/marketing/entity-ui";
 import { FaqBlock, VerdictBands } from "@/components/marketing/entity-sections";
-import { isListed, isSeoWorthy, listableEntities, regulatorHubs } from "@/lib/compare/insights";
+import { entityPath, isListed, isSeoWorthy, listableEntities, pairsForType, regulatorHubs, vsPath } from "@/lib/compare/insights";
 import { btsWebsiteIdentity } from "@/lib/compare/bts-research";
 import { getRegulator } from "@/lib/compare/regulators";
 import { FilterMenu } from "@/components/marketing/filter-menu";
@@ -180,6 +180,74 @@ function RegulatorTags({ e }: { e: PublicEntity }) {
       ))}
       {refs.length > shown.length ? <span className="text-[11px] text-slate-500">+{refs.length - shown.length}</span> : null}
     </span>
+  );
+}
+
+/**
+ * Plain-link directory of every record, grouped A–Z. The table above is
+ * paginated, and paginated/filtered views are noindex and canonicalise to the
+ * base page — so without this block most record pages have no internal link
+ * from an indexable page (site crawls flagged them as orphans). <details>
+ * keeps the UI compact; the links are still in the server-rendered HTML.
+ */
+function AtoZDirectory({ entities, plural }: { entities: PublicEntity[]; plural: string }) {
+  const sorted = [...entities].sort((a, b) => a.name.localeCompare(b.name, "en"));
+  const groups = new Map<string, PublicEntity[]>();
+  for (const e of sorted) {
+    const c = (e.name[0] ?? "#").toUpperCase();
+    const key = c >= "A" && c <= "Z" ? c : "0–9";
+    const group = groups.get(key);
+    if (group) group.push(e);
+    else groups.set(key, [e]);
+  }
+  const letters = [...groups.keys()].sort((a, b) => (a === "0–9" ? 1 : b === "0–9" ? -1 : a.localeCompare(b)));
+  return (
+    <nav aria-label={`All ${plural}, A to Z`}>
+      <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">All {sorted.length} {plural}, A to Z</h2>
+      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">Every record in the register as a direct link, including firms that are under review or not active. Open a letter to browse.</p>
+      <div className="mt-5 space-y-2">
+        {letters.map((letter) => {
+          const group = groups.get(letter)!;
+          return (
+            <details key={letter} className="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+              <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:text-white">
+                {letter} <span className="font-normal text-slate-500">· {group.length}</span>
+              </summary>
+              <ul className="columns-2 gap-x-6 px-4 pb-4 pt-1 sm:columns-3 lg:columns-4">
+                {group.map((e) => (
+                  <li key={e.slug} className="break-inside-avoid py-0.5">
+                    <Link href={entityPath(e)} className="text-sm text-slate-300 hover:text-white hover:underline">{e.name}</Link>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+/** Every curated side-by-side page as a plain link, so none of them is an orphan. */
+function ComparisonsDirectory({ pairs, plural }: { pairs: Array<[PublicEntity, PublicEntity]>; plural: string }) {
+  if (!pairs.length) return null;
+  return (
+    <nav aria-label="Side-by-side comparisons">
+      <h2 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">Side-by-side comparisons</h2>
+      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">Curated head-to-head pages that put two {plural} through the same method, line by line.</p>
+      <details className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.02]">
+        <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:text-white">
+          All {pairs.length} comparison pages
+        </summary>
+        <ul className="columns-1 gap-x-6 px-4 pb-4 pt-1 sm:columns-2 lg:columns-3">
+          {pairs.map(([a, b]) => (
+            <li key={`${a.slug}-${b.slug}`} className="break-inside-avoid py-0.5">
+              <Link href={vsPath(a.type, a.slug, b.slug)} className="text-sm text-slate-300 hover:text-white hover:underline">{a.name} vs {b.name}</Link>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </nav>
   );
 }
 
@@ -501,6 +569,10 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
               </div>
             </div>
           ) : null}
+
+          {/* `all`, not `unique`: deduplicated alias records still have their own indexed pages, which need a link too. */}
+          <AtoZDirectory entities={all} plural={cfg.plural} />
+          {type !== "guru" ? <ComparisonsDirectory pairs={pairsForType(type, all)} plural={cfg.plural} /> : null}
 
           <CategoryVideo
             video={CATEGORY_VIDEOS[type]}
