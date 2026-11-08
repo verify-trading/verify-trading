@@ -30,7 +30,10 @@ export function formatRecordDate(iso: string | null): string {
   return Number.isFinite(t) ? dateFmt.format(new Date(t)) : "Not recorded";
 }
 
-export const askCheckHref = (name: string) => `/ask?prefill=${encodeURIComponent(`Is ${name} safe?`)}`;
+// Via /signup (200) rather than /ask directly: /ask 307s visitors and crawlers to /login.
+// The prefill survives signup/login through the `next` param and safe-redirect handling.
+export const askCheckHref = (name: string) =>
+  `/signup?next=${encodeURIComponent(`/ask?prefill=${encodeURIComponent(`Is ${name} safe?`)}`)}`;
 
 export function scoreLabel(e: { score: number | null; verdict?: string; type?: string }): string {
   if (e.type === "guru") return "No numeric score (person)";

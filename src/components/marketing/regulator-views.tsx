@@ -254,7 +254,7 @@ export function RegulatorHub({ hub, uniqueCode, others }: { hub: HubStats; uniqu
       <CtaBand
         title={`Check a ${r.code} broker in Ask`}
         body="Ask answers from the verified registry with sources, and covers anything a record does not."
-        primary={{ label: "Run a check", href: "/ask", event: "ask" }}
+        primary={{ label: "Run a check", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "How we verify", href: "/methodology" }}
         location="regulator_hub"
       />

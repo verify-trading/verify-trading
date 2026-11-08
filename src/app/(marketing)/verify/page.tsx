@@ -29,7 +29,7 @@ export default function VerifyPage() {
         "A Caution is only issued when it is backed by a documented regulator or court action.",
         "Entity checks are free, and a verdict is never behind a paywall.",
       ]}
-      primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+      primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
       secondary={{ label: "Read the methodology", href: "/methodology" }}
       visual={<VerifyCardMock />}
       featuresTitle="One check for each kind of name"

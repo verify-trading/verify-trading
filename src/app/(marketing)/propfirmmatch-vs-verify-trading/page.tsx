@@ -345,7 +345,7 @@ export default function PropFirmMatchVsVerifyTradingPage() {
             {
               title: "Ask AI, grounded in the records",
               body: "Ask about any broker, prop firm, setup or market and get a sourced answer in seconds — including firms too new or too small to have a full record yet.",
-              href: "/ask",
+              href: "/signup?next=%2Fask",
               label: "Ask about a firm",
             },
             {

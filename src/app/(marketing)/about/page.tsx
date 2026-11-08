@@ -23,7 +23,7 @@ export default function AboutPage() {
         eyebrow="About"
         title={<>Verify before you trade.</>}
         lede="verify.trading is an independent verification and decision-support tool for retail traders. It checks brokers, prop firms and educators against regulator and court records, and gives you the facts to decide for yourself."
-        primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+        primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "Read the methodology", href: "/methodology" }}
         location="about"
       />
@@ -83,7 +83,7 @@ export default function AboutPage() {
       <CtaBand
         title="Run your first check"
         body="It is free, and it stays free."
-        primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+        primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "Careers", href: "/careers" }}
         location="about"
       />

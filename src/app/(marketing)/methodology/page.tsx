@@ -128,7 +128,7 @@ export default function MethodologyPage() {
           </>
         }
         lede="This page documents how we assess brokers, prop firms and trading educators: what we measure, where our data comes from, the limits of what we can know, and how a record can be challenged."
-        primary={{ label: "Run a free check", href: "/ask", event: "ask" }}
+        primary={{ label: "Run a free check", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "Request a correction", href: "/contact" }}
         visual={<RulesCard />}
         location="methodology"
@@ -270,7 +270,7 @@ export default function MethodologyPage() {
       <CtaBand
         title="Check any name for free"
         body="See the record for yourself before your money moves."
-        primary={{ label: "Run your first check", href: "/ask", event: "ask" }}
+        primary={{ label: "Run your first check", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "Trust & independence", href: "/trust" }}
         location="methodology"
       />

@@ -115,7 +115,7 @@ export function ToolPage(p: {
       <CtaBand
         title="Size it, then check who you are trading with"
         body="Free checks on brokers and prop firms, with the source shown."
-        primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+        primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "Learning hub", href: "/resources" }}
         location="tool"
       />

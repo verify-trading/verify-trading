@@ -68,7 +68,7 @@ export default function GlossaryIndexPage() {
       <CtaBand
         title="Check a name before you deposit"
         body="Free checks against regulator records, with the source shown."
-        primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+        primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "Learning hub", href: "/resources" }}
         location="glossary"
       />

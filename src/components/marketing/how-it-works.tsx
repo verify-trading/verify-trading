@@ -263,8 +263,8 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  { n: "01", id: "ask", icon: "ask", title: "Ask", body: "Ask about any broker, prop firm, setup or market and get a sourced answer in seconds.", href: "/ask", cta: "Go to Ask", tier: "Free", visual: askScreen },
-  { n: "02", id: "markets", icon: "markets", title: "Markets", body: "Live prices across gold, forex, indices and crypto, with the context behind each move.", href: "/markets", cta: "Go to Markets", tier: "Free", visual: marketsScreen },
+  { n: "01", id: "ask", icon: "ask", title: "Ask", body: "Ask about any broker, prop firm, setup or market and get a sourced answer in seconds.", href: "/signup?next=%2Fask", cta: "Go to Ask", tier: "Free", visual: askScreen },
+  { n: "02", id: "markets", icon: "markets", title: "Markets", body: "Live prices across gold, forex, indices and crypto, with the context behind each move.", href: "/signup?next=%2Fmarkets", cta: "Go to Markets", tier: "Free", visual: marketsScreen },
   { n: "03", id: "intelligence", icon: "intelligence", title: "Intelligence", body: "A daily pre-session brief: the bias, the key level and what to watch for each major asset.", href: "/intelligence", cta: "Go to Intelligence", tier: "Pro", visual: intelligenceScreen },
   { n: "04", id: "economic-calendar", icon: "calendar", title: "Economic Calendar", body: "See CPI, NFP and FOMC coming, with impact levels and a heads-up before high-impact releases.", href: "/economic-calendar", cta: "Go to Economic Calendar", tier: "Pro", visual: calendarScreen },
   { n: "05", id: "journal", icon: "journal", title: "Journal", body: "Log every trade, spot the patterns that cost you, and run Challenge Mode for prop firm evaluations.", href: "/journal", cta: "Go to Journal", tier: "Pro", visual: journalScreen },
