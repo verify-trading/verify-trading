@@ -71,7 +71,7 @@ export default function ResourcesPage() {
       <CtaBand
         title="Learn it, then check it"
         body="Run a free check on a broker or prop firm before you deposit."
-        primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+        primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "Read the FAQ", href: "/faq" }}
         location="resources"
       />

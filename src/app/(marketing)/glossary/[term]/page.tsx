@@ -141,7 +141,7 @@ export default async function GlossaryTermPage({ params }: Props) {
       <CtaBand
         title="Check a name before you deposit"
         body="Free checks against regulator records, with the source shown."
-        primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+        primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "All terms", href: "/glossary" }}
         location="glossary_term"
       />

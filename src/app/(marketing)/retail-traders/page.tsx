@@ -26,7 +26,7 @@ export default function RetailTradersPage() {
         "Check the economic calendar and session tone before scheduled news moves the market.",
         "Log each trade and your discipline in the journal to spot patterns over time.",
       ]}
-      primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+      primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
       secondary={{ label: "Use the free calculators", href: "/tools" }}
       helpTitle="Essential tools before risking capital"
       help={[
@@ -49,7 +49,7 @@ export default function RetailTradersPage() {
           theme: "blue",
           title: "Pre-session context",
           body: "Ask about upcoming releases, session tone, or currency pairs with structured responses linked directly to live feeds.",
-          href: "/ask",
+          href: "/signup?next=%2Fask",
         },
       ]}
       workflowTitle="A pre-trade routine in four steps"

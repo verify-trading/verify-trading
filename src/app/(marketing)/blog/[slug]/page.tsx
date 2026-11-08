@@ -119,7 +119,7 @@ export default async function BlogPostPage({ params }: Props) {
       <CtaBand
         title="Check a name before you deposit"
         body="Run a free check against regulator records, with the source shown."
-        primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+        primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "More guides", href: "/blog" }}
         location="blog_post"
       />
@@ -155,7 +155,7 @@ function RemotePost({ article: a }: { article: RemoteArticle }) {
       <CtaBand
         title="Check a name before you deposit"
         body="Run a free check against regulator records, with the source shown."
-        primary={{ label: "Check a name", href: "/ask", event: "ask" }}
+        primary={{ label: "Check a name", href: "/signup?next=%2Fask", event: "ask" }}
         secondary={{ label: "More guides", href: "/blog" }}
         location="blog_post"
       />

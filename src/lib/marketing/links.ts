@@ -6,8 +6,8 @@ import { getTerm } from "@/lib/marketing/glossary";
 export const LINKS = {
   howItWorks: { href: "/how-it-works", title: "How it works", body: "What happens between typing a name and reading a sourced verdict.", tag: "Guide" },
   verify: { href: "/verify", title: "Verify", body: "Check brokers, prop firms and educators against regulator records.", tag: "Free" },
-  ask: { href: "/ask", title: "Ask", body: "Ask about a broker, a trade or the markets and get a cited answer.", tag: "Free" },
-  markets: { href: "/markets", title: "Markets", body: "Live prices and session context across gold, FX, indices and crypto.", tag: "Pro" },
+  ask: { href: "/signup?next=%2Fask", title: "Ask", body: "Ask about a broker, a trade or the markets and get a cited answer.", tag: "Free" },
+  markets: { href: "/signup?next=%2Fmarkets", title: "Markets", body: "Live prices and session context across gold, FX, indices and crypto.", tag: "Pro" },
   intelligence: { href: "/intelligence", title: "Intelligence", body: "A daily pre-session brief with a bias and key level per asset.", tag: "Pro" },
   calendar: { href: "/economic-calendar", title: "Economic calendar", body: "Seven days of events with impact levels, filtered by country.", tag: "Pro" },
   journal: { href: "/journal", title: "Trading journal", body: "Log sessions, tag mood and rule breaches, and get a weekly insight.", tag: "Pro" },

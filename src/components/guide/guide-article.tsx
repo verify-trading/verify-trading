@@ -453,7 +453,7 @@ export function GuideArticle() {
         title="Serious traders don't guess. They verify."
         body={`Start free with ${FREE_DAILY_ASK_LIMIT} Ask chats a day and run your first broker check in under a minute.`}
         primary={{ label: "Start free", href: "/signup", event: "signup" }}
-        secondary={{ label: "Open Ask", href: "/ask", event: "ask" }}
+        secondary={{ label: "Open Ask", href: "/signup?next=%2Fask", event: "ask" }}
         location="guide"
       />
     </>

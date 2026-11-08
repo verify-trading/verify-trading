@@ -33,7 +33,7 @@ describe("/guide", () => {
   it("links out to the core product pages", () => {
     const { container } = render(<GuidePage />);
     const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
-    for (const h of ["/tools", "/compare/brokers", "/compare/prop-firms", "/how-it-works", "/ask"]) expect(hrefs).toContain(h);
+    for (const h of ["/tools", "/compare/brokers", "/compare/prop-firms", "/how-it-works", "/signup?next=%2Fask"]) expect(hrefs).toContain(h);
   });
 
   it("ships HowTo and TechArticle JSON-LD", () => {
