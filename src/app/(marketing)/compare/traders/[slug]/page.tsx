@@ -5,12 +5,13 @@ import { EntityDetail } from "@/components/marketing/entity-detail";
 import { getPublicEntities, getPublicEntity } from "@/lib/compare/entities";
 import { listableEntities } from "@/lib/compare/insights";
 import { entityMetadata } from "@/lib/compare/page-meta";
+import { compareStaticParams } from "@/lib/compare/static-params";
 
-// Rendered on first request, then cached and revalidated hourly (no build-time DB dependency).
+// Prebuilt at production build time (every record + curated vs page) so a fresh deploy never
+// serves the register cold; revalidated hourly in the background after that. Preview/CI builds
+// skip the prebuild and render on first request as before.
 export const revalidate = 3600;
-export function generateStaticParams() {
-  return [];
-}
+export const generateStaticParams = () => compareStaticParams("guru");
 
 type Props = { params: Promise<{ slug: string }> };
 
