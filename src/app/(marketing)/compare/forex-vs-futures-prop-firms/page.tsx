@@ -6,7 +6,7 @@ import { ScoreBar, VerdictBadge, scoreLabel } from "@/components/marketing/entit
 import { Breadcrumbs, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
 import { entityPath, isSeoWorthy } from "@/lib/compare/insights";
 import { getPublicEntities, type PublicEntity } from "@/lib/compare/entities";
-import { collectionPageSchema, pageMetadata } from "@/lib/marketing/seo";
+import { collectionPageSchema, itemListSchema, pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/forex-vs-futures-prop-firms";
@@ -114,6 +114,8 @@ export default async function ForexVsFuturesPropFirmsPage() {
       />
       <JsonLd data={faqPageSchema(FAQS)} />
       <JsonLd data={collectionPageSchema({ name: "Forex vs Futures Prop Firms: Which Should You Choose?", description: "Forex and futures prop firms differ in the markets you trade, how drawdown is calculated and how you pay. Side-by-side comparison with verified firm examples from each side.", path })} />
+      {/* The list items mirror the page's own link targets: a firm's record page where one exists, the register search otherwise. */}
+      <JsonLd data={itemListSchema({ name: "Forex vs Futures Prop Firms: Which Should You Choose?", items: exampleGroups.flatMap((group) => group.firms).map(({ name, entity }) => ({ name, path: entity && isSeoWorthy(entity) ? entityPath(entity) : `/compare/prop-firms?q=${encodeURIComponent(name)}` })) })} />
 
       <PageHero
         eyebrow="Compare"

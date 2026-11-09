@@ -6,7 +6,7 @@ import { ScoreBar, VerdictBadge, scoreLabel } from "@/components/marketing/entit
 import { Breadcrumbs, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
 import { entityPath, isSeoWorthy } from "@/lib/compare/insights";
 import { getPublicEntities, type PublicEntity } from "@/lib/compare/entities";
-import { collectionPageSchema, pageMetadata } from "@/lib/marketing/seo";
+import { collectionPageSchema, itemListSchema, pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/forex-prop-firms";
@@ -15,7 +15,7 @@ export const REVIEWED = "2026-10-20";
 const REVIEWED_LABEL = `Reviewed ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(REVIEWED))}`;
 
 const description =
-  "Compare the top forex prop firms by challenge fees, profit targets, drawdown limits and profit splits. FTMO, The5ers, FundingPips and their Verify Trading verdicts.";
+  "Compare top forex prop firms by challenge fees, profit targets, drawdown and profit splits. FTMO, The5ers and FundingPips with Verify Trading verdicts.";
 
 export const metadata: Metadata = pageMetadata({
   title: "Forex Prop Firms Compared: Fees, Rules & Drawdown",
@@ -122,6 +122,8 @@ export default async function ForexPropFirmsPage() {
       />
       <JsonLd data={faqPageSchema(FAQS)} />
       <JsonLd data={collectionPageSchema({ name: "Compare Forex Prop Firms: Fees, Rules & Drawdown", description: "FTMO, The5ers and FundingPips compared on their standard 2-step $100K challenges: fees, profit targets, drawdown and profit split, with the Verify Trading verdict for each.", path })} />
+      {/* The list items mirror the page's own link targets: a firm's record page where one exists, the register search otherwise. */}
+      <JsonLd data={itemListSchema({ name: "Compare Forex Prop Firms: Fees, Rules & Drawdown", items: rows.map(({ firm, entity }) => ({ name: firm.name, path: entity && isSeoWorthy(entity) ? entityPath(entity) : `/compare/prop-firms?q=${encodeURIComponent(firm.name)}` })) })} />
 
       <PageHero
         eyebrow="Compare"

@@ -48,7 +48,7 @@ const BASE_POSTS: BlogPost[] = [
     slug: "how-to-check-if-a-broker-is-fca-regulated",
     title: "How to check if a broker is FCA regulated",
     description:
-      "A step-by-step guide to checking a broker on the FCA Register: find the firm reference number, confirm permissions, spot clone firms and read the warning list.",
+      "A guide to checking a broker on the FCA Register: find the firm reference number, confirm permissions, spot clone firms and read the warning list.",
     date: "2026-09-29",
     category: "Broker safety",
     relatedPosts: ["how-to-tell-a-scam-broker-from-a-real-one", "fscs-cysec-and-client-money-protection-explained"],
@@ -92,7 +92,7 @@ const BASE_POSTS: BlogPost[] = [
     slug: "prop-firm-challenge-rules-that-catch-traders-out",
     title: "Prop firm challenge rules that catch traders out",
     description:
-      "Daily drawdown, trailing drawdown, news trading limits and consistency rules explained, with a worked example and a checklist to run before you buy a challenge.",
+      "Daily drawdown, trailing drawdown, news limits and consistency rules explained, with a worked example and a checklist to run before you buy a challenge.",
     date: "2026-09-29",
     category: "Prop firms",
     relatedPosts: ["what-is-drawdown-and-how-to-manage-it", "how-to-keep-a-trading-journal"],

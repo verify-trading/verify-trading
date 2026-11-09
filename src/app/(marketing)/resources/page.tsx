@@ -4,7 +4,7 @@ import { Breadcrumbs, CardGrid, CtaBand, LinkGrid, PageHero, Section } from "@/c
 import { JsonLd } from "@/components/seo/json-ld";
 import { POSTS } from "@/lib/blog/posts";
 import { postCard } from "@/lib/marketing/links";
-import { collectionPageSchema, pageMetadata } from "@/lib/marketing/seo";
+import { collectionPageSchema, itemListSchema, pageMetadata } from "@/lib/marketing/seo";
 
 const path = "/resources";
 const description =
@@ -17,6 +17,18 @@ export default function ResourcesPage() {
   return (
     <>
       <JsonLd data={collectionPageSchema({ name: "verify.trading learning hub", description, path })} />
+      <JsonLd
+        data={itemListSchema({
+          name: "verify.trading learning hub",
+          items: [
+            ...latest.map((p) => ({ name: p.title, path: `/blog/${p.slug}` })),
+            { name: "Trading glossary", path: "/glossary" },
+            { name: "Compound growth calculator", path: "/tools/compound-growth-calculator" },
+            { name: "Profit & loss calculator", path: "/tools/profit-loss-calculator" },
+            { name: "All trading calculators", path: "/tools" },
+          ],
+        })}
+      />
       <Breadcrumbs crumbs={[{ name: "Learning hub", path }]} />
       <PageHero
         eyebrow="Learning hub"
