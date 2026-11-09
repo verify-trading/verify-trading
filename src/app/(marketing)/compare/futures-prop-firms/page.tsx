@@ -6,7 +6,7 @@ import { ScoreBar, VerdictBadge, scoreLabel } from "@/components/marketing/entit
 import { Breadcrumbs, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
 import { entityPath, isSeoWorthy } from "@/lib/compare/insights";
 import { getPublicEntities, type PublicEntity } from "@/lib/compare/entities";
-import { collectionPageSchema, pageMetadata } from "@/lib/marketing/seo";
+import { collectionPageSchema, itemListSchema, pageMetadata } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 
 const path = "/compare/futures-prop-firms";
@@ -134,6 +134,8 @@ export default async function FuturesPropFirmsPage() {
       />
       <JsonLd data={faqPageSchema(FAQS)} />
       <JsonLd data={collectionPageSchema({ name: "Compare Futures Prop Firms: Fees, Rules & Drawdown", description: "Five $50K futures evaluations compared on fees, profit targets, drawdown and consistency rules, with the Verify Trading verdict for each.", path })} />
+      {/* The list items mirror the page's own link targets: a firm's record page where one exists, the register search otherwise. */}
+      <JsonLd data={itemListSchema({ name: "Compare Futures Prop Firms: Fees, Rules & Drawdown", items: rows.map(({ firm, entity }) => ({ name: firm.name, path: entity && isSeoWorthy(entity) ? entityPath(entity) : `/compare/prop-firms?q=${encodeURIComponent(firm.name)}` })) })} />
 
       <PageHero
         eyebrow="Compare"

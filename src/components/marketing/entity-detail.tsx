@@ -20,15 +20,32 @@ import { entityReviewSchema, webPageSchema } from "@/lib/marketing/seo";
 const ENTITY_LIST_PATH = { broker: "/compare/brokers", propfirm: "/compare/prop-firms", guru: "/compare/traders" } as const;
 const LIST_CRUMB = { broker: "Compare Brokers", propfirm: "Compare Prop Firms", guru: "Verify Traders" } as const;
 
-const truncateDescription = (text: string) => (text.length <= 160 ? text : `${text.slice(0, 157).trimEnd()}...`);
+/** Search engines truncate meta descriptions past ~155 characters. */
+const DESCRIPTION_LIMIT = 155;
+
+/** Fits the description by dropping whole tail sentences first; a mid-sentence cut is the last resort. */
+const fitDescription = (lead: string, tail: string[]): string => {
+  let out = lead;
+  for (const sentence of tail) {
+    if (`${out} ${sentence}`.length > DESCRIPTION_LIMIT) break;
+    out = `${out} ${sentence}`;
+  }
+  return out.length <= DESCRIPTION_LIMIT ? out : `${out.slice(0, DESCRIPTION_LIMIT - 3).trimEnd()}...`;
+};
 
 export function entityDescription(e: PublicEntity): string {
   if (e.type === "guru") {
-    return truncateDescription(`Independent trader and educator check for ${e.name}: verdict ${e.verdict}. See the record, its basis and last update. Sourced from public records, not paid placement.`);
+    return fitDescription(`Independent trader and educator check for ${e.name}: verdict ${e.verdict}.`, [
+      "See the record, its basis and last update.",
+      "Sourced from public records, not paid placement.",
+    ]);
   }
   const noun = e.type === "broker" ? "broker" : "prop firm";
-  const reg = e.regulators.length ? ` Listed regulators: ${e.regulators.slice(0, 3).join(", ")}.` : "";
-  return truncateDescription(`Independent ${noun} check for ${e.name}: verdict ${e.verdict}.${reg} See the record, its basis and last update. Sourced from public records, not paid placement.`);
+  return fitDescription(`Independent ${noun} check for ${e.name}: verdict ${e.verdict}.`, [
+    ...(e.regulators.length ? [`Listed regulators: ${e.regulators.slice(0, 3).join(", ")}.`] : []),
+    "See the record, its basis and last update.",
+    "Sourced from public records, not paid placement.",
+  ]);
 }
 
 /** How the rating is described: the official independent check, or the baseline while that is pending. */

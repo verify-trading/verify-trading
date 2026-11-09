@@ -70,7 +70,7 @@ export const MORE_POSTS: BlogPost[] = [
     slug: "fscs-cysec-and-client-money-protection-explained",
     title: "FSCS, CySEC ICF and client money protection explained",
     description:
-      "What the FSCS and the CySEC Investor Compensation Fund actually cover, what segregated client money does, and why the legal entity holding your account matters.",
+      "What the FSCS and the CySEC Investor Compensation Fund cover, what segregated client money does, and why the legal entity holding your account matters.",
     date: "2026-09-29",
     category: "Broker safety",
     relatedPosts: ["how-to-check-if-a-broker-is-fca-regulated", "how-to-tell-a-scam-broker-from-a-real-one"],
@@ -120,7 +120,7 @@ export const MORE_POSTS: BlogPost[] = [
     slug: "what-is-drawdown-and-how-to-manage-it",
     title: "What is drawdown and how to manage it",
     description:
-      "Drawdown explained: how it is measured, why recovery needs bigger gains than the loss, how prop firms use daily and trailing limits, and practical ways to control it.",
+      "Drawdown explained: how it is measured, why recovery needs bigger gains than the loss, how prop firms use daily and trailing limits, and how to control it.",
     date: "2026-09-29",
     category: "Risk management",
     relatedPosts: ["position-sizing-how-much-to-risk-per-trade", "prop-firm-challenge-rules-that-catch-traders-out"],
@@ -180,7 +180,7 @@ export const MORE_POSTS: BlogPost[] = [
     slug: "risk-reward-and-win-rate-what-the-maths-says",
     title: "Risk to reward and win rate: what the maths says",
     description:
-      "How risk to reward ratio and win rate combine into expectancy, the break-even win rate at each ratio, and why a high ratio alone does not make a trade good.",
+      "How risk to reward ratio and win rate combine into expectancy, the break-even win rate at each ratio, and why a high ratio alone doesn't make a trade good.",
     date: "2026-09-29",
     category: "Risk management",
     relatedPosts: ["position-sizing-how-much-to-risk-per-trade", "what-is-drawdown-and-how-to-manage-it"],
@@ -291,7 +291,7 @@ export const MORE_POSTS: BlogPost[] = [
     slug: "revenge-trading-and-tilt-how-to-stop",
     title: "Revenge trading and tilt: how to stop",
     description:
-      "What revenge trading and tilt look like, the triggers behind them, and a set of rules and routines that interrupt the pattern before it costs you an account.",
+      "What revenge trading and tilt look like, the triggers behind them, and rules and routines that interrupt the pattern before it costs you an account.",
     date: "2026-09-29",
     category: "Trading psychology",
     relatedPosts: ["how-to-keep-a-trading-journal", "what-is-drawdown-and-how-to-manage-it"],
@@ -352,7 +352,7 @@ export const MORE_POSTS: BlogPost[] = [
     slug: "how-to-trade-around-economic-news",
     title: "How to trade around economic news",
     description:
-      "Which economic releases move markets, what happens to spreads and stops around them, and how to plan a session and follow a prop firm news rule using a calendar.",
+      "Which economic releases move markets, what happens to spreads and stops around them, and how to plan a session and follow a prop firm news rule.",
     date: "2026-09-29",
     category: "Markets and news",
     relatedPosts: ["prop-firm-challenge-rules-that-catch-traders-out", "position-sizing-how-much-to-risk-per-trade"],

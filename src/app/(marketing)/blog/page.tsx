@@ -10,7 +10,7 @@ const path = "/blog";
 export const metadata: Metadata = pageMetadata({
   title: "Trading Blog: Broker Safety, Prop Firm Rules & Risk",
   description:
-    "Plain-English guides on checking brokers, understanding prop firm rules, position sizing, drawdown and trading psychology. Written to inform, never to sell a broker or a signal.",
+    "Plain-English guides on checking brokers, prop firm rules, position sizing, drawdown and trading psychology. Written to inform, never to sell.",
   path,
 });
 
