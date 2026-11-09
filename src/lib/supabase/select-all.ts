@@ -6,11 +6,22 @@
 export async function selectAll<T>(
   page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
   size = 1000,
+  retries = 1,
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0; ; from += size) {
-    const { data, error } = await page(from, from + size - 1);
-    if (error) throw new Error(error.message);
+    let data: T[] | null = null;
+    // One chunk is one Postgres statement: under load a heavy chunk can hit the statement
+    // timeout, so a failed chunk gets a short-backoff retry before the whole read gives up.
+    for (let attempt = 0; ; attempt++) {
+      const res = await page(from, from + size - 1);
+      if (!res.error) {
+        data = res.data;
+        break;
+      }
+      if (attempt >= retries) throw new Error(res.error.message);
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+    }
     rows.push(...(data ?? []));
     if (!data || data.length < size) return rows;
   }

@@ -242,8 +242,13 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
   }
   // Throw rather than return [] so a failed read is never cached for an hour as "0 brokers"
   // and detail pages answer 500 (retry) instead of 404 (gone) to search engines.
-  const data = await selectAll((from, to) =>
-    client.from("verified_entities").select(PUBLIC_ENTITY_COLUMNS).eq("entity_type", type).order("name").order("slug").range(from, to),
+  // 150-row chunks: each row carries the full bts details JSON (research texts, source lists),
+  // so a 1,000-row statement can exceed the Postgres statement timeout when the DB is busy
+  // ("canceling statement due to statement timeout", 9 Nov 2026 build logs). Small chunks keep
+  // every statement fast; selectAll retries a failed chunk once before giving up.
+  const data = await selectAll(
+    (from, to) => client.from("verified_entities").select(PUBLIC_ENTITY_COLUMNS).eq("entity_type", type).order("name").order("slug").range(from, to),
+    150,
   ).catch((error: Error) => {
     throw new Error(`Compare register read failed for ${type}: ${error.message}`);
   });
