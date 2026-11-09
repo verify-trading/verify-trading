@@ -2,7 +2,10 @@ import type { MetadataRoute } from "next";
 
 import { getSiteUrl } from "@/lib/site-config";
 
-const DISALLOW = ["/api/", "/auth/"];
+// /login and /signup: auth pages, already noindex. Blocking them also stops crawlers
+// from fetching the ~900 unique /signup?next=… variants the marketing CTAs link
+// (each "Check in Ask AI" link carries its own prefill), which wastes crawl budget.
+const DISALLOW = ["/api/", "/auth/", "/login", "/signup"];
 
 export default function robots(): MetadataRoute.Robots {
   const base = getSiteUrl();
