@@ -4,7 +4,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { EntityDetail } from "@/components/marketing/entity-detail";
 import { VsView, vsSummary } from "@/components/marketing/vs-view";
 import { getOfficialAssessment, getOfficialCountryScores } from "@/lib/compare/bts-l2";
-import { getPublicEntities, getPublicEntity } from "@/lib/compare/entities";
+import { getPublicEntities, getPublicEntityRecord } from "@/lib/compare/entities";
 import { listableEntities, parseVsPair } from "@/lib/compare/insights";
 import { entityMetadata } from "@/lib/compare/page-meta";
 import { compareStaticParams } from "@/lib/compare/static-params";
@@ -45,7 +45,7 @@ export default async function Page({ params }: Props) {
     if (res.kind === "notFound") notFound();
     return <VsView a={res.a} b={res.b} />;
   }
-  const entity = await getPublicEntity("propfirm", slug);
+  const entity = await getPublicEntityRecord("propfirm", slug);
   if (!entity) notFound();
   const official = entity.scoreBasis === "official" && entity.bts ? await getOfficialAssessment(entity.bts.entityId) : null;
   // Engine-gated firms (not active, being re-researched) never set scoreBasis: no country scores for them.

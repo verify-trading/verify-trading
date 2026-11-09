@@ -260,8 +260,41 @@ export async function loadEntities(type: PublicEntityType): Promise<PublicEntity
   return entities;
 }
 
+/**
+ * The register-wide cache entry: the long research texts and source lists are dropped so 800+
+ * records serialize well under Next's 2MB `unstable_cache` limit. At 2.6MB the broker register
+ * silently failed to cache ("items over 2MB can not be cached", 9 Nov 2026 build log), so every
+ * request and every prerender re-ran the full Supabase read until Postgres cancelled statements.
+ * List surfaces only read website/legalEntity (dedupe), operatingStatus and cloneNoticeSource;
+ * the record page loads the full row per slug via `getPublicEntityRecord`.
+ */
+export function slimEntity(e: PublicEntity): PublicEntity {
+  if (!e.bts?.research) return e;
+  return {
+    ...e,
+    bts: {
+      ...e.bts,
+      research: { ...e.bts.research, licences: [], sources: [], actions: null, payoutTerms: null, tradingRules: null, disputes: null, auditIssues: [] },
+    },
+  };
+}
+
+const loadSlimEntities = async (type: PublicEntityType) => (await loadEntities(type)).map(slimEntity);
+
 /** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */
-const getEngineEntities = unstable_cache(loadEntities, ["public-entities-v7"], { revalidate: 3600, tags: ["bts"] });
+const getEngineEntities = unstable_cache(loadSlimEntities, ["public-entities-v8-slim"], { revalidate: 3600, tags: ["bts"] });
+
+// One register read per process at a time: concurrent renders (a crawl, or the production
+// build's prerender workers) share the same in-flight promise instead of each querying Supabase.
+const inFlightLists = new Map<PublicEntityType, Promise<PublicEntity[]>>();
+function dedupedEngineEntities(type: PublicEntityType): Promise<PublicEntity[]> {
+  let run = inFlightLists.get(type);
+  if (!run) {
+    run = getEngineEntities(type).finally(() => inFlightLists.delete(type));
+    inFlightLists.set(type, run);
+  }
+  return run;
+}
 
 /**
  * The register as the website shows it: each firm's official (published, global) score replaces its
@@ -280,13 +313,40 @@ export function withOfficialScores(entities: PublicEntity[], official: Record<st
 }
 
 export async function getPublicEntities(type: PublicEntityType): Promise<PublicEntity[]> {
-  const entities = await getEngineEntities(type);
+  const entities = await dedupedEngineEntities(type);
   if (type === "guru") return entities;
   return withOfficialScores(entities, await getOfficialScores().catch(() => ({})));
 }
 
+/** Slim view of one entity (no research texts/sources): enough for metadata, lists and vs pages. */
 export async function getPublicEntity(type: PublicEntityType, slug: string) {
   return (await getPublicEntities(type)).find((e) => e.slug === slug) ?? null;
+}
+
+async function loadEntityRecord(type: PublicEntityType, slug: string): Promise<PublicEntity | null> {
+  const client = getSupabaseAdminClient();
+  if (!client) {
+    logger.warn("Compare record unavailable: Supabase admin is not configured.", { type, slug });
+    return null;
+  }
+  // Same throw-over-[] contract as loadEntities: a failed read must 500 (retry), never 404 or cache as missing.
+  const { data, error } = await client.from("verified_entities").select(PUBLIC_ENTITY_COLUMNS).eq("entity_type", type).eq("slug", slug).limit(1).maybeSingle();
+  if (error) throw new Error(`Compare record read failed for ${type}/${slug}: ${error.message}`);
+  const entity = data ? toPublicEntity(data as unknown as Record<string, unknown>) : null;
+  // Defamation gate: unpublishable gurus never render, matching the loadEntities register filter.
+  if (!entity || (type === "guru" && !entity.publishable)) return null;
+  return entity;
+}
+
+// Per-slug cache entries are a few KB each, so unlike the register-wide entry they always fit the 2MB limit.
+const getEngineEntityRecord = unstable_cache(loadEntityRecord, ["public-entity-record-v1"], { revalidate: 3600, tags: ["bts"] });
+
+/** One entity with the full research detail (actions, sources, terms), for its record page. */
+export async function getPublicEntityRecord(type: PublicEntityType, slug: string): Promise<PublicEntity | null> {
+  const entity = await getEngineEntityRecord(type, slug);
+  if (!entity) return null;
+  if (type === "guru") return entity;
+  return withOfficialScores([entity], await getOfficialScores().catch(() => ({})))[0] ?? null;
 }
 
 /* ─── Filtering (pure) ─── */

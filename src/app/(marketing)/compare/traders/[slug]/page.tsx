@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { EntityDetail } from "@/components/marketing/entity-detail";
-import { getPublicEntities, getPublicEntity } from "@/lib/compare/entities";
+import { getPublicEntities, getPublicEntityRecord } from "@/lib/compare/entities";
 import { listableEntities } from "@/lib/compare/insights";
 import { entityMetadata } from "@/lib/compare/page-meta";
 import { compareStaticParams } from "@/lib/compare/static-params";
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function Page({ params }: Props) {
-  const entity = await getPublicEntity("guru", (await params).slug);
+  const entity = await getPublicEntityRecord("guru", (await params).slug);
   if (!entity) notFound();
   return <EntityDetail entity={entity} all={listableEntities(await getPublicEntities("guru"))} />;
 }
