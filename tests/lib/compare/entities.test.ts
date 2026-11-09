@@ -4,6 +4,7 @@ import {
   filterEntities,
   parseRegulators,
   PUBLIC_ENTITY_COLUMNS,
+  slimEntity,
   toPublicEntity,
   type PublicEntity,
 } from "@/lib/compare/entities";
@@ -96,6 +97,60 @@ describe("public entity mapper", () => {
     expect(g.publishable).toBe(true);
     expect(toPublicEntity({ ...brokerRow, slug: "" })).toBeNull();
     expect(toPublicEntity({ ...brokerRow, entity_type: "mystery" })).toBeNull();
+  });
+});
+
+describe("slimEntity", () => {
+  const rowWithResearch = {
+    ...brokerRow,
+    bts: {
+      ...brokerRow.bts,
+      details: {
+        ...brokerRow.bts.details,
+        research_input: {
+          website_url: "https://example-broker.com",
+          legal_entity: "Example Broker Ltd",
+          operating_status: "active",
+          verified_regulatory_actions: "A very long paragraph about regulatory actions…",
+          payout_terms_summary: "Long payout terms…",
+          trading_rules_summary: "Long trading rules…",
+          documented_material_disputes: "Long disputes text…",
+        },
+        source_evidence: [{ url: "https://register.fca.org.uk/x", roles: ["licence"], research_date: "2026-10-30" }],
+        clone_notice: { source_url: "https://fca.org.uk/warning" },
+      },
+    },
+  };
+
+  it("drops the heavy research texts and sources but keeps the fields list surfaces read", () => {
+    // The register-wide unstable_cache entry must stay under Next's 2MB limit: the long
+    // research texts live only on the per-slug record (getPublicEntityRecord).
+    const full = toPublicEntity(rowWithResearch)!;
+    expect(full.bts!.research!.actions).toBeTruthy();
+    expect(full.bts!.research!.sources.length).toBe(1);
+    const slim = slimEntity(full);
+    expect(slim.bts!.research).toMatchObject({
+      website: "https://example-broker.com",
+      legalEntity: "Example Broker Ltd",
+      operatingStatus: "active",
+      cloneNoticeSource: "https://fca.org.uk/warning",
+      actions: null,
+      payoutTerms: null,
+      tradingRules: null,
+      disputes: null,
+      sources: [],
+      licences: [],
+      auditIssues: [],
+    });
+    // Everything outside research is untouched, and the original entity is not mutated.
+    expect(slim.score).toBe(full.score);
+    expect(slim.bts!.pillars).toEqual(full.bts!.pillars);
+    expect(full.bts!.research!.sources.length).toBe(1);
+  });
+
+  it("passes through entities without research", () => {
+    const e = toPublicEntity(brokerRow)!;
+    expect(slimEntity(e)).toBe(e);
   });
 });
 
