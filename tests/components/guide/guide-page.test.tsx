@@ -36,10 +36,11 @@ describe("/guide", () => {
     for (const h of ["/tools", "/compare/brokers", "/compare/prop-firms", "/how-it-works", "/signup?next=%2Fask"]) expect(hrefs).toContain(h);
   });
 
-  it("ships HowTo and TechArticle JSON-LD", () => {
+  it("ships HowTo and WebPage JSON-LD (Article schema is reserved for blog posts)", () => {
     const { container } = render(<GuidePage />);
     const types = Array.from(container.querySelectorAll('script[type="application/ld+json"]')).map((s) => JSON.parse(s.textContent ?? "{}")["@type"]);
-    expect(types).toEqual(expect.arrayContaining(["HowTo", "TechArticle", "BreadcrumbList", "FAQPage"]));
+    expect(types).toEqual(expect.arrayContaining(["HowTo", "WebPage", "BreadcrumbList", "FAQPage"]));
+    expect(types).not.toContain("TechArticle");
   });
 
   it("has a title and description inside the SEO length limits", () => {

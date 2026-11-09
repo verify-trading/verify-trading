@@ -5,7 +5,7 @@ import { APP_ICONS, type AppIconKey } from "@/components/icons/app-icons";
 import { MethodologyModels } from "@/components/marketing/methodology-models";
 import { Breadcrumbs, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
 import { JsonLd } from "@/components/seo/json-ld";
-import { articleSchema, SITE_REVIEWED } from "@/lib/marketing/seo";
+import { webPageSchema } from "@/lib/marketing/seo";
 import { getAppName } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
@@ -118,7 +118,7 @@ export default function MethodologyPage() {
   const app = getAppName();
   return (
     <>
-      <JsonLd data={articleSchema({ headline: "How We Verify Brokers & Prop Firms", description: `How ${app} assesses brokers, prop firms and trading educators: our funding model, data sources, assessment rules and the limits of what any record can tell you.`, path, datePublished: SITE_REVIEWED, articleType: "TechArticle" })} />
+      <JsonLd data={webPageSchema({ name: "How We Verify Brokers & Prop Firms", description: `How ${app} assesses brokers, prop firms and trading educators: our funding model, data sources, assessment rules and the limits of what any record can tell you.`, path })} />
       <Breadcrumbs crumbs={[{ name: "Methodology", path }]} />
       <PageHero
         eyebrow="Methodology"

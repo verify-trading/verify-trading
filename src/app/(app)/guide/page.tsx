@@ -3,14 +3,13 @@ import type { Metadata } from "next";
 import {
   GUIDE_DESCRIPTION,
   GUIDE_PATH,
-  GUIDE_REVIEWED,
   GUIDE_SETUP_STEPS,
   GUIDE_TITLE,
   GuideArticle,
 } from "@/components/guide/guide-article";
 import { JsonLd } from "@/components/seo/json-ld";
 import { SiteFooter } from "@/components/site/site-footer";
-import { articleSchema, howToSchema, pageMetadata } from "@/lib/marketing/seo";
+import { howToSchema, pageMetadata, webPageSchema } from "@/lib/marketing/seo";
 
 export const metadata: Metadata = pageMetadata({ title: GUIDE_TITLE, description: GUIDE_DESCRIPTION, path: GUIDE_PATH });
 
@@ -19,12 +18,10 @@ export default function GuidePage() {
     // The (app) shell clips overflow, so this page owns its scroll.
     <div className="min-h-0 flex-1 overflow-y-auto">
       <JsonLd
-        data={articleSchema({
-          headline: "AI Trading Prompts and verify.trading Platform Guide",
+        data={webPageSchema({
+          name: "AI Trading Prompts and verify.trading Platform Guide",
           description: GUIDE_DESCRIPTION,
           path: GUIDE_PATH,
-          datePublished: GUIDE_REVIEWED,
-          articleType: "TechArticle",
         })}
       />
       <JsonLd

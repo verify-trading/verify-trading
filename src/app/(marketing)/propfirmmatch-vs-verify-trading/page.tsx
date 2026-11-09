@@ -5,7 +5,7 @@ import { Check, ExternalLink, X } from "lucide-react";
 
 import { JsonLd } from "@/components/seo/json-ld";
 import { Breadcrumbs, Byline, CtaBand, FaqSection, PageHero, Section } from "@/components/marketing/primitives";
-import { articleSchema, pageMetadata } from "@/lib/marketing/seo";
+import { pageMetadata, webPageSchema } from "@/lib/marketing/seo";
 import { faqPageSchema } from "@/lib/seo/schema";
 import { cn } from "@/lib/utils";
 
@@ -162,12 +162,10 @@ export default function PropFirmMatchVsVerifyTradingPage() {
       <Breadcrumbs crumbs={[{ name: "Prop Firm Match vs Verify Trading", path }]} />
       <JsonLd data={faqPageSchema(FAQS)} />
       <JsonLd
-        data={articleSchema({
-          headline: "Prop Firm Match vs Verify Trading: Which Should Traders Trust?",
+        data={webPageSchema({
+          name: "Prop Firm Match vs Verify Trading: Which Should Traders Trust?",
           description,
           path,
-          datePublished: REVIEWED,
-          articleType: "Article",
         })}
       />
 
