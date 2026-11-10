@@ -10,7 +10,7 @@ import type { PublicEntity } from "@/lib/compare/entities";
 import { entityPath, VERDICT_RANK, vsPath } from "@/lib/compare/insights";
 import { getRegulator } from "@/lib/compare/regulators";
 import { INDEPENDENCE_STATEMENT, NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
-import { webPageSchema } from "@/lib/marketing/seo";
+import { itemListSchema, webPageSchema } from "@/lib/marketing/seo";
 
 const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
@@ -83,6 +83,8 @@ export function VsView({ a, b }: { a: PublicEntity; b: PublicEntity }) {
   return (
     <>
       <JsonLd data={webPageSchema({ name: `${a.name} vs ${b.name}`, description: vsSummary(a, b), path })} />
+      {/* The two records this page compares, as the list the comparison is built from. */}
+      <JsonLd data={itemListSchema({ name: `${a.name} vs ${b.name}`, items: names.map((e) => ({ name: e.name, path: entityPath(e) })) })} />
       <Breadcrumbs crumbs={[crumb, { name: `${a.name} vs ${b.name}`, path }]} />
       <section className="mx-auto w-full max-w-5xl px-4 pb-14 pt-4 sm:px-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--vt-coral)]/90">{eyebrow}</p>

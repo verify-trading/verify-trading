@@ -43,7 +43,7 @@ describe("entityDescription", () => {
     const long = entityDescription(
       broker({
         name: "An Extremely Long Brokerage Company Name International Holdings Limited",
-        verdict: "Proceed with caution",
+        verdict: "High risk",
         regulators: ["FCA", "CySEC", "ASIC"],
       }),
     );

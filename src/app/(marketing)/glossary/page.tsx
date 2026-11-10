@@ -5,7 +5,7 @@ import { Breadcrumbs, CtaBand, PageHero, Section } from "@/components/marketing/
 import { JsonLd } from "@/components/seo/json-ld";
 import { NOT_ADVICE_STATEMENT } from "@/lib/marketing/copy";
 import { GLOSSARY, glossaryLetters, sortedGlossary } from "@/lib/marketing/glossary";
-import { definedTermSetSchema, pageMetadata } from "@/lib/marketing/seo";
+import { definedTermSetSchema, itemListSchema, pageMetadata } from "@/lib/marketing/seo";
 
 const path = "/glossary";
 const description =
@@ -20,6 +20,7 @@ export default function GlossaryIndexPage() {
   return (
     <>
       <JsonLd data={definedTermSetSchema({ terms: sorted })} />
+      <JsonLd data={itemListSchema({ name: "Trading glossary", items: sorted.map((t) => ({ name: t.term, path: `${path}/${t.slug}` })) })} />
       <Breadcrumbs crumbs={[{ name: "Glossary", path }]} />
       <PageHero
         eyebrow="Glossary"
