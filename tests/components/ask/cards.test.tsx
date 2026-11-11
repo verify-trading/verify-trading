@@ -102,6 +102,19 @@ describe("AskResponseCard", () => {
     expect(screen.queryByText("FCA")).not.toBeInTheDocument();
   });
 
+  it("labels trading software as a tool, not a regulated broker", () => {
+    render(
+      <AskResponseCard
+        card={{ type: "broker", name: "TrendSpider", score: "85/100", status: "LEGITIMATE", fca: "No", complaints: "None found", verdict: "Charting software.", color: "green" }}
+        uiMeta={{ verificationKind: "tool" }}
+      />,
+    );
+    expect(screen.getByText("Tool Review")).toBeInTheDocument();
+    expect(screen.getByText("Tools")).toBeInTheDocument();
+    expect(screen.queryByText("Regulation")).not.toBeInTheDocument();
+    expect(screen.queryByText("None verified")).not.toBeInTheDocument();
+  });
+
   it("renders curated developing-firm evidence instead of the model verdict", () => {
     render(
       <AskResponseCard

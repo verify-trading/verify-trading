@@ -116,7 +116,14 @@ const submitAskCardInputSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'One UI card as a JSON string. Include "type": broker | briefing | calc | guru | insight | plan | chart | setup | projection and all required fields for that type.',
+      'One UI card as a JSON string with exactly these fields for its type (no others; strings unless noted): ' +
+        'insight {type,headline,body,verdict} | ' +
+        'broker {type,name,score,status:"LEGITIMATE"|"CAUTION"|"WARNING"|"AVOID",fca:"Yes"|"No",complaints:"Low"|"Medium"|"High"|"None found"|"On record"|"Not checked",verdict,color:"green"|"amber"|"red"} | ' +
+        'guru {type,name,tier:"Verified"|"Unverified"|"Caution",trackRecord,citationUrl(string|null),verdict} | ' +
+        'briefing {type,asset,price,change,direction:"up"|"down",level1,level2,event(string|null),verdict} | ' +
+        'setup {type,asset,bias:"Bullish"|"Bearish"|"Neutral",entry,stop,target,rr,rationale,confidence:"High"|"Medium"|"Low",verdict} | ' +
+        'chart {type,pattern,bias,entry,stop,target,rr,confidence,verdict} | ' +
+        'calc, plan and projection: copy the card the matching tool returned.',
     ),
   followups: z
     .array(z.string())
@@ -905,8 +912,16 @@ export function createAskTools(dependencies: AskServiceDependencies) {
         "Calculate risk-reward ratio from pips or from entry, stop, and target prices. Use it when the user gives either riskPips plus rewardPips, or entryPrice plus stopPrice plus targetPrice. Do not invent missing prices or distances. In mixed questions, treat this as evidence, not the whole final answer.",
       inputSchema: calculateRiskRewardInputSchema,
       execute: async (toolInput) => {
-        const result = calculateRiskReward(toolInput);
-        return withCard(buildRiskRewardCard(result));
+        try {
+          return withCard(buildRiskRewardCard(calculateRiskReward(toolInput)));
+        } catch (error) {
+          if (!(error instanceof RangeError)) throw error;
+          return withCard(buildInsightCard(
+            "Those Levels Don't Match the Side",
+            "A buy needs the stop below entry and the target above it; a sell needs the stop above entry and the target below it.",
+            "Did you mean to buy or sell, or are the stop and target swapped? Confirm that before placing the order.",
+          ));
+        }
       },
     }),
     calculate_pip_value: tool({

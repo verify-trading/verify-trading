@@ -455,7 +455,12 @@ export async function generateAskResponse(
       toolNames: toolResults.map((toolResult) => toolResult.toolName ?? "unknown"),
     });
 
-    const uiMeta = withFollowups(extractUiMeta(merged, toolResults), toolResults);
+    const extracted = extractUiMeta(merged, toolResults);
+    // The engine scores software too; its card shows the type instead of a regulator.
+    const isTool = merged.type === "broker" && findEngineVerdict(toolResults, merged.name)?.type === "tool";
+    const uiMeta = withFollowups(isTool ? { ...extracted, verificationKind: "tool" as const } : extracted, toolResults);
+    // A card that asks the user something wants their answer, not a suggestion chip.
+    if (uiMeta?.followups?.length && /\?\s*$/.test(merged.verdict)) uiMeta.followups = [];
 
     return askResponseSchema.parse({
       data: sanitizeCard(merged),

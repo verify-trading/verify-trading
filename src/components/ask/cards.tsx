@@ -101,12 +101,14 @@ function BrokerCard({
       : propCaution
         ? "text-[var(--vt-amber)]"
         : "text-[var(--vt-coral)]";
-  const eyebrow = isPropFirm ? "Firm Check" : "Broker Check";
+  // Software (journals, charting, bots) isn't licensed like a broker, so it shows its type, not a regulator.
+  const isTool = uiMeta?.verificationKind === "tool";
+  const eyebrow = isTool ? "Tool Review" : isPropFirm ? "Firm Check" : "Broker Check";
   // Regulators with register-verified licences; older saved cards only carry the FCA Yes/No.
   const regulation = uiMeta?.regulation ?? (card.fca === "Yes" ? "FCA" : "None verified");
-  const primaryLabel = isPropFirm ? "Type" : "Regulation";
-  const primaryValue = isPropFirm ? "Prop Firm" : regulation;
-  const primaryClassName = isPropFirm || regulation !== "None verified" ? "text-white" : "text-[var(--vt-coral)]";
+  const primaryLabel = isPropFirm || isTool ? "Type" : "Regulation";
+  const primaryValue = isTool ? "Tools" : isPropFirm ? "Prop Firm" : regulation;
+  const primaryClassName = isPropFirm || isTool || regulation !== "None verified" ? "text-white" : "text-[var(--vt-coral)]";
 
   const propFirm = uiMeta?.propFirm;
   const notRated = propFirm?.notRated ?? false;

@@ -252,20 +252,39 @@ export function calculatePositionSize(input: CalculatePositionSizeInput) {
 export function calculatePositionSizeCard(input: CalculatePositionSizeInput): CalcCard {
   const parsed = calculatePositionSizeInputSchema.parse(input);
   const result = calculatePositionSize(parsed);
+  // Most brokers' smallest trade is 0.01 lots; below it the honest answer is the floor's real risk.
+  const MIN_LOT = 0.01;
+  const belowMin = result.lots < MIN_LOT;
+  const riskAtMin = MIN_LOT * parsed.stopLossPips * result.pipValuePerLot;
 
   return {
     type: "calc",
-    lots: result.lots.toFixed(2),
+    lots: belowMin ? "<0.01" : result.lots.toFixed(2),
     risk_amount: formatCurrency(result.riskAmount, parsed.accountCurrency),
     account: formatCurrency(parsed.accountSize, parsed.accountCurrency),
     risk_pct: `${parsed.riskPercent}%`,
     sl_pips: `${parsed.stopLossPips}`,
-    verdict: "Size down first. Protect the downside before chasing the upside.",
+    verdict: belowMin
+      ? `That's below the usual 0.01 minimum lot. Even 0.01 lots would risk about ${formatCurrency(riskAtMin, parsed.accountCurrency)} with this stop, so tighten the stop, accept a bigger risk knowingly, or skip the trade. Check your broker's minimum lot and contract size.`
+      : "Size down first. Protect the downside before chasing the upside.",
   };
+}
+
+/** Long: stop below entry, target above. Short: the reverse. */
+export function isValidTradeGeometry(direction: "long" | "short", entry: number, stop: number, target: number): boolean {
+  return direction === "long" ? stop < entry && target > entry : stop > entry && target < entry;
 }
 
 export function calculateRiskReward(input: CalculateRiskRewardInput): RiskRewardResult {
   const parsed = calculateRiskRewardInputSchema.parse(input);
+  if (parsed.entryPrice && parsed.stopPrice && parsed.targetPrice) {
+    const { entryPrice: entry, stopPrice: stop, targetPrice: target } = parsed;
+    // Without a stated side, the stop's position implies it; the target must then agree.
+    const direction = parsed.direction ?? (stop < entry ? "long" : "short");
+    if (!isValidTradeGeometry(direction, entry, stop, target)) {
+      throw new RangeError("Invalid trade geometry: long requires stop below entry and target above; short requires stop above entry and target below.");
+    }
+  }
 
   const riskDistance =
     parsed.riskPips ??

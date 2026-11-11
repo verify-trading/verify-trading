@@ -83,7 +83,7 @@ describe("ask contracts", () => {
     expect(card.verdict).toBe(`Use the original source at ${url}.`);
   });
 
-  it("removes dash punctuation from natural language response fields", () => {
+  it("turns dash punctuation into commas but keeps hyphenated words", () => {
     const card = sanitizeCard({
       type: "briefing",
       asset: "GOLD",
@@ -102,8 +102,26 @@ describe("ask contracts", () => {
     }
 
     expect(card.change).toBe("-3.02%");
-    expect(card.event).toBe("CPI hot, dollar bid");
-    expect(card.verdict).toBe("Gold is weak, wait for rate cut noise to settle.");
+    expect(card.event).toBe("CPI-hot, dollar bid");
+    expect(card.verdict).toBe("Gold is weak, wait for rate-cut noise to settle.");
+  });
+
+  it("keeps the quoted text but drops web-search cite tags", () => {
+    expect(stripAskInternalCitationMarkers('Fine. <cite index="4-11">It is a charting platform.</cite> Done.'))
+      .toBe("Fine. It is a charting platform. Done.");
+  });
+
+  it("writes card prose in the product voice: contractions, no markdown or list markers", () => {
+    const card = sanitizeCard({
+      type: "insight",
+      headline: "Do Not Chase",
+      body: "It does not prove a scam. Check **these**: 1) Regulator register.",
+      verdict: "Do not deposit yet.",
+    });
+    if (card.type !== "insight") throw new Error("Expected insight");
+    expect(card.headline).toBe("Don't Chase");
+    expect(card.body).toBe("It doesn't prove a scam. Check these: Regulator register.");
+    expect(card.verdict).toBe("Don't deposit yet.");
   });
 
   it("strips leaked gateway citation markers without touching source links", () => {

@@ -150,3 +150,20 @@ describe("calculator formulas", () => {
     expect(result.pipsMoved).toBe(50);
   });
 });
+
+describe("trade checks that protect the user", () => {
+  it("rejects a buy whose stop is above entry and target below", () => {
+    expect(() => calculateRiskReward({ direction: "long", entryPrice: 4000, stopPrice: 4020, targetPrice: 3960 })).toThrow(RangeError);
+  });
+
+  it("infers the side from the stop when none is given", () => {
+    expect(calculateRiskReward({ entryPrice: 1.3, stopPrice: 1.304, targetPrice: 1.292 }).ratio).toBeCloseTo(2, 4);
+    expect(() => calculateRiskReward({ entryPrice: 1.3, stopPrice: 1.304, targetPrice: 1.31 })).toThrow(RangeError);
+  });
+
+  it("says <0.01 and what the smallest lot would really risk", () => {
+    const card = calculatePositionSizeCard({ accountSize: 200, riskPercent: 1, stopLossPips: 10, pipValuePerLot: 100, accountCurrency: "GBP" });
+    expect(card.lots).toBe("<0.01");
+    expect(card.verdict).toContain("£10.00");
+  });
+});

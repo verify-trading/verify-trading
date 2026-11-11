@@ -330,7 +330,7 @@ export const askUiMetaSchema = z
     marketSourceLabel: z.string().trim().min(1).optional(),
     marketLevelScopeLabel: z.string().trim().min(1).optional(),
     projectionMarkers: z.array(z.number().int().nonnegative()).optional(),
-    verificationKind: z.enum(["broker", "propfirm"]).optional(),
+    verificationKind: z.enum(["broker", "propfirm", "tool"]).optional(),
     verificationSourceLabel: z.string().trim().min(1).optional(),
     cloneNotice: z.object({ message: z.string(), sourceUrl: httpUrlSchema.optional() }).optional(),
     // Regulators holding register-verified licences, e.g. "FCA, CySEC". Replaces the UK-only FCA tile.
@@ -488,6 +488,8 @@ const REPLACEMENT_CITATION_LABEL = /\uFFFD\s*(?:cite|citation)\s*\uFFFD?/giu;
 /** Remove gateway/tool citation markers while preserving ordinary prose and source URLs. */
 export function stripAskInternalCitationMarkers(value: string): string {
   return value
+    // Anthropic web search wraps quoted text in <cite index="…">…</cite>; keep the text.
+    .replace(/<cite\b[^>]*>|<\/cite>/gi, "")
     .replace(PRIVATE_CITATION_BLOCK, " ")
     .replace(PRIVATE_CITATION_PREFIX, " ")
     .replace(BRACKETED_INTERNAL_TOOL_REFERENCE, " ")
@@ -502,6 +504,32 @@ export function stripAskInternalCitationMarkers(value: string): string {
     .replace(/\s{2,}/g, " ")
     .replace(/\s+([,.;!?])/g, "$1")
     .trim();
+}
+
+// The product voice uses contractions; the model drifts into formal negatives.
+const CONTRACTIONS: Array<[RegExp, string]> = [
+  [/\b(do|does|did|is|are|was|were|has|have|had|would|should|could) not\b/gi, "$1n't"],
+  [/\bcannot\b/gi, "can't"],
+  [/\bwill not\b/gi, "won't"],
+  [/\bit is (?=[a-z])/gi, "it's "],
+  [/\bthere is\b/gi, "there's"],
+  [/\byou are\b/gi, "you're"],
+  [/\bI am\b/g, "I'm"],
+  [/\bI would\b/g, "I'd"],
+];
+
+/** Cards render plain text: drop markdown emphasis and list markers, apply contractions (first letter's case kept). */
+function toCardVoice(text: string): string {
+  let voiced = text
+    .replace(/\*\*(.+?)\*\*|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])/g, (_match, bold, italic) => bold ?? italic)
+    .replace(/(^|\s)(?:[•*]|\(?\d{1,2}[.)])\s+(?=[A-Z])/g, "$1");
+  for (const [pattern, replacement] of CONTRACTIONS) {
+    voiced = voiced.replace(pattern, (match, ...groups) => {
+      const out = typeof groups[0] === "string" ? replacement.replace("$1", groups[0]) : replacement;
+      return match[0] === match[0].toUpperCase() ? out[0].toUpperCase() + out.slice(1) : out;
+    });
+  }
+  return voiced;
 }
 
 function sanitizeNaturalLanguageField(
@@ -535,9 +563,9 @@ function sanitizeNaturalLanguageField(
     return placeholder + punctuation;
   });
   const normalized = stripAskInternalCitationMarkers(protectedValue)
-    .replace(/[\u2010-\u2015]/g, ",")
+    // Dashes used as punctuation become commas; hyphenated words ("read-only") stay.
+    .replace(/\s*[\u2012-\u2015]\s*/g, ", ")
     .replace(/\s+-\s+/g, ", ")
-    .replace(/(?<=\p{L})-(?=\p{L})/gu, " ")
     .replace(/\s+,/g, ",")
     .replace(/,{2,}/g, ",")
     .replace(/\s{2,}/g, " ")
@@ -547,10 +575,11 @@ function sanitizeNaturalLanguageField(
     return "No additional detail available.";
   }
 
+  const voiced = toCardVoice(normalized);
   const sentenceLimited =
     limits.maxSentences === undefined
-      ? normalized
-      : limitSentences(normalized, limits.maxSentences);
+      ? voiced
+      : limitSentences(voiced, limits.maxSentences);
 
   const limited = limits.maxWords === undefined
     ? sentenceLimited
