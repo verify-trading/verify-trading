@@ -167,9 +167,42 @@ export function propVsPairs(propFirms: PublicEntity[]): Array<[PublicEntity, Pub
   return out;
 }
 
-/** The indexed pair set for a register type. Brokers pair by shared regulator; prop firms by score. */
+/**
+ * Names traders actually search for (founder's Ask-usage data, 2026-11-11). Every pairing among
+ * them is indexed on top of the automatic score-based set, so indexing follows real demand.
+ * Matched against record names case-insensitively ignoring punctuation; names without a record,
+ * or whose record is not indexable/listed (e.g. High risk), drop out silently.
+ */
+const DEMAND_VS_NAMES: Record<"broker" | "propfirm", string[]> = {
+  broker: ["Pepperstone", "FxPro", "Exness", "IC Markets", "FXCM", "XM"],
+  propfirm: ["FTMO", "Tradeify", "Alpha Capital"],
+};
+
+const nameKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+export function demandPairs(type: PublicEntityType, entities: PublicEntity[]): Array<[PublicEntity, PublicEntity]> {
+  if (type === "guru") return [];
+  const wanted = new Set(DEMAND_VS_NAMES[type].map(nameKey));
+  const found = entities.filter((e) => wanted.has(nameKey(e.name)) && isIndexable(e) && isListed(e) && !e.fcaWarning);
+  const out: Array<[PublicEntity, PublicEntity]> = [];
+  for (let i = 0; i < found.length; i++) {
+    for (let j = i + 1; j < found.length; j++) out.push(canonicalPair(found[i], found[j]));
+  }
+  return out;
+}
+
+/** The indexed pair set for a register type: demand-driven pairs plus the automatic set, deduplicated. */
 export function pairsForType(type: PublicEntityType, entities: PublicEntity[]): Array<[PublicEntity, PublicEntity]> {
-  return type === "propfirm" ? propVsPairs(entities) : vsPairs(entities);
+  const auto = type === "propfirm" ? propVsPairs(entities) : vsPairs(entities);
+  const seen = new Set<string>();
+  const out: Array<[PublicEntity, PublicEntity]> = [];
+  for (const pair of [...demandPairs(type, entities), ...auto]) {
+    const key = `${pair[0].slug}|${pair[1].slug}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(pair);
+  }
+  return out;
 }
 
 export const isIndexedVsPair = (type: PublicEntityType, entities: PublicEntity[], a: string, b: string) => {

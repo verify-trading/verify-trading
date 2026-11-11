@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { toPublicEntity, parseRegulatorRefs, verdictTone, type PublicEntity } from "@/lib/compare/entities";
-import { entityFaqs, entityPath, isIndexable, isIndexedVsPair, isSeoWorthy, pairKey, parseVsPair, pickAlternatives, propVsPairs, VERDICT_RANK, vsPairs, vsPath } from "@/lib/compare/insights";
+import { demandPairs, entityFaqs, entityPath, isIndexable, isIndexedVsPair, isSeoWorthy, pairKey, pairsForType, parseVsPair, pickAlternatives, propVsPairs, VERDICT_RANK, vsPairs, vsPath } from "@/lib/compare/insights";
 import { findRegulator, getRegulator } from "@/lib/compare/regulators";
 
 /** A BTS engine row as the join returns it. */
@@ -186,5 +186,43 @@ describe("guru register", () => {
     const faqs = entityFaqs(guru("alice", { name: "Alice" }));
     expect(faqs.find((f) => f.q.toLowerCase().includes("score"))?.a).toContain("never");
     expect(faqs.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("demand-driven indexed pairs", () => {
+  it("adds pairs among demand-listed names on top of the automatic set, deduped", () => {
+    const firms = [
+      prop("ftmo", { name: "FTMO", bts: bts("VERIFIED", 100, "") }),
+      prop("tradeify", { name: "Tradeify", bts: bts("CAUTION", 60, "") }),
+      prop("alphacapital", { name: "Alpha Capital", bts: bts("VERIFIED", 80, "") }),
+      prop("other", { name: "Other Firm", bts: bts("VERIFIED", 90, "") }),
+    ];
+    const pairs = pairsForType("propfirm", firms);
+    const keys = pairs.map(([a, b]) => `${a.slug}|${b.slug}`);
+    // All three demand pairings are present even though the automatic set would also pick some.
+    expect(keys).toContain("ftmo|tradeify");
+    expect(keys).toContain("alphacapital|ftmo");
+    expect(keys).toContain("alphacapital|tradeify");
+    // No duplicates after merging the demand and automatic sets.
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const [a, b] of pairs) expect(a.slug < b.slug).toBe(true);
+  });
+
+  it("drops demand names whose record is missing or not listable", () => {
+    const firms = [
+      prop("ftmo", { name: "FTMO", bts: bts("NOT ACTIVE", 90, "") }), // closed → excluded
+      prop("tradeify", { name: "Tradeify", bts: bts("VERIFIED", 70, "") }),
+    ];
+    expect(demandPairs("propfirm", firms)).toEqual([]);
+    expect(demandPairs("guru", firms)).toEqual([]);
+  });
+
+  it("matches demand names ignoring case and punctuation", () => {
+    const brokers = [
+      broker("icmarkets", { name: "IC Markets" }),
+      broker("fxpro", { name: "FxPro" }),
+    ];
+    const keys = demandPairs("broker", brokers).map(([a, b]) => `${a.slug}|${b.slug}`);
+    expect(keys).toEqual(["fxpro|icmarkets"]);
   });
 });
