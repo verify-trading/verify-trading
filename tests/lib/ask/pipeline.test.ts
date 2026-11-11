@@ -592,6 +592,16 @@ describe("generateAskResponse short-circuit", () => {
 });
 
 describe("calculator answers", () => {
+  it("asks the model once to put a prose answer into a card", async () => {
+    const card = { type: "insight", headline: "Position Size Check", body: "About 0.0025 lots.", verdict: "Use 0.01 only if you accept more risk." };
+    const generateTextImpl = vi.fn()
+      .mockResolvedValueOnce({ text: "About 0.0025 lots. Most brokers start at 0.01.", toolResults: [] })
+      .mockResolvedValueOnce(textResult([submitResult(card)])) as never;
+    const response = await generateAskResponse(baseRequest("what lot size for 2 pounds risk with a 10 dollar stop on gold?"), { generateTextImpl, retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge), route: { kind: "model" } });
+    expect(vi.mocked(generateTextImpl as never as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
+    expect(response.data).toMatchObject({ headline: "Position Size Check" });
+  });
+
   it("reads the side and levels a user states", () => {
     expect(statedTrade("I'm buying gold at 4000 with stop 4020 and target 3960")).toEqual({ side: "long", entry: 4000, stop: 4020, target: 3960 });
     expect(statedTrade("I am short GBP/USD at 1.3000, stop 1.3040, target 1.2920")).toEqual({ side: "short", entry: 1.3, stop: 1.304, target: 1.292 });

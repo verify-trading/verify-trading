@@ -533,7 +533,7 @@ export async function generateAskResponse(
     }
   }
 
-  const result = await runAskGeneration({
+  let result = await runAskGeneration({
     messages,
     tools: baseTools,
     maxSteps: ASK_MAX_STEPS,
@@ -543,6 +543,26 @@ export async function generateAskResponse(
     messageId,
     callbacks,
   });
+
+  // The model sometimes ends with prose or nothing instead of a card (more often after card
+  // history). One cheap step with only submit_ask_card turns that answer into a real card.
+  if (!resolveRunCard(result) && !/^\s*[{[]/.test(result.text)) {
+    const prose = result.text.trim();
+    const retry = await runAskGeneration({
+      messages: [
+        ...messages,
+        ...(prose ? [{ role: "assistant" as const, content: prose }] : []),
+        { role: "user", content: prose ? "Submit your answer above as one submit_ask_card call. Same meaning, plain prose, no markdown." : "Answer my last message with one submit_ask_card call." },
+      ],
+      tools: { submit_ask_card: baseTools.submit_ask_card },
+      maxSteps: 1,
+      generateTextImpl,
+      sessionId,
+      messageId,
+      callbacks,
+    }).catch(() => null);
+    if (retry?.card) result = { ...retry, toolResults: [...result.toolResults, ...retry.toolResults] };
+  }
 
   const toolCard = resolveRunCard(result);
   const card = toolCard ?? salvageCardFromText(result.text);
