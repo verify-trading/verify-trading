@@ -11,6 +11,7 @@ vi.mock("@/lib/observability/logger", () => ({
 import {
   generateAskResponse as generateResponse,
   mergeToolOwnedNumbers,
+  statedTrade,
   stopAfterFinalToolResult,
 } from "@/lib/ask/pipeline";
 import { fallbackInsightCard, imageFallbackInsightCard } from "@/lib/ask/contracts";
@@ -590,6 +591,30 @@ describe("generateAskResponse short-circuit", () => {
   });
 });
 
+describe("calculator answers", () => {
+  it("reads the side and levels a user states", () => {
+    expect(statedTrade("I'm buying gold at 4000 with stop 4020 and target 3960")).toEqual({ side: "long", entry: 4000, stop: 4020, target: 3960 });
+    expect(statedTrade("I am short GBP/USD at 1.3000, stop 1.3040, target 1.2920")).toEqual({ side: "short", entry: 1.3, stop: 1.304, target: 1.292 });
+    expect(statedTrade("risk £2 on gold, my stop is $10 away")).toBeNull();
+  });
+
+  it("corrects a stated trade whose levels contradict its side, whatever the model sent", async () => {
+    const generateTextImpl = vi.fn().mockResolvedValue(textResult([submitResult({ type: "insight", headline: "Risk Reward", body: "Risk is 20. Reward is 40.", verdict: "Fine." })])) as never;
+    const response = await generateAskResponse(baseRequest("I'm buying gold at 4000 with stop 4020 and target 3960. Good trade?"), { generateTextImpl, retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge), route: { kind: "model" } });
+    expect(response.data).toMatchObject({ type: "insight", headline: "Those Levels Don't Match the Side" });
+  });
+
+  it("prefers a calculator's finished card over a market card from the same step", async () => {
+    const calcInsight = { type: "insight", headline: "Those Levels Don't Match the Side", body: "b.", verdict: "Buy or sell?" };
+    const generateTextImpl = vi.fn().mockResolvedValue(textResult([
+      { toolName: "calculate_risk_reward", output: { card: calcInsight } },
+      { toolName: "get_market_briefing", output: { card: briefingToolCard } },
+    ])) as never;
+    const response = await generateAskResponse(baseRequest("buying gold at 4000, stop 4020, target 3960 valid?"), { generateTextImpl, retrieveAskKnowledgeImpl: vi.fn().mockResolvedValue(emptyKnowledge), route: { kind: "model" } });
+    expect(response.data).toMatchObject({ type: "insight", headline: calcInsight.headline });
+  });
+});
+
 describe("mergeToolOwnedNumbers", () => {
   it("returns the model card untouched when no matching tool card exists", () => {
     expect(mergeToolOwnedNumbers(insightCard, [])).toEqual(insightCard);
@@ -600,6 +625,13 @@ describe("mergeToolOwnedNumbers", () => {
     const model = { ...reviewed, name: "Trademax Global Markets (TMGM)", score: "N/A", verdict: "Model words." };
     expect(mergeToolOwnedNumbers(model, [{ toolName: "verify_entity", output: { card: reviewed } }]))
       .toMatchObject({ score: "62/100", status: "CAUTION", color: "amber" });
+  });
+
+  it("matches the firm by the name it was looked up by", () => {
+    const reviewed = { type: "broker" as const, name: "Trademax Global Markets", score: "62/100", status: "CAUTION" as const, fca: "No" as const, complaints: "On record" as const, verdict: "Reviewed.", color: "amber" as const };
+    const model = { ...reviewed, name: "TMGM", score: "N/A", verdict: "Model words." };
+    expect(mergeToolOwnedNumbers(model, [{ toolName: "verify_entity", input: { name: "TMGM" }, output: { card: reviewed } } as never]))
+      .toMatchObject({ score: "62/100", status: "CAUTION" });
   });
 
   it("copies setup levels from the tool card", () => {

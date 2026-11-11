@@ -1,6 +1,8 @@
 import { routeAskMessage, type AskRoute } from "@/lib/ask/routing";
 import { generateText, stepCountIs, type ModelMessage } from "ai";
 
+import { isValidTradeGeometry } from "@/lib/ask/calculators";
+
 import {
   buildAnalysisRulesPrompt,
   getActiveAnalysisRules,
@@ -63,7 +65,13 @@ const ASK_MAX_STEPS = 10;
 /** Recent turns kept verbatim; older context is carried by session memory. */
 const MAX_HISTORY_TURNS = 12;
 
-type ToolResultRecord = { toolName?: string; output?: unknown };
+type ToolResultRecord = { toolName?: string; input?: unknown; output?: unknown };
+
+/** The name the model looked the firm up by ("TMGM"), which can differ from the record's name. */
+const lookedUpName = (result: ToolResultRecord) => {
+  const name = (result.input as { name?: unknown } | undefined)?.name;
+  return typeof name === "string" ? name : "";
+};
 type AskStep = { toolResults?: ToolResultRecord[] };
 
 type AskGenerationDependencies = AskServiceDependencies & {
@@ -192,7 +200,7 @@ function findEngineVerdict(toolResults: ToolResultRecord[], cardName: string): B
     const toolResult = toolResults[index];
     if (toolResult.toolName !== "verify_entity" || !toolResult.output || typeof toolResult.output !== "object") continue;
     const bts = (toolResult.output as { bts?: BtsAskContext }).bts;
-    if (bts && firmKey(bts.firm) === name) return bts;
+    if (bts && (firmKey(bts.firm) === name || firmKey(lookedUpName(toolResult)) === name)) return bts;
   }
   return null;
 }
@@ -255,9 +263,12 @@ export function mergeToolOwnedNumbers(
     // match (coverage miss, FCA-only, or a web-researched firm), the number is
     // not ours — force "N/A" so a model-assembled score never reads as a rating.
     const verifiedDbCard = findToolCard("verify_entity", "broker");
+    const verifiedDbCardCount = toolResults.filter((result) => result.toolName === "verify_entity" && parseToolCard(result)?.type === "broker").length;
     const gated = findEngineVerdict(toolResults, card.name);
+    // Names the firm was looked up by this turn ("TMGM" for Trademax Global Markets).
+    const lookedUp = new Set(toolResults.filter((result) => result.toolName === "verify_entity").map((result) => firmKey(lookedUpName(result))));
     const sameFirm = (candidate: AskCard | null): candidate is Extract<AskCard, { type: "broker" }> =>
-      candidate?.type === "broker" && firmKey(candidate.name) === firmKey(card.name);
+      candidate?.type === "broker" && (firmKey(candidate.name) === firmKey(card.name) || (verifiedDbCardCount === 1 && lookedUp.has(firmKey(card.name))));
 
     if (sameFirm(verifiedDbCard) && gated && btsVerificationGate(gated.operatingStatus, gated.researchStatus)) return verifiedDbCard;
     if (sameFirm(verifiedDbCard)) {
@@ -371,8 +382,31 @@ async function runAskGeneration({
   };
 }
 
+/** Side, entry, stop and target the user stated ("buying gold at 4000 with stop 4020 and target 3960"). */
+export function statedTrade(message: string) {
+  const text = message.toLowerCase().replace(/(?<=\d),(?=\d)/g, "");
+  const long = /\b(?:buy|buying|bought|long)\b/.test(text);
+  const short = /\b(?:sell|selling|sold|short|shorting)\b/.test(text);
+  const price = (pattern: RegExp) => Number(text.match(pattern)?.[1] ?? Number.NaN);
+  const entry = price(/\b(?:at|entry(?: at| of)?|entered at)\s*\$?(\d+(?:\.\d+)?)/);
+  const stop = price(/\b(?:stop(?: loss)?|sl)\s*(?:at|of|is|=)?\s*\$?(\d+(?:\.\d+)?)/);
+  const target = price(/\b(?:target|tp|take profit)\s*(?:at|of|is|=)?\s*\$?(\d+(?:\.\d+)?)/);
+  if (long === short || ![entry, stop, target].every((value) => Number.isFinite(value) && value > 0)) return null;
+  return { side: long ? "long" as const : "short" as const, entry, stop, target };
+}
+
+const WRONG_SIDE_CARD: AskCard = {
+  type: "insight",
+  headline: "Those Levels Don't Match the Side",
+  body: "A buy needs the stop below entry and the target above it; a sell needs the stop above entry and the target below it.",
+  verdict: "Did you mean to buy or sell, or are the stop and target swapped? Confirm that before placing the order.",
+};
+
 function resolveRunCard(run: AskRunResult): AskCard | null {
-  return run.card ?? extractToolCard(run.toolResults, askCardSchema);
+  // With no submitted card, a calculator's finished card is the answer; a market or verify
+  // card from the same step is only evidence.
+  const finished = run.toolResults.filter((result) => Boolean(result.toolName && DETERMINISTIC_CARD_TOOLS.has(result.toolName)) && Boolean(parseToolCard(result)));
+  return run.card ?? extractToolCard(finished.length ? finished : run.toolResults, askCardSchema);
 }
 
 /**
@@ -445,7 +479,11 @@ export async function generateAskResponse(
     source: string,
     toolResults: ToolResultRecord[],
   ) => {
-    const resolved = mergeToolOwnedNumbers(card, toolResults);
+    // The user's own levels decide the side check; the model sometimes passes distances instead.
+    const trade = image ? null : statedTrade(normalizedMessage);
+    const resolved = trade && !isValidTradeGeometry(trade.side, trade.entry, trade.stop, trade.target)
+      ? WRONG_SIDE_CARD
+      : mergeToolOwnedNumbers(card, toolResults);
     const comparison = resolved.type === "insight" && (toolResults.some(result => result.toolName === "list_verified_entities" && result.output && typeof result.output === "object" && "bts" in result.output));
     const merged: AskCard = comparison ? { ...resolved, variant: "broker_discovery" } : resolved;
 
