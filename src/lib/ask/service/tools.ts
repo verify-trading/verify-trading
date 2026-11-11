@@ -909,7 +909,7 @@ export function createAskTools(dependencies: AskServiceDependencies) {
     }),
     calculate_risk_reward: tool({
       description:
-        "Calculate risk-reward ratio from pips or from entry, stop, and target prices. Use it when the user gives either riskPips plus rewardPips, or entryPrice plus stopPrice plus targetPrice. Do not invent missing prices or distances. In mixed questions, treat this as evidence, not the whole final answer.",
+        "Calculate risk-reward ratio from pips or from entry, stop, and target prices. When the user gives prices, always pass entryPrice, stopPrice and targetPrice with direction (long for buy, short for sell), never distances you worked out: the tool checks the stop and target are on the right side. Use riskPips plus rewardPips only when the user gives distances. Do not invent missing prices or distances. In mixed questions, treat this as evidence, not the whole final answer.",
       inputSchema: calculateRiskRewardInputSchema,
       execute: async (toolInput) => {
         try {

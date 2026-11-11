@@ -595,6 +595,13 @@ describe("mergeToolOwnedNumbers", () => {
     expect(mergeToolOwnedNumbers(insightCard, [])).toEqual(insightCard);
   });
 
+  it("matches the verified firm when the model adds an abbreviation to the name", () => {
+    const reviewed = { type: "broker" as const, name: "Trademax Global Markets", score: "62/100", status: "CAUTION" as const, fca: "No" as const, complaints: "On record" as const, verdict: "Reviewed.", color: "amber" as const };
+    const model = { ...reviewed, name: "Trademax Global Markets (TMGM)", score: "N/A", verdict: "Model words." };
+    expect(mergeToolOwnedNumbers(model, [{ toolName: "verify_entity", output: { card: reviewed } }]))
+      .toMatchObject({ score: "62/100", status: "CAUTION", color: "amber" });
+  });
+
   it("copies setup levels from the tool card", () => {
     const modelCard = { ...setupCard, entry: "9999", verdict: "Model words." };
     const merged = mergeToolOwnedNumbers(modelCard, [

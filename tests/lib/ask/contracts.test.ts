@@ -124,6 +124,13 @@ describe("ask contracts", () => {
     expect(card.verdict).toBe("Don't deposit yet.");
   });
 
+  it("keeps numbers that end a sentence", () => {
+    const card = sanitizeCard({ type: "insight", headline: "Risk Reward", body: "Risk is 20. Reward is 40. Gross reward-to-risk is 2.00:1.", verdict: "Wait for 4062. Then act." });
+    if (card.type !== "insight") throw new Error("Expected insight");
+    expect(card.body).toBe("Risk is 20. Reward is 40. Gross reward-to-risk is 2.00:1.");
+    expect(card.verdict).toBe("Wait for 4062. Then act.");
+  });
+
   it("strips leaked gateway citation markers without touching source links", () => {
     expect(
       stripAskInternalCitationMarkers(

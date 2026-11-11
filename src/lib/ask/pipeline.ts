@@ -183,13 +183,16 @@ function buildAskMessages({
 }
 
 /** The engine context verify_entity returned for this card's firm (exact name match only), if any. */
+/** "Trademax Global Markets (TMGM)" and "Trademax Global Markets" are the same firm. */
+const firmKey = (name: string) => name.replace(/\s*\([^)]*\)\s*$/, "").trim().toLowerCase();
+
 function findEngineVerdict(toolResults: ToolResultRecord[], cardName: string): BtsAskContext | null {
-  const name = cardName.trim().toLowerCase();
+  const name = firmKey(cardName);
   for (let index = toolResults.length - 1; index >= 0; index -= 1) {
     const toolResult = toolResults[index];
     if (toolResult.toolName !== "verify_entity" || !toolResult.output || typeof toolResult.output !== "object") continue;
     const bts = (toolResult.output as { bts?: BtsAskContext }).bts;
-    if (bts && bts.firm.replace(/\s*\(.*\)$/, "").trim().toLowerCase() === name) return bts;
+    if (bts && firmKey(bts.firm) === name) return bts;
   }
   return null;
 }
@@ -254,7 +257,7 @@ export function mergeToolOwnedNumbers(
     const verifiedDbCard = findToolCard("verify_entity", "broker");
     const gated = findEngineVerdict(toolResults, card.name);
     const sameFirm = (candidate: AskCard | null): candidate is Extract<AskCard, { type: "broker" }> =>
-      candidate?.type === "broker" && candidate.name.trim().toLowerCase() === card.name.trim().toLowerCase();
+      candidate?.type === "broker" && firmKey(candidate.name) === firmKey(card.name);
 
     if (sameFirm(verifiedDbCard) && gated && btsVerificationGate(gated.operatingStatus, gated.researchStatus)) return verifiedDbCard;
     if (sameFirm(verifiedDbCard)) {

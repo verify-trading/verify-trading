@@ -522,7 +522,8 @@ const CONTRACTIONS: Array<[RegExp, string]> = [
 function toCardVoice(text: string): string {
   let voiced = text
     .replace(/\*\*(.+?)\*\*|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])/g, (_match, bold, italic) => bold ?? italic)
-    .replace(/(^|\s)(?:[•*]|\(?\d{1,2}[.)])\s+(?=[A-Z])/g, "$1");
+    // Only unambiguous markers: bullets and "1)"/"(2)". "20. Next" is a number ending a sentence.
+    .replace(/(^|\s)(?:[•*]|\(?\d{1,2}\))\s+(?=[A-Z])/g, "$1");
   for (const [pattern, replacement] of CONTRACTIONS) {
     voiced = voiced.replace(pattern, (match, ...groups) => {
       const out = typeof groups[0] === "string" ? replacement.replace("$1", groups[0]) : replacement;
