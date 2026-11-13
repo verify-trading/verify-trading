@@ -8,7 +8,7 @@ import { askCheckHref, EntityAvatar, formatRecordDate, ScoreBar, scoreLabel, Ver
 import { Block, EntityMiniCard, FaqBlock, RegulatorCard, TocNav, VerdictBands, VerifySteps, WarningBanner } from "@/components/marketing/entity-sections";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
-import { pillarDisplay } from "@/lib/compare/bts";
+import { pillarDisplay, type CountryFitRow } from "@/lib/compare/bts";
 import type { L2Result, OfficialScore } from "@/lib/compare/bts-l2";
 import { CountryVerdict } from "@/components/marketing/country-verdict";
 import type { PublicEntity } from "@/lib/compare/entities";
@@ -78,7 +78,7 @@ function SummaryStats({ items }: { items: Array<[string, string]> }) {
   );
 }
 
-export function EntityDetail({ entity: e, all, official = null, countryScores = {} }: { entity: PublicEntity; all: PublicEntity[]; official?: L2Result | null; countryScores?: Record<string, OfficialScore> }) {
+export function EntityDetail({ entity: e, all, official = null, countryScores = {}, countryRows = {} }: { entity: PublicEntity; all: PublicEntity[]; official?: L2Result | null; countryScores?: Record<string, OfficialScore>; countryRows?: Record<string, CountryFitRow> }) {
   if (e.type === "guru") return <GuruDetail entity={e} />;
   const description = entityDescription(e);
   const listPath = ENTITY_LIST_PATH[e.type];
@@ -181,7 +181,7 @@ export function EntityDetail({ entity: e, all, official = null, countryScores = 
               </div>
               <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-white/[0.08] bg-black/25 px-5 py-4">
                 {bts && e.scoreBasis !== undefined ? (
-                  <CountryVerdict verdict={e.verdict} score={e.score} basis={e.scoreBasis ?? null} checkedAt={e.updatedAt} countryScores={countryScores} />
+                  <CountryVerdict verdict={e.verdict} score={e.score} basis={e.scoreBasis ?? null} checkedAt={e.updatedAt} countryScores={countryScores} countryRows={countryRows} />
                 ) : (
                   <div className="flex items-center gap-4">
                     <VerdictBadge verdict={e.verdict} className="px-3 py-1 text-xs" />

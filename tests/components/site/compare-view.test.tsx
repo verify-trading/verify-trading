@@ -21,6 +21,8 @@ const entity = (slug: string, verdict: PublicEntity["verdict"], score: number | 
   fcaWarning: false,
   yearFounded: null,
   updatedAt: "2026-10-30",
+  // As withOfficialScores leaves a scored firm that has no official score.
+  ...(score === null ? {} : { scoreBasis: "baseline" as const }),
 });
 
 const BROKERS = [
@@ -68,17 +70,18 @@ const { CompareView } = await import("@/components/marketing/compare-view");
 const order = (html: string, names: string[]) => names.map((n) => html.indexOf(`>${n}<`));
 
 describe("Compare directory (BTS v2)", () => {
-  it("ranks brokers by global score without country controls and keeps Under review and Not active out of the table (A–Z directory only)", async () => {
+  it("shows a GB visitor the scores Ask shows: country baselines applied, Not available left out, unlisted firms in the A–Z directory only", async () => {
     const html = renderToStaticMarkup(await CompareView({ type: "broker", searchParams: {} }));
-    expect(html).toContain("4 brokers");
-    expect(html).not.toContain("Showing results for");
+    // exness is Not available in GB, so it leaves the list (a name search still finds it).
+    expect(html).toContain("3 brokers");
+    expect(html).toContain("Showing results for");
     // Unlisted records appear exactly once: as a plain link in the A–Z directory, never as a ranked row.
     expect(html).toContain("A to Z");
-    for (const hidden of ["REVIEW", "GONE"]) expect((html.match(new RegExp(`>${hidden}<`, "g")) ?? []).length).toBe(1);
-    // Every visitor sees the same stored scores: top 93, offshore 88, mid 60.
+    for (const hidden of ["REVIEW", "GONE", "EXNESS"]) expect((html.match(new RegExp(`>${hidden}<`, "g")) ?? []).length).toBe(1);
+    // offshore has no GB licence: its 88 becomes the GB baseline 40, below mid's 60.
     const [top, mid, offshore] = order(html, ["TOP", "MID", "OFFSHORE"]);
-    expect(top).toBeLessThan(offshore);
-    expect(offshore).toBeLessThan(mid);
+    expect(top).toBeLessThan(mid);
+    expect(mid).toBeLessThan(offshore);
   });
 
   it("still finds an unlisted firm by name search", async () => {

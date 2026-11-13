@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 
 import { resolveGuruTier, type GuruTier } from "@/lib/ask/gurus";
-import { PILLARS, SCORELESS, gatedVerdict, parseLicences, type BtsRecord, type BtsVerdict } from "@/lib/compare/bts";
+import { PILLARS, SCORELESS, countryView, gatedVerdict, parseLicences, type BtsRecord, type BtsVerdict, type CountryFitRow } from "@/lib/compare/bts";
 import { findRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
 import { getSiteOfficialScores, type OfficialScore } from "@/lib/compare/bts-l2";
 import { logger } from "@/lib/observability/logger";
@@ -314,6 +314,32 @@ export function withOfficialScores(entities: PublicEntity[], official: Record<st
     // A disputed check is waiting for a person: no score anywhere until it is decided.
     if (o.score === null) return { ...e, score: null, verdict: "Under review", scoreBasis: null, updatedAt: o.checkedAt };
     return { ...e, score: o.score, verdict: o.verdict, scoreBasis: "official", updatedAt: o.checkedAt };
+  });
+}
+
+/**
+ * The register as a visitor in `country` sees it, by the rule Ask uses (listBtsRanked): the firm's
+ * official score for that country, else its global official score, else the engine's country
+ * baseline (brokers only). Takes the output of withOfficialScores; gated firms stay as they are.
+ */
+export function forCountry(
+  entities: PublicEntity[],
+  country: string,
+  official: Record<string, OfficialScore>,
+  rows: Record<string, CountryFitRow | undefined>,
+): PublicEntity[] {
+  if (country === "XX") return entities;
+  return entities.map((e) => {
+    if (!e.bts || e.scoreBasis === undefined) return e;
+    const local = official[`${e.bts.entityId}|${country}`];
+    if (local) {
+      return local.score === null
+        ? { ...e, score: null, verdict: "Under review", scoreBasis: null, updatedAt: local.checkedAt }
+        : { ...e, score: local.score, verdict: local.verdict, scoreBasis: "official", updatedAt: local.checkedAt };
+    }
+    if (e.scoreBasis !== "baseline" || e.type !== "broker") return e;
+    const view = countryView({ verdict: e.verdict as BtsVerdict, score: e.score }, rows[e.bts.entityId], country);
+    return { ...e, verdict: view.verdict, score: view.score };
   });
 }
 

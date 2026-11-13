@@ -19,6 +19,7 @@ import { btsVerificationGate, readBtsResearch } from "@/lib/compare/bts-research
 import { selectAll } from "@/lib/supabase/select-all";
 import { hasMajorLicence } from "@/lib/compare/regulators";
 import { getOfficialScores } from "@/lib/compare/bts-l2";
+import { unstable_cache } from "next/cache";
 
 const COLUMNS = "entity_id, country, country_fit, country_score, country_verdict, applicable_licences, country_note";
 
@@ -39,6 +40,26 @@ async function countryRows(country: string): Promise<Array<CountryFitRow & { ent
   );
   return (data as Record<string, unknown>[]).map((r) => ({ ...toRow(r), entityId: String(r.entity_id) }));
 }
+
+/** The engine's table for one country, keyed by firm. Cached for a day: the register list reads it on every request. */
+export const getCountryRows = unstable_cache(
+  async (country: string): Promise<Record<string, CountryFitRow>> =>
+    Object.fromEntries((await countryRows(country)).map(({ entityId, ...row }) => [entityId, row])),
+  ["bts-country-rows-v1"],
+  { revalidate: 86400, tags: ["bts"] },
+);
+
+/** One firm's rows for every country, keyed by country, for its record page. Notes and licences are left out to keep the page small. */
+export const getFirmCountryRows = unstable_cache(
+  async (entityId: string): Promise<Record<string, CountryFitRow>> => {
+    const client = getSupabaseAdminClient();
+    if (!client) return {};
+    const { data } = await client.from("bts_country_fit").select("country, country_fit, country_score, country_verdict").eq("entity_id", entityId);
+    return Object.fromEntries(((data ?? []) as Record<string, unknown>[]).map((r) => [String(r.country), toRow(r)]));
+  },
+  ["bts-firm-country-rows-v1"],
+  { revalidate: 86400, tags: ["bts"] },
+);
 
 /** The visitor's country: their saved choice, else Vercel's IP guess, else XX. Only the 2-letter code is used. */
 export async function getRequestCountry(): Promise<string> {

@@ -4,6 +4,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { EntityDetail } from "@/components/marketing/entity-detail";
 import { VsView, vsSummary } from "@/components/marketing/vs-view";
 import { getOfficialAssessment, getOfficialCountryScores } from "@/lib/compare/bts-l2";
+import { getFirmCountryRows } from "@/lib/compare/bts-data";
 import { getPublicEntities, getPublicEntityRecord } from "@/lib/compare/entities";
 import { listableEntities, parseVsPair } from "@/lib/compare/insights";
 import { entityMetadata } from "@/lib/compare/page-meta";
@@ -50,5 +51,7 @@ export default async function Page({ params }: Props) {
   const official = entity.scoreBasis === "official" && entity.bts ? await getOfficialAssessment(entity.bts.entityId) : null;
   // Engine-gated firms (not active, being re-researched) never set scoreBasis: no country scores for them.
   const countryScores = entity.bts && entity.scoreBasis !== undefined ? await getOfficialCountryScores(entity.bts.entityId) : {};
-  return <EntityDetail entity={entity} all={listableEntities(await getPublicEntities("broker"))} official={official} countryScores={countryScores} />;
+  // Baseline brokers also carry the engine's country baselines, so the badge matches Ask in every country.
+  const countryRows = entity.bts && entity.scoreBasis === "baseline" ? await getFirmCountryRows(entity.bts.entityId).catch(() => ({})) : {};
+  return <EntityDetail entity={entity} all={listableEntities(await getPublicEntities("broker"))} official={official} countryScores={countryScores} countryRows={countryRows} />;
 }
