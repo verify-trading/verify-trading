@@ -23,7 +23,7 @@ describe.skipIf(process.env.RUN_BTS_L2_SMOKE !== "1")("live Layer 2", () => {
     const cached = await getL2Assessment(subject);
     expect(cached).toEqual({ ...result, checkedAt: cached!.checkedAt });
     expect(Date.parse(cached!.checkedAt)).toBe(Date.parse(result!.checkedAt));
-    const { resolveVerificationToolResult } = await import("@/lib/ask/service/tools");
+    const { resolveVerificationToolResult } = await import("@/lib/ask/service/verification");
     const card = await resolveVerificationToolResult(firm, {}, "GB");
     expect("card" in card && card.card.type === "broker" && card.card.score).toBe(`${result!.finalScore}/100`);
     expect("uiMeta" in card && card.uiMeta?.verification?.sources.length).toBeGreaterThan(0);
