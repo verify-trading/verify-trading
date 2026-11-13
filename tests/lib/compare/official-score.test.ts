@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("next/cache", () => ({ unstable_cache: (fn: unknown) => fn }));
 
 import { isDisputed, publicationCheck, takeMatches } from "@/lib/compare/bts-l2";
-import { withOfficialScores, type PublicEntity } from "@/lib/compare/entities";
+import { forCountry, withOfficialScores, type PublicEntity } from "@/lib/compare/entities";
 
 const check = (over: Partial<Parameters<typeof publicationCheck>[0]> = {}) => ({
   kind: "broker" as const,
@@ -68,5 +68,28 @@ describe("official score", () => {
     expect(a).toMatchObject({ score: 74, verdict: "Generally positive", scoreBasis: "official" });
     expect(b).toMatchObject({ score: 88, scoreBasis: "baseline" });
     expect(c.scoreBasis).toBeUndefined();
+  });
+
+  it("shows a country visitor what Ask shows: country official, else global official, else the country baseline", () => {
+    const firm = (id: string, score: number | null, type = "broker"): PublicEntity =>
+      ({ slug: id, name: id, type, verdict: "Verified", score, bts: { entityId: id } } as unknown as PublicEntity);
+    const official = {
+      "A|GB": { score: 81, verdict: "Strong" as const, checkedAt: "2026-11-04T10:00:00Z" },
+      "A|XX": { score: 76, verdict: "Generally positive" as const, checkedAt: "2026-11-04T10:00:00Z" },
+      "B|XX": { score: 50, verdict: "Caution" as const, checkedAt: "2026-11-04T10:00:00Z" },
+      "G|GB": { score: 70, verdict: "Generally positive" as const, checkedAt: "2026-11-04T10:00:00Z" },
+    };
+    const row = (score: number, verdict: string, fit = "NO LOCAL LICENCE VERIFIED") => ({ country: "GB", fit, score, verdict, licences: null, note: null });
+    const rows = { B: row(40, "CAUTION"), C: row(40, "CAUTION"), E: row(34, "NOT AVAILABLE IN YOUR COUNTRY", "NOT AVAILABLE"), P: row(10, "HIGH RISK") };
+    const global = withOfficialScores([firm("A", 93), firm("B", 59), firm("C", 91), firm("D", 85), firm("E", 34), firm("P", 100, "propfirm"), firm("G", null)], official);
+    const [a, b, c, d, e, p, g] = forCountry(global, "GB", official, rows);
+    expect(a).toMatchObject({ score: 81, verdict: "Strong", scoreBasis: "official" }); // country official wins
+    expect(b).toMatchObject({ score: 50, scoreBasis: "official" }); // global official outranks the country baseline
+    expect(c).toMatchObject({ score: 40, verdict: "Caution", scoreBasis: "baseline" }); // country baseline
+    expect(d).toMatchObject({ score: 85, scoreBasis: "baseline" }); // no country row: global baseline
+    expect(e).toMatchObject({ score: null, verdict: "Not available" });
+    expect(p).toMatchObject({ score: 100 }); // prop firms have no country baseline
+    expect(g.score).toBeNull(); // engine-gated firms stay gated, whatever a check says
+    expect(forCountry(global, "XX", official, rows)).toBe(global);
   });
 });

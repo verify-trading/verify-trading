@@ -12,7 +12,10 @@ import {
   GEO_COOKIE,
   countryFlag,
   countryName,
+  countryView,
   normalizeCountry,
+  type BtsVerdict,
+  type CountryFitRow,
 } from "@/lib/compare/bts";
 
 const readCookie = (name: string) => document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))?.[1] ?? null;
@@ -35,7 +38,7 @@ const OPTIONS = [...BTS_COUNTRIES].sort((a, b) => countryName(a).localeCompare(c
  * "Showing results for 🇬🇧 United Kingdom · Change". The choice is saved in a cookie and wins over the IP guess.
  * Server-rendered lists pass `refresh` so the server re-ranks for the new country.
  */
-function CountryPicker({ country, refresh = false }: { country: string; refresh?: boolean }) {
+export function CountryPicker({ country, refresh = false }: { country: string; refresh?: boolean }) {
   const router = useRouter();
   return (
     <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
@@ -68,8 +71,9 @@ function CountryPicker({ country, refresh = false }: { country: string; refresh?
 
 /**
  * Firm hero badge. Server-rendered with the global rating (cached page, what search engines see),
- * then switched to the visitor's official country score once mounted, when one is published.
- * Never computes a score: it shows the same official score Ask gives for that country.
+ * then switched once mounted to what Ask shows a visitor in that country: the official country
+ * score when one is published, else (baseline brokers only) the engine's country baseline.
+ * Never computes a score.
  */
 export function CountryVerdict({
   verdict,
@@ -77,21 +81,29 @@ export function CountryVerdict({
   basis,
   checkedAt,
   countryScores,
+  countryRows = {},
 }: {
   verdict: Verdict;
   score: number | null;
   basis: "official" | "baseline" | null;
   checkedAt: string | null;
   countryScores: Record<string, OfficialScore>;
+  /** The engine's country baselines for this broker; empty for prop firms. */
+  countryRows?: Record<string, CountryFitRow>;
 }) {
   const country = useVisitorCountry();
   const local = country ? countryScores[country] : undefined;
   const countryLabel = countryName(country ?? "XX");
-  const view = local ? { verdict: local.verdict, score: local.score } : { verdict, score };
+  // A global official score outranks a country baseline, as in Ask.
+  const fit = !local && basis === "baseline" && country ? countryView({ verdict: verdict as BtsVerdict, score }, countryRows[country], country) : null;
+  const baseline = fit && !fit.global ? fit : null;
+  const view = local ? { verdict: local.verdict, score: local.score } : baseline ? { verdict: baseline.verdict, score: baseline.score } : { verdict, score };
   const line = local
     ? local.score === null
       ? `Under review for ${countryLabel}: new evidence is being checked`
       : `Official score for ${countryLabel} · checked ${formatRecordDate(local.checkedAt)}`
+    : baseline
+      ? `Baseline score for ${countryLabel} · independent verification pending`
     : score === null && verdict === "Under review"
       ? "Under review: new evidence is being checked"
       : basis === "official"

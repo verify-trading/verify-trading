@@ -13,8 +13,12 @@ import { getRegulator } from "@/lib/compare/regulators";
 import { FilterMenu } from "@/components/marketing/filter-menu";
 import { surface } from "@/components/landing/section-primitives";
 import { JsonLd } from "@/components/seo/json-ld";
+import { CountryPicker } from "@/components/marketing/country-verdict";
+import { getCountryRows, getRequestCountry } from "@/lib/compare/bts-data";
+import { getSiteOfficialScores } from "@/lib/compare/bts-l2";
 import {
   filterEntities,
+  forCountry,
   getPublicEntities,
   PAGE_SIZE,
   topRegulators,
@@ -257,7 +261,14 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
   const cfg = CONFIG[type];
   const filters = parseCompareParams(searchParams);
   const view: View = { ...filters, sort: parseSort(searchParams, type) };
-  const all = await getPublicEntities(type);
+  // Brokers and prop firms show what Ask shows a visitor in this country; people have no score.
+  const country = type === "guru" ? "XX" : await getRequestCountry();
+  const [global, official, countryRows] = await Promise.all([
+    getPublicEntities(type),
+    country === "XX" ? {} : getSiteOfficialScores().catch(() => ({})),
+    type === "broker" && country !== "XX" ? getCountryRows(country).catch(() => ({})) : {},
+  ]);
+  const all = forCountry(global, country, official, countryRows);
   // Lists leave out Under review, Not active and Not available; a name search still finds them.
   // One row per firm: duplicate records of the same engine firm ("Saxo", "Saxo Bank") keep the shortest name.
   const byFirm = new Map<string, PublicEntity>();
@@ -325,7 +336,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-3xl">{cfg.h1}</h1>
             <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-400">{cfg.intro}</p>
-            {type !== "guru" ? <p className="mt-1 text-xs text-slate-500">Scores are global. Open a firm to see its score for your country.</p> : null}
+            {type !== "guru" ? <div className="mt-1.5"><CountryPicker country={country} refresh /></div> : null}
           </div>
           <p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
             <span className="font-semibold text-white">{listed.length.toLocaleString("en-GB")} {cfg.plural}</span>
