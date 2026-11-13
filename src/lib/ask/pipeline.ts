@@ -40,7 +40,8 @@ import {
   getAskModel,
   getAskPrimaryModelId,
 } from "@/lib/ask/service/provider";
-import { createAskTools, resolveVerificationToolResult } from "@/lib/ask/service/tools";
+import { createAskTools } from "@/lib/ask/service/tools";
+import { resolveVerificationToolResult } from "@/lib/ask/service/verification";
 import { btsVerificationGate } from "@/lib/compare/bts-research";
 import { cardStatus, statusColor } from "@/lib/compare/bts";
 import type { BtsAskContext } from "@/lib/compare/bts-data";

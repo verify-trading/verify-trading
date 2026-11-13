@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { resolveVerificationToolResult } from "@/lib/ask/service/tools";
+import { resolveVerificationToolResult } from "@/lib/ask/service/verification";
 import type { BtsAskContext } from "@/lib/compare/bts-data";
 
 const lookupVerifiedEntityImpl = vi.fn().mockResolvedValue({
