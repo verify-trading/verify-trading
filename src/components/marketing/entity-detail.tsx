@@ -321,7 +321,7 @@ export function EntityDetail({ entity: e, all, official = null, countryScores = 
                   {partners.map((p, i) => (
                     <span key={p.slug}>
                       {i > 0 ? ", " : ""}
-                      <Link href={vsPath(e.type, e.slug, p.slug)} className="text-[var(--vt-blue)] hover:underline">{e.name} vs {p.name}</Link>
+                      <Link href={vsPath(e.type, e.slug, p.slug)} prefetch={false} className="text-[var(--vt-blue)] hover:underline">{e.name} vs {p.name}</Link>
                     </span>
                   ))}
                 </p>

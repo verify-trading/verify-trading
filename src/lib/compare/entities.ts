@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { resolveGuruTier, type GuruTier } from "@/lib/ask/gurus";
 import { PILLARS, SCORELESS, gatedVerdict, parseLicences, type BtsRecord, type BtsVerdict } from "@/lib/compare/bts";
 import { findRegulator, regulatorForEngineCode } from "@/lib/compare/regulators";
-import { getOfficialScores, type OfficialScore } from "@/lib/compare/bts-l2";
+import { getSiteOfficialScores, type OfficialScore } from "@/lib/compare/bts-l2";
 import { logger } from "@/lib/observability/logger";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { btsVerificationGate, readBtsResearch } from "@/lib/compare/bts-research";
@@ -286,8 +286,8 @@ export function slimEntity(e: PublicEntity): PublicEntity {
 
 const loadSlimEntities = async (type: PublicEntityType) => (await loadEntities(type)).map(slimEntity);
 
-/** All public entities of a type, cached for an hour so filter/search requests don't hit the DB. */
-const getEngineEntities = unstable_cache(loadSlimEntities, ["public-entities-v8-slim"], { revalidate: 3600, tags: ["bts"] });
+/** All public entities of a type, cached for a day so filter/search requests don't hit the DB. */
+const getEngineEntities = unstable_cache(loadSlimEntities, ["public-entities-v8-slim"], { revalidate: 86400, tags: ["bts"] });
 
 // One register read per process at a time: concurrent renders (a crawl, or the production
 // build's prerender workers) share the same in-flight promise instead of each querying Supabase.
@@ -320,7 +320,7 @@ export function withOfficialScores(entities: PublicEntity[], official: Record<st
 export async function getPublicEntities(type: PublicEntityType): Promise<PublicEntity[]> {
   const entities = await dedupedEngineEntities(type);
   if (type === "guru") return entities;
-  return withOfficialScores(entities, await getOfficialScores().catch(() => ({})));
+  return withOfficialScores(entities, await getSiteOfficialScores().catch(() => ({})));
 }
 
 /** Slim view of one entity (no research texts/sources): enough for metadata, lists and vs pages. */
@@ -344,14 +344,14 @@ async function loadEntityRecord(type: PublicEntityType, slug: string): Promise<P
 }
 
 // Per-slug cache entries are a few KB each, so unlike the register-wide entry they always fit the 2MB limit.
-const getEngineEntityRecord = unstable_cache(loadEntityRecord, ["public-entity-record-v1"], { revalidate: 3600, tags: ["bts"] });
+const getEngineEntityRecord = unstable_cache(loadEntityRecord, ["public-entity-record-v1"], { revalidate: 86400, tags: ["bts"] });
 
 /** One entity with the full research detail (actions, sources, terms), for its record page. */
 export async function getPublicEntityRecord(type: PublicEntityType, slug: string): Promise<PublicEntity | null> {
   const entity = await getEngineEntityRecord(type, slug);
   if (!entity) return null;
   if (type === "guru") return entity;
-  return withOfficialScores([entity], await getOfficialScores().catch(() => ({})))[0] ?? null;
+  return withOfficialScores([entity], await getSiteOfficialScores().catch(() => ({})))[0] ?? null;
 }
 
 /* ─── Filtering (pure) ─── */

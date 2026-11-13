@@ -5,7 +5,7 @@ import { getPublicEntities } from "@/lib/compare/entities";
 import { listableEntities, regulatorHubs } from "@/lib/compare/insights";
 import { pageMetadata } from "@/lib/marketing/seo";
 
-export const revalidate = 3600;
+export const revalidate = 86400;
 
 export const metadata: Metadata = pageMetadata({
   title: "Broker Regulators: What a Licence Means and How to Check It",
