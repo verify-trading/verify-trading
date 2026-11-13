@@ -7,7 +7,7 @@ import { hubFor, listableEntities, regulatorHubs } from "@/lib/compare/insights"
 import { getRegulator } from "@/lib/compare/regulators";
 import { pageMetadata } from "@/lib/marketing/seo";
 
-export const revalidate = 3600;
+export const revalidate = 86400;
 export function generateStaticParams() {
   return [];
 }

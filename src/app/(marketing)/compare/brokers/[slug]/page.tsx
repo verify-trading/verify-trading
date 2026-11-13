@@ -15,9 +15,9 @@ import { pageMetadata } from "@/lib/marketing/seo";
 // /compare/brokers/<a>-vs-<b> (side-by-side page): Next.js allows only one
 // dynamic folder per level, so the "-vs-" shape decides which page renders.
 // Prebuilt at production build time (every record + curated vs page) so a fresh deploy never
-// serves the register cold; revalidated hourly in the background after that. Preview/CI builds
+// serves the register cold; revalidated at most daily after that (hourly burned ISR writes). Preview/CI builds
 // skip the prebuild and render on first request as before.
-export const revalidate = 3600;
+export const revalidate = 86400;
 export const generateStaticParams = () => compareStaticParams("broker");
 
 type Props = { params: Promise<{ slug: string }> };

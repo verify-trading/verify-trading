@@ -314,7 +314,7 @@ function refreshWebsite() {
   try {
     revalidateTag("bts-official", { expire: 0 });
   } catch {
-    /* Scripts and tests have no Next cache. The 5-minute revalidate catches up. */
+    /* Scripts and tests have no Next cache. Ask catches up in 5 minutes, website pages within a day. */
   }
 }
 
@@ -457,7 +457,7 @@ async function checkedRecently(s: L2Subject): Promise<boolean> {
 
 /** A firm's official country scores (not the global one), keyed by country code, for its record page. */
 export async function getOfficialCountryScores(entityId: string): Promise<Record<string, OfficialScore>> {
-  const all = await getOfficialScores().catch(() => ({}) as Record<string, OfficialScore>);
+  const all = await getSiteOfficialScores().catch(() => ({}) as Record<string, OfficialScore>);
   return Object.fromEntries(
     Object.entries(all).flatMap(([key, score]) => {
       const [id, country] = key.split("|");
@@ -470,12 +470,11 @@ export async function getOfficialCountryScores(entityId: string): Promise<Record
 export const getOfficialAssessment = unstable_cache(
   async (entityId: string): Promise<L2Result | null> => published({ firm: "", entityId, country: "XX" }).catch(() => null),
   ["bts-official-assessment-v2"],
-  { revalidate: 300, tags: ["bts", "bts-official"] },
+  { revalidate: 86400, tags: ["bts", "bts-official"] },
 );
 
 /** Every official score, newest per firm and jurisdiction, keyed "entityId|country" ("XX" = global). */
-export const getOfficialScores = unstable_cache(
-  async (): Promise<Record<string, OfficialScore>> => {
+async function loadOfficialScores(): Promise<Record<string, OfficialScore>> {
     const client = getSupabaseAdminClient();
     if (!client) return {};
     const data = await selectAll((from, to) =>
@@ -497,10 +496,24 @@ export const getOfficialScores = unstable_cache(
       else if (r.final_score !== null && r.final_verdict !== "Score unavailable") out[key] = { score: r.final_score, verdict: r.final_verdict, checkedAt: r.checked_at };
     }
     return out;
-  },
-  ["bts-official-scores-v2"],
-  { revalidate: 300, tags: ["bts", "bts-official"] },
-);
+}
+
+/** For Ask: fresh within 5 minutes, so a score published by a script reaches answers quickly. */
+export const getOfficialScores = unstable_cache(loadOfficialScores, ["bts-official-scores-v2"], {
+  revalidate: 300,
+  tags: ["bts", "bts-official"],
+});
+
+/**
+ * For website pages: the same scores on a daily timer. A page revalidates as often as its
+ * shortest-lived cache, so reading the 5-minute copy re-rendered every record page every
+ * 5 minutes (858k ISR writes in Nov 2026). A publish made inside a request still clears
+ * this at once through the "bts-official" tag.
+ */
+export const getSiteOfficialScores = unstable_cache(loadOfficialScores, ["bts-official-scores-site-v1"], {
+  revalidate: 86400,
+  tags: ["bts", "bts-official"],
+});
 
 type Previous = { id?: number; score: number | null; verdict: string } | null;
 

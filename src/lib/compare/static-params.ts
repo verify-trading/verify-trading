@@ -6,7 +6,7 @@ import { logger } from "@/lib/observability/logger";
  * Slugs to prerender at production build time: every record page plus the curated
  * vs pages. A deploy empties the ISR cache, and the 9 Nov 2026 crawls timed out on
  * exactly these sitemap URLs while ~1,000 pages each rendered on demand against
- * Supabase. Prebuilding serves them statically from the first request; the hourly
+ * Supabase. Prebuilding serves them statically from the first request; the daily
  * `revalidate` on the routes then refreshes them in the background (stale-while-
  * revalidate), so a full crawl never triggers a render stampede.
  *

@@ -123,7 +123,7 @@ function HubRow({ e, hub }: { e: PublicEntity; hub: string }) {
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-white/[0.035] sm:px-5">
       <EntityAvatar name={e.name} verdict={e.verdict} className="size-9" />
       <div className="min-w-0 flex-1 basis-40">
-        <Link href={entityPath(e)} className="block truncate text-[15px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60">{e.name}</Link>
+        <Link href={entityPath(e)} prefetch={false} className="block truncate text-[15px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60">{e.name}</Link>
         <p className="truncate text-xs text-slate-500">{others.length ? `Also: ${others.slice(0, 3).join(", ")}${others.length > 3 ? ` +${others.length - 3}` : ""}` : `Updated ${formatRecordDate(e.updatedAt)}`}</p>
       </div>
       <VerdictBadge verdict={e.verdict} />

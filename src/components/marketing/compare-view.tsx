@@ -216,7 +216,7 @@ function AtoZDirectory({ entities, plural }: { entities: PublicEntity[]; plural:
               <ul className="columns-2 gap-x-6 px-4 pb-4 pt-1 sm:columns-3 lg:columns-4">
                 {group.map((e) => (
                   <li key={e.slug} className="break-inside-avoid py-0.5">
-                    <Link href={entityPath(e)} className="text-sm text-slate-300 hover:text-white hover:underline">{e.name}</Link>
+                    <Link href={entityPath(e)} prefetch={false} className="text-sm text-slate-300 hover:text-white hover:underline">{e.name}</Link>
                   </li>
                 ))}
               </ul>
@@ -242,7 +242,7 @@ function ComparisonsDirectory({ pairs, plural }: { pairs: Array<[PublicEntity, P
         <ul className="columns-1 gap-x-6 px-4 pb-4 pt-1 sm:columns-2 lg:columns-3">
           {pairs.map(([a, b]) => (
             <li key={`${a.slug}-${b.slug}`} className="break-inside-avoid py-0.5">
-              <Link href={vsPath(a.type, a.slug, b.slug)} className="text-sm text-slate-300 hover:text-white hover:underline">{a.name} vs {b.name}</Link>
+              <Link href={vsPath(a.type, a.slug, b.slug)} prefetch={false} className="text-sm text-slate-300 hover:text-white hover:underline">{a.name} vs {b.name}</Link>
             </li>
           ))}
         </ul>
@@ -428,7 +428,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                     <EntityAvatar name={e.name} verdict={e.verdict} />
                     <div className="min-w-0 flex-1">
                       {isSeoWorthy(e) ? (
-                        <Link href={`${cfg.path}/${e.slug}`} className="block truncate rounded text-[15px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60">
+                        <Link href={`${cfg.path}/${e.slug}`} prefetch={false} className="block truncate rounded text-[15px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60">
                           {e.name}
                         </Link>
                       ) : (
@@ -444,7 +444,7 @@ export async function CompareView({ type, searchParams }: { type: PublicEntityTy
                   <p className="hidden text-xs text-slate-400 lg:block">{formatRecordDate(e.updatedAt)}</p>
                   <div className="col-span-2 flex items-center gap-2 lg:col-span-1 lg:justify-end">
                     {isSeoWorthy(e) ? (
-                      <Link href={`${cfg.path}/${e.slug}`} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 lg:flex-none">
+                      <Link href={`${cfg.path}/${e.slug}`} prefetch={false} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-white transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vt-blue)]/60 lg:flex-none">
                         View record
                       </Link>
                     ) : (

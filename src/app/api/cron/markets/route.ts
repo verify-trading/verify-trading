@@ -27,7 +27,8 @@ import {
 import { logger } from "@/lib/observability/logger";
 
 /**
- * Markets cron: runs every 5 minutes to fetch Twelve Data market snapshots.
+ * Markets cron: runs every 30 minutes to fetch Twelve Data market snapshots (was 5; cut to
+ * save Vercel function time). One chart timeframe per run, so each refreshes every 2 hours.
  * Credit budget (55/min):
  * - Base: Quotes (24) + Market State (1) = 25 credits
  * - One selected-detail timeframe run (+24): 49 credits
@@ -63,8 +64,12 @@ type MarketsCronRunPayload = MarketsCronResults & {
   error?: string;
 };
 
+// Must match the pg_cron schedule (migration 39). A faster cron is harmless: extra calls in the
+// same window hit the duplicate-run skip below.
+const RUN_INTERVAL_MS = 30 * 60 * 1000;
+
 function getRunNumber(timestampMs = Date.now()): number {
-  return Math.floor(timestampMs / (5 * 60 * 1000));
+  return Math.floor(timestampMs / RUN_INTERVAL_MS);
 }
 
 function getFetchedAtRunNumber(fetchedAt: string | null | undefined): number | null {

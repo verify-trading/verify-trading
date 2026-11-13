@@ -252,7 +252,7 @@ describe("GET /api/cron/markets", () => {
   });
 
   it("refreshes one selected-detail timeframe and keeps existing symbols on failures", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(5 * 60 * 1000);
+    vi.spyOn(Date, "now").mockReturnValue(30 * 60 * 1000);
     vi.stubEnv("CRON_SECRET", "");
     vi.mocked(fetchMarketState).mockResolvedValue([]);
     vi.mocked(readCacheRow).mockImplementation(async (key: string) => {

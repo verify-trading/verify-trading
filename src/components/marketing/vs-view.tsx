@@ -102,7 +102,7 @@ export function VsView({ a, b }: { a: PublicEntity; b: PublicEntity }) {
                 </div>
                 <ScoreBar entity={e} className="w-24 shrink-0" />
               </div>
-              <Link href={entityPath(e)} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[var(--vt-blue)] hover:underline">Full {e.name} record <ArrowRight className="size-3.5" aria-hidden /></Link>
+              <Link href={entityPath(e)} prefetch={false} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[var(--vt-blue)] hover:underline">Full {e.name} record <ArrowRight className="size-3.5" aria-hidden /></Link>
             </div>
           ))}
         </div>

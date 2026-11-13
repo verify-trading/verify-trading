@@ -179,6 +179,7 @@ export function EntityMiniCard({ e, note }: { e: PublicEntity; note?: string }) 
   return (
     <Link
       href={entityPath(e)}
+      prefetch={false}
       className="group flex items-center justify-between gap-3 py-3.5 transition-colors hover:bg-white/[0.02]"
     >
       <div className="flex items-center gap-3 min-w-0">
