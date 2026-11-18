@@ -14,6 +14,10 @@ import { getSiteUrl } from "@/lib/site-config";
 
 /** Pages with a real review date get it as lastmod; the rest omit lastmod rather than claim "changed today" on every crawl. */
 
+// The register grows daily and the curated vs-pair set follows the live scores, so the sitemap
+// must regenerate on the same hourly cadence as the pages instead of staying frozen at build time.
+export const revalidate = 3600;
+
 const MARKETING_PATHS: Array<[path: string, priority: number, reviewed?: string]> = [
   ["/how-it-works", 0.8],
   ["/guide", 0.7, GUIDE_REVIEWED],
